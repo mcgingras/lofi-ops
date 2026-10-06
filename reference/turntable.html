@@ -1,0 +1,563 @@
+<title>Low Poly Turntable</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Stage on the left (black, like the product shots), control rack on the right; stacks on phones. */
+:root{
+  --bg:#0d0c0b;
+  --rack:#171513;
+  --line:#2c2925;
+  --fg:#ebe5da;
+  --dim:#958e83;
+  --amber:#ffb340;
+  --well:#0a0909;
+  --pixel:'Silkscreen','Courier New',monospace;
+  --body:'IBM Plex Sans',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font:13px/1.45 var(--body);overflow:hidden}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 352px;gap:16px;height:100%;padding-block:16px;padding-inline:16px}
+.left{display:flex;flex-direction:column;gap:12px;min-width:0;min-height:0}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+h1{margin:0;font:400 18px/1 var(--pixel);letter-spacing:.02em}
+header p{margin:0;color:var(--dim);max-width:62ch}
+.stage{position:relative;flex:1;min-height:300px;border:1px solid var(--line);background:#000;overflow:hidden}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated;cursor:grab;touch-action:none}
+.stage canvas:active{cursor:grabbing}
+.badge{position:absolute;left:10px;top:10px;font:400 10px/1 var(--pixel);color:var(--dim);background:rgba(0,0,0,.6);padding:4px 6px;pointer-events:none}
+.strip{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.texs{display:flex;gap:12px;flex-wrap:wrap}
+.tex{display:flex;flex-direction:column;gap:4px}
+.tex img{display:block;height:96px;width:auto;max-width:100%;image-rendering:pixelated;border:1px solid var(--line);background:repeating-conic-gradient(#222 0 25%,#1a1a1a 0 50%) 0 0/12px 12px}
+.tex span,.swatch-label{font:500 11px/1.2 var(--mono);color:var(--dim)}
+.palette{display:flex;flex-direction:column;gap:4px;min-width:0}
+.swatches{display:grid;grid-template-columns:repeat(16,12px);gap:2px}
+.swatches i{display:block;width:12px;height:12px}
+.save-hint{color:var(--dim);font-size:12px;margin:0}
+
+.rack{background:var(--rack);border:1px solid var(--line);overflow:auto;display:flex;flex-direction:column;min-height:0}
+section{padding:14px 14px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+section:last-child{border-bottom:0}
+h2{margin:0;font:400 11px/1 var(--pixel);letter-spacing:.06em;color:var(--amber);text-transform:uppercase}
+.seg{display:grid;grid-template-columns:repeat(6,1fr);border:1px solid var(--line)}
+.seg button{all:unset;cursor:pointer;text-align:center;padding:7px 0;font:500 12px/1 var(--body);color:var(--dim);border-left:1px solid var(--line)}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.seg button:focus-visible,.slot:focus-visible,.check input:focus-visible,select:focus-visible,input[type=range]:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.slot{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:6px;padding:20px 8px 8px;border:1px dashed var(--line);background:var(--well);position:relative}
+.slot:hover,.slot.over{border-color:var(--amber)}
+.slot .thumb{height:64px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.slot .thumb img{max-height:64px;max-width:100%;display:block}
+.slot b{font:600 12px/1.2 var(--body)}
+.slot small{color:var(--dim);font-size:11px;line-height:1.3}
+.slot .tag{position:absolute;right:6px;top:6px;font:400 9px/1 var(--pixel);color:var(--dim)}
+.slot.custom .tag{color:var(--amber)}
+.row{display:grid;grid-template-columns:96px minmax(0,1fr) 44px;align-items:center;gap:10px}
+.row label{color:var(--dim)}
+.row output{font:500 12px/1 var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.row select{grid-column:2 / 4}
+select{background:var(--well);color:var(--fg);border:1px solid var(--line);padding:5px 6px;font:13px var(--body)}
+input[type=range]{width:100%;accent-color:var(--amber)}
+.check{display:flex;gap:8px;align-items:center;color:var(--fg)}
+.check input{accent-color:var(--amber)}
+.note{color:var(--dim);font-size:12px;margin:0}
+.btn{all:unset;cursor:pointer;font:500 12px/1 var(--body);border:1px solid var(--line);padding:7px 10px;color:var(--fg);text-align:center}
+.btn:hover{border-color:var(--fg)}
+.btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+[data-for]{display:contents}
+@media (max-width:880px){
+  html,body{height:auto}
+  body{overflow:auto}
+  .app{grid-template-columns:1fr;height:auto}
+  .stage{flex:none;aspect-ratio:1/1;min-height:0;max-width:100%}
+  .rack{overflow:visible}
+}
+</style>
+
+<div class="app">
+  <div class="left">
+    <header>
+      <h1>Low Poly Turntable</h1>
+      <p>Drop in photos, reduce them to 16 colours with a crosshatch pattern dither, wrap them onto a simple shape and spin it. Unlit, closest-pixel, no anti-aliasing. Defaults match the settings in Calippert's Blender video.</p>
+    </header>
+    <div class="stage" id="stage">
+      <canvas id="view" aria-label="Spinning low-poly object"></canvas>
+      <div class="badge" id="badge">360p · drag to turn</div>
+    </div>
+    <div class="strip">
+      <div class="texs" id="texs"></div>
+      <div class="palette"><span class="swatch-label" id="palLabel">Palette</span><div class="swatches" id="swatches"></div></div>
+    </div>
+    <p class="save-hint">The processed textures above are ordinary images: right-click one and choose Save Image to keep it for Blender or the game.</p>
+  </div>
+
+  <aside class="rack" aria-label="Controls">
+    <section>
+      <h2>Shape</h2>
+      <div class="seg" id="shapes" role="group" aria-label="Shape">
+        <button type="button" data-shape="cup">Cup</button>
+        <button type="button" data-shape="can">Can</button>
+        <button type="button" data-shape="bottle">Bottle</button>
+        <button type="button" data-shape="box">Box</button>
+        <button type="button" data-shape="crate">Crate</button>
+        <button type="button" data-shape="card">Card</button>
+      </div>
+      <p class="note" id="shapeNote"></p>
+    </section>
+
+    <section>
+      <h2>Photos</h2>
+      <div class="slots" id="slots"></div>
+      <p class="note">Click a slot or drag a photo onto it. Crop tight to the object; for cans and bottles a straight-on side photo works best. The samples are generated stand-ins; real photos are what make this look work.</p>
+      <input type="file" id="file" accept="image/*" hidden>
+    </section>
+
+    <section>
+      <h2>Colour</h2>
+      <div class="row"><label for="texSize">Long side</label><select id="texSize"><option value="128">128 px</option><option value="256">256 px</option><option value="432">432 px</option><option value="576" selected>576 px</option><option value="768">768 px</option></select></div>
+      <div class="row"><label for="colors">Colours</label><select id="colors"><option>8</option><option selected>16</option><option>32</option><option>64</option><option>128</option></select></div>
+      <div class="row"><label for="dither">Dither</label><select id="dither"><option value="pattern" selected>Pattern 4×4 (crosshatch)</option><option value="bayer">Bayer 4×4</option><option value="fs">Floyd–Steinberg</option><option value="none">None</option></select></div>
+      <div class="row"><label for="space">Colour space</label><select id="space"><option value="ycocg" selected>YCoCg</option><option value="rgb">RGB</option></select></div>
+      <div class="row"><label for="strength">Strength</label><input type="range" id="strength" min="0" max="100" value="75"><output for="strength" id="strengthOut">75</output></div>
+      <label class="check"><input type="checkbox" id="shared" checked> One palette for the whole object</label>
+      <div class="row"><label for="bright">Brightness</label><input type="range" id="bright" min="-50" max="50" value="0"><output id="brightOut">0</output></div>
+      <div class="row"><label for="contrast">Contrast</label><input type="range" id="contrast" min="50" max="160" value="100"><output id="contrastOut">100</output></div>
+      <div class="row"><label for="sat">Saturation</label><input type="range" id="sat" min="0" max="200" value="100"><output id="satOut">100</output></div>
+      <div class="row"><label for="hue">Hue</label><input type="range" id="hue" min="-180" max="180" value="0"><output id="hueOut">0°</output></div>
+    </section>
+
+    <section>
+      <h2>Model</h2>
+      <div data-for="round"><div class="row"><label for="sides">Sides</label><input type="range" id="sides" min="5" max="32" value="10"><output id="sidesOut">10</output></div></div>
+      <div class="row"><label for="w">Width</label><input type="range" id="w" min="20" max="300" value="100"><output id="wOut">1.00</output></div>
+      <div class="row"><label for="h">Height</label><input type="range" id="h" min="20" max="300" value="125"><output id="hOut">1.25</output></div>
+      <div data-for="cup"><div class="row"><label for="taper">Taper</label><input type="range" id="taper" min="40" max="100" value="74"><output id="taperOut">74</output></div></div>
+      <div data-for="box"><div class="row"><label for="d">Depth</label><input type="range" id="d" min="10" max="300" value="46"><output id="dOut">0.46</output></div></div>
+      <div data-for="round"><div class="row"><label for="mapping">Side map</label><select id="mapping"><option value="project" selected>Project from front</option><option value="wrap">Wrap around</option></select></div></div>
+      <button type="button" class="btn" id="fit">Match proportions to photo</button>
+    </section>
+
+    <section>
+      <h2>Show</h2>
+      <div class="row"><label for="res">Render</label><select id="res"><option value="240">240p</option><option value="360" selected>360p</option><option value="480">480p</option><option value="720">720p</option><option value="0">Full</option></select></div>
+      <div class="row"><label for="speed">Spin</label><input type="range" id="speed" min="0" max="180" value="45"><output id="speedOut">45°/s</output></div>
+      <div class="row"><label for="tilt">Tilt</label><input type="range" id="tilt" min="-10" max="60" value="22"><output id="tiltOut">22°</output></div>
+      <div class="row"><label for="bg">Background</label><select id="bg"><option value="#000000" selected>Black</option><option value="#1c1b22">Charcoal</option><option value="#16224a">Night blue</option><option value="#e9e4da">Paper</option></select></div>
+      <label class="check"><input type="checkbox" id="bob"> Hover like a pickup</label>
+    </section>
+  </aside>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.170.0/three.module.min.js';
+
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+let seed = 5; const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647;
+
+/* ---------- bottle profile, shared by geometry and the sample photo ---------- */
+const BOTTLE = [[0, 0], [.92, 0], [1, .03], [1, .55], [.93, .62], [.72, .69], [.48, .74], [.37, .78], [.34, .9], [.34, .915], [.41, .915], [.41, 1], [0, 1]];
+function bottleR(t) { for (let i = 1; i < BOTTLE.length - 1; i++) { const [r0, t0] = BOTTLE[i], [r1, t1] = BOTTLE[i + 1]; if (t >= t0 && t <= t1 && t1 > t0) return r0 + (r1 - r0) * (t - t0) / (t1 - t0); } return t > .5 ? .41 : 1; }
+
+/* ---------- sample "photos": drawn, then given fake lighting and grain so the dither has something to chew on ---------- */
+function cnv(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+function photoize(c, { cyl = false, vignette = .25, grain = 10, light = 0 } = {}) {
+  const g = c.getContext('2d'), im = g.getImageData(0, 0, c.width, c.height), d = im.data, W = c.width, H = c.height;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4; if (d[i + 3] < 8) continue;
+    let k = 1;
+    if (cyl) { const u = (x - W / 2) / (W / 2); k *= .42 + .58 * Math.sqrt(Math.max(0, 1 - u * u)) + .35 * Math.exp(-((u + .38) ** 2) / .012); }
+    if (light) k *= 1 + light * ((W - x) / W - .5);
+    const vx = x / W - .5, vy = y / H - .5; k *= 1 - vignette * (vx * vx + vy * vy) * 2;
+    const n = (rnd() - .5) * grain * 2;
+    for (let j = 0; j < 3; j++) d[i + j] = clamp(d[i + j] * k + n, 0, 255);
+  }
+  g.putImageData(im, 0, 0); return c;
+}
+function blobNoise(w, h, cells, lo, hi) {
+  const s = cnv(cells, Math.max(2, Math.round(cells * h / w))), g = s.getContext('2d');
+  for (let y = 0; y < s.height; y++) for (let x = 0; x < s.width; x++) { const v = lo + (hi - lo) * rnd(); g.fillStyle = `rgba(${v < 0 ? '0,0,0' : '255,255,255'},${Math.abs(v)})`; g.fillRect(x, y, 1, 1); }
+  const c = cnv(w, h), cg = c.getContext('2d'); cg.imageSmoothingEnabled = true; cg.imageSmoothingQuality = 'high'; cg.drawImage(s, 0, 0, w, h); return c;
+}
+function photoUp(src, long = 576, blur = .8, grain = 7) {
+  const k = long / Math.max(src.width, src.height), c = cnv(Math.round(src.width * k), Math.round(src.height * k)), g = c.getContext('2d');
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.filter = `blur(${blur * k}px)`; g.drawImage(src, 0, 0, c.width, c.height); g.filter = 'none';
+  g.globalCompositeOperation = 'overlay'; g.drawImage(blobNoise(c.width, c.height, 40, -.12, .12), 0, 0); g.globalCompositeOperation = 'source-over';
+  const im = g.getImageData(0, 0, c.width, c.height), d = im.data;
+  for (let i = 0; i < d.length; i += 4) { if (d[i + 3] < 8) continue; const n = (rnd() - .5) * grain * 2; d[i] = clamp(d[i] + n, 0, 255); d[i + 1] = clamp(d[i + 1] + n, 0, 255); d[i + 2] = clamp(d[i + 2] + n, 0, 255); }
+  g.putImageData(im, 0, 0); return c;
+}
+function fruitChunks(g, cx, cy, R, n) {
+  for (let i = 0; i < n; i++) {
+    const a = rnd() * 6.283, r = Math.sqrt(rnd()) * R, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r, s = 22 + rnd() * 30, rot = rnd() * 3;
+    g.save(); g.translate(x, y); g.rotate(rot);
+    g.filter = 'blur(5px)'; g.fillStyle = 'rgba(150,95,10,.55)'; g.beginPath(); g.roundRect(-s / 2 + 6, -s * .35 + 7, s, s * .7, 9); g.fill();
+    g.filter = 'blur(1.4px)'; const lg = g.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2); lg.addColorStop(0, '#fff2a8'); lg.addColorStop(.5, '#f6cf52'); lg.addColorStop(1, '#d99a1c');
+    g.fillStyle = lg; g.beginPath(); g.roundRect(-s / 2, -s * .35, s, s * .7, 9); g.fill();
+    g.fillStyle = 'rgba(255,255,235,.65)'; g.beginPath(); g.roundRect(-s / 2 + 4, -s * .35 + 3, s * .5, 5, 3); g.fill();
+    g.restore();
+  }
+  g.filter = 'none';
+}
+const SAMPLES = {
+  cupTop() {
+    const c = cnv(576, 576), g = c.getContext('2d');
+    g.fillStyle = '#4a2a16'; g.fillRect(0, 0, 576, 576); g.globalCompositeOperation = 'overlay'; g.drawImage(blobNoise(576, 576, 9, -.4, .3), 0, 0); g.globalCompositeOperation = 'source-over';
+    const rim = g.createRadialGradient(240, 230, 120, 288, 288, 290); rim.addColorStop(0, '#f4f4f0'); rim.addColorStop(.8, '#bfc2c4'); rim.addColorStop(1, '#8e9294');
+    g.fillStyle = rim; g.beginPath(); g.arc(288, 288, 286, 0, 7); g.fill();
+    g.save(); g.beginPath(); g.arc(288, 288, 248, 0, 7); g.clip();
+    const sy = g.createRadialGradient(250, 240, 20, 288, 288, 260); sy.addColorStop(0, '#f2c23a'); sy.addColorStop(1, '#c98a14'); g.fillStyle = sy; g.fillRect(0, 0, 576, 576);
+    g.globalCompositeOperation = 'overlay'; g.drawImage(blobNoise(576, 576, 14, -.35, .35), 0, 0); g.globalCompositeOperation = 'source-over';
+    fruitChunks(g, 288, 288, 230, 70);
+    g.fillStyle = 'rgba(70,32,8,.85)'; for (let i = 0; i < 70; i++) { const t = rnd(), x = 160 + t * 260 + (rnd() - .5) * 40, y = 330 - t * 140 + (rnd() - .5) * 36; g.beginPath(); g.arc(x, y, 1.5 + rnd() * 3.5, 0, 7); g.fill(); }
+    g.filter = 'blur(6px)'; g.fillStyle = 'rgba(255,255,255,.28)'; g.beginPath(); g.ellipse(210, 170, 120, 26, -.5, 0, 7); g.fill(); g.filter = 'none';
+    g.restore();
+    g.strokeStyle = 'rgba(120,124,126,.9)'; g.lineWidth = 5; g.beginPath(); g.arc(288, 288, 250, 0, 7); g.stroke();
+    return photoUp(c, 576, .6, 8);
+  },
+  cupSide() {
+    const c = cnv(576, 360), g = c.getContext('2d');
+    const body = g.createLinearGradient(0, 0, 0, 360); body.addColorStop(0, '#f4cf54'); body.addColorStop(1, '#d69a1e'); g.fillStyle = body; g.fillRect(0, 0, 576, 360);
+    g.globalAlpha = .6; fruitChunks(g, 288, 190, 300, 60); g.globalAlpha = 1;
+    g.filter = 'blur(3px)'; g.fillStyle = 'rgba(255,240,190,.35)'; g.fillRect(0, 0, 576, 360); g.filter = 'none';
+    const rim = g.createLinearGradient(0, 0, 0, 30); rim.addColorStop(0, '#eceeee'); rim.addColorStop(1, '#a4a8aa'); g.fillStyle = rim; g.fillRect(0, 0, 576, 30);
+    g.globalCompositeOperation = 'overlay'; g.drawImage(blobNoise(576, 360, 12, -.3, .3), 0, 0); g.globalCompositeOperation = 'source-over';
+    return photoUp(photoize(c, { cyl: true, grain: 0, vignette: .05 }), 576, .8, 8);
+  },
+
+  canSide() {
+    const c = cnv(256, 320), g = c.getContext('2d');
+    g.fillStyle = '#c8202c'; g.fillRect(0, 0, 256, 320);
+    g.fillStyle = '#f4efe6'; g.beginPath(); g.moveTo(0, 190); for (let x = 0; x <= 256; x += 4) g.lineTo(x, 182 + Math.sin(x / 256 * Math.PI * 2) * 18); for (let x = 256; x >= 0; x -= 4) g.lineTo(x, 214 + Math.sin(x / 256 * Math.PI * 2 + .6) * 18); g.fill();
+    g.fillStyle = '#f4efe6'; g.font = 'bold 76px Georgia, serif'; g.textAlign = 'center'; g.fillText('Fizz', 128, 140);
+    g.font = 'bold 15px Georgia, serif'; g.fillText('ORIGINAL · 330 ml', 128, 272);
+    for (const [y0, y1] of [[0, 20], [300, 320]]) for (let y = y0; y < y1; y++) { const k = 150 + 60 * Math.sin((y - y0) / (y1 - y0) * Math.PI); g.fillStyle = `rgb(${k},${k},${k + 6})`; g.fillRect(0, y, 256, 1); if (y % 4 === 0) { g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(0, y, 256, 1); } }
+    return photoize(c, { cyl: true });
+  },
+  canTop() {
+    const c = cnv(256, 256), g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, 256, 256);
+    const rg = g.createRadialGradient(100, 100, 10, 128, 128, 128); rg.addColorStop(0, '#e4e6ea'); rg.addColorStop(1, '#7c8088'); g.fillStyle = rg; g.beginPath(); g.arc(128, 128, 127, 0, 7); g.fill();
+    g.strokeStyle = '#5c6068'; g.lineWidth = 6; g.beginPath(); g.arc(128, 128, 112, 0, 7); g.stroke(); g.strokeStyle = '#f2f3f5'; g.lineWidth = 2; g.beginPath(); g.arc(128, 128, 118, 0, 7); g.stroke();
+    g.fillStyle = '#3a3c40'; g.beginPath(); g.ellipse(128, 70, 34, 22, 0, 0, 7); g.fill();
+    g.fillStyle = '#b4b8bf'; g.beginPath(); g.roundRect(104, 92, 48, 70, 20); g.fill(); g.fillStyle = '#5a5e66'; g.beginPath(); g.ellipse(128, 136, 12, 16, 0, 0, 7); g.fill(); g.fillStyle = '#d8dbe0'; g.beginPath(); g.arc(128, 104, 6, 0, 7); g.fill();
+    return photoize(c, { vignette: .1, grain: 8 });
+  },
+  bottleSide() {
+    const W = 200, H = 400, c = cnv(W, H), g = c.getContext('2d'); g.fillStyle = '#121212'; g.fillRect(0, 0, W, H);
+    for (let y = 0; y < H; y++) {
+      const t = 1 - y / H, hw = bottleR(t) * W / 2;
+      for (let x = Math.round(W / 2 - hw); x < W / 2 + hw; x++) {
+        const u = (x - W / 2) / hw; let rgb = [86, 44, 18];
+        if (t > .2 && t < .5) rgb = [232, 214, 176];
+        if (t > .79 && t < .84) rgb = [206, 168, 72];
+        if (t > .915) rgb = (Math.floor(x / 4) % 2) ? [190, 30, 34] : [150, 22, 26];
+        const k = .35 + .65 * Math.sqrt(Math.max(0, 1 - u * u)) + (t < .2 || (t > .5 && t < .79) ? .7 * Math.exp(-((u + .45) ** 2) / .008) : .2 * Math.exp(-((u + .45) ** 2) / .02));
+        g.fillStyle = `rgb(${rgb.map(v => clamp(v * k, 0, 255) | 0)})`; g.fillRect(x, y, 1, 1);
+      }
+    }
+    g.fillStyle = 'rgba(150,30,30,.92)'; g.font = 'bold 34px Georgia, serif'; g.textAlign = 'center'; g.fillText('MALT', W / 2, H * .66); g.font = 'bold 13px Georgia, serif'; g.fillStyle = 'rgba(60,40,20,.85)'; g.fillText('No. 33 · BREWED', W / 2, H * .7); g.fillRect(W * .2, H * .72, W * .6, 2);
+    return photoize(c, { vignette: .05, grain: 9 });
+  },
+  bottleTop() {
+    const c = cnv(256, 256), g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, 256, 256);
+    g.fillStyle = '#8a161a'; g.beginPath(); for (let i = 0; i <= 42; i++) { const a = i / 42 * Math.PI * 2, r = i % 2 ? 118 : 127; g.lineTo(128 + Math.cos(a) * r, 128 + Math.sin(a) * r); } g.fill();
+    const rg = g.createRadialGradient(105, 100, 8, 128, 128, 112); rg.addColorStop(0, '#e2484a'); rg.addColorStop(1, '#9a1a1e'); g.fillStyle = rg; g.beginPath(); g.arc(128, 128, 104, 0, 7); g.fill();
+    g.strokeStyle = 'rgba(255,220,200,.5)'; g.lineWidth = 3; g.beginPath(); g.arc(128, 128, 60, 0, 7); g.stroke(); g.fillStyle = 'rgba(255,230,220,.8)'; g.font = 'bold 34px Georgia, serif'; g.textAlign = 'center'; g.fillText('33', 128, 140);
+    return photoize(c, { vignette: .1, grain: 8 });
+  },
+  boxFront() {
+    const c = cnv(240, 330), g = c.getContext('2d');
+    g.fillStyle = '#f2c230'; g.fillRect(0, 0, 240, 330); g.fillStyle = '#c8302a'; g.fillRect(0, 0, 240, 92);
+    g.fillStyle = '#fff6e0'; g.font = 'bold 40px Georgia, serif'; g.textAlign = 'center'; g.fillText('OATY', 120, 50); g.font = 'bold 26px Georgia, serif'; g.fillText('RINGS', 120, 80);
+    g.fillStyle = '#2f5aa8'; g.beginPath(); g.ellipse(120, 228, 92, 50, 0, 0, 7); g.fill(); g.fillStyle = '#f8f2e4'; g.beginPath(); g.ellipse(120, 214, 80, 30, 0, 0, 7); g.fill();
+    for (let i = 0; i < 16; i++) { const x = 60 + rnd() * 120, y = 196 + rnd() * 30; g.strokeStyle = '#c47a2a'; g.lineWidth = 6; g.beginPath(); g.arc(x, y, 8, 0, 7); g.stroke(); }
+    g.fillStyle = '#c8302a'; g.beginPath(); for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2, r = i % 2 ? 26 : 34; g.lineTo(196 + Math.cos(a) * r, 128 + Math.sin(a) * r); } g.fill();
+    g.fillStyle = '#fff'; g.font = 'bold 14px Georgia, serif'; g.fillText('NEW!', 196, 133);
+    g.fillStyle = '#3a2410'; g.font = '12px Georgia, serif'; g.fillText('NET WT 12 OZ (340 g)', 120, 316);
+    return photoize(c, { light: .4, grain: 9 });
+  },
+  boxSide() {
+    const c = cnv(110, 330), g = c.getContext('2d'); g.fillStyle = '#f2c230'; g.fillRect(0, 0, 110, 330); g.fillStyle = '#f8f4ea'; g.fillRect(10, 40, 90, 240);
+    g.fillStyle = '#1a1a1a'; g.font = 'bold 11px Georgia, serif'; g.fillText('Nutrition', 16, 58); g.fillRect(16, 64, 78, 3);
+    for (let y = 76; y < 270; y += 11) { g.fillRect(16, y, rnd() * 40 + 30, 2); g.fillRect(84, y, 10, 2); }
+    g.fillStyle = '#c8302a'; g.fillRect(0, 0, 110, 28);
+    return photoize(c, { light: -.3, grain: 9 });
+  },
+  boxTop() {
+    const c = cnv(240, 110), g = c.getContext('2d'); g.fillStyle = '#e6b42a'; g.fillRect(0, 0, 240, 110); g.fillStyle = 'rgba(80,50,10,.5)'; g.fillRect(0, 54, 240, 2);
+    g.fillStyle = '#7a1a14'; g.font = 'bold 13px Georgia, serif'; g.textAlign = 'center'; g.fillText('OPEN HERE', 120, 40);
+    return photoize(c, { grain: 9 });
+  },
+  crate() {
+    const c = cnv(256, 256), g = c.getContext('2d');
+    for (let r = 0; r < 6; r++) { const base = [92 + rnd() * 18, 98 + rnd() * 14, 54 + rnd() * 10]; g.fillStyle = `rgb(${base.map(v => v | 0)})`; g.fillRect(0, r * 43, 256, 42); g.fillStyle = 'rgba(30,26,12,.5)'; for (let k = 0; k < 9; k++) g.fillRect(rnd() * 256, r * 43 + 3 + rnd() * 36, 20 + rnd() * 60, 1); g.fillStyle = '#1e1c10'; g.fillRect(0, r * 43 + 42, 256, 2); }
+    g.fillStyle = '#4c4e2c'; g.fillRect(0, 0, 256, 18); g.fillRect(0, 238, 256, 18); g.fillRect(0, 0, 18, 256); g.fillRect(238, 0, 18, 256);
+    g.fillStyle = '#2a2a2a'; for (const [x, y] of [[9, 9], [247, 9], [9, 247], [247, 247]]) { g.beginPath(); g.arc(x, y, 4, 0, 7); g.fill(); }
+    g.fillStyle = 'rgba(232,214,120,.9)'; g.font = 'bold 30px "Courier New", monospace'; g.textAlign = 'center'; g.fillText('AMMO', 128, 110); g.font = 'bold 18px "Courier New", monospace'; g.fillText('7.62 × 39 MM', 128, 140); g.fillText('1440 RDS', 128, 166);
+    return photoize(c, { light: .25, grain: 12 });
+  },
+  card() {
+    const c = cnv(256, 256), g = c.getContext('2d');
+    g.fillStyle = '#e8a640'; g.beginPath(); g.moveTo(128, 246); g.lineTo(26, 40); g.quadraticCurveTo(128, 0, 230, 40); g.closePath(); g.fill();
+    g.fillStyle = '#9a5a22'; g.beginPath(); g.moveTo(26, 40); g.quadraticCurveTo(128, 0, 230, 40); g.quadraticCurveTo(128, 18, 26, 58); g.fill(); g.lineWidth = 16; g.strokeStyle = '#b8702e'; g.beginPath(); g.moveTo(30, 44); g.quadraticCurveTo(128, 6, 226, 44); g.stroke();
+    for (const [x, y, r] of [[100, 90, 18], [156, 96, 16], [128, 150, 15], [110, 196, 10], [170, 60, 12], [80, 60, 11]]) { g.fillStyle = '#a82820'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.fillStyle = 'rgba(80,10,10,.5)'; g.beginPath(); g.arc(x + 3, y + 3, r * .5, 0, 7); g.fill(); }
+    return photoize(c, { light: .3, grain: 10, vignette: 0 });
+  },
+};
+
+for (const k of Object.keys(SAMPLES)) if (!k.startsWith('cup')) { const f = SAMPLES[k]; SAMPLES[k] = () => photoUp(f(), 576, 1.1, 9); }
+
+/* ---------- shapes ---------- */
+const SHAPES = {
+  cup: { note: 'An eight-sided tapered cup with a flat lid that overhangs as a rim, like the fruit cup in the video.', slots: [['top', 'Top', 'from above, square', 'cupTop'], ['side', 'Side', 'straight-on photo', 'cupSide']], dims: { w: 1, h: .62, d: .5 }, round: true },
+  can: { note: 'A cylinder with a flat lid, like the video. The side photo is projected from the front onto both halves.', slots: [['side', 'Side', 'straight-on photo', 'canSide'], ['top', 'Top', 'lid, square crop', 'canTop']], dims: { w: 1, h: 1.25, d: .5 }, round: true },
+  bottle: { note: 'A lathe profile. The side photo should show the whole bottle; the background around the neck is never used.', slots: [['side', 'Side', 'whole bottle', 'bottleSide'], ['top', 'Cap', 'top of cap', 'bottleTop']], dims: { w: 1, h: 2, d: .5 }, round: true },
+  box: { note: 'Front and back share one photo, both sides share one, top and bottom share one.', slots: [['front', 'Front', 'face on', 'boxFront'], ['side', 'Side', 'narrow side', 'boxSide'], ['top', 'Top', 'from above', 'boxTop']], dims: { w: 1, h: 1.375, d: .46 } },
+  crate: { note: 'One photo on all six faces. Good for crates, ammo boxes, dice, blocks.', slots: [['face', 'Face', 'square crop', 'crate']], dims: { w: 1, h: 1, d: 1 } },
+  card: { note: 'A flat double-sided sprite. Transparent PNGs keep their cut-out shape.', slots: [['face', 'Image', 'PNG with alpha works', 'card']], dims: { w: 1, h: 1, d: .5 } },
+};
+const state = { shape: 'cup', dims: {}, user: {}, sampleCache: {} };
+for (const k in SHAPES) state.dims[k] = { ...SHAPES[k].dims };
+const srcFor = (shape, key, sample) => state.user[`${shape}:${key}`] ?? (state.sampleCache[sample] ??= SAMPLES[sample]());
+
+/* ---------- colour pipeline: adjust → median-cut palette → dither ---------- */
+function readSettings() {
+  return { size: +$('texSize').value, k: +$('colors').value, dither: $('dither').value, space: $('space').value, strength: $('strength').value / 100, shared: $('shared').checked,
+    bright: +$('bright').value, contrast: $('contrast').value / 100, sat: $('sat').value / 100, hue: +$('hue').value };
+}
+function hueMatrix(deg) {
+  const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  return [.299 + .701 * c + .168 * s, .587 - .587 * c + .330 * s, .114 - .114 * c - .497 * s, .299 - .299 * c - .328 * s, .587 + .413 * c + .035 * s, .114 - .114 * c + .292 * s, .299 - .3 * c + 1.25 * s, .587 - .588 * c - 1.05 * s, .114 + .886 * c - .203 * s];
+}
+function sample(src, key, set) {
+  const aspect = (src.height || src.naturalHeight) / (src.width || src.naturalWidth);
+  const square = key === 'top' || (key === 'face' && state.shape === 'crate');
+  let w = set.size, h = set.size;
+  if (!square) { if (aspect > 1) w = Math.max(4, Math.round(set.size / aspect)); else h = Math.max(4, Math.round(set.size * aspect)); }
+  const c = cnv(w, Math.max(4, h)), g = c.getContext('2d'); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  if (square) { const sw = src.width, sh = src.height, s = Math.min(sw, sh); g.drawImage(src, (sw - s) / 2, (sh - s) / 2, s, s, 0, 0, c.width, c.height); }
+  else g.drawImage(src, 0, 0, c.width, c.height);
+  const im = g.getImageData(0, 0, c.width, c.height), d = im.data, m = hueMatrix(set.hue), px = new Float32Array(c.width * c.height * 3), alpha = new Uint8Array(c.width * c.height);
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+    let r = d[i], gg = d[i + 1], b = d[i + 2];
+    if (set.hue) { const R = r * m[0] + gg * m[1] + b * m[2], G2 = r * m[3] + gg * m[4] + b * m[5], B = r * m[6] + gg * m[7] + b * m[8]; r = R; gg = G2; b = B; }
+    const l = .299 * r + .587 * gg + .114 * b; r = l + (r - l) * set.sat; gg = l + (gg - l) * set.sat; b = l + (b - l) * set.sat;
+    r = (r - 128) * set.contrast + 128 + set.bright * 2; gg = (gg - 128) * set.contrast + 128 + set.bright * 2; b = (b - 128) * set.contrast + 128 + set.bright * 2;
+    r = clamp(r, 0, 255); gg = clamp(gg, 0, 255); b = clamp(b, 0, 255);
+    if (set.space === 'ycocg') { px[j * 3] = .25 * r + .5 * gg + .25 * b; px[j * 3 + 1] = .5 * r - .5 * b + 128; px[j * 3 + 2] = -.25 * r + .5 * gg - .25 * b + 128; }
+    else { px[j * 3] = r; px[j * 3 + 1] = gg; px[j * 3 + 2] = b; }
+    alpha[j] = d[i + 3] > 127 ? 255 : 0;
+  }
+  return { w: c.width, h: c.height, px, alpha };
+}
+function medianCut(list, k) {
+  let boxes = [list];
+  while (boxes.length < k) {
+    let bi = -1, best = -1, ch = 0;
+    boxes.forEach((b, i) => {
+      if (b.length < 2) return;
+      const mn = [255, 255, 255], mx = [0, 0, 0];
+      for (const p of b) for (let c = 0; c < 3; c++) { if (p[c] < mn[c]) mn[c] = p[c]; if (p[c] > mx[c]) mx[c] = p[c]; }
+      const r = [mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]], c = r.indexOf(Math.max(...r)), score = r[c] * Math.sqrt(b.length);
+      if (score > best) { best = score; bi = i; ch = c; }
+    });
+    if (bi < 0 || best <= 0) break;
+    const b = boxes[bi].sort((p, q) => p[ch] - q[ch]), mid = b.length >> 1;
+    boxes.splice(bi, 1, b.slice(0, mid), b.slice(mid));
+  }
+  return boxes.map(b => { const s = [0, 0, 0]; for (const p of b) { s[0] += p[0]; s[1] += p[1]; s[2] += p[2]; } return s.map(v => v / b.length); });
+}
+function paletteFrom(imgs, k) {
+  const list = [];
+  for (const im of imgs) { const n = im.w * im.h, step = Math.max(1, Math.floor(n * imgs.length / 14000)); for (let j = 0; j < n; j += step) if (im.alpha[j]) list.push([im.px[j * 3], im.px[j * 3 + 1], im.px[j * 3 + 2]]); }
+  return list.length ? medianCut(list, k) : [[0, 0, 0]];
+}
+let W3 = [2, 4, 3];
+function nearest(pal, r, g, b) { let bi = 0, bd = 1e12; for (let i = 0; i < pal.length; i++) { const p = pal[i], dr = r - p[0], dg = g - p[1], db = b - p[2], d = W3[0] * dr * dr + W3[1] * dg * dg + W3[2] * db * db; if (d < bd) { bd = d; bi = i; } } return bi; }
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+const PATTERN = Array.from({ length: 16 }, (_, i) => { const x = i & 3, y = i >> 2; return ((x + y) & 3) * 4 + ((x - y) & 3); });
+const toRGB = (p, space) => space === 'ycocg' ? (() => { const Y = p[0], Co = p[1] - 128, Cg = p[2] - 128, t = Y - Cg; return [clamp(t + Co, 0, 255), clamp(Y + Cg, 0, 255), clamp(t - Co, 0, 255)]; })() : p;
+function quantize(im, pal, set) {
+  const { w, h, px, alpha } = im, out = cnv(w, h), g = out.getContext('2d'), od = g.createImageData(w, h), buf = Float32Array.from(px);
+  W3 = set.space === 'ycocg' ? [3, 1.4, 1.4] : [2, 4, 3];
+  const spread = (set.space === 'ycocg' ? 255 / Math.sqrt(pal.length) : 255 / Math.cbrt(pal.length)) * set.strength;
+  const rgbPal = pal.map(p => toRGB(p, set.space));
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const j = y * w + x; if (!alpha[j]) continue;
+    let r = buf[j * 3], gg = buf[j * 3 + 1], b = buf[j * 3 + 2];
+    if (set.dither === 'bayer' || set.dither === 'pattern') { const t = ((set.dither === 'bayer' ? BAYER : PATTERN)[(y & 3) * 4 + (x & 3)] + .5) / 16 - .5; r += t * spread; if (set.space !== 'ycocg') { gg += t * spread; b += t * spread; } else { gg += t * spread * .35; b += t * spread * .35; } }
+    const pi = nearest(pal, r, gg, b), p = pal[pi], o = rgbPal[pi];
+    od.data[j * 4] = o[0]; od.data[j * 4 + 1] = o[1]; od.data[j * 4 + 2] = o[2]; od.data[j * 4 + 3] = 255;
+    if (set.dither === 'fs') {
+      const er = (r - p[0]) * set.strength, eg = (gg - p[1]) * set.strength, eb = (b - p[2]) * set.strength;
+      for (const [dx, dy, f] of [[1, 0, 7 / 16], [-1, 1, 3 / 16], [0, 1, 5 / 16], [1, 1, 1 / 16]]) {
+        const xx = x + dx, yy = y + dy; if (xx < 0 || xx >= w || yy >= h) continue; const q = (yy * w + xx) * 3;
+        buf[q] += er * f; buf[q + 1] += eg * f; buf[q + 2] += eb * f;
+      }
+    }
+  }
+  g.putImageData(od, 0, 0); return out;
+}
+
+/* ---------- three.js stage ---------- */
+const canvas = $('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+renderer.setPixelRatio(1);
+const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(30, 1, .05, 100);
+const pivot = new THREE.Group(); scene.add(pivot);
+let mesh = null, radius = 1;
+const texCache = {};
+function toTex(c) { const t = new THREE.CanvasTexture(c); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; }
+const mat = (tex, o = {}) => new THREE.MeshBasicMaterial({ map: tex, alphaTest: .5, side: o.side ?? THREE.FrontSide });
+
+function projectSide(geo, R, H, y0) { const p = geo.attributes.position, uv = geo.attributes.uv; for (let i = 0; i < p.count; i++) uv.setXY(i, .5 + p.getX(i) / (2 * R), (p.getY(i) - y0) / H); }
+function buildMesh(tex) {
+  const S = state.shape, D = state.dims[S], sides = +$('sides').value, project = $('mapping').value === 'project';
+  if (mesh) { pivot.remove(mesh); mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); [].concat(o.material || []).forEach(m => m.dispose()); }); }
+  if (S === 'cup') {
+    const R = D.w / 2 * .92, Rb = R * $('taper').value / 100, geo = new THREE.CylinderGeometry(R, Rb, D.h, sides, 1, true);
+    if (project) { const p = geo.attributes.position, uv = geo.attributes.uv; for (let i = 0; i < p.count; i++) uv.setXY(i, .5 + p.getX(i) / (2 * R), (p.getY(i) + D.h / 2) / D.h); }
+    mesh = new THREE.Group();
+    mesh.add(new THREE.Mesh(geo, mat(tex.side, { side: THREE.DoubleSide })));
+    const lid = new THREE.Mesh(new THREE.CircleGeometry(D.w / 2, sides).rotateX(-Math.PI / 2), mat(tex.top, { side: THREE.DoubleSide })); lid.position.y = D.h / 2; mesh.add(lid);
+    const base = new THREE.Mesh(new THREE.CircleGeometry(Rb, sides).rotateX(Math.PI / 2), mat(tex.side)); base.position.y = -D.h / 2; mesh.add(base);
+  } else if (S === 'can') {
+    const R = D.w / 2, geo = new THREE.CylinderGeometry(R, R, D.h, sides, 1);
+    if (project) { const p = geo.attributes.position, uv = geo.attributes.uv, n = (sides + 1) * 2; for (let i = 0; i < n; i++) uv.setXY(i, .5 + p.getX(i) / (2 * R), (p.getY(i) + D.h / 2) / D.h); }
+    mesh = new THREE.Mesh(geo, [mat(tex.side), mat(tex.top), mat(tex.top)]);
+  } else if (S === 'bottle') {
+    const R = D.w / 2, pts = BOTTLE.map(([r, t]) => new THREE.Vector2(r * R, t * D.h - D.h / 2)).slice(0, -1);
+    const body = new THREE.LatheGeometry(pts, sides);
+    if (project) projectSide(body, R, D.h, -D.h / 2); else { const p = body.attributes.position, uv = body.attributes.uv; for (let i = 0; i < p.count; i++) uv.setY(i, (p.getY(i) + D.h / 2) / D.h); }
+    mesh = new THREE.Group();
+    mesh.add(new THREE.Mesh(body, mat(tex.side, { side: THREE.DoubleSide })));
+    const cap = new THREE.Mesh(new THREE.CircleGeometry(.41 * R, sides).rotateX(-Math.PI / 2), mat(tex.top)); cap.position.y = D.h / 2; mesh.add(cap);
+  } else if (S === 'box' || S === 'crate') {
+    const t = S === 'crate' ? [tex.face, tex.face, tex.face, tex.face, tex.face, tex.face] : [tex.side, tex.side, tex.top, tex.top, tex.front, tex.front];
+    mesh = new THREE.Mesh(new THREE.BoxGeometry(D.w, D.h, D.d), t.map(x => mat(x)));
+  } else {
+    mesh = new THREE.Mesh(new THREE.PlaneGeometry(D.w, D.h), mat(tex.face, { side: THREE.DoubleSide }));
+  }
+  if (!project && state.shape === 'can') tex.side.repeat.set(1, 1);
+  pivot.add(mesh);
+  const box = new THREE.Box3().setFromObject(mesh), sph = box.getBoundingSphere(new THREE.Sphere()); radius = sph.radius;
+}
+
+let lastSet = null;
+function rebuild() {
+  const S = SHAPES[state.shape], set = readSettings();
+  const raws = S.slots.map(([key, , , smp]) => sample(srcFor(state.shape, key, smp), key, set));
+  const sharedPal = set.shared ? paletteFrom(raws, set.k) : null;
+  const tex = {}, outs = [];
+  const allPal = [];
+  S.slots.forEach(([key, label], i) => {
+    const pal = sharedPal ?? paletteFrom([raws[i]], set.k);
+    if (!sharedPal || i === 0) allPal.push(...pal.map(p => toRGB(p, set.space)));
+    const out = quantize(raws[i], pal, set);
+    texCache[key]?.dispose(); tex[key] = texCache[key] = toTex(out);
+    outs.push([label, out]);
+  });
+  buildMesh(tex);
+  // texture strip + palette
+  $('texs').replaceChildren(...outs.map(([label, c]) => { const f = document.createElement('figure'); f.className = 'tex'; f.style.margin = '0'; const img = new Image(); img.src = c.toDataURL('image/png'); img.alt = `${label} texture`; const s = document.createElement('span'); s.textContent = `${label} · ${c.width}×${c.height}`; f.append(img, s); return f; }));
+  const uniq = [...new Map(allPal.map(p => [p.map(v => v | 0).join(','), p])).values()].sort((a, b) => (.299 * a[0] + .587 * a[1] + .114 * a[2]) - (.299 * b[0] + .587 * b[1] + .114 * b[2]));
+  $('swatches').replaceChildren(...uniq.map(p => { const i = document.createElement('i'); i.style.background = `rgb(${p.map(v => v | 0)})`; return i; }));
+  $('palLabel').textContent = `Palette · ${uniq.length} colours${set.shared ? '' : ' (per photo)'}`;
+  lastSet = set;
+}
+let pending = 0;
+const schedule = () => { cancelAnimationFrame(pending); pending = requestAnimationFrame(rebuild); };
+
+/* ---------- UI ---------- */
+function renderSlots() {
+  const S = SHAPES[state.shape];
+  $('shapeNote').textContent = S.note;
+  $('slots').replaceChildren(...S.slots.map(([key, label, hint, smp]) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'slot'; b.id = `slot-${key}`;
+    const custom = !!state.user[`${state.shape}:${key}`]; if (custom) b.classList.add('custom');
+    const src = srcFor(state.shape, key, smp), th = document.createElement('div'); th.className = 'thumb';
+    const img = new Image(); img.alt = ''; img.src = src instanceof HTMLCanvasElement ? src.toDataURL() : src.toDataURL?.() ?? ''; th.append(img);
+    if (!(src instanceof HTMLCanvasElement)) { const c = cnv(src.width, src.height); c.getContext('2d').drawImage(src, 0, 0); img.src = c.toDataURL(); }
+    const t = document.createElement('span'); t.className = 'tag'; t.textContent = custom ? 'Yours' : 'Sample';
+    const bb = document.createElement('b'); bb.textContent = label; const sm = document.createElement('small'); sm.textContent = custom ? 'Click to replace' : hint;
+    b.append(t, th, bb, sm);
+    b.onclick = () => { pickFor = key; $('file').value = ''; $('file').click(); };
+    b.ondragover = e => { e.preventDefault(); b.classList.add('over'); };
+    b.ondragleave = () => b.classList.remove('over');
+    b.ondrop = e => { e.preventDefault(); b.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) load(key, f); };
+    return b;
+  }));
+  document.querySelectorAll('[data-for="round"]').forEach(el => el.hidden = !S.round);
+  document.querySelectorAll('[data-for="box"]').forEach(el => el.hidden = state.shape !== 'box');
+  document.querySelectorAll('[data-for="cup"]').forEach(el => el.hidden = state.shape !== 'cup');
+  $('sides').value = state.shape === 'cup' ? 8 : $('sides').value; $('sidesOut').textContent = $('sides').value;
+  $('h').closest('.row').hidden = false;
+}
+let pickFor = null;
+$('file').onchange = () => { const f = $('file').files[0]; if (f && pickFor) load(pickFor, f); };
+async function load(key, file) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const c = cnv(Math.min(bmp.width, 1024), Math.round(Math.min(bmp.width, 1024) * bmp.height / bmp.width)); c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    state.user[`${state.shape}:${key}`] = c;
+    fitTo(key, c); renderSlots(); syncDims(); schedule();
+  } catch { $('shapeNote').textContent = 'That file could not be read as an image. Try a JPG or PNG.'; }
+}
+function fitTo(key, c) {
+  const D = state.dims[state.shape], a = c.height / c.width;
+  if (['cup', 'can', 'bottle'].includes(state.shape) && key === 'side') D.h = +(D.w * a).toFixed(2);
+  if (state.shape === 'box' && key === 'front') D.h = +(D.w * a).toFixed(2);
+  if (state.shape === 'box' && key === 'side') D.d = +(D.h / a).toFixed(2);
+  if (state.shape === 'card') { D.h = 1; D.w = +(1 / a).toFixed(2); }
+}
+$('fit').onclick = () => { for (const [key, , , smp] of SHAPES[state.shape].slots) { const s = srcFor(state.shape, key, smp); if (key !== 'top') fitTo(key, s); } syncDims(); schedule(); };
+function syncDims() {
+  const D = state.dims[state.shape];
+  for (const k of ['w', 'h', 'd']) { $(k).value = Math.round(D[k] * 100); $(k + 'Out').textContent = D[k].toFixed(2); }
+}
+function setShape(s) {
+  state.shape = s;
+  document.querySelectorAll('#shapes button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.shape === s)));
+  renderSlots(); syncDims(); schedule();
+}
+document.querySelectorAll('#shapes button').forEach(b => b.onclick = () => setShape(b.dataset.shape));
+for (const k of ['w', 'h', 'd']) $(k).oninput = () => { state.dims[state.shape][k] = $(k).value / 100; $(k + 'Out').textContent = state.dims[state.shape][k].toFixed(2); schedule(); };
+const live = [['taper', v => v], ['strength', v => v], ['bright', v => v], ['contrast', v => v], ['sat', v => v], ['hue', v => v + '°'], ['sides', v => v]];
+live.forEach(([id, fmt]) => $(id).addEventListener('input', () => { $(id + 'Out').textContent = fmt($(id).value); schedule(); }));
+['texSize', 'colors', 'dither', 'space', 'shared', 'mapping'].forEach(id => $(id).addEventListener('change', schedule));
+$('speed').oninput = () => $('speedOut').textContent = $('speed').value + '°/s';
+$('tilt').oninput = () => $('tiltOut').textContent = $('tilt').value + '°';
+$('res').onchange = resize;
+$('bg').onchange = () => renderer.setClearColor($('bg').value, 1);
+renderer.setClearColor('#000000', 1);
+
+/* ---------- drag to turn ---------- */
+let drag = null, holdUntil = 0, vel = 0;
+canvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); vel = 0; });
+canvas.addEventListener('pointermove', e => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; pivot.rotation.y += dx * .012; vel = dx * .012; const t = clamp(+$('tilt').value + dy * .3, -10, 60); $('tilt').value = t; $('tiltOut').textContent = Math.round(t) + '°'; });
+canvas.addEventListener('pointerup', () => { drag = null; holdUntil = performance.now() + 1200; });
+
+function resize() {
+  const r = $('stage').getBoundingClientRect(), choice = +$('res').value;
+  const lh = choice || Math.round(r.height), lw = Math.max(1, Math.round(lh * r.width / r.height));
+  renderer.setSize(lw, lh, false); cam.aspect = r.width / r.height; cam.updateProjectionMatrix();
+  $('badge').textContent = `${choice ? choice + 'p' : 'Full res'} · drag to turn`;
+}
+new ResizeObserver(resize).observe($('stage'));
+
+let last = performance.now(), t = 0;
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now; t += dt;
+  if (!drag) { if (now > holdUntil) pivot.rotation.y += +$('speed').value * Math.PI / 180 * dt; else { pivot.rotation.y += vel; vel *= .9; } }
+  pivot.position.y = $('bob').checked ? Math.sin(t * 2.2) * radius * .08 : 0;
+  const tilt = +$('tilt').value * Math.PI / 180, dist = radius / Math.sin(cam.fov * Math.PI / 360) * 1.12;
+  cam.position.set(0, Math.sin(tilt) * dist, Math.cos(tilt) * dist); cam.lookAt(0, 0, 0);
+  renderer.render(scene, cam);
+  requestAnimationFrame(frame);
+}
+setShape('cup'); resize(); requestAnimationFrame(frame);
+</script>
