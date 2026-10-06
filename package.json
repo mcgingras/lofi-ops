@@ -1,0 +1,29 @@
+{
+  "name": "lofi-ops",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run typecheck && vite build",
+    "typecheck": "tsc -p tsconfig.json && tsc -p src/client/tsconfig.json",
+    "test": "vitest run",
+    "start": "tsx src/server/index.ts --prod"
+  },
+  "dependencies": {
+    "three": "~0.170.0",
+    "tsx": "^4.23.15",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1",
+    "@types/three": "~0.170.0",
+    "@types/ws": "^8.18.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.3",
+    "vitest": "^5.0.3"
+  }
+}

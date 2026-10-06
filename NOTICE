@@ -1,4 +1,8 @@
 Lo-Fi Ops
 
-Portions adapted from Blockyard (https://github.com/Potrock/blockyard), MIT License, Copyright (c) 2026 Patrick Blais.
+Portions adapted from Blockyard (https://github.com/Potrock/blockyard), MIT License, Copyright (c) 2026 Patrick Blais:
+  src/server/lagcomp.ts (tick history with interpolated rewind, from src/platform/sim/hitscan.ts),
+  src/shared/collision.ts (ray vs box slab test, from src/platform/sim/hitboxes.ts),
+  src/server/room.ts and combat.ts (room step loop, spawn selection and kill/assist flow patterns from
+  src/platform/host/room.ts and src/games/callofblocky/server.ts).
 Textures in assets/textures from Poly Haven (https://polyhaven.com), CC0.

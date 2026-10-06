@@ -35,7 +35,8 @@ src/shared/            pure TS, no DOM, no Node APIs; imported by both sides
     progression.ts challenges.ts camos.ts economy.ts
   maps/<id>.ts         one file per map (brush data + spawns + lights + props)
 src/server/
-  index.ts             http + ws entry, static files in prod
+  index.ts             entry (runs app.ts startServer); app.ts = http + ws, static files in prod
+  feature.ts           Feature / ServerApi plug-in contract; bus.ts, modifiers.ts, rpc.ts, entities.ts, player.ts, session.ts
   lobby.ts             playlists, matchmaking, per-game lobbies, map vote
   room.ts              one match instance: tick loop, players, snapshots
   sim.ts               authoritative simulation step
@@ -54,7 +55,7 @@ src/client/
   features/<area>/     client side of each feature
 assets/textures/       Poly Haven photos (512px JPG)
 reference/             approved prototypes, read-only
-docs/                  this file, CONTRACTS.md (written by core), per-feature notes
+docs/                  this file, CONTRACTS.md (written by core: exact extension APIs), per-feature notes
 tests/                 vitest unit + headless integration
 ```
 
@@ -92,12 +93,12 @@ Client side: `registerScreen(id, mount)`, `registerHudWidget(id, draw)`, and a f
 
 Each file exports a typed array + `byId` map. Core seeds each with one or two entries so everything type-checks; feature owners fill them in.
 
-- `WeaponDef { id, name, class: 'ar'|'smg'|'lmg'|'sniper'|'shotgun'|'pistol'|'launcher'|'special', damage: {near, far, nearRange, farRange}, multipliers: {head, torso, limb}, rpm, mode: 'auto'|'semi'|'burst'|'bolt'|'pump', burst?, pellets?, magazine, reserve, reloadMs, reloadEmptyMs, adsMs, sprintOutMs, moveMult, spread: {hip, ads, move}, recoil: {vertical, horizontal, recovery}, unlockLevel, attachments: string[], model: string }`
+- `WeaponDef { id, name, class: 'ar'|'smg'|'lmg'|'sniper'|'shotgun'|'pistol'|'launcher'|'special', slot: 'primary'|'secondary', damage: {near, far, nearRange, farRange}, multipliers: {head, torso, limb}, rpm, mode: 'auto'|'semi'|'burst'|'bolt'|'pump', burst?, pellets?, magazine, reserve, reloadMs, reloadEmptyMs, adsMs, sprintOutMs, moveMult, spread: {hip, ads, move}, recoil: {vertical, horizontal, recovery}, unlockLevel, attachments: string[], model: string, range?, swapMs?, zoom?, scope?, price? }`
 - `AttachmentDef { id, name, slot: 'optic'|'muzzle'|'underbarrel'|'magazine'|'other', modifiers: Partial<...>, unlockKills?, model? }`
 - `PerkDef { id, name, tier: 1|2|3, description, pro: {description, challenge}, unlockLevel }`
 - `KillstreakDef { id, name, kills, description, unlockLevel, kind: 'passive'|'called'|'controlled' }`
 - `ModeDef { id, name, teams: boolean, scoreLimit, timeLimitSec, respawn: boolean, wager?: {ante, payouts[]}, playlist }`
-- `MapDef { id, name, inspiredBy, build(): MapData, modes: string[], sizes: 'small'|'medium'|'large' }`
+- `MapDef { id, name, inspiredBy, build(): MapData, modes: string[], size: 'small'|'medium'|'large' }`
 - Progression: levels 1–50 with XP table, prestige 0–15 (prestige resets level and unlocks, keeps CoD points and challenge records, grants an emblem), XP sources (kill 100, headshot +50, assist 50, objective, match bonus, challenges).
 - `ChallengeDef { id, name, mode?: string, weapon?: string, metric, goal, tiers?, xp, codPoints? }` — challenges per game mode and per weapon feed XP and CoD Points.
 - `CamoDef { id, name, price | unlock, recipe }` — skins are texture recipes run through the developer.
@@ -121,7 +122,24 @@ Each file exports a typed array + `byId` map. Core seeds each with one or two en
 - `reference/yard-lab.html`: approved look, shader, baking, HUD, viewmodel, soldier model, photo recipes.
 - `reference/turntable.html`: quantizer/dither settings.
 
-## 10. Quality bar
+## 10. Deployment (must stay deployable)
+
+Target: **Fly.io** (the `fly` CLI is installed and logged in on the dev machine). The game server is a long-lived Node process holding WebSockets and in-memory match state, so serverless platforms are out: Cloudflare Workers would need a Durable Objects rewrite without `node:sqlite`. Cloudflare can still front the domain or host the static client later if we want.
+
+Requirements every change must respect:
+- One process serves the built client (static files), the WebSocket endpoint and the API on `process.env.PORT` (default 8080). Bind `0.0.0.0`.
+- The client derives the socket URL from `location` (`wss://` on https), never a hard-coded host.
+- `GET /healthz` returns 200 with `{ok, rooms, players, version}`.
+- Persistent data lives under `process.env.DATA_DIR` (default `./data`); the SQLite file goes there. On Fly that is a mounted volume.
+- Graceful shutdown on SIGTERM/SIGINT: stop accepting joins, save every profile, close sockets, exit within 10 s (Fly sends SIGINT then waits).
+- No dev-only dependencies at runtime; `npm run build` produces the client bundle and a compiled (or tsx-runnable) server.
+- Repo ships a multi-stage `Dockerfile`, `.dockerignore`, `fly.toml` (internal_port 8080, http service with `force_https`, a `[[mounts]]` volume at `/data`, health check on `/healthz`, `auto_stop_machines = "stop"` and `min_machines_running = 0` for cheap idle) and `docs/DEPLOY.md` with first-deploy and redeploy steps.
+- A local check: `docker build` then `docker run -p 8080:8080` must serve a playable game.
+- Primary region: **`dfw` (Dallas)**. Players are in Colorado and Fly has no Denver region; Dallas is the closest (roughly 25–30 ms round trip from Denver), ahead of `lax`, `ord` and `sjc`.
+- Scale to zero: `auto_stop_machines = "stop"`, `auto_start_machines = true`, `min_machines_running = 0`, smallest shared-CPU machine (`shared-cpu-1x`, 512 MB to start; bump to 1 GB if bot-heavy rooms need it). The first visitor after idle waits a few seconds for boot; the client shows a "Waking server" state and retries the socket.
+- Deploying (creating the Fly app/volume and running `fly deploy`) is done only after the owner confirms the app name.
+
+## 11. Quality bar
 
 - `npm run typecheck`, `npm test`, `npm run build` stay green on every handoff.
 - Each feature ships unit tests for its rules and at least one headless integration test exercising it through the server.
