@@ -1,6 +1,6 @@
 /**
  * Client side of the "modes" feature (auto-imported by main.ts via import.meta.glob):
- * objective state store, HUD widgets, world props, sounds, the final killcam, the end-of-match
+ * objective state store, HUD widgets, world props, sounds, the per-death and final killcams, the end-of-match
  * summary screen and quick-play menu entries for the objective modes. See docs/features/modes.md.
  */
 import { HUD_COLORS as C, rect, txt, unit } from '../../hud/draw';
@@ -11,6 +11,7 @@ import './sounds';
 import './store';
 import './hud';
 import './props';
+import { deathcamPlaying } from './deathcam';
 import { killcamPlaying } from './killcam';
 import { summaryOpen } from './summary';
 
@@ -27,7 +28,8 @@ for (const [order, mode, hint] of [
  * Small wraps of core widgets (same ids and orders, so a later replacement by another feature
  * still wins): the scoreboard and result title stay out of the way of the final killcam and
  * the summary screen, and the death screen explains Headquarters' "no respawn while your HQ
- * stands" instead of "waiting for next round".
+ * stands" instead of "waiting for next round". The death screen also steps aside while the
+ * per-death killcam plays.
  */
 let wrapped = false;
 function wrapCoreWidgets(): void {
@@ -43,6 +45,7 @@ function wrapCoreWidgets(): void {
       orig(g, W, H, dt);
     });
   wrap('core.death', (orig) => (g, W, H, dt) => {
+    if (deathcamPlaying()) return;
     const m = currentMatch();
     if (!m || m.joined.mode !== 'hq' || m.alive || !m.death || m.phase === 'ended' || (m.me?.respawnAt ?? null) !== null) return orig(g, W, H, dt);
     const u = unit(H);

@@ -12,5 +12,6 @@ import economy from './economy/index';
 import frontend from './frontend/index';
 import bots from './bots/index';
 import modes from './modes/index';
+import pickups from './pickups/index';
 
-export const FEATURES: Feature[] = [weapons, perks, killstreaks, progression, economy, frontend, bots, modes];
+export const FEATURES: Feature[] = [weapons, perks, killstreaks, progression, economy, frontend, bots, modes, pickups];

@@ -1,10 +1,12 @@
 /**
  * Wire types of the modes feature (owner: modes): the objective state the server pushes to each
  * player (`modes.state`, team-relative: the bomb carrier only goes to attackers), announcer
- * events (`modes.event`), the final killcam clip (`modes.killcam`) and the end-of-match summary
+ * events (`modes.event`), the final killcam clip (`modes.killcam`), the per-death killcam
+ * (`modes.deathcam`, payload in deathcam.ts) and the end-of-match summary
  * that rides in `MatchResults.ext.modes`. Entity kinds for world props are listed in ENTITY_KINDS.
  */
 import type { Team } from '../constants';
+import type { DeathcamPayload } from './deathcam';
 
 export const MODE_ENTITY = {
   flag: 'modes.flag',
@@ -112,10 +114,10 @@ export interface ModeEventPayload {
   points?: number;
 }
 
-/** Replay frame: every player's pose at a room time. `f` = PlayerFlags bits. */
+/** Replay frame: every player's pose at a room time. `f` = PlayerFlags bits, `hp` = health % (0..100). */
 export interface KillcamFrame {
   t: number;
-  p: [id: string, x: number, y: number, z: number, yaw: number, pitch: number, f: number][];
+  p: [id: string, x: number, y: number, z: number, yaw: number, pitch: number, f: number, hp?: number][];
 }
 
 export interface KillcamPayload {
@@ -156,5 +158,7 @@ declare module '../protocol' {
     'modes.state': ModeStatePayload;
     'modes.event': ModeEventPayload;
     'modes.killcam': KillcamPayload;
+    /** Per-death killcam, to the victim only (see defs/deathcam.ts). */
+    'modes.deathcam': DeathcamPayload;
   }
 }

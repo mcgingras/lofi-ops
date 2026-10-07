@@ -94,6 +94,7 @@ varying vec3 vUvA;
 varying float vFog;
 #ifdef SNAP_DEPTH
 uniform mat4 projectionMatrix;
+uniform vec2 uPolyOffset;
 varying vec3 vView, vViewS, vNormV;
 #endif
 void main() {
@@ -108,10 +109,13 @@ void main() {
     float t = dot(nn, vView) / den;
     if (t > 0.0) {
       vec4 c = projectionMatrix * vec4(vViewS * t, 1.0);
-      z = clamp(0.5 * c.z / c.w + 0.5, 0.0, 1.0);
+      z = 0.5 * c.z / c.w + 0.5;
     }
   }
-  gl_FragDepth = z;
+  // gl_FragDepth bypasses the material's polygon offset (map depth levels), so apply it here, as
+  // GL defines it: factor * max depth slope + units * the depth buffer's resolution (24-bit).
+  if (uPolyOffset != vec2(0.0)) z += uPolyOffset.x * max(abs(dFdx(z)), abs(dFdy(z))) + uPolyOffset.y / 16777216.0;
+  gl_FragDepth = clamp(z, 0.0, 1.0);
 #endif
   vec4 t = texture2D(tMap, vUvA.xy / vUvA.z);
   if (t.a < 0.5) discard;
@@ -147,7 +151,7 @@ export interface LookMaterialOpts {
   haze?: number;
 }
 
-export type LookMaterial = THREE.ShaderMaterial & { uniforms: { tMap: { value: THREE.Texture }; uTint: { value: THREE.Color }; uDyn: { value: THREE.Color }; uOpacity: { value: number }; uSnapMul: { value: number } } };
+export type LookMaterial = THREE.ShaderMaterial & { uniforms: { tMap: { value: THREE.Texture }; uTint: { value: THREE.Color }; uDyn: { value: THREE.Color }; uOpacity: { value: number }; uSnapMul: { value: number }; uPolyOffset?: { value: THREE.Vector2 } } };
 
 const SIDES = { front: THREE.FrontSide, back: THREE.BackSide, double: THREE.DoubleSide } as const;
 
@@ -181,6 +185,7 @@ export function makeLookMaterial(o: LookMaterialOpts): LookMaterial {
       uHazeOn: { value: o.haze ?? (o.fog === false && !o.dyn && !o.sky && o.bake !== false ? 1 : 0) },
       uSky: { value: o.sky ? 1 : 0 },
       uSnapMul: { value: (o.snap ?? !(o.dyn && o.fog === false)) ? 1 : 0 },
+      uPolyOffset: { value: new THREE.Vector2() },
       uAffMul: { value: o.affine ?? 1 },
       uDynOn: { value: o.dyn ? 1 : 0 },
       uDyn: { value: new THREE.Color(1, 1, 1) },
@@ -193,6 +198,12 @@ export function makeLookMaterial(o: LookMaterialOpts): LookMaterial {
   }) as LookMaterial;
   m.defines ??= {};
   if (m.uniforms.uSnapMul.value) {
+    // polygonOffset is set by the caller after creation (map depth levels): mirror it for SNAP_DEPTH.
+    const po = m.uniforms.uPolyOffset!.value as THREE.Vector2;
+    m.onBeforeRender = () => {
+      if (m.polygonOffset) po.set(m.polygonOffsetFactor, m.polygonOffsetUnits);
+      else po.set(0, 0);
+    };
     snapping.add(m);
     m.addEventListener('dispose', () => snapping.delete(m));
     applySnapDepth(m);

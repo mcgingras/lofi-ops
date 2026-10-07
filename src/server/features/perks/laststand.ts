@@ -52,6 +52,19 @@ export function setupLastStand(room: Room): void {
   room.modifiers.add('speedMultiplier', (p) => (down(p) ? T.lastStandSpeed : undefined), 'perks.second_chance_speed');
   room.modifiers.add('canSprint', (p) => (down(p) ? false : undefined), 'perks.second_chance_sprint');
   room.modifiers.add('regenDelayMultiplier', (p) => (down(p) ? 1e6 : undefined), 'perks.second_chance_regen');
+  // USE belongs to last stand while down, and to reviving next to a downed (Pro) teammate.
+  room.modifiers.add(
+    'useClaimed',
+    (q) => {
+      if (down(q)) return true;
+      for (const p of room.players.values()) {
+        if (p === q || !p.alive || !down(p) || !isPro(p, 'second_chance') || room.isEnemy(p, q)) continue;
+        if (Math.hypot(q.move.x - p.move.x, q.move.z - p.move.z) <= T.reviveRadius && Math.abs(q.move.y - p.move.y) < 1.5) return true;
+      }
+      return undefined;
+    },
+    'perks.second_chance_use',
+  );
 
   room.bus.on('death', ({ victim }) => end(victim));
   room.bus.on('spawn', ({ player }) => end(player));

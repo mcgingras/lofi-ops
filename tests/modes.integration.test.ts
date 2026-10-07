@@ -10,6 +10,7 @@ import type { DomRules } from '../src/server/features/modes/dom';
 import type { SdRules } from '../src/server/features/modes/sd';
 import type { PlayerState } from '../src/server/player';
 import { MODE_TUNING } from '../src/shared/defs/modes';
+import { unpackClip, type DeathcamPayload } from '../src/shared/defs/deathcam';
 import { MODE_ENTITY, type MatchSummaryExt, type ModeEventPayload, type ModeStatePayload } from '../src/shared/defs/modestate';
 import { Buttons } from '../src/shared/input';
 import { createMoveState } from '../src/shared/movement';
@@ -144,5 +145,37 @@ describe('modes over real sockets', () => {
     expect(ev.player).toBe(me.id);
     const sc = await client.waitFor('score', (s) => (s.teams?.[me.team!] ?? 0) === 1);
     expect(sc.teams![me.team!]).toBe(1);
+  });
+
+  it('per-death killcam: the clip goes to the victim only, then the respawn comes on time', async () => {
+    const { client: a, welcome: wa } = await FakeClient.connect(server.url, 'Shooter');
+    const { client: b, welcome: wb } = await FakeClient.connect(server.url, 'Shot');
+    clients.push(a, b);
+    const room = server.lobby.createRoom({ mode: 'tdm', map: 'yard', autoStart: false, onEnd: 'close' });
+    a.send({ t: 'joinRoom', roomId: room.id });
+    await a.waitFor('joined');
+    b.send({ t: 'joinRoom', roomId: room.id });
+    await b.waitFor('joined');
+    room.startMatch();
+    const pa = room.players.get(wa.sessionId)!;
+    const pb = room.players.get(wb.sessionId)!;
+    expect(pa.team).not.toBe(pb.team);
+    // A couple of seconds of recorded poses before the kill.
+    const t0 = room.time;
+    while (room.time - t0 < 2) await sleep(50);
+    const spawnsBefore = b.all('spawned').length;
+    room.kill(pb, pa, { weapon: 'ak47', means: 'bullet', part: 'torso' });
+    const died = await b.waitFor('died');
+    const cam = await feat<DeathcamPayload>(b, 'modes.deathcam');
+    expect(cam).toMatchObject({ killer: pa.id, victim: pb.id, view: 'eyes' });
+    expect(cam.card.name).toBe('Shooter');
+    const { frames } = unpackClip(cam.clip!);
+    expect(frames.length).toBeGreaterThan(20);
+    expect(cam.playAt + (frames.at(-1)!.t - frames[0]!.t)).toBeLessThanOrEqual(died.respawnAt! + 1e-3);
+    const t1 = Date.now();
+    while (b.all('spawned').length === spawnsBefore && Date.now() - t1 < 6000) await sleep(20);
+    expect(b.all('spawned').length).toBe(spawnsBefore + 1);
+    expect(pb.spawnTime - died.respawnAt!).toBeLessThan(0.05); // respawned on time, not after the clip
+    expect(a.all('feat').some((m) => m.id === 'modes.deathcam')).toBe(false);
   });
 });

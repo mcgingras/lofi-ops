@@ -24,7 +24,7 @@ import { botAutoStreaks, botCallDelay, callKillstreak } from './api';
 import { botStreakSkill } from './skill';
 import { closeMap, openMap, submitMapTarget, tickMap } from './mapmode';
 import { flushState, grant, ksOf, markDirty, onKill, resetPlayer, stateMsg } from './state';
-import { onUsePressed } from './streaks/package';
+import { crateInReach, onUsePressed } from './streaks/package';
 import { registerRadarModifiers } from './streaks/radar';
 import { ksRoom } from './world';
 
@@ -145,6 +145,8 @@ const feature: Feature = {
     // down; designating: no sprint.
     room.modifiers.add('speedMultiplier', (p) => (p.ext.killstreaks?.control || p.ext.killstreaks?.map ? 0 : undefined), 'killstreaks.control');
     room.modifiers.add('canSprint', (p) => (p.ext.killstreaks?.control || p.ext.killstreaks?.armed || p.ext.killstreaks?.map ? false : undefined), 'killstreaks.control_sprint');
+    // USE takes a care package in reach (before any weapon pickup), and does nothing else while driving or on the radio.
+    room.modifiers.add('useClaimed', (p) => (p.ext.killstreaks?.control || p.ext.killstreaks?.map || crateInReach(ctx, p) ? true : undefined), 'killstreaks.use');
 
     room.bus.on('death', (e) => {
       const ks = e.victim.ext.killstreaks;

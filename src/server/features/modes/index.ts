@@ -3,7 +3,8 @@
  *
  * setup(): registers the rules for tdm, ffa (polished), dom, sd, hq and kc.
  * room():  pushes team-relative objective state to each player (`modes.state`, every 0.25 s and
- *          on change), records the final killcam, and writes the end-of-match summary into
+ *          on change), records the final killcam, sends each killed human their per-death
+ *          killcam (deathcam.ts), and writes the end-of-match summary into
  *          `results.ext.modes` (MVP, objective stats, XP breakdown).
  * Bot hooks: ./bots.ts (`objectivesFor`, `bestObjective`).
  */
@@ -15,6 +16,7 @@ import { controllerOf, isEnemyKill } from './common';
 import { DomRules } from './dom';
 import { HqRules } from './hq';
 import { KcRules } from './kc';
+import { Deathcams } from './deathcam';
 import { KillcamRecorder } from './killcam';
 import { SdRules } from './sd';
 import { buildSummary } from './summary';
@@ -57,7 +59,13 @@ const feature: Feature = {
   room(room) {
     room.every(STATE_EVERY, () => pushState(room));
     const cam = new KillcamRecorder(room);
-    room.bus.on('matchStart', () => cam.clear());
+    const deathcams = new Deathcams(room, cam);
+    room.bus.on('matchStart', () => {
+      cam.clear();
+      deathcams.clear();
+    });
+    room.bus.on('fire', (e) => cam.onShot(e.player, e.end, e.hits.length > 0));
+    room.bus.on('damage', (e) => deathcams.onDamage(e.victim, e.from));
     room.bus.on('tick', ({ tick }) => {
       cam.onTick(tick);
       if (controllerOf(room)?.dirty) pushState(room);
@@ -68,6 +76,7 @@ const feature: Feature = {
     });
     room.bus.on('death', (e) => {
       if (isEnemyKill(room, e)) cam.onKill(e.attacker, e.victim, e.weapon, e.headshot);
+      deathcams.onDeath(e);
     });
     room.bus.on(
       'matchEnd',

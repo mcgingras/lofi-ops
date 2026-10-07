@@ -63,7 +63,15 @@ export class Renderer {
   readonly canvas: HTMLCanvasElement;
   readonly gl: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
-  readonly cam = new THREE.PerspectiveCamera(70, 1, 0.05, 1000);
+  /**
+   * Near plane 0.1 m (was 0.05): with the 24-bit depth target the smallest resolvable depth step
+   * at distance d is about d^2 / (near * 2^24), so this halves it: 6 mm at 100 m, 2 cm at 190 m
+   * (the farthest fog). The eye is never closer than 0.3 m to a wall (PLAYER.radius) or 0.2 m to a
+   * ceiling, and the near plane's corners reach 1.6 x near at 16:9 (1.9 x at 21:9), so nothing
+   * clips. Far barely matters (it only has to clear the 450 m sky dome). Coplanar faces are
+   * settled separately, by depth levels (mapbuilder).
+   */
+  readonly cam = new THREE.PerspectiveCamera(70, 1, 0.1, 1000);
   readonly vmScene = new THREE.Scene();
   readonly vmCam = new THREE.PerspectiveCamera(58, 1, 0.01, 10);
   readonly hud: HTMLCanvasElement;
