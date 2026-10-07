@@ -4,17 +4,26 @@
  * UVs (prototype `worldUV`) or raw 0..1 UVs. Lighting is baked into vertex colours per time of day
  * (cached in memory and IndexedDB). Glow props become additive sprites; the sky is a dome.
  *
+ * Z-fighting: faces that share a plane with another overlapping face (trim flush on a wall, wall
+ * ends in a corner, a strip on a floor, decals) are settled by `planDepth` (shared maps/faces.ts):
+ * hidden duplicates are not drawn, the rest get a depth level and go into a per-(material, level)
+ * mesh drawn with a polygon offset of that many steps, and decals lying flat on surfaces are drawn
+ * after the world in stacking order without writing depth. The intended face wins at any
+ * distance; geometry, UVs and collision are unchanged.
+ *
  * Extension: `registerPropBuilder(kind, fn)` renders custom prop kinds (e.g. 'gltf').
  */
 import * as THREE from 'three';
-import { buildCollisionWorld, type Brush, type Decal, type Face, type GlowProp, type MapData, type MaterialDef, type Prop, type TimePreset } from '../../shared/maps/types';
+import { boxFace, decalQuad, FACES, faceKey, planDepth, RAMP_ANGLE, xform, type FaceSource } from '../../shared/maps/faces';
+import { buildCollisionWorld, type Brush, type Decal, type GlowProp, type MapData, type MaterialDef, type Prop, type TimePreset } from '../../shared/maps/types';
 import { hashString, type Vec3 } from '../../shared/math';
 import { Baker, DynLight } from './bake';
 import { cacheGet, cachePut } from './idb';
 import { G, makeLookMaterial, type LookMaterial } from './shader';
 import { bindTexture, getTexture, unbindTexture } from './textures';
 
-const BAKE_VERSION = 2;
+// 3: meshes split per depth level (the bake buffer's vertex order changed).
+const BAKE_VERSION = 3;
 const sg = (v: number) => Math.min(56, Math.max(1, Math.round(v / 1.1)));
 
 class Bucket {
@@ -30,8 +39,9 @@ class Bucket {
 type V = [number, number, number];
 type Xf = (p: V) => V;
 
-/** A subdivided quad: corner o, full edges u and v (normal = u x v), UV size (uw, vh). */
-function quad(b: Bucket, o: V, u: V, v: V, su: number, sv: number, uw: number, vh: number, xf: Xf, nxf: Xf) {
+/** A subdivided quad: corner o, full edges u and v (normal = u x v), UV size (uw, vh). No bucket: skipped. */
+function quad(b: Bucket | null, o: V, u: V, v: V, su: number, sv: number, uw: number, vh: number, xf: Xf, nxf: Xf) {
+  if (!b) return;
   const n = norm(cross(u, v));
   const N = nxf(n);
   const base = b.count;
@@ -55,7 +65,8 @@ function quad(b: Bucket, o: V, u: V, v: V, su: number, sv: number, uw: number, v
     }
 }
 
-function tri(b: Bucket, p: [V, V, V], uv: [number, number][], xf: Xf, nxf: Xf) {
+function tri(b: Bucket | null, p: [V, V, V], uv: [number, number][], xf: Xf, nxf: Xf) {
+  if (!b) return;
   const n = nxf(norm(cross(sub(p[1], p[0]), sub(p[2], p[0]))));
   const base = b.count;
   for (let k = 0; k < 3; k++) {
@@ -74,41 +85,16 @@ function norm(a: V): V {
   return [a[0] / l, a[1] / l, a[2] / l];
 }
 
-/** Rotation about y by `ry` (three.js convention) then translation. */
-function xform(ry: number, c: V): { xf: Xf; nxf: Xf } {
-  const cs = Math.cos(ry);
-  const sn = Math.sin(ry);
-  const rot = (p: V): V => [p[0] * cs + p[2] * sn, p[1], -p[0] * sn + p[2] * cs];
-  return { xf: (p) => {
-    const r = rot(p);
-    return [r[0] + c[0], r[1] + c[1], r[2] + c[2]];
-  }, nxf: rot };
+/**
+ * Polygon offset for a depth level (0 = none). The constant term separates the levels: two depth
+ * steps per level, above the 1-2 steps that differently tessellated coplanar faces disagree by.
+ * The slope term covers grazing angles and the PS1 vertex snap moving edges by half a pixel. Maps
+ * use up to 4 levels (tests/zfight.test.ts keeps it at 6 or fewer): at most 8 steps, under 5 cm
+ * at 100 m, and a slope pull of 2 px at most, so an offset face never visibly bleeds past an edge.
+ */
+export function depthOffset(level: number): { factor: number; units: number } {
+  return level > 0 ? { factor: -1 - 0.25 * Math.min(level, 4), units: -2 * level } : { factor: 0, units: 0 };
 }
-
-const FACES: Face[] = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
-
-/** Box faces in local space (centred), sized w x h x d. */
-function boxFace(f: Face, w: number, h: number, d: number): { o: V; u: V; v: V; uw: number; vh: number } {
-  const x = w / 2;
-  const y = h / 2;
-  const z = d / 2;
-  switch (f) {
-    case 'px':
-      return { o: [x, -y, z], u: [0, 0, -d], v: [0, h, 0], uw: d, vh: h };
-    case 'nx':
-      return { o: [-x, -y, -z], u: [0, 0, d], v: [0, h, 0], uw: d, vh: h };
-    case 'py':
-      return { o: [-x, y, z], u: [w, 0, 0], v: [0, 0, -d], uw: w, vh: d };
-    case 'ny':
-      return { o: [-x, -y, -z], u: [w, 0, 0], v: [0, 0, d], uw: w, vh: d };
-    case 'pz':
-      return { o: [-x, -y, z], u: [w, 0, 0], v: [0, h, 0], uw: w, vh: h };
-    case 'nz':
-      return { o: [x, -y, -z], u: [-w, 0, 0], v: [0, h, 0], uw: w, vh: h };
-  }
-}
-
-const RAMP_ANGLE = { '+x': 0, '-z': Math.PI / 2, '-x': Math.PI, '+z': -Math.PI / 2 } as const;
 
 export type PropBuilder = (prop: Prop, ctx: { map: MapData; root: THREE.Group; material(id: string): LookMaterial | null }) => THREE.Object3D | null;
 const propBuilders = new Map<string, PropBuilder>();
@@ -144,8 +130,10 @@ export class MapScene {
     this.baker = new Baker(this.world, map);
     this.time = map.times.find((t) => t.id === map.defaultTime) ?? map.times[0]!;
     this.dyn = new DynLight(this.baker, this.time);
-    this.signature = hashString(JSON.stringify([BAKE_VERSION, map.brushes, map.decals, map.props, map.lights])).toString(36);
     this.build();
+    // The cached bake is one buffer over the baked meshes in order, so their layout is part of the key.
+    const layout = this.baked.map((b) => [b.mesh.name, b.pos.length]);
+    this.signature = hashString(JSON.stringify([BAKE_VERSION, map.brushes, map.decals, map.props, map.lights, layout])).toString(36);
     this.skyMat = makeLookMaterial({ texture: this.time.sky, emissive: 1, fog: false, side: 'back', affine: 0, bake: false });
     this.sky = new THREE.Mesh(new THREE.SphereGeometry(450, 32, 16), this.skyMat);
     this.sky.frustumCulled = false;
@@ -162,21 +150,28 @@ export class MapScene {
 
   private build() {
     const map = this.map;
+    const { level, drop, flush } = planDepth(map);
     const buckets = new Map<string, Bucket>();
-    const bucket = (mat: string) => {
-      let b = buckets.get(mat);
-      if (!b) buckets.set(mat, (b = new Bucket()));
+    /** The mesh for a material at the depth level of a face (and the layer of a flush decal). */
+    const bucket = (mat: string, src: FaceSource) => {
+      const k = faceKey(src);
+      const layer = flush.get(k);
+      const key = `${mat}#${level.get(k) ?? 0}${layer === undefined ? '' : `#${layer}`}`;
+      let b = buckets.get(key);
+      if (!b) buckets.set(key, (b = new Bucket()));
       return b;
     };
-    for (const br of map.brushes) if (!br.noRender) this.addBrush(br, bucket);
-    for (const d of map.decals) this.addDecal(d, bucket(d.mat));
-    for (const p of map.props) {
+    map.brushes.forEach((br, i) => {
+      if (!br.noRender) this.addBrush(br, i, (mat, src) => (drop.has(faceKey(src)) ? null : bucket(mat, src)));
+    });
+    map.decals.forEach((d, i) => this.addDecal(d, bucket(d.mat, { kind: 'decal', i })));
+    map.props.forEach((p, i) => {
       if (p.kind === 'cylinder') {
         const geo = new THREE.CylinderGeometry(p.r, p.r, p.len, p.sides, Math.max(1, Math.round(p.len / 1.2)));
         if (p.axis === 'z') geo.rotateX(Math.PI / 2);
         else if (p.axis === 'x') geo.rotateZ(Math.PI / 2);
         geo.translate(p.x, p.y, p.z);
-        appendGeometry(bucket(p.mat), geo);
+        appendGeometry(bucket(p.mat, { kind: 'cap', i, end: 0 }), geo);
         geo.dispose();
       } else if (p.kind === 'glow') {
         const m = new THREE.SpriteMaterial({ map: getTexture('glow'), color: new THREE.Color(p.color[0], p.color[1], p.color[2]), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false });
@@ -191,11 +186,14 @@ export class MapScene {
         if (obj) this.root.add(obj);
         else if (!fn) console.info(`[map] prop kind "${p.kind}" has no builder (registerPropBuilder)`);
       }
-    }
-    for (const [matId, b] of buckets) {
+    });
+    for (const [key, b] of buckets) {
       if (!b.count) continue;
-      const mat = this.makeMat(matId);
+      const [matId, lv, layer] = key.split('#') as [string, string, string | undefined];
+      const mat = this.makeMat(matId, Number(lv));
       if (!mat) continue;
+      // Flush decals: after the world, in stacking order, without writing depth (planDepth `flush`).
+      if (layer !== undefined) mat.depthWrite = false;
       const geo = new THREE.BufferGeometry();
       const pos = new Float32Array(b.pos);
       const nor = new Float32Array(b.nor);
@@ -206,7 +204,8 @@ export class MapScene {
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, mat);
       mesh.matrixAutoUpdate = false;
-      mesh.name = matId;
+      mesh.name = key;
+      if (layer !== undefined) mesh.renderOrder = 1 + Number(layer);
       this.root.add(mesh);
       if (mat.vertexColors) {
         const color = new THREE.BufferAttribute(new Float32Array(pos.length), 3);
@@ -217,7 +216,7 @@ export class MapScene {
     }
   }
 
-  private makeMat(id: string): LookMaterial | null {
+  private makeMat(id: string, level = 0): LookMaterial | null {
     const def: MaterialDef | undefined = this.map.materials[id];
     if (!def) {
       console.warn(`[map] unknown material ${id}`);
@@ -225,11 +224,18 @@ export class MapScene {
     }
     if (def.texture === 'none') return null;
     const m = makeLookMaterial({ texture: def.texture, uvMul: def.uvMul, tint: def.tint, emissive: def.emissive, side: def.side, bake: def.bake, fog: def.fog, affine: def.affine });
+    if (level > 0) {
+      const o = depthOffset(level);
+      m.polygonOffset = true;
+      m.polygonOffsetFactor = o.factor;
+      m.polygonOffsetUnits = o.units;
+    }
     this.materials.push(m);
     return m;
   }
 
-  private addBrush(br: Brush, bucket: (mat: string) => Bucket) {
+  /** `bucket` returns null for faces the depth plan drops. */
+  private addBrush(br: Brush, i: number, bucket: (mat: string, src: FaceSource) => Bucket | null) {
     const { min, max } = br;
     const c: V = [(min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2];
     const raw = br.uv === 'raw';
@@ -241,7 +247,7 @@ export class MapScene {
       const L = along ? w : d;
       const W = along ? d : w;
       const { xf, nxf } = xform(RAMP_ANGLE[br.ramp], c);
-      const b = bucket(br.mat);
+      const b = (part: 'slope' | 'rampHi' | 'rampLo' | 'rampSideA' | 'rampSideB') => bucket(br.mat, { kind: 'brush', i, part });
       const x = L / 2;
       const y = h / 2;
       const z = W / 2;
@@ -249,17 +255,17 @@ export class MapScene {
       const uvs = (uw: number, vh: number): [number, number] => (raw ? [1, 1] : [uw, vh]);
       // Slope, high end, bottom, two side triangles.
       const [su, sv] = uvs(sl, W);
-      quad(b, [-x, -y, z], [L, h, 0], [0, 0, -W], sg(sl), sg(W), su, sv, xf, nxf);
+      quad(b('slope'), [-x, -y, z], [L, h, 0], [0, 0, -W], sg(sl), sg(W), su, sv, xf, nxf);
       const hi = boxFace('px', L, h, W);
       const hu = uvs(hi.uw, hi.vh);
-      quad(b, hi.o, hi.u, hi.v, sg(hi.uw), sg(hi.vh), hu[0], hu[1], xf, nxf);
+      quad(b('rampHi'), hi.o, hi.u, hi.v, sg(hi.uw), sg(hi.vh), hu[0], hu[1], xf, nxf);
       const lo = boxFace('ny', L, h, W);
       const lu = uvs(lo.uw, lo.vh);
-      quad(b, lo.o, lo.u, lo.v, sg(lo.uw), sg(lo.vh), lu[0], lu[1], xf, nxf);
+      quad(b('rampLo'), lo.o, lo.u, lo.v, sg(lo.uw), sg(lo.vh), lu[0], lu[1], xf, nxf);
       const k = raw ? 1 / L : 1;
       const kh = raw ? 1 / h : 1;
-      tri(b, [[-x, -y, z], [x, -y, z], [x, y, z]], [[0, 0], [L * k, 0], [L * k, h * kh]], xf, nxf);
-      tri(b, [[x, -y, -z], [-x, -y, -z], [x, y, -z]], [[0, 0], [L * k, 0], [0, h * kh]], xf, nxf);
+      tri(b('rampSideA'), [[-x, -y, z], [x, -y, z], [x, y, z]], [[0, 0], [L * k, 0], [L * k, h * kh]], xf, nxf);
+      tri(b('rampSideB'), [[x, -y, -z], [-x, -y, -z], [x, y, -z]], [[0, 0], [L * k, 0], [0, h * kh]], xf, nxf);
       return;
     }
     const ry = br.ry ?? 0;
@@ -270,7 +276,7 @@ export class MapScene {
       if (hide?.includes(f)) continue;
       const face = boxFace(f, w, h, d);
       const mat = br.faceMats?.[f] ?? br.mat;
-      quad(bucket(mat), face.o, face.u, face.v, sg(face.uw), sg(face.vh), raw ? 1 : face.uw, raw ? 1 : face.vh, xf, nxf);
+      quad(bucket(mat, { kind: 'brush', i, part: f }), face.o, face.u, face.v, sg(face.uw), sg(face.vh), raw ? 1 : face.uw, raw ? 1 : face.vh, xf, nxf);
     }
   }
 
@@ -279,8 +285,8 @@ export class MapScene {
     const { xf, nxf } = xform(d.ry ?? 0, [d.x, d.y, d.z]);
     const su = d.seg ?? sg(d.w);
     const sv = d.seg ?? sg(d.h);
-    if (d.kind === 'wall') quad(b, [-d.w / 2, 0, 0], [d.w, 0, 0], [0, d.h, 0], su, sv, raw ? 1 : d.w, raw ? 1 : d.h, xf, nxf);
-    else quad(b, [-d.w / 2, 0, d.h / 2], [d.w, 0, 0], [0, 0, -d.h], su, sv, raw ? 1 : d.w, raw ? 1 : d.h, xf, nxf);
+    const q = decalQuad(d);
+    quad(b, q.o, q.u, q.v, su, sv, raw ? 1 : d.w, raw ? 1 : d.h, xf, nxf);
   }
 
   /** Switch time of day: global uniforms, sky, glows, and the (cached) bake. */
