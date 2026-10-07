@@ -64,8 +64,16 @@ export function promptTarget(m: Match): DropEnt | null {
   const eyeY = pos.y + eyeHeight(m.net.predictor.state);
   const drops = snap.ents.filter((e): e is DropEnt => e.kind === PICKUP_ENTITY && !!dropState(e)?.l);
   const eye = { x: pos.x, y: eyeY, z: pos.z };
-  return pickDropTarget(pos, eyeY, m.yaw, m.pitch, drops, (d) => !carried.has(d.s.w) && m.net.world.lineOfSight(eye, { x: d.x, y: d.y + 0.1, z: d.z }, 'players'));
+  const now = performance.now() / 1000;
+  for (const d of drops) if (!seenAt.has(d.id)) seenAt.set(d.id, now);
+  if (seenAt.size > 64) for (const id of [...seenAt.keys()]) if (!drops.some((d) => d.id === id)) seenAt.delete(id);
+  // Not the gun I just put down (the server refuses it for PICKUP.reswapSec).
+  const fresh = (d: DropEnt) => d.s.o === m.myId && now - (seenAt.get(d.id) ?? 0) < PICKUP.reswapSec;
+  return pickDropTarget(pos, eyeY, m.yaw, m.pitch, drops, (d) => !carried.has(d.s.w) && !fresh(d) && m.net.world.lineOfSight(eye, { x: d.x, y: d.y + 0.1, z: d.z }, 'players'));
 }
+
+/** Local time each dropped gun was first seen. */
+const seenAt = new Map<number, number>();
 
 const ui = { holdT: 0, holdOn: -1, blocked: false };
 

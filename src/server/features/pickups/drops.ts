@@ -29,8 +29,9 @@ export interface DropData {
   landed: boolean;
   born: number;
   expires: number;
-  /** Who dropped it (the dead player or the swapper). */
+  /** Who dropped it (the dead player or the swapper), and why. */
   from: string | null;
+  reason: 'death' | 'swap';
 }
 
 export type DropEntity = Entity & { data: DropData; s: DropSnapState & Record<string, string | number | boolean> };
@@ -82,6 +83,7 @@ export function spawnDrop(room: Room, w: WeaponState, at: Vec3, vel: Vec3, from:
     born: room.time,
     expires: room.time + PICKUP.lifeSec,
     from: from?.id ?? null,
+    reason,
   };
   const s: DropSnapState = { w: id, a: data.attachments.join(','), c: w.camo, l: false, m: w.mag, r: w.reserve, o: from?.id ?? '' };
   const e = room.entities.add({ kind: PICKUP_ENTITY, x: at.x, y: at.y + PICKUP.dropHeight, z: at.z, yaw: (from?.yaw ?? 0) + (Math.random() - 0.5) * 0.6, s: { ...s }, data }) as DropEntity;
@@ -155,12 +157,16 @@ export function swapBlocker(room: Room, p: PlayerState, drop: Entity | undefined
   const slot = opts.slot ?? p.slot;
   if (slot < 0 || slot >= GL_SLOT || !p.weapons[slot]) return 'slot';
   if (carriesWeapon(p, drop.data.weapon)) return 'same_weapon';
+  if (justDropped(room, p, drop)) return 'just_dropped';
   if (room.modifiers.any('useClaimed', p) === true) return 'claimed';
   const eye = eyeOf(p);
   if (dropScore(p.move, eye.y, p.yaw, p.pitch, drop) === null) return 'far';
   if (!room.world.lineOfSight(eye, { x: drop.x, y: drop.y + 0.1, z: drop.z }, 'players')) return 'blocked';
   return null;
 }
+
+/** The gun `p` swapped away a moment ago (no taking it straight back). */
+export const justDropped = (room: Room, p: PlayerState, d: DropEntity) => d.data.reason === 'swap' && d.data.from === p.id && room.time - d.data.born < PICKUP.reswapSec;
 
 export const carriesWeapon = (p: PlayerState, id: string) => p.weapons.slice(0, GL_SLOT).some((w) => w.def.base.id === id);
 

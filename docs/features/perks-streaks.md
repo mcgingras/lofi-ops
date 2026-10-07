@@ -25,7 +25,7 @@ tests/tacmap.test.ts, tests/tacmap.integration.test.ts, tests/tacmap.client.test
 |---|---|---|---|
 | 1 | Lightweight | speed x1.07 | no fall damage (`damageTaken` 0 for `fall`) |
 | 1 | Flak Jacket | `explosive` damage x0.65 | `fire` damage 0 (napalm ground fire); `grenadeFuseReset` key |
-| 1 | Scavenger | every death drops a `perks_pack`; an enemy with Scavenger walking over it gets a mag of reserve per weapon | spawn with +2 mags; emits `perks.resupply {lethal:1, tactical:1}` |
+| 1 | Scavenger | every death drops a `perks_pack`; an enemy with Scavenger walking over it gets a mag of reserve per weapon (separate from the dropped guns of the pickups feature) | spawn with +2 mags; emits `perks.resupply {lethal:1, tactical:1}` |
 | 1 | Ghost | `radarVisible` false (unless firing an unsuppressed gun) vs Spy Plane / Blackbird | `streakTargetable` false for helicopters, gunner AI, sentries (dogs and RC-XD still find you) |
 | 1 | Hardline | `streakCostOffset` -1 | owner's first USE on their landed Care Package rerolls it |
 | 2 | Hardened | `penetrationMultiplier` 2 | `killstreakDamageDealt` x1.5, `flinchMultiplier` 0.5 |
@@ -51,7 +51,7 @@ tests/tacmap.test.ts, tests/tacmap.integration.test.ts, tests/tacmap.client.test
 | rcxd | RC-XD | 3 | drive it (movement keys + view yaw, chase cam); FIRE/STREAK detonates (6 m, 260); 30 s fuse; 40 hp, harmless when shot |
 | counter_uav | Counter-Spy Plane | 4 | `radarJammed` for your enemies (static on their radar) 30 s; 700 hp |
 | sam_turret | SAM Turret | 4 | placed in front; homing missiles (1000 dmg) at enemy aircraft in 160 m, 8 missiles, 60 s; 450 hp |
-| care_package | Care Package | 5 | designate a spot; Chinook drops a crate (crushes); hold USE: owner 0.5 s, team 1.25 s, enemy 3 s; random streak or ammo. Waypoint over your side's crates (enemy crates within 20 m), "HOLD F FOR CARE PACKAGE" once in reach (`CRATE_REACH`) |
+| care_package | Care Package | 5 | designate a spot; Chinook drops a crate (crushes); hold USE: owner 0.5 s, team 1.25 s, enemy 3 s; random streak or ammo. Waypoint over your side's crates (enemy crates within 20 m), "HOLD F FOR CARE PACKAGE" once in reach (`CRATE_REACH`). A crate in reach claims USE (`useClaimed`), so the weapon swap prompt and swap stand aside |
 | napalm | Napalm Strike | 5 | tactical map: spot + direction; F-4 releases ~4 s after the call; 3 canisters (7 m) + 8 s burning ground (`fire` 30/s) |
 | sentry_gun | Sentry Gun | 6 | placed in front; turns to nearest visible enemy, spins up, 8 rounds/s; 90 s; 450 hp |
 | mortar | Mortar Team | 6 | tactical map: 3 spots; red ring warning, 2 rounds per spot from 3 s, 3.5 m blast radius (BO1: ~7 m across) |

@@ -19,7 +19,7 @@ import type { Feature } from '../../feature';
 import type { PlayerState } from '../../player';
 import type { Room } from '../../room';
 import { updateBotPickups, wireBotGoal } from './bots';
-import { carriesWeapon, dropOnDeath, dropsEnabled, dropsOf, onTopOf, swapBlocker, swapFor, takeAmmo, updateDrops } from './drops';
+import { carriesWeapon, dropOnDeath, dropsEnabled, dropsOf, justDropped, onTopOf, swapBlocker, swapFor, takeAmmo, updateDrops } from './drops';
 import { pickupsOf } from './state';
 
 export { dropsOf, spawnDrop, swapBlocker, swapFor, takeAmmo, dropOnDeath, GL_SLOT, type DropData, type DropEntity } from './drops';
@@ -29,7 +29,7 @@ export { pickupsOf } from './state';
 /** The gun a human holding USE would swap for right now (also what the client prompt shows). */
 export function useTarget(room: Room, p: PlayerState) {
   const eye = eyeOf(p);
-  return pickDropTarget(p.move, eye.y, p.yaw, p.pitch, dropsOf(room), (d) => d.data.landed && !carriesWeapon(p, d.data.weapon) && room.world.lineOfSight(eye, { x: d.x, y: d.y + 0.1, z: d.z }, 'players'));
+  return pickDropTarget(p.move, eye.y, p.yaw, p.pitch, dropsOf(room), (d) => d.data.landed && !carriesWeapon(p, d.data.weapon) && !justDropped(room, p, d) && room.world.lineOfSight(eye, { x: d.x, y: d.y + 0.1, z: d.z }, 'players'));
 }
 
 function updateHumanUse(room: Room, p: PlayerState, dt: number): void {

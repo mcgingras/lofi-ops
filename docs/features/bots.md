@@ -47,6 +47,7 @@ Owner: bots. Covers DESIGN.md section 8a (hard requirement): every lobby runs wi
   - `objectivePlay`: chance of following a mode goal.
   - `streakUse`: how likely and how soon it uses an earned streak.
   - `aggression`: chasing, flanking, how far forward it roams, sprinting, how long it holds an angle, and retreating to cover when hurt.
+  - `weaponPickup`: how far a dry bot looks for a gun on the floor (`4 + 22 × weaponPickup` m; 0 = never). Read by the pickups feature (`src/server/features/pickups/bots.ts`, docs/features/pickups.md), which walks it there through a `registerBotGoal('*')` goal.
 - Measured hit rate per shot in 4v4 Yard TDM (120 s simulated): recruit 0.04, regular 0.17, hardened 0.29, veteran 0.45.
 
 ### Navigation (nav.ts)

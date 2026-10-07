@@ -25,6 +25,8 @@ export const PICKUP = {
   ammoRadius: 1.1,
   /** Hold USE this long to swap (s). */
   holdSec: 0.25,
+  /** The gun you just swapped away can't be taken back by you for this long (s); USE must also be let go. */
+  reswapSec: 1,
   /** Dropped guns despawn after this (s). */
   lifeSec: 45,
   /** At most this many dropped guns per room; the oldest goes first. */

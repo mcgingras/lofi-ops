@@ -222,6 +222,21 @@ describe('swap', () => {
     expect([h.weapons[0]!.mag, h.weapons[0]!.reserve]).toEqual([3, 12]);
   });
 
+  it('a stutter on the key (or a lag gap) does not swap straight back to the gun you just dropped', () => {
+    const room = setup();
+    const h = human(room, 0);
+    place(h, -1, 5);
+    floorGun(room, -1, 4.2, 'famas');
+    const yaw = yawTo(h, -1, 4.2);
+    drive(room, h, Buttons.USE, 0.3, yaw, -1);
+    expect(h.weapons[0]!.def.base.id).toBe('famas');
+    steps(room, 0.4); // no input: the server idles (USE up)
+    const ak = dropsOf(room)[0]!;
+    expect(swapBlocker(room, Object.assign(h, { yaw: yawTo(h, ak.x, ak.z), pitch: -1.2 }), ak)).toBe('just_dropped');
+    drive(room, h, Buttons.USE, 0.4, yawTo(h, ak.x, ak.z), -1.2);
+    expect(h.weapons[0]!.def.base.id).toBe('famas');
+  });
+
   it('swaps the gun in hand: holding the sidearm, the sidearm goes', () => {
     const room = setup();
     const h = human(room, 0);
