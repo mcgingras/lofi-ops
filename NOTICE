@@ -9,5 +9,9 @@ Portions adapted from Blockyard (https://github.com/Potrock/blockyard), MIT Lice
   src/client/netcode/predict.ts (predict/replay/ease-in reconciliation, from src/platform/client/predict.ts),
   src/shared/frontend/lobby.ts (map vote tally rule: most votes, ties to the earliest option, from src/games/callofblocky/nextvote.ts),
   src/server/features/modes/sd.ts and killcam.ts, src/client/features/modes/killcam.ts (Search and Destroy round
-  flow and final-killcam timing patterns from src/games/callofblocky/briefcase.ts and killcam.ts).
+  flow and final-killcam timing patterns from src/games/callofblocky/briefcase.ts and killcam.ts),
+  src/server/features/bots/nav.ts (walk/jump/drop cell grid and typed-array A* with a binary heap, from
+  src/platform/kits/navgrid.ts), src/server/features/bots/brain.ts and aim.ts (react-then-settle aim,
+  bursts, strafe timers, chasing heard/seen positions and unsticking, from src/platform/kits/shooterbot.ts
+  and src/games/callofblocky/bots.ts).
 Textures in assets/textures from Poly Haven (https://polyhaven.com), CC0.

@@ -81,3 +81,46 @@ export function skillFor(settings: LobbyBotSettings): BotSkill {
   const preset = BOT_DIFFICULTY_BY_ID.get(settings.difficulty === 'custom' ? 'regular' : settings.difficulty);
   return { ...(preset ?? BOT_DIFFICULTIES[1]).skill };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Wire types (CONTRACTS section 5 declaration merging), here so both sides get them.
+//
+//   bots.get          { roomId? }                     -> BotsState     (anyone)
+//   bots.setSettings  { roomId?, settings: Partial }  -> BotsState     (host of a private room only)
+//   bots.playWithBots { mode, map?, ...settings }      -> { roomId }    (creates a private room that
+//                                     starts at once with bots; then navigate('match', { room }))
+//   push 'bots.status' BotsState                       (to the room when settings or bot counts change)
+// ---------------------------------------------------------------------------------------------
+
+export interface BotsState {
+  roomId: string;
+  settings: LobbyBotSettings;
+  /** The skill bots play with before per-bot variance (preset or custom). */
+  skill: BotSkill;
+  /** The receiving session may change settings (host of a private room). */
+  editable: boolean;
+  /** Effective target (settings.targetPlayers capped by the room size). */
+  target: number;
+  humans: number;
+  bots: number;
+  /** Room time when matchmaking stops waiting for humans and backfills, or null. */
+  fillAt: number | null;
+  /** False when this room's bot count is not managed by the bots feature (core botFill, LOFI_BOTS=off). */
+  managed: boolean;
+}
+
+export interface PlayWithBotsReq extends Partial<LobbyBotSettings> {
+  mode: string;
+  map?: string;
+}
+
+declare module '../protocol' {
+  interface RpcMap {
+    'bots.get': { req: { roomId?: string }; res: BotsState };
+    'bots.setSettings': { req: { roomId?: string; settings: Partial<LobbyBotSettings> }; res: BotsState };
+    'bots.playWithBots': { req: PlayWithBotsReq; res: { roomId: string } };
+  }
+  interface FeatureMessages {
+    'bots.status': BotsState;
+  }
+}
