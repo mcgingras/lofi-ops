@@ -15,5 +15,8 @@ Portions adapted from Blockyard (https://github.com/Potrock/blockyard), MIT Lice
   bursts, strafe timers, chasing heard/seen positions and unsticking, from src/platform/kits/shooterbot.ts
   and src/games/callofblocky/bots.ts),
   src/server/features/progression/tracker.ts (XP medal rules: first blood, multi-kill window, revenge, assists, and
-  bots-never-earn, from src/games/callofblocky/progression.ts).
+  bots-never-earn, from src/games/callofblocky/progression.ts),
+  src/server/features/killstreaks/streaks/mortar.ts (Mortar Team marks, staggered shells landing on the first
+  surface under the spot, from src/games/callofblocky/streaks/mortar.ts), and the perk/streak rule shapes in
+  src/server/features/perks and src/server/features/killstreaks (from src/games/callofblocky/perks.ts and streaks/).
 Textures in assets/textures from Poly Haven (https://polyhaven.com), CC0.

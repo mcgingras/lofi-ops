@@ -1,0 +1,62 @@
+/**
+ * Wire types for the perks and killstreaks features (owner: perks-streaks). Declaration-merged into
+ * the core protocol so both the server and the client get typed RPCs and feature pushes. Lives in
+ * shared so the client tsconfig sees it.
+ */
+import type { Team } from '../constants';
+
+export interface KillstreakStateMsg {
+  /** The three picked streaks with their cost after Hardline. */
+  chosen: { id: string; cost: number }[];
+  /** Kills toward streaks this life (streak kills excluded). */
+  count: number;
+  /** Earned and waiting to be called (oldest first). */
+  ready: string[];
+  /** Index into `ready` the STREAK button calls. */
+  selected: number;
+  /** Designating targets for a streak (press STREAK again at each spot). */
+  armed: { id: string; marks: [number, number, number][]; need: number; until: number } | null;
+  /** Driving / gunning one: the entity id the camera follows and when it ends (room time). */
+  control: { id: string; entity: number; until: number } | null;
+}
+
+export interface KillstreakFx {
+  kind: 'boom' | 'bigboom' | 'shell' | 'napalm' | 'crate_land' | 'crate_open' | 'hacked' | 'destroyed' | 'sam_launch' | 'bite' | 'bark';
+  x: number;
+  y: number;
+  z: number;
+  /** Blast radius, for the effect size. */
+  r?: number;
+}
+
+declare module '../protocol' {
+  interface RpcMap {
+    /** Pick which ready streak the STREAK button calls. */
+    'killstreaks.select': { req: { index: number }; res: { selected: number } };
+    /** Call a ready streak. Targets default to where the caller aims (server-side raycast). */
+    'killstreaks.call': { req: { id: string; target?: [number, number, number]; targets?: [number, number, number][] }; res: { ok: boolean; reason?: string } };
+    /** Current streak state (also pushed as `killstreaks.state`). */
+    'killstreaks.state': { req: Record<string, never>; res: KillstreakStateMsg | null };
+    /** Dev only (server started with LOFI_CHEATS=1): grant a ready streak and/or add enemy bots. */
+    'killstreaks.cheat': { req: { id?: string; bots?: number }; res: { ready: string[] } };
+    /** Perk ids the caller has the Pro version of (create-a-class shows them). */
+    'perks.pro': { req: Record<string, never>; res: { pro: string[]; progress: Record<string, number> } };
+  }
+  interface FeatureMessages {
+    'killstreaks.state': KillstreakStateMsg;
+    'killstreaks.earned': { id: string };
+    /** Someone called a streak (everyone gets it; the HUD says friendly / enemy). */
+    'killstreaks.called': { id: string; owner: string; team: Team | null };
+    'killstreaks.ended': { id: string; owner: string; team: Team | null; destroyed: boolean; by?: string | null };
+    'killstreaks.fx': KillstreakFx;
+    /** Care Package contents for the player standing at it. */
+    'killstreaks.crate': { entity: number; contents: string; progress: number } | null;
+    /** Players whose perks change what others hear/see (Ninja footsteps, Ghost Pro name tags). */
+    'perks.public': { ninja: string[]; ghostPro: string[] };
+    /** Your last stand: until (room time) or null when it ends; revive progress 0..1. */
+    'perks.lastStand': { until: number | null; revive: number };
+    'perks.notice': { text: string };
+  }
+}
+
+export {};
