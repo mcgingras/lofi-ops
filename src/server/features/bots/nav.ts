@@ -187,8 +187,9 @@ export class NavGrid {
           }
         }
         if (dropTo && !diag) {
-          // Walk off the edge: room over the lower column at this cell's height.
-          if (freeAt(w, dropTo.x, c.y + EPS, dropTo.z, R * 0.9, PLAYER.height) && freeAt(w, mx, c.y + EPS, mz, R * 0.9, PLAYER.height)) {
+          // Walk off the edge: the whole fall over the lower column is clear, from this cell's height
+          // down to the landing (not just room at the top: an upper floor over a lower one is no drop).
+          if (freeAt(w, dropTo.x, dropTo.y + EPS, dropTo.z, R * 0.9, c.y - dropTo.y + PLAYER.height) && freeAt(w, mx, c.y + EPS, mz, R * 0.9, PLAYER.height)) {
             edges.push({ to: dropTo.i, cost: horiz + 0.4 + (c.y - dropTo.y) * 0.3, kind: 'drop' });
           }
         }

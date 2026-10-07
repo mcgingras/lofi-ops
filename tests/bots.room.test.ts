@@ -4,7 +4,7 @@ import botsFeature from '../src/server/features/bots/index';
 import { botBrain, configureRoomBots, createBotRoom, getRoomBots, registerBotGoal } from '../src/server/features/bots/api';
 import { botStreakSkill } from '../src/server/features/killstreaks/skill';
 import { Lobby } from '../src/server/lobby';
-import type { PlayerState } from '../src/server/player';
+import { makeWeapon, type PlayerState } from '../src/server/player';
 import type { Room, RoomOptions } from '../src/server/room';
 import { Session } from '../src/server/session';
 import { Store } from '../src/server/store';
@@ -174,8 +174,12 @@ describe('bots: combat', () => {
     listener.move = { ...createMoveState(0, 0, 0), onGround: true };
     deaf.move = { ...createMoveState(-20, 0, -22), onGround: true };
     shooter.move = { ...createMoveState(0, 0, 20), onGround: true };
+    // A fixed, unsuppressed hitscan rifle: the random bot class may roll a suppressor.
+    shooter.weapons = [makeWeapon({ weapon: 'ak47', attachments: [], camo: '' }, 'ak47')];
+    shooter.slot = 0;
     shooter.swapEnd = 0;
-    r.fire(shooter, { dir: { x: 0, y: 0, z: -1 } });
+    shooter.reloadEnd = 0;
+    expect(r.fire(shooter, { dir: { x: 0, y: 0, z: -1 } }).ok).toBe(true);
     expect(botBrain(r, listener)!.heard).not.toBeNull();
     expect(botBrain(r, deaf)!.heard).toBeNull();
   });

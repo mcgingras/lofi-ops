@@ -348,7 +348,14 @@ export class Brain implements BotBrain {
 
       const goal = this.chooseGoal(room, nav, self, now);
       let looked = false;
-      if (goal && this.path) {
+      // Plant / defuse style goals (hold a button inside the radius): stand still and keep holding.
+      // Shuffling would release the button and, with the S&D movement freeze, never finish.
+      const holdingUse = !!goal && goal.hold && goal.holdButtons !== 0 && Math.hypot(self.move.x - goal.at.x, self.move.z - goal.at.z) <= goal.radius * 0.85 && Math.abs(self.move.y - goal.at.y) < 2;
+      if (goal && holdingUse) {
+        buttons |= goal.holdButtons;
+        this.path = null;
+        this.stuckAt = { ...self.move };
+      } else if (goal && this.path) {
         const step = this.follow(nav, self);
         const arrived = step.done;
         if (!arrived) {
@@ -553,7 +560,9 @@ export class Brain implements BotBrain {
     if (!next) {
       const og = botGoalFor(room, self, { skill: sk, now });
       if (og) {
-        if (now > this.intentAt) {
+        // Mid plant/defuse: keep at it instead of re-rolling the intent and walking off.
+        const busy = this.objectiveIntent && !!g && g.kind === 'objective' && g.holdButtons !== 0 && Math.hypot(self.move.x - g.at.x, self.move.z - g.at.z) <= g.radius;
+        if (now > this.intentAt && !busy) {
           const pri = og.priority ?? 0.5;
           this.objectiveIntent = this.rnd() < clamp(sk.objectivePlay * (0.55 + pri * 0.9), 0, 1);
           this.intentAt = now + 6 + this.rnd() * 6;

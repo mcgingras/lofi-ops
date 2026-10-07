@@ -191,7 +191,7 @@ export class HqRules extends TdmRules {
     if (!z || p.team === null) return [];
     const pos = { x: z.x, y: z.y, z: z.z };
     if (this.phase === 'neutral') return [{ kind: 'capture', id: 'HQ', pos, radius: z.r, priority: 0.85, stay: true }];
-    if (z.owner === p.team) return [{ kind: 'defend', id: 'HQ', pos, radius: z.r * 2, priority: z.capTeam !== null && z.capTeam !== p.team ? 0.95 : 0.6 }];
+    if (z.owner === p.team) return [{ kind: 'defend', id: 'HQ', pos, radius: z.r * 2, priority: z.capTeam !== null && z.capTeam !== p.team ? 0.95 : 0.6, stay: true }];
     return [{ kind: 'destroy', id: 'HQ', pos, radius: z.r, priority: 0.9, stay: true }];
   }
 }

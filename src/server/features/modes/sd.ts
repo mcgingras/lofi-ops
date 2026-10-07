@@ -411,12 +411,13 @@ export class SdRules extends TdmRules {
       } else if (b.state === 'carried' && b.carrier) {
         out.push({ kind: 'escort', id: 'bomb', pos: { ...b.carrier.move }, radius: 6, priority: 0.5 });
       } else if (b.state === 'planted') {
-        out.push({ kind: 'defend', id: b.site ?? 'bomb', pos: { ...b.pos }, radius: 8, priority: 0.9 });
+        out.push({ kind: 'defend', id: b.site ?? 'bomb', pos: { ...b.pos }, radius: 8, priority: 0.9, stay: true });
       }
     } else {
       if (b.state === 'planted') out.push({ kind: 'defuse', id: b.site ?? 'bomb', pos: { ...b.pos }, radius: T.defuseReach * 0.8, priority: 1, holdUse: true, stay: true });
       else {
-        for (const s of this.sites) out.push({ kind: 'defend', id: s.id, pos: sitePos(s), radius: s.r * 2.5, priority: 0.6 });
+        // Hold the site (stay): without it defenders walked to a site, "arrived" and went hunting.
+        for (const s of this.sites) out.push({ kind: 'defend', id: s.id, pos: sitePos(s), radius: s.r * 2.5, priority: 0.6, stay: true });
         if (b.state === 'dropped') out.push({ kind: 'defend', id: 'bomb', pos: { ...b.pos }, radius: 5, priority: 0.55 });
       }
     }

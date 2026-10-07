@@ -5,7 +5,7 @@ import { freeAt, NavGrid } from '../src/server/features/bots/nav';
 import { applyVariance, defaultSettings, rollBot, sanitizeSettings, SKILL_KEYS, skillRating } from '../src/server/features/bots/skill';
 import { PLAYER } from '../src/shared/constants';
 import { BOT_DIFFICULTY_BY_ID, BOT_SKILL_RANGES, DEFAULT_LOBBY_BOTS, skillFor, type BotSkill } from '../src/shared/defs/bots';
-import { getMapData } from '../src/shared/defs/maps';
+import { getMapData, MAPS } from '../src/shared/defs/maps';
 import { sanitizeLoadout } from '../src/shared/loadout';
 import { rng } from '../src/shared/math';
 import { stairsMap } from './bots-fixtures';
@@ -132,6 +132,28 @@ describe('bots: navigation grid', () => {
     }
     expect(len).toBeGreaterThan(Math.hypot(23, 47) - 1);
     expect(len).toBeLessThan(Math.hypot(23, 47) * 1.6);
+  });
+
+  it('never drops through a floor: every drop link falls through clear air (all maps)', () => {
+    // Regression: upper floors (Nuketown houses, Rust/Terminal decks) used to get drop links straight
+    // through their slab to the room below, and bots stood upstairs jumping on the spot forever.
+    for (const m of MAPS) {
+      const g = new NavGrid(getMapData(m.id));
+      let drops = 0;
+      for (const c of g.cells)
+        for (const e of c.edges) {
+          if (e.kind !== 'drop') continue;
+          drops++;
+          const to = g.cells[e.to]!;
+          expect(freeAt(g.world, to.x, to.y + 0.01, to.z, PLAYER.radius * 0.85, c.y - to.y + PLAYER.height), `${m.id} drop ${c.x},${c.y},${c.z} -> ${to.x},${to.y},${to.z}`).toBe(true);
+        }
+      expect(drops, m.id).toBeGreaterThan(0);
+    }
+    // Nuketown's green house: the upstairs bedroom links only to the upstairs floor.
+    const nt = new NavGrid(getMapData('nuketown'));
+    const up = nt.cellAt({ x: -26.2, y: 3.3, z: -7.8 })!;
+    expect(up.y).toBeCloseTo(3.3, 1);
+    expect(up.edges.every((e) => nt.cells[e.to]!.y > 3)).toBe(true);
   });
 
   it('climbs stairs and ramps by walking, jumps onto low ledges, never walks up walls', () => {

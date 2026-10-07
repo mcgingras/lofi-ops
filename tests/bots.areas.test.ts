@@ -7,6 +7,7 @@ import { createFrontendFeature, LobbyManager } from '../src/server/features/fron
 import modesFeature, { registerModeRules } from '../src/server/features/modes/index';
 import { controllerOf } from '../src/server/features/modes/common';
 import type { DomRules } from '../src/server/features/modes/dom';
+import type { SdRules } from '../src/server/features/modes/sd';
 import { Lobby } from '../src/server/lobby';
 import type { Room } from '../src/server/room';
 import { Session } from '../src/server/session';
@@ -15,6 +16,7 @@ import { TICK_DT } from '../src/shared/constants';
 import { BOT_DIFFICULTY_BY_ID, MATCHMAKING_WAIT_SEC } from '../src/shared/defs/bots';
 import { Buttons } from '../src/shared/input';
 import { newProfile } from '../src/shared/profile';
+import { createMoveState } from '../src/shared/movement';
 
 let store: Store | undefined;
 let lobby: Lobby | undefined;
@@ -58,6 +60,60 @@ describe('bots <- modes objectives', () => {
       t += 1;
     }
     expect(rules.flags.some((f) => f.zone.owner === 0)).toBe(true);
+  });
+
+  function sdRoom() {
+    store = new Store(':memory:');
+    lobby = new Lobby({ store, features: [modesFeature, botsFeature], log: () => {}, autoTick: false });
+    const room = lobby.createRoom({ mode: 'sd', map: 'yard', private: true, closeWhenEmpty: false, onEnd: 'close', countdownSec: 0 });
+    const rb = getRoomBots(room)!;
+    rb.managed = false;
+    rb.update({ fill: false, difficulty: 'custom', custom: { ...BOT_DIFFICULTY_BY_ID.get('regular')!.skill, objectivePlay: 1 }, variance: 0 });
+    const events: string[] = [];
+    room.bus.on('objective', (e) => events.push(e.kind));
+    return { room, rules: controllerOf(room) as SdRules, events };
+  }
+
+  it('a lone attacker bot carries the bomb to a site and plants it (holds USE without shuffling)', () => {
+    const { room, rules, events } = sdRoom();
+    const bot = room.addBot({ name: 'Planter', team: 0 });
+    let t = 0;
+    while (t < 45 && !events.includes('sd.plant')) {
+      steps(room, 0.5);
+      t += 0.5;
+    }
+    expect(events).toContain('sd.plant');
+    expect(rules.bomb.planter).toBe(bot);
+  });
+
+  it('a defender bot defuses a planted bomb', () => {
+    const { room, rules, events } = sdRoom();
+    // A scripted attacker stands in site A holding USE (and can't be hurt) until the bomb is down.
+    const planter = room.addBot({ name: 'Scripted', team: 0 });
+    planter.brain = { think: () => ({ buttons: Buttons.USE, yaw: 0, pitch: 0, weaponSlot: 0 }) };
+    const defender = room.addBot({ name: 'Defuser', team: 1 });
+    room.bus.on('beforeDamage', (e) => {
+      if (e.victim === planter) e.cancel = true;
+    });
+    steps(room, 6); // prep
+    planter.move = { ...createMoveState(-15, 0, 15), onGround: true };
+    let t = 0;
+    while (t < 20 && !events.includes('sd.plant')) {
+      planter.move.x = -15;
+      planter.move.z = 15;
+      steps(room, 0.25);
+      t += 0.25;
+    }
+    expect(events).toContain('sd.plant');
+    room.kill(planter, null, { weapon: 'test', means: 'world' } as never);
+    t = 0;
+    while (t < 40 && !events.includes('sd.defuse')) {
+      steps(room, 0.5);
+      t += 0.5;
+    }
+    expect(defender.alive).toBe(true);
+    expect(events).toContain('sd.defuse');
+    expect(rules.bomb.state).not.toBe('planted');
   });
 });
 
