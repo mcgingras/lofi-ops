@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CollisionWorld, playerHitboxes, rayHitboxes } from '../src/shared/collision';
+import { CollisionWorld, playerHitboxes, rayAABB, rayHitboxes, type Solid } from '../src/shared/collision';
+import type { Vec3 } from '../src/shared/math';
 import { PLAYER } from '../src/shared/constants';
 import { getMapData, MAPS } from '../src/shared/defs/maps';
 import { buildCollisionWorld } from '../src/shared/maps/types';
@@ -33,6 +34,45 @@ describe('collision world', () => {
     expect(w.raycast({ x: 0, y: 1, z: 0 }, { x: 0, y: 0, z: -1 }, 20, 'bullets')).toBeNull();
     expect(w.raycast({ x: 0, y: 1, z: 0 }, { x: 0, y: 0, z: -1 }, 20, 'players')!.t).toBeCloseTo(5, 5);
     expect(w.lineOfSight({ x: 0, y: 1, z: 0 }, { x: 0, y: 1, z: -10 })).toBe(true);
+  });
+
+  it('the ray grid finds the same first hit as testing every solid (every map, random rays)', () => {
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (const def of MAPS) {
+      const world = buildCollisionWorld(getMapData(def.id));
+      const b = getMapData(def.id).bounds;
+      const single = new Map<Solid, CollisionWorld>();
+      const brute = (o: Vec3, d: Vec3, maxT: number, mask: 'bullets' | 'sight') => {
+        let best = maxT;
+        let hit = false;
+        for (const s of world.solids) {
+          if (!s[mask]) continue;
+          let t: number | undefined;
+          if (s.ramp) {
+            let w = single.get(s);
+            if (!w) single.set(s, (w = new CollisionWorld([s])));
+            t = w.raycast(o, d, best, mask)?.t;
+          } else t = rayAABB(o, d, s.min, s.max, best)?.t;
+          if (t !== undefined && t <= best) {
+            best = t;
+            hit = true;
+          }
+        }
+        return hit ? best : null;
+      };
+      for (let i = 0; i < 300; i++) {
+        const o = { x: b.min.x + rnd() * (b.max.x - b.min.x), y: rnd() * 8, z: b.min.z + rnd() * (b.max.z - b.min.z) };
+        const a = rnd() * Math.PI * 2;
+        const e = (rnd() - 0.3) * 1.2;
+        const d = { x: Math.cos(a) * Math.cos(e), y: Math.sin(e), z: Math.sin(a) * Math.cos(e) };
+        const mask = i % 2 ? 'bullets' : 'sight';
+        const got = world.raycast(o, d, 120, mask)?.t ?? null;
+        const want = brute(o, d, 120, mask);
+        if (want === null) expect(got, `${def.id} ray ${i}`).toBeNull();
+        else expect(got, `${def.id} ray ${i}`).toBeCloseTo(want, 9);
+      }
+    }
   });
 
   it('hitboxes: head above torso above legs; crouch is lower', () => {

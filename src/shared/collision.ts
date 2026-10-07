@@ -171,6 +171,7 @@ function rayRamp(o: Vec3, d: Vec3, s: Solid, maxT: number): { t: number; n: Vec3
 export class CollisionWorld {
   readonly solids: readonly Solid[];
   private grid = new Map<number, number[]>();
+  private rays: RayGrid | undefined;
   private stamp = 0;
   private marks: Uint32Array;
 
@@ -252,15 +253,23 @@ export class CollisionWorld {
    * 'players' only player-colliding ones.
    */
   raycast(o: Vec3, d: Vec3, maxT: number, mask: RayMask = 'bullets'): RayHit | null {
+    // Broad phase: walk the ray through a grid of the solids' footprints (cells in xz, nearest
+    // first) and stop once the next cell starts beyond the best hit. Same answer as testing every
+    // solid, much cheaper on maps with thousands of them (the bake casts a ray per vertex).
+    const g = (this.rays ??= buildRayGrid(this.solids));
+    const st = ++this.stamp;
     let best: RayHit | null = null;
     let bestT = maxT;
-    for (const s of this.solids) {
-      if (!s[mask]) continue;
+    const test = (i: number) => {
+      if (this.marks[i] === st) return;
+      this.marks[i] = st;
+      const s = this.solids[i]!;
+      if (!s[mask]) return;
       const box = rayAABB(o, d, s.min, s.max, bestT);
-      if (!box) continue;
+      if (!box) return;
       if (s.ramp) {
         const r = rayRamp(o, d, s, bestT);
-        if (!r || r.t > bestT) continue;
+        if (!r || r.t > bestT) return;
         bestT = r.t;
         best = { t: r.t, point: at(o, d, r.t), normal: r.n, solid: s };
       } else {
@@ -270,6 +279,48 @@ export class CollisionWorld {
         else if (box.axis === 1) n.y = box.sign;
         else if (box.axis === 2) n.z = box.sign;
         best = { t: box.t, point: at(o, d, box.t), normal: n, solid: s };
+      }
+    };
+    for (const i of g.big) test(i);
+    // Clip the ray to the grid's footprint.
+    let t0 = 0;
+    let t1 = bestT;
+    for (const [oa, da, lo, hi] of [[o.x, d.x, g.x0, g.x1], [o.z, d.z, g.z0, g.z1]] as const) {
+      if (Math.abs(da) < 1e-12) {
+        if (oa < lo || oa > hi) return best;
+        continue;
+      }
+      let a = (lo - oa) / da;
+      let b = (hi - oa) / da;
+      if (a > b) [a, b] = [b, a];
+      t0 = Math.max(t0, a);
+      t1 = Math.min(t1, b);
+    }
+    if (t0 > t1) return best;
+    const px = o.x + d.x * t0;
+    const pz = o.z + d.z * t0;
+    let cx = Math.min(g.nx - 1, Math.max(0, Math.floor((px - g.x0) / RAY_CELL)));
+    let cz = Math.min(g.nz - 1, Math.max(0, Math.floor((pz - g.z0) / RAY_CELL)));
+    const sx = d.x > 0 ? 1 : -1;
+    const sz = d.z > 0 ? 1 : -1;
+    const dx = Math.abs(d.x) > 1e-12 ? RAY_CELL / Math.abs(d.x) : Infinity;
+    const dz = Math.abs(d.z) > 1e-12 ? RAY_CELL / Math.abs(d.z) : Infinity;
+    let tx = Math.abs(d.x) > 1e-12 ? (g.x0 + (cx + (sx > 0 ? 1 : 0)) * RAY_CELL - o.x) / d.x : Infinity;
+    let tz = Math.abs(d.z) > 1e-12 ? (g.z0 + (cz + (sz > 0 ? 1 : 0)) * RAY_CELL - o.z) / d.z : Infinity;
+    let tc = t0;
+    while (tc <= bestT && tc <= t1) {
+      const list = g.cells[cz * g.nx + cx];
+      if (list) for (const i of list) test(i);
+      if (tx < tz) {
+        tc = tx;
+        tx += dx;
+        cx += sx;
+        if (cx < 0 || cx >= g.nx) break;
+      } else {
+        tc = tz;
+        tz += dz;
+        cz += sz;
+        if (cz < 0 || cz >= g.nz) break;
       }
     }
     return best;
@@ -287,6 +338,58 @@ export class CollisionWorld {
 }
 
 const key = (cx: number, cz: number) => (cx + 32768) * 65536 + (cz + 32768);
+
+/** Ray broad phase: every solid's footprint in a grid of RAY_CELL cells; huge solids (ground slabs) apart. */
+interface RayGrid {
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+  nx: number;
+  nz: number;
+  cells: (number[] | undefined)[];
+  big: number[];
+}
+
+const RAY_CELL = 4;
+const RAY_BIG = 64;
+
+function buildRayGrid(solids: readonly Solid[]): RayGrid {
+  const big: number[] = [];
+  const small: number[] = [];
+  let x0 = Infinity;
+  let z0 = Infinity;
+  let x1 = -Infinity;
+  let z1 = -Infinity;
+  solids.forEach((s, i) => {
+    if (s.max.x - s.min.x > RAY_BIG || s.max.z - s.min.z > RAY_BIG) {
+      big.push(i);
+      return;
+    }
+    small.push(i);
+    x0 = Math.min(x0, s.min.x);
+    z0 = Math.min(z0, s.min.z);
+    x1 = Math.max(x1, s.max.x);
+    z1 = Math.max(z1, s.max.z);
+  });
+  if (!small.length) return { x0: 0, z0: 0, x1: 0, z1: 0, nx: 1, nz: 1, cells: [], big };
+  x0 -= 1e-3;
+  z0 -= 1e-3;
+  const nx = Math.max(1, Math.ceil((x1 + 1e-3 - x0) / RAY_CELL));
+  const nz = Math.max(1, Math.ceil((z1 + 1e-3 - z0) / RAY_CELL));
+  x1 = x0 + nx * RAY_CELL;
+  z1 = z0 + nz * RAY_CELL;
+  const cells: (number[] | undefined)[] = new Array(nx * nz);
+  for (const i of small) {
+    const s = solids[i]!;
+    const a = Math.max(0, Math.floor((s.min.x - x0) / RAY_CELL));
+    const b = Math.min(nx - 1, Math.floor((s.max.x - x0) / RAY_CELL));
+    const c = Math.max(0, Math.floor((s.min.z - z0) / RAY_CELL));
+    const e = Math.min(nz - 1, Math.floor((s.max.z - z0) / RAY_CELL));
+    for (let cz = c; cz <= e; cz++) for (let cx = a; cx <= b; cx++) (cells[cz * nx + cx] ??= []).push(i);
+  }
+  return { x0, z0, x1, z1, nx, nz, cells, big };
+}
 const at = (o: Vec3, d: Vec3, t: number): Vec3 => ({ x: o.x + d.x * t, y: o.y + d.y * t, z: o.z + d.z * t });
 
 // ---------------------------------------------------------------------------------------------

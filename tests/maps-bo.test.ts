@@ -267,22 +267,74 @@ describe('maps-bo walks', () => {
     expect(s.x).toBeLessThan(-9.9);
   });
 
-  it('firing range: west spawn -> booths -> cabin stairs -> catwalk -> NE tower -> east spawn', () => {
+  // Firing Range: turned buildings are addressed in their own frames (same numbers as firingrange.ts).
+  const frame = (ox: number, oz: number, deg: number) => {
+    const c = Math.cos((deg * Math.PI) / 180);
+    const s = Math.sin((deg * Math.PI) / 180);
+    return (u: number, y: number, w: number) => v(ox + u * c - w * s, y, oz + u * s + w * c);
+  };
+  const SH = frame(-17.2, -15.0, 24);
+  const OF = frame(-32.3, 3.0, -20);
+
+  it('firing range: Road spawn -> round to the Shoot House -> through it -> crossroads -> up the Tower ladder', () => {
     const map = getMapData('firingrange');
     const w = buildCollisionWorld(map);
-    const r = walkRoute(w, map.spawns.teams[0][2]!, [v(-20, 0, -12), v(-14, 0, -14.5), v(0, 0, -14.5), v(6.9, 0, -20.5), v(6.9, 3.2, -27.9), v(8.2, 3.2, -29.1), v(21, 3.2, -29.1), v(24, 3.2, -28.6), v(25.6, 3.2, -28.6), v(26.7, 3.1, -28.9), v(26.7, 0, -22.6), v(35, 0, -22), v(42, 0, 0)]);
-    expect(r.maxY).toBeGreaterThan(3.1);
+    const r = walkRoute(w, map.spawns.teams[0][2]!, [v(-13.6, 0, -31), v(-20, 0, -22), SH(-1.6, 0, 2.3), SH(1.2, 0, 2.3), SH(10.6, 0, 2.0), SH(10.6, 0, 3.6), SH(10.6, 0, 6.0), v(-12, 0, 5), v(-8.6, 0, 2.7), v(-5.0, 4.6, 2.7)]);
+    expect(r.state.y).toBeCloseTo(4.6, 1);
+    expect(r.seconds).toBeLessThan(30);
   });
 
-  it('firing range: the trench and bunker, the cabin inside stairs, the SW tower', () => {
+  it('firing range: Shoot House stairs to the upper floor, out onto the west room roof, and back down', () => {
+    const w = buildCollisionWorld(getMapData('firingrange'));
+    const up = walkRoute(w, SH(1.2, 0, 2.3), [SH(1.5, 0, 0.75), SH(7.8, 3.2, 0.75), SH(7.8, 3.2, 2.6), SH(1.6, 3.2, 3.4), SH(1.6, 3.2, 6.0), SH(4.5, 3.2, 8.5)]);
+    expect(up.state.y).toBeCloseTo(3.2, 1);
+    const down = walkRoute(w, up.state, [SH(1.6, 3.2, 6.0), SH(1.6, 3.2, 3.4), SH(8.0, 3.2, 2.4), SH(8.0, 3.2, 0.75), SH(1.5, 0, 0.75), SH(1.2, 0, 2.3), SH(-1.6, 0, 2.3)]);
+    expect(down.state.y).toBeCloseTo(0, 1);
+  });
+
+  it('firing range: the Office end to end, round the Containers and up the Bunker stairs to its roof', () => {
+    const w = buildCollisionWorld(getMapData('firingrange'));
+    const r = walkRoute(w, v(-29.5, 0, -5), [OF(3.15, 0, -1.2), OF(3.15, 0, 1.0), OF(4.8, 0, 5.5), OF(4.8, 0, 8.5), OF(1.6, 0, 10.0), OF(1.6, 0, 12.8), OF(3.15, 0, 18.5), OF(3.15, 0, 21.2), v(-20, 0, 25.0), v(-14.3, 0, 25.1), v(-14.3, 3.25, 31.0), v(-15.6, 3.25, 33.5)]);
+    expect(r.state.y).toBeCloseTo(3.25, 1);
+  });
+
+  it('firing range: Dirt Road -> through Storage -> Range courtyard -> through the Garage -> rock path -> crossroads', () => {
     const map = getMapData('firingrange');
     const w = buildCollisionWorld(map);
-    const trench = walkRoute(w, map.spawns.teams[0][4]!, [v(-20, 0, 14), v(0, 0, 20.75), v(10, -1, 20.75), v(27, -1, 20.75), v(30, -1, 20.75), v(34.5, -1, 20.75), v(39, 0, 20.75), v(42, 0, 10)]);
-    expect(trench.state.y).toBeCloseTo(0, 1);
-    const cabin = walkRoute(w, v(1.5, 0, -18), [v(1.5, 0.3, -22.5), v(-3.15, 0.3, -21.7), v(-3.15, 3.2, -28.6), v(-1.5, 3.2, -28.6), v(2, 3.2, -26)]);
-    expect(cabin.state.y).toBeCloseTo(3.2, 1);
-    const tower = walkRoute(w, v(-18, 0, 27), [v(-21.6, 0, 26.85), v(-29, 4, 26.85), v(-30, 4, 28)]);
-    expect(tower.state.y).toBeCloseTo(4, 1);
+    const r = walkRoute(w, map.spawns.teams[0][0]!, [v(-13, 0, -30), v(-5, 0, -21), v(3, 0, -14), v(14, 0, -11), v(18.4, 0, -7.4), v(21.6, 0, -7.4), v(21.4, 0, -4.0), v(20.5, 0, -0.5), v(19.5, 0, 2.4), v(20, 0, 5), v(30, 0, 5), v(30, 0, 16), v(27, 0, 16), v(20.5, 0, 14.0), v(16.9, 0, 14.5), v(16.9, 0, 17.5), v(14.5, 0, 17.5), v(10, 0, 15), v(3, 0, 12.5), v(-3, 0, 10), v(-11, 0, 6)]);
+    expect(r.state.y).toBeCloseTo(0, 1);
+    expect(r.seconds).toBeLessThan(40);
+  });
+
+  it('firing range: the crates by the covered shed climb onto its roof (the Dirt Road perch)', () => {
+    const w = buildCollisionWorld(getMapData('firingrange'));
+    const p = SH(19.0, 0, -3.0);
+    const goal = SH(13.0, 0, -3.0);
+    const s = { ...createMoveState(p.x, 0, p.z), onGround: true };
+    let maxY = 0;
+    for (let t = 0; t < 8 * 60; t++) {
+      const yaw = Math.atan2(-(goal.x - s.x), -(goal.z - s.z));
+      stepMove(w, s, Buttons.FORWARD | (t % 30 === 0 && t < 6 * 60 ? Buttons.JUMP : 0), yaw, 1 / 60);
+      maxY = Math.max(maxY, s.y);
+    }
+    expect(maxY).toBeGreaterThan(2.7);
+    expect(s.onGround).toBe(true);
+    expect(s.y).toBeCloseTo(2.75, 1);
+  });
+
+  it('firing range: turned walls are closed (rays from inside each turned building stop at its walls)', () => {
+    const w = buildCollisionWorld(getMapData('firingrange'));
+    const B7 = frame(-12.9, 10.6, 14.5);
+    const BK = frame(-22.2, 27.6, 19.8);
+    for (const [f, W, D, y] of [[SH, 18, 4.6, 2.6], [OF, 6.3, 19.8, 2.6], [B7, 13.2, 6.0, 2.6], [BK, 17.1, 8.5, 2.5]] as const) {
+      const c = f(W / 2, y, D / 2);
+      for (let i = 0; i < 72; i++) {
+        const a = (i / 72) * Math.PI * 2;
+        const hit = w.raycast(c, v(Math.cos(a), 0, Math.sin(a)), 30);
+        expect(hit, `ray ${i} from ${JSON.stringify(c)}`).not.toBeNull();
+        expect(hit!.t).toBeLessThan(Math.hypot(W, D) / 2 + 0.6);
+      }
+    }
   });
 });
 
@@ -330,12 +382,19 @@ describe('maps-bo sightlines', () => {
     expect(w.lineOfSight(v(0, eye, -6), v(6, eye, -6))).toBe(false);
   });
 
-  it('firing range: the lanes are a long sightline; the berm shields the east spawn; the bunker slit sees out', () => {
+  it('firing range: the tower watches the crossroads, the hill splits the map, the Office hall and the Range lanes are open', () => {
     const w = buildCollisionWorld(getMapData('firingrange'));
-    expect(w.lineOfSight(v(-8, eye, 0.6), v(29, eye, 0.6))).toBe(true);
-    expect(w.lineOfSight(v(-8, eye, 0.6), v(42, eye, 0.6))).toBe(false);
-    expect(w.lineOfSight(v(28.3, -1 + eye, 17.2), v(28.3, 0.7, 5))).toBe(true);
-    expect(w.lineOfSight(v(28.3, -1 + eye, 17.2), v(26.5, -1 + eye, 30))).toBe(false);
+    expect(w.lineOfSight(v(-4.7, 4.6 + eye, 2.7), v(-20, eye, 8))).toBe(true);
+    expect(w.lineOfSight(v(-12, eye, -29), v(22, eye, 16))).toBe(false);
+    const c = Math.cos((-20 * Math.PI) / 180);
+    const s = Math.sin((-20 * Math.PI) / 180);
+    const of = (u: number, y: number, wv: number) => v(-32.3 + u * c - wv * s, y, 3 + u * s + wv * c);
+    expect(w.lineOfSight(of(3.15, eye, 0.6), of(3.15, eye, 19.2))).toBe(true);
+    expect(w.lineOfSight(v(31, eye, 20), v(55, 1.2, 19))).toBe(true);
+    expect(w.lineOfSight(v(-11, 3.25 + eye, 32.5), v(-8, eye, 26))).toBe(true);
+    // The Dirt Road from the covered shed roof down to Storage.
+    const sh = (u: number, y: number, wv: number) => v(-17.2 + u * Math.cos(0.4189) - wv * Math.sin(0.4189), y, -15 + u * Math.sin(0.4189) + wv * Math.cos(0.4189));
+    expect(w.lineOfSight(sh(13, 2.75 + eye, -3), v(17, eye, -11.5))).toBe(true);
   });
 });
 
