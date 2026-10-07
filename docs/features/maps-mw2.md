@@ -9,11 +9,11 @@ every mode it supports. Each one can also run a full lobby of bots (see "Bots" b
 |---|---|---|---|---|---|
 | `rust` | Rust | small | 48.6 x 49.6 m | `day` (sandstorm) | `dusk`, `night` |
 | `scrapyard` | Scrapyard | medium | 51 x 80 m (true scale, see `docs/maps/scrapyard-reference.md`) | `overcast` | `dusk`, `night` |
-| `terminal` | Terminal | medium | ~72 x 50 m | `day` (clear afternoon) | `overcast`, `dusk` |
+| `terminal` | Terminal | large | ~115 x 79 m (full map) | `day` (clear afternoon) | `overcast`, `dusk` |
 
-Screenshots (headless Chrome, dev server, free camera) are in `docs/features/maps-mw2/*.jpg`:
-an overview plus three close-ups per map. Rust was rebuilt from references; its shots, overhead
-renders and the reference write-up are in `docs/maps/rust/` and `docs/maps/rust-reference.md`.
+All three maps were rebuilt from references. Write-ups are in `docs/maps/<id>-reference.md`; Rust's
+shots and overheads are in `docs/maps/rust/`, Terminal's (one per callout) in `docs/maps/terminal/`,
+and Scrapyard's in `docs/features/maps-mw2/*.jpg`.
 
 ## What is in each map
 
@@ -67,32 +67,39 @@ west (truck, low wall), centre (fuselages) and east (an open service road). The 
 corrugated walls and chain-link, with dirt berms beyond. A crane outside the south wall swings its
 boom over the yard.
 
-**Terminal (compact section).** The gate level is a solid 3 m plinth. On it are the bookstore (its
-own walls and ceiling, shelves and a till), the food counter, a gate desk with a sign, gate seating
-rows and pillars. Big windows look over the apron, and you can jump out through them. The jet
-bridge runs from the gate to an airliner parked on the apron. Its cabin is at gate height and you
-can walk through it, with seats and an aisle and a rear airstair down to the tarmac. You walk under
-the wings. A landing with a stair ramp at the west end and a service ramp at the east end also link
-the gate level and the apron. On the apron are a fuel truck, baggage carts, a tug, ULD containers
-and cones, with a blast fence to the south and chain-link fences to the sides.
+**Terminal (full map, rebuilt from the official overheads; see `docs/maps/terminal-reference.md`).**
+The concourse is 4 m up. West to east it holds Security with its scanner lanes (team 0 spawns behind
+them), the departure hall and Shopping (check-in island, airline office, customer service desk, gate
+seating, the Makeup Store), the Bookstore passage between two closed shop blocks, the west corridor
+up to Dining (checker floor) with Burger Town in its corner, and the Upper Lounge at the top of the
+escalators. The Hallway runs along the east wall, with windows over the Maintenance roof and the
+apron. On the ground floor are the Lower Lounge (team 1 spawns: baggage claim, snack bar, glass
+facade), the Maintenance shed (walk through it, or take its outside stairs to the roof), the NE
+strip and the apron. The apron has the parked trijet, which you walk through: in from the Hallway by
+the jet bridge (front), out by the evacuation slide (side) or the aft airstair (rear). Outside stairs
+beside the jet bridge climb back into the concourse. Containers, a police car, a tug and baggage
+carts, and a fuel truck give cover on the apron; crates by the north wing root let you climb onto
+the wing. Overheads: `docs/maps/overhead/terminal-overhead*.png`. In-game screenshots:
+`docs/maps/terminal/*.jpg`.
 
 ## Data conventions (for modes, bots and frontend)
 
 - **Team spawns.** `spawns.teams[0]` is on one side (Rust: the trucks, south-east; Scrapyard: north-west as in MW2;
-  Terminal inside the terminal) and `spawns.teams[1]` is on the other. Every team spawn is more than 20 m from every
+  Terminal: Security) and `spawns.teams[1]` is on the other. Every team spawn is more than 20 m from every
   enemy team spawn. Spawns face into the map. Each team has 8 or more spawns, plus 12 or more FFA
   spawns.
 - **Domination:** `objectives.dom` = `A`, `B`, `C`. A is on team 0's side, B is in the middle (Rust:
-  just east of the tower; Scrapyard: inside Storage, the west building; Terminal: under the jet bridge), and C is on team
+  just east of the tower; Scrapyard: inside Storage, the west building; Terminal: in the Hallway, as in MW2), and C is on team
   1's side.
 - **Search and Destroy:** `objectives.sd` = sites `A`, `B`, both with `team: 1`. Team 1's spawn side
   defends and team 0's spawns are the attacker starts. `objectives.sdBomb` = one point (`id: 'bomb'`,
   `team: 0`) at the attackers' start. Swapping sides each round is the mode's job: give the
-  defending team `spawns.teams[1]` through `ModeRules.spawnPoints`.
+  defending team `spawns.teams[1]` through `ModeRules.spawnPoints`. Terminal also carries
+  `modeSpawns.sd.attackers` (Security) and `.defenders` (Lower Lounge).
 - **Headquarters:** `objectives.hq` = 5 named points per map (some on upper floors; read `y`).
-- **Bots:** `hotspots` = 10 to 16 roam points per map, including the upper levels (the tower decks,
-  the building's upper floor, catwalks, the fuselage cabins and roofs, the Sea Knight cabin, the nose roof, the container roost,
-  the gate level and the jet bridge).
+- **Bots:** `hotspots` = 10 to 20 roam points per map (Terminal: 20, one per callout), including the
+  upper levels (the tower decks, the building's upper floor, catwalks, the fuselage cabins and roofs, the
+  Sea Knight cabin, the concourse, the Maintenance roof, the jet bridge and the plane cabin).
 - **Stairs:** the ramp brushes for stairs carry `tag: 'stairs'`. Railings are player-only clips
   tagged `rail` (bullets and sight pass), and map-edge and fence clips are tagged `clip`. A nav
   builder can use these tags.
@@ -134,12 +141,14 @@ Recipe files (auto-imported):
   scrap_cockpit scrap_junk scrap_wall scrap_trailer scrap_blueclad`
 - `src/client/render/recipes/terminal.ts`: `term_apron term_facade term_floor term_wall term_books
   term_counter term_signBooks term_signGate term_signFood term_jet term_bridge term_blast
-  term_truck term_skyDay`
+  term_truck term_skyDay term_carpet term_seat term_alu term_cabin term_cockpit term_stairs
+  term_rail term_glass term_checker term_slide term_signBurger term_signSecurity term_signMakeup
+  term_signBaggage term_signLounge` (Terminal no longer borrows `scrap_*` / `rust_*` recipes)
 
 Shared ids from core and the Yard are reused as-is: `fence steel lamp crate pallet barrel barrier
 rubber yellow hazard paint winRow container0..5 skyGrey skyDusk skyNight`. If the Yard recipes are
-ever renamed, these maps need the same ids. Terminal and Scrapyard also reuse each other's and
-Rust's `scrap_*` and `rust_stairs` / `rust_rail` recipes.
+ever renamed, these maps need the same ids (Terminal also uses `shutter`). Scrapyard reuses Rust's
+`rust_stairs` / `rust_rail` recipes.
 
 ## Authoring kit
 
