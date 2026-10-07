@@ -10,6 +10,7 @@ import { WEAPON_BY_ID } from '../../../shared/defs/weapons';
 import type { Loadout } from '../../../shared/loadout';
 import { HUD_COLORS, txt, unit } from '../../hud/draw';
 import { net } from '../../net';
+import { deathcamPlaying } from '../modes/deathcam';
 import { registerHudWidget, registerScreen } from '../../registry';
 import { closeOverlay, currentScreen, openOverlay, overlayOpen } from '../../router';
 import { currentMatch } from '../../state';
@@ -104,7 +105,7 @@ registerHudWidget(
   'frontend.classHint',
   (g, W, H) => {
     const m = currentMatch();
-    if (!m || m.alive || !m.death || m.phase !== 'playing') return;
+    if (!m || m.alive || !m.death || m.phase !== 'playing' || deathcamPlaying()) return;
     const u = unit(H);
     const y = Math.round(H * 0.68);
     txt(g, `PRESS ${keyLabel(keyFor('classMenu')).toUpperCase()} TO CHANGE CLASS`, W / 2, y, 8, HUD_COLORS.paper, 'center', u);
