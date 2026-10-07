@@ -105,7 +105,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<GameServer>
 
   const staticDir = opts.staticDir ? resolve(opts.staticDir) : null;
   const health = (): HealthReport => healthReport({ rooms: lobby.rooms, sessions: sessions.size, version, startedAt, draining });
-  const http = createServer((req, res) => handleHttp(req, res, lobby, staticDir, health));
+  const http = createServer((req, res) => handleHttp(req, res, lobby, staticDir, health, store));
   const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
   http.on('upgrade', (req, socket, head) => {
     const path = (req.url ?? '').split('?')[0];
@@ -291,13 +291,14 @@ function registerCoreRpcs(rpc: RpcRegistry, store: Store) {
   });
 }
 
-function handleHttp(req: IncomingMessage, res: ServerResponse, lobby: Lobby, staticDir: string | null, health: () => HealthReport) {
+function handleHttp(req: IncomingMessage, res: ServerResponse, lobby: Lobby, staticDir: string | null, health: () => HealthReport, store: Store) {
   const url = new URL(req.url ?? '/', 'http://x');
   if (HEALTH_PATHS.has(url.pathname)) {
     const report = health();
     return json(res, report, report.ok ? 200 : 503, { 'cache-control': 'no-store' });
   }
   if (url.pathname === '/api/rooms') return json(res, { rooms: lobby.list({ mode: url.searchParams.get('mode') ?? undefined }) });
+  if (url.pathname === '/api/recover') return handleRecover(req, res, store);
   if (!staticDir || (req.method !== 'GET' && req.method !== 'HEAD')) {
     res.writeHead(404).end('not found');
     return;
@@ -319,6 +320,45 @@ function handleHttp(req: IncomingMessage, res: ServerResponse, lobby: Lobby, sta
   res.writeHead(200, { 'content-type': type, 'cache-control': file.endsWith('index.html') ? 'no-cache' : 'public, max-age=3600' });
   if (req.method === 'HEAD') return res.end();
   createReadStream(file).pipe(res);
+}
+
+/** Recovery codes are the guest token shown in groups; accept any spacing, dashes or case. */
+export function normalizeRecoveryCode(code: unknown): string | null {
+  if (typeof code !== 'string') return null;
+  const hex = code.toLowerCase().replace(/[^0-9a-f]/g, '');
+  return hex.length >= 16 && hex.length <= 128 ? hex : null;
+}
+
+const RECOVER_WINDOW_MS = 60_000;
+const RECOVER_MAX_PER_WINDOW = 10;
+const recoverHits = new Map<string, { n: number; since: number }>();
+
+/** POST /api/recover {code}: says which profile a recovery code belongs to. Never creates one. */
+function handleRecover(req: IncomingMessage, res: ServerResponse, store: Store) {
+  if (req.method !== 'POST') return json(res, { ok: false, error: 'POST only' }, 405);
+  const ip = (req.headers['fly-client-ip'] as string | undefined) ?? req.socket.remoteAddress ?? '?';
+  const now = Date.now();
+  const hit = recoverHits.get(ip);
+  if (!hit || now - hit.since > RECOVER_WINDOW_MS) recoverHits.set(ip, { n: 1, since: now });
+  else if (++hit.n > RECOVER_MAX_PER_WINDOW) return json(res, { ok: false, error: 'Too many tries. Wait a minute and try again.' }, 429);
+  let body = '';
+  req.setEncoding('utf8');
+  req.on('data', (chunk: string) => {
+    body += chunk;
+    if (body.length > 2048) req.destroy();
+  });
+  req.on('end', () => {
+    let code: string | null = null;
+    try {
+      code = normalizeRecoveryCode((JSON.parse(body) as { code?: unknown }).code);
+    } catch {
+      /* bad json */
+    }
+    if (!code) return json(res, { ok: false, error: 'That doesn\'t look like a recovery code.' }, 400);
+    const found = store.peek(code);
+    if (!found) return json(res, { ok: false, error: 'No account uses that code. Check it and try again.' }, 404);
+    return json(res, { ok: true, name: found.name, level: found.level, prestige: found.prestige });
+  });
 }
 
 function json(res: ServerResponse, body: unknown, status = 200, headers: Record<string, string> = {}) {

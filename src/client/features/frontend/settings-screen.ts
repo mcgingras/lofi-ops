@@ -6,13 +6,14 @@
  */
 import { sfx } from '../../game/audio';
 import { cacheClear } from '../../render/idb';
+import { adoptToken, currentToken, formatRecoveryCode, net, normalizeRecoveryCode } from '../../net';
 import { registerScreen } from '../../registry';
 import { back } from '../../router';
 import { lookPreset, settings, updateSettings, type Settings } from '../../settings';
 import { BINDABLE, conflictFor, keyFor, keyLabel, resetBinds, setBind, type BindAction } from './keybinds';
 import { h, seg, slider } from './ui';
 
-type Tab = 'video' | 'controls' | 'keys' | 'audio';
+type Tab = 'video' | 'controls' | 'keys' | 'audio' | 'account';
 let lastTab: Tab = 'video';
 
 registerScreen('settings', (root, params) => {
@@ -126,8 +127,8 @@ registerScreen('settings', (root, params) => {
     ...row('Test', h('button', { class: 'lf-btn small', type: 'button', onclick: () => sfx.play('shot', { volume: 0.6 }) }, 'Play a shot')),
   );
 
-  const panes: Record<Tab, HTMLElement> = { video, controls, keys: h('div', {}, keys, keyNote), audio };
-  const labels: [Tab, string][] = [['video', 'Video'], ['controls', 'Controls'], ['keys', 'Key bindings'], ['audio', 'Audio']];
+  const panes: Record<Tab, HTMLElement> = { video, controls, keys: h('div', {}, keys, keyNote), audio, account: accountPane() };
+  const labels: [Tab, string][] = [['video', 'Video'], ['controls', 'Controls'], ['keys', 'Key bindings'], ['audio', 'Audio'], ['account', 'Account']];
   const tabBtns = labels.map(([t, l]) => h('button', { class: 'fe-tab', type: 'button', role: 'tab', onclick: () => select(t) }, l));
   const panel = h('div', { class: 'lf-panel', role: 'tabpanel' });
   const select = (t: Tab) => {
@@ -137,8 +138,118 @@ registerScreen('settings', (root, params) => {
   };
   const done = h('button', { class: 'lf-btn primary', type: 'button', onclick: () => back(params) }, params.overlay === '1' ? 'Back to match' : 'Back');
   root.append(h('div', { class: `fe-page${params.overlay === '1' ? '' : ' lf-bg'}` }, h('h2', { class: 'lf-h2' }, 'Settings'), h('div', {}, h('div', { class: 'fe-tabs', role: 'tablist' }, ...tabBtns), panel), h('div', { class: 'fe-actions' }, done)));
-  select(params.tab === 'keys' || params.tab === 'audio' || params.tab === 'controls' || params.tab === 'video' ? params.tab : lastTab);
+  select(params.tab === 'keys' || params.tab === 'audio' || params.tab === 'controls' || params.tab === 'video' || params.tab === 'account' ? params.tab : lastTab);
   refresh();
   done.focus();
   return () => removeEventListener('keydown', onKey, true);
 });
+
+
+/**
+ * Account tab: this browser's recovery code (the guest token, shown in groups) with Show/Copy, and
+ * "Use a recovery code" to move to an existing account on this device. The server checks a code
+ * with POST /api/recover before we switch, so a typo never lands you on a fresh empty account.
+ */
+function accountPane(): HTMLElement {
+  const token = currentToken();
+  const code = token ? formatRecoveryCode(token) : null;
+  const masked = code ? code.replace(/[0-9A-F]/g, '•').slice(0, -4) + code.slice(-4) : 'Not signed in yet';
+  const codeEl = h('code', { class: 'fe-code', 'aria-live': 'polite' }, masked);
+  let shown = false;
+  const showBtn = h('button', { class: 'lf-btn small', type: 'button' }, 'Show');
+  showBtn.addEventListener('click', () => {
+    if (!code) return;
+    shown = !shown;
+    codeEl.textContent = shown ? code : masked;
+    showBtn.textContent = shown ? 'Hide' : 'Show';
+  });
+  const copyNote = h('span', { class: 'lf-status' });
+  const copyBtn = h('button', { class: 'lf-btn small', type: 'button' }, 'Copy');
+  copyBtn.addEventListener('click', async () => {
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      copyNote.textContent = 'Copied. Keep it somewhere safe, like a password manager.';
+    } catch {
+      shown = true;
+      codeEl.textContent = code;
+      showBtn.textContent = 'Hide';
+      const range = document.createRange();
+      range.selectNodeContents(codeEl);
+      getSelection()?.removeAllRanges();
+      getSelection()?.addRange(range);
+      copyNote.textContent = 'Copy blocked by the browser. The code is selected: press Ctrl+C or Cmd+C.';
+    }
+  });
+  if (!code) [showBtn, copyBtn].forEach((b) => (b.disabled = true));
+
+  const input = h('input', { id: 'recover-code', class: 'fe-input', type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: 'XXXX-XXXX-XXXX-…', 'aria-label': 'Recovery code' });
+  const checkBtn = h('button', { class: 'lf-btn small', type: 'button' }, 'Check code');
+  const result = h('div', { class: 'lf-status', role: 'status' });
+  const switchBtn = h('button', { class: 'lf-btn primary', type: 'button', hidden: true }, 'Switch to this account');
+  let pending: string | null = null;
+  const check = async () => {
+    switchBtn.hidden = true;
+    pending = null;
+    const norm = normalizeRecoveryCode(input.value);
+    if (!norm) {
+      result.textContent = "That doesn't look like a recovery code. It's 48 letters and numbers, usually in groups of four.";
+      return;
+    }
+    if (norm === token) {
+      result.textContent = "That's the account you're already on.";
+      return;
+    }
+    checkBtn.disabled = true;
+    result.textContent = 'Checking…';
+    try {
+      const res = await fetch('/api/recover', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: norm }) });
+      const body = (await res.json()) as { ok: boolean; name?: string; level?: number; prestige?: number; error?: string };
+      if (!body.ok) {
+        result.textContent = body.error ?? 'No account uses that code.';
+        return;
+      }
+      pending = norm;
+      const pres = body.prestige ? ` · Prestige ${body.prestige}` : '';
+      result.textContent = `Found ${body.name} · Level ${body.level}${pres}. Switching leaves this browser's current account (${net.profile?.name ?? 'guest'}) reachable only with its own code, so copy it first if you want to keep it.`;
+      switchBtn.hidden = false;
+    } catch {
+      result.textContent = "Couldn't reach the server. Check your connection and try again.";
+    } finally {
+      checkBtn.disabled = false;
+    }
+  };
+  checkBtn.addEventListener('click', check);
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') check();
+  });
+  switchBtn.addEventListener('click', () => {
+    if (!pending) return;
+    if (!adoptToken(pending)) {
+      result.textContent = "This browser won't save the code (private mode?). Try a normal window.";
+      return;
+    }
+    result.textContent = 'Switching…';
+    location.hash = '#/';
+    location.reload();
+  });
+
+  return h(
+    'div',
+    { class: 'fe-form fe-account' },
+    h('label', {}, 'Your recovery code'),
+    h('div', { class: 'fe-code-row' }, codeEl, showBtn, copyBtn),
+    h('span', {}),
+    h('p', { class: 'fe-help' }, 'Your stats, unlocks, classes and CoD Points belong to this code. Save it: it is the only way back to this account if you clear your browser data, and the way to play as yourself on another device. Anyone with the code can use your account.'),
+    h('span', {}),
+    copyNote,
+    h('div', { class: 'fe-divider' }),
+    h('label', { for: 'recover-code' }, 'Use a recovery code'),
+    h('div', { class: 'fe-code-row' }, input, checkBtn),
+    h('span', {}),
+    result,
+    h('span', {}),
+    switchBtn,
+  );
+}

@@ -130,3 +130,10 @@
   .fe-player { grid-template-columns: 26px 30px minmax(0, 1fr) 44px; }
   .fe-player .tags { display: none; }
 }
+
+/* Settings > Account: recovery code */
+.fe-account .fe-code-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
+.fe-code { font-family: var(--ui); font-size: 12px; letter-spacing: 0.06em; color: var(--hi); background: rgba(0, 0, 0, 0.45); border: 1px solid var(--line); padding: 8px 10px; overflow-wrap: anywhere; min-width: 0; max-width: 100%; user-select: all; }
+.fe-input { font-family: var(--ui); font-size: 12px; letter-spacing: 0.06em; color: var(--paper); background: rgba(0, 0, 0, 0.45); border: 1px solid var(--line); padding: 8px 10px; min-width: 0; flex: 1 1 260px; text-transform: uppercase; }
+.fe-input:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+.fe-help { margin: 0; color: var(--dim); font-size: 12px; line-height: 1.5; max-width: 62ch; }

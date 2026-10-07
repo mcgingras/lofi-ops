@@ -81,6 +81,18 @@ export class Store {
     return { profile, token: fresh, created: true };
   }
 
+  /**
+   * Look up the profile behind a recovery code (the guest token) without creating anything.
+   * Used by POST /api/recover so a typo never silently makes a fresh account.
+   */
+  peek(token: string): { id: string; name: string; level: number; prestige: number; xp: number } | null {
+    if (typeof token !== 'string' || token.length < 16 || token.length > 128) return null;
+    const row = this.db.prepare('SELECT id, name, level, prestige, xp FROM profiles WHERE token_hash = ?').get(hashToken(token)) as
+      | { id: string; name: string; level: number; prestige: number; xp: number }
+      | undefined;
+    return row ? { id: row.id, name: row.name, level: row.level, prestige: row.prestige, xp: row.xp } : null;
+  }
+
   load(id: string): Profile | null {
     const row = this.db.prepare('SELECT * FROM profiles WHERE id = ?').get(id) as Row | undefined;
     return row ? fromRow(row) : null;

@@ -51,6 +51,28 @@ function lsSet(k: string, v: string) {
   }
 }
 
+/** The guest token this browser signs in with (the recovery code), if it has one yet. */
+export function currentToken(): string | undefined {
+  return lsGet(TOKEN_KEY);
+}
+
+/** Recovery codes are the token in groups of four, upper case: ABCD-1234-... */
+export function formatRecoveryCode(token: string): string {
+  return token.toUpperCase().match(/.{1,4}/g)?.join('-') ?? token.toUpperCase();
+}
+
+/** Accept a pasted code with any spacing, dashes or case; null if it can't be a code. */
+export function normalizeRecoveryCode(code: string): string | null {
+  const hex = code.toLowerCase().replace(/[^0-9a-f]/g, '');
+  return hex.length >= 16 && hex.length <= 128 ? hex : null;
+}
+
+/** Switch this browser to another account's token; the caller reloads so the socket says hello again. */
+export function adoptToken(token: string): boolean {
+  lsSet(TOKEN_KEY, token);
+  return lsGet(TOKEN_KEY) === token;
+}
+
 export class Net {
   status: NetStatus = 'idle';
   profile: Profile | null = null;
