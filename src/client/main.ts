@@ -18,7 +18,8 @@ import './menus/match-screen';
 
 // Texture recipes (one file per map/area) and feature folders register themselves on import.
 import.meta.glob('./render/recipes/*.ts', { eager: true });
-import.meta.glob('./features/*/index.ts', { eager: true });
+// Features load after the core screens so they can replace them (see features.ts).
+import './features';
 
 const app = document.getElementById('app')!;
 const screen = document.createElement('div');
