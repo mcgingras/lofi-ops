@@ -6,6 +6,9 @@
 import { describe, expect, it } from 'vitest';
 import { MAP_BY_ID, getMapData, mapsForMode } from '../src/shared/defs/maps';
 import { buildCollisionWorld, type MapData } from '../src/shared/maps/types';
+import { TICK_DT } from '../src/shared/constants';
+import { Buttons } from '../src/shared/input';
+import { createMoveState, stepMove } from '../src/shared/movement';
 import { floodWalk, reaches, type WalkResult } from './maps-mw2-walk';
 
 const MW2 = ['rust', 'scrapyard', 'terminal'] as const;
@@ -113,6 +116,15 @@ for (const id of MW2) {
         for (const s of all(map)) expect(reaches(res, s), `spawn ${s.x},${s.z}`).toBe(true);
         for (const [kind, list] of Object.entries(map.objectives)) for (const o of list) expect(reaches(res, o, Math.max(1.2, o.radius * 0.8)), `${kind} ${o.id}`).toBe(true);
         for (const h of map.hotspots ?? []) expect(reaches(res, h), `hotspot ${h.x},${h.y},${h.z}`).toBe(true);
+      }
+    });
+
+    it('no spawn faces an obstacle: walking forward for 1.2 s covers more than 2 m', () => {
+      const world = buildCollisionWorld(map);
+      for (const s of all(map)) {
+        let st = createMoveState(s.x, s.y, s.z);
+        for (let i = 0; i < 72; i++) st = stepMove(world, st, Buttons.FORWARD, s.yaw, TICK_DT);
+        expect(Math.hypot(st.x - s.x, st.z - s.z), `spawn ${s.x},${s.z}`).toBeGreaterThan(2);
       }
     });
   });

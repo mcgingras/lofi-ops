@@ -249,7 +249,7 @@ export function buildRust(): MapData {
 
   // ----- spawns, objectives -----
   const face = (x: number, z: number, tx = 0, tz = 0) => spawnAt(x, z, yawTowards(x, z, tx, tz));
-  const team0: SpawnPoint[] = [face(-10, -21), face(-6, -21.5), face(-2, -21.5), face(2, -21.5), face(6, -21), face(-13, -20), face(8, -19), face(0, -18.5)];
+  const team0: SpawnPoint[] = [face(-10, -21), face(-6, -21.5), face(-4, -21.5), face(2, -21.5), face(6, -21), face(-13, -20), face(8, -19), face(0, -18.5)];
   const team1: SpawnPoint[] = [face(-6, 21), face(-2, 21.5), face(2, 21.5), face(6, 21.5), face(10, 21), face(-4, 19), face(4, 17), face(8, 19)];
   const ffa: SpawnPoint[] = [face(0, -10), face(10, -8), face(-13, -7), face(-14, 9), face(13, 6), face(5, 14), face(-4, -14), face(19, -6), face(-22, -21), face(22, 21), face(-2, 8), face(-23, -9), face(16, -22.5), face(-21, 22), face(24, -20), face(3, -22)];
 

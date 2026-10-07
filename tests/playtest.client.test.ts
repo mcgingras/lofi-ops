@@ -210,6 +210,9 @@ describe('playtest over real sockets', () => {
       while (running) {
         const t = (performance.now() - t0) / 1000;
         b.client.input(Buttons.FORWARD | Buttons.SPRINT, Math.floor(t / 0.8) % 2 === 0 ? -Math.PI / 2 : Math.PI / 2, 0, 1);
+        // A keeps holding ADS at frame rate like a real client: after 250 ms without input the
+        // server idles the player (buttons 0), ADS decays and hip spread makes hits random.
+        a.client.input(Buttons.ADS, 0, 0, 1);
         await sleep(1000 / 60);
       }
     })();
@@ -223,6 +226,9 @@ describe('playtest over real sockets', () => {
         const seen = buf.sample(b.id, rt);
         if (!seen || Math.abs(seen.vx) < 6 || Math.abs(pb.move.vx) < 6 || Math.sign(seen.vx) !== Math.sign(pb.move.vx)) continue;
         const lead = Math.abs(pb.move.x - seen.x);
+        // Only shoot once the seen position is well clear of the real hitbox (under load the
+        // render time can lag less than usual for a frame).
+        if (lead <= 0.5) continue;
         const before = a.client.all('hit').length;
         // Without rewind: claim a view time in the future (clamped to now by the server).
         shoot(a.client, eye, { x: seen.x, y: seen.y + 1.15, z: seen.z }, shot, rewind ? rt : rt + 10);
