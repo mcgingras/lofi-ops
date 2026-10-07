@@ -14,6 +14,14 @@ export interface KsControl {
   until: number;
 }
 
+/** The tactical map is up (radio raised) for `id`. */
+export interface KsMapMode {
+  id: string;
+  until: number;
+  /** The `ks_radio` entity others see. */
+  entity: number;
+}
+
 export interface KillstreakExt {
   /** Kills toward streaks this life (kills by killstreaks excluded). */
   count: number;
@@ -24,6 +32,10 @@ export interface KillstreakExt {
   selected: number;
   armed: KsArmed | null;
   control: KsControl | null;
+  /** Tactical map open (humans; bots pick targets server-side). */
+  map?: KsMapMode | null;
+  /** Rate limit for map RPCs. */
+  mapRpc?: { tokens: number; at: number };
   /** Bots: 0..1 skill for calling streaks (BotSkill.streakUse). Set by the bots feature; default from its ext or 0.6. */
   botStreakUse?: number;
   /** Bots: true = the bots brain calls streaks itself through the API (no automatic use). */

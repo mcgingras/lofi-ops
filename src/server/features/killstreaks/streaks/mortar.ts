@@ -1,15 +1,17 @@
 /**
- * Mortar Team: three marked spots, two shells on each a moment apart. Each spot shows a ring to
+ * Mortar Team: three spots chosen on the tactical map, two rounds on each a moment apart (BO1:
+ * explosions about seven metres across, `STRIKE.mortar`). Each spot shows a ring to
  * everyone (`ks_mark` entity with the landing time) so whoever is under it can move. Shells land on
  * the first thing above the spot (a roof takes it). Pattern after Blockyard's Mortar Team (MIT).
  */
 import { KS_ENTITY } from '../../../../shared/defs/killstreaks';
+import { STRIKE } from '../../../../shared/defs/tactical-map';
 import type { Vec3 } from '../../../../shared/math';
 import type { PlayerState } from '../../../player';
 import type { Active, KsRoom } from '../world';
 import type { CallArgs } from './types';
 
-export const MORTAR = { first: 2.6, apart: 0.7, perMark: 2, second: 0.45, spread: 2, blast: { r: 6, max: 200, min: 30 } };
+export const MORTAR = { first: 3, apart: 0.7, perMark: 2, second: 0.45, spread: STRIKE.mortar.spread, blast: { r: STRIKE.mortar.blastR, max: 220, min: 60 } };
 
 export function callMortar(ctx: KsRoom, p: PlayerState, args: CallArgs): string | null {
   const room = ctx.room;

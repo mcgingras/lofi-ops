@@ -133,7 +133,8 @@ export class MapScene {
   private baked: BakedMesh[] = [];
   private materials: LookMaterial[] = [];
   private glows: { sprite: THREE.Sprite; prop: GlowProp }[] = [];
-  private sky: THREE.Mesh;
+  /** The sky dome (hidden for top-down captures such as the tactical map). */
+  readonly sky: THREE.Mesh;
   private skyMat: LookMaterial;
   private bakes = new Map<string, Float32Array>();
   private signature: string;

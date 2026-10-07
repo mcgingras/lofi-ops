@@ -1,18 +1,21 @@
 /**
- * Napalm Strike and Rolling Thunder: a plane flies a line through the designated point along the
- * caller's facing and drops on it. Napalm: three canisters, then burning ground (`fire` damage,
- * Flak Jacket Pro is immune). Rolling Thunder: a B-52 carpet-bombs a long line.
+ * Napalm Strike and Rolling Thunder: a plane flies a line through the point chosen on the tactical
+ * map along the chosen run direction and drops on it. Napalm: three canisters, then burning ground
+ * (`fire` damage, Flak Jacket Pro is immune), released about 4 s after the call. Rolling Thunder:
+ * a B-52 carpet-bombs a long line, about 7 s out (BO1 timings). Footprints: `STRIKE` in
+ * shared/defs/tactical-map.ts (the client draws the same ones to scale).
  */
 import { KS_ENTITY } from '../../../../shared/defs/killstreaks';
+import { STRIKE, dirOfYaw } from '../../../../shared/defs/tactical-map';
 import type { Vec3 } from '../../../../shared/math';
 import type { PlayerState } from '../../../player';
 import type { Active, KsRoom } from '../world';
 import type { CallArgs } from './types';
 
-export const NAPALM = { speed: 70, drops: [-6, 0, 6], blast: { r: 7, max: 180, min: 50 }, fire: { sec: 8, r: 4.5, dps: 30, tick: 0.5 } };
-export const THUNDER = { speed: 32, bombs: 14, spacing: 4, blast: { r: 6.5, max: 200, min: 40 } };
-
-const dirOf = (yaw: number) => ({ x: -Math.sin(yaw), z: -Math.cos(yaw) });
+const N = STRIKE.napalm;
+const T = STRIKE.rolling_thunder;
+export const NAPALM = { speed: N.speed, drops: [...N.drops], releaseSec: N.releaseSec, blast: { r: N.blastR, max: 180, min: 50 }, fire: { sec: 8, r: N.fireR, dps: 30, tick: 0.5 } };
+export const THUNDER = { speed: T.speed, bombs: T.bombs, spacing: T.spacing, releaseSec: T.releaseSec, blast: { r: T.blastR, max: 200, min: 40 } };
 
 interface Drop {
   /** Distance along the run where it falls. */
@@ -23,10 +26,11 @@ interface Drop {
 
 function runLine(ctx: KsRoom, p: PlayerState, streak: 'napalm' | 'rolling_thunder', target: Vec3, yaw: number): string | null {
   const room = ctx.room;
-  const d = dirOf(yaw);
+  const d = dirOfYaw(yaw);
   const speed = streak === 'napalm' ? NAPALM.speed : THUNDER.speed;
   const y = streak === 'napalm' ? ctx.groundY + 32 : ctx.planeY();
-  const lead = ctx.radius + 60;
+  // Starts far enough out that the middle of the drop comes `releaseSec` after the call.
+  const lead = Math.max(ctx.radius + 20, speed * (streak === 'napalm' ? NAPALM.releaseSec : THUNDER.releaseSec));
   const start = { x: target.x - d.x * lead, z: target.z - d.z * lead };
   const ent = room.entities.add({ kind: streak === 'napalm' ? KS_ENTITY.jet : KS_ENTITY.bomber, x: start.x, y, z: start.z, yaw, owner: p.id, team: p.team });
   const offsets = streak === 'napalm' ? NAPALM.drops : Array.from({ length: THUNDER.bombs }, (_, i) => (i - (THUNDER.bombs - 1) / 2) * THUNDER.spacing);

@@ -213,35 +213,31 @@ describe('strikes', () => {
     expect(room.entities.byKind(KS_ENTITY.mortarMark)).toHaveLength(0);
   });
 
-  it('designates with the STREAK button (arm, then mark where aiming)', () => {
+  it('the Care Package designates with the STREAK button (arm, then mark where aiming)', () => {
     const room = setup();
     const a = bot(room, 0);
     place(a, -1, 12);
     a.yaw = 0;
     a.pitch = -0.5;
-    give(a, 'napalm');
+    give(a, 'care_package');
     onStreakPressed(room, a);
-    expect(ksOf(a).armed?.id).toBe('napalm');
+    expect(ksOf(a).armed?.id).toBe('care_package');
     steps(room, 0.1);
     expect(a.swapEnd).toBeGreaterThan(room.time); // weapon down while designating
     onStreakPressed(room, a);
     expect(ksOf(a).armed).toBeNull();
     expect(readyKillstreaks(a)).toEqual([]);
-    expect(room.entities.byKind(KS_ENTITY.jet)).toHaveLength(1);
+    expect(room.entities.byKind(KS_ENTITY.dropHeli)).toHaveLength(1);
   });
 
-  it('mortar needs three marks from the button', () => {
+  it('map streaks never fall back to the crosshair', () => {
     const room = setup();
     const a = bot(room, 0);
     place(a, -1, 12);
-    a.pitch = -0.4;
-    give(a, 'mortar');
-    onStreakPressed(room, a);
-    onStreakPressed(room, a);
-    onStreakPressed(room, a);
-    expect(ksOf(a).armed?.marks.length).toBe(2);
-    onStreakPressed(room, a);
-    expect(room.entities.byKind(KS_ENTITY.mortarMark)).toHaveLength(3);
+    a.pitch = -0.5;
+    give(a, 'napalm');
+    expect(callKillstreak(room, a, 'napalm')).toEqual({ ok: false, reason: 'no_target' });
+    expect(readyKillstreaks(a)).toEqual(['napalm']);
   });
 });
 

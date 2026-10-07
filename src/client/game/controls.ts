@@ -89,6 +89,7 @@ export class Controls {
   private offs: (() => void)[] = [];
   /** Extra look multiplier (ADS sensitivity, scopes). */
   lookScale = 1;
+  /** False while a feature owns the input (tactical map): no buttons, look, clicks or wheel. Key releases still register. */
   enabled = true;
   /** Drag-to-look instead of pointer lock (dev only, `?devlook=1`). */
   readonly devlook = devlookEnabled();
@@ -138,6 +139,7 @@ export class Controls {
         if (e.target === this.canvas && e.button === 0) this.requestLock();
         return;
       }
+      if (!this.enabled) return; // a feature owns the mouse (tactical map)
       if (this.devlook && e.button === 0) {
         // Drag looks; a click without a drag fires a tap on mouseup.
         this.dragging = true;
@@ -149,6 +151,10 @@ export class Controls {
       if (this.devlook && e.button === 2) this.holdUntil.set('ads', performance.now() + DEVLOOK_MIN_HOLD_MS);
     });
     on('mouseup', (e) => {
+      if (!this.enabled) {
+        this.dragging = false;
+        return;
+      }
       if (this.devlook && e.button === 0) {
         if (this.dragging && this.dragMoved < 6) this.hold('fire', DEVLOOK_MIN_HOLD_MS);
         this.dragging = false;
@@ -158,7 +164,7 @@ export class Controls {
       if (e.button === 2) this.release('ads');
     });
     on('wheel', (e) => {
-      if (this.locked) this.wheel += Math.sign(e.deltaY);
+      if (this.locked && this.enabled) this.wheel += Math.sign(e.deltaY);
     });
     on('contextmenu', (e) => {
       if (this.locked || e.target === this.canvas) e.preventDefault();

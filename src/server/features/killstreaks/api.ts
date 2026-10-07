@@ -66,8 +66,8 @@ export const killstreakState = (room: Room, p: PlayerState) => stateMsg(room, p)
 /** True while the player drives / aims a streak (RC-XD, Chopper Gunner, Valkyrie). */
 export const isDrivingStreak = (p: PlayerState): boolean => !!p.ext.killstreaks?.control;
 
-/** True while designating targets (holding the marker). */
-export const isDesignating = (p: PlayerState): boolean => !!p.ext.killstreaks?.armed;
+/** True while designating targets (holding the marker, or the radio with the tactical map up). */
+export const isDesignating = (p: PlayerState): boolean => !!(p.ext.killstreaks?.armed || p.ext.killstreaks?.map);
 
 /**
  * Call a ready streak now. Targets default to where the player aims (point/line), their marks or
@@ -85,15 +85,21 @@ export function callKillstreak(room: Room, p: PlayerState, id: string, opts: Cal
   if (ks.control) return { ok: false, reason: 'busy' };
   const ctx = ksRoom(room);
   if ((id === 'attack_helicopter' || id === 'chopper_gunner') && airspaceFull(ctx)) return { ok: false, reason: 'airspace_full' };
-  const aim = ctx.aimPoint(p);
-  const target = opts.target ? ctx.clampToMap(opts.target) : aim;
+  // Map-targeted streaks never fall back to the crosshair (humans choose on the tactical map, bots
+  // pass `suggestTarget`); a patrol area defaults to the middle of the map.
+  const fallback = def.targeting === 'map' ? (def.mapPick === 'area' ? ctx.center : null) : ctx.aimPoint(p);
+  const target = opts.target ? ctx.clampToMap(opts.target) : opts.targets?.[0] ? ctx.clampToMap(opts.targets[0]) : fallback;
   const targets = (opts.targets?.length ? opts.targets : target ? [target] : []).map((t) => ctx.clampToMap(t));
-  if ((def.targeting === 'point' || def.targeting === 'line' || def.targeting === 'points') && !targets.length) return { ok: false, reason: 'no_target' };
+  if ((def.targeting === 'point' || def.targeting === 'line' || def.targeting === 'points' || def.targeting === 'map') && !targets.length) return { ok: false, reason: 'no_target' };
   const reason = impl(ctx, p, { target: target ?? targets[0] ?? null, targets, yaw: opts.yaw ?? p.yaw });
   if (reason) return { ok: false, reason };
   ks.ready.splice(idx, 1);
   ks.selected = Math.max(0, Math.min(ks.selected, ks.ready.length - 1));
   if (ks.armed?.id === id) ks.armed = null;
+  if (ks.map?.id === id) {
+    room.entities.remove(ks.map.entity);
+    ks.map = null;
+  }
   markDirty(room, p);
   room.bus.emit('killstreaks.called', { player: p, id });
   room.sendFeature(null, 'killstreaks.called', { id, owner: p.id, team: p.team });
@@ -119,8 +125,12 @@ export function enemyStreakTargets(room: Room, p: PlayerState): { entity: number
  */
 export function suggestTarget(room: Room, p: PlayerState, id: string, skill = botStreakSkill(p)): { target: Vec3 | null; targets: Vec3[]; yaw: number } {
   const ctx = ksRoom(room);
-  const enemies = [...room.players.values()].filter((q) => q.alive && room.isEnemy(p, q));
-  const err = (1 - skill) * 10 + 1;
+  // Aim at what the bot knows: enemies on its radar or in sight. Knowing nobody, it guesses from
+  // where everyone is with twice the error (players expect enemies near the action too).
+  const all = [...room.players.values()].filter((q) => q.alive && room.isEnemy(p, q));
+  const known = knownEnemies(room, p, all);
+  const enemies = known.length ? known : all;
+  const err = ((1 - skill) * 10 + 1) * (known.length ? 1 : 2);
   const jitter = (v: Vec3): Vec3 => ctx.clampToMap({ x: v.x + (Math.random() - 0.5) * err, y: v.y, z: v.z + (Math.random() - 0.5) * err });
   const spots = room.map.hotspots?.length ? room.map.hotspots : [ctx.center];
   // Score each enemy by how many others are near it (low-skill bots just pick anyone).
@@ -139,6 +149,17 @@ export function suggestTarget(room: Room, p: PlayerState, id: string, skill = bo
     yaw = second && skill > 0.5 ? Math.atan2(-(second.x - target.x), -(second.z - target.z)) : Math.atan2(-(target.x - p.move.x), -(target.z - p.move.z));
   }
   return { target, targets, yaw };
+}
+
+/** Enemies `p` knows about: on its radar (Spy Plane, gunfire) or in line of sight within 90 m. */
+export function knownEnemies(room: Room, p: PlayerState, enemies = [...room.players.values()].filter((q) => q.alive && room.isEnemy(p, q))): PlayerState[] {
+  const radar = new Set(room.radarFor(p));
+  const eye = { x: p.move.x, y: p.move.y + 1.5, z: p.move.z };
+  return enemies.filter((q) => {
+    if (radar.has(q.id)) return true;
+    const c = chestOf(q);
+    return Math.hypot(c.x - eye.x, c.z - eye.z) < 90 && room.world.lineOfSight(eye, c, 'sight');
+  });
 }
 
 /** Seconds a bot waits after earning a streak before calling it (lower skill = slower, less sure). */
@@ -164,7 +185,7 @@ export function botWants(room: Room, p: PlayerState, id: string, skill: number):
 /** Automatic streak use for bots (every few ticks from the feature). */
 export function botAutoStreaks(room: Room, p: PlayerState): void {
   const ks = p.ext.killstreaks;
-  if (!ks || ks.manual || !p.alive || !ks.ready.length || ks.control || ks.armed) return;
+  if (!ks || ks.manual || !p.alive || !ks.ready.length || ks.control || ks.armed || ks.map) return;
   const skill = botStreakSkill(p);
   ks.botNextCall ??= room.time + botCallDelay(skill);
   if (room.time < ks.botNextCall) return;

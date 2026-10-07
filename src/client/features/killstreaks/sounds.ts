@@ -38,3 +38,7 @@ sfx.register('ks_buzz', (ctx) => tone(ctx, 0.1, (t) => (((t * 210) % 1) * 2 - 1)
 sfx.register('ks_launch', (ctx) => noise(ctx, 0.8, 2, (k) => (k < 0.1 ? k * 10 : Math.pow(1 - k, 1.5)) * 0.7));
 sfx.register('ks_sentry', (ctx) => noise(ctx, 0.12, 3, (k) => Math.pow(1 - k, 3)));
 sfx.register('ks_fire', (ctx) => noise(ctx, 0.5, 5, () => 0.25));
+// Tactical map (radio): static burst when the feed cuts in/out, a chirp per mark, a confirm tone.
+sfx.register('ks_static', (ctx) => noise(ctx, 0.35, 1, (k) => (k < 0.1 ? k * 10 : 1 - k) * 0.35));
+sfx.register('ks_mark', (ctx) => tone(ctx, 0.08, (t) => sq(t, 1650) * 0.18 * (1 - t / 0.08)));
+sfx.register('ks_confirm', (ctx) => tone(ctx, 0.32, (t) => sq(t, t < 0.12 ? 980 : 1470) * 0.2 * (t > 0.12 && t < 0.16 ? 0 : 1) * (1 - t / 0.32)));

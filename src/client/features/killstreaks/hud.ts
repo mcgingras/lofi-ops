@@ -6,6 +6,7 @@ import { KILLSTREAK_BY_ID, KS_ENTITY } from '../../../shared/defs/killstreaks';
 import { blink, box, clock, rect, txt, textWidth, unit, HUD_COLORS as C } from '../../hud/draw';
 import { registerHudWidget } from '../../registry';
 import { currentMatch } from '../../state';
+import { STRIKE } from '../../../shared/defs/tactical-map';
 import { ksClient, streakName } from './store';
 
 const SHORT: Record<string, string> = {
@@ -52,7 +53,7 @@ registerHudWidget(
     if (st.ready.length && m.alive) {
       const sel = st.ready[st.selected] ?? st.ready[0]!;
       const flash = m.time - ksClient.earnedAt < 2 && blink(m.time, 0.3, 0.2);
-      const label = st.armed ? 'DESIGNATING' : `[4] ${streakName(sel).toUpperCase()}`;
+      const label = st.map ? 'RADIO' : st.armed ? 'DESIGNATING' : `[4] ${streakName(sel).toUpperCase()}`;
       txt(g, label, W - 8 * u, y - 4 * u, 8, flash ? C.paper : C.hi, 'right', u);
       if (st.ready.length > 1) txt(g, `+${st.ready.length - 1}  [5] NEXT`, W - 8 * u, y - 13 * u, 8, C.dim, 'right', u);
     }
@@ -96,7 +97,7 @@ registerHudWidget(
       }
       rect(g, cx - u, cy - u, 2 * u, 2 * u, C.warn);
       const need = st.armed.need;
-      const label = need > 1 ? `MARK TARGET ${st.armed.marks.length + 1}/${need}` : def?.targeting === 'line' ? 'MARK TARGET (RUNS ALONG YOUR FACING)' : 'MARK TARGET';
+      const label = need > 1 ? `MARK TARGET ${st.armed.marks.length + 1}/${need}` : def?.targeting === 'line' ? 'MARK TARGET (RUNS ALONG YOUR FACING)' : def?.id === 'care_package' ? 'MARK DROP ZONE' : 'MARK TARGET';
       txt(g, label, cx, cy + 16 * u, 8, C.hi, 'center', u);
       txt(g, `[4] CONFIRM  ${streakName(st.armed.id).toUpperCase()}`, cx, cy + 26 * u, 8, C.paper, 'center', u);
     }
@@ -128,7 +129,7 @@ registerHudWidget(
     if (me?.alive && m.net.lastSnap) {
       for (const e of m.net.lastSnap.ents) {
         if (e.kind !== KS_ENTITY.mortarMark) continue;
-        if (Math.hypot(e.x - me.move.x, e.z - me.move.z) < 7) {
+        if (Math.hypot(e.x - me.move.x, e.z - me.move.z) < STRIKE.mortar.blastR * 2) {
           const t = 'MORTAR INCOMING';
           if (blink(m.time, 0.4, 0.25)) txt(g, t, cx, cy - 30 * u, 16, C.warn, 'center', u);
           void textWidth;

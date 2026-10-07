@@ -16,6 +16,8 @@ export interface KillstreakStateMsg {
   selected: number;
   /** Designating targets for a streak (press STREAK again at each spot). */
   armed: { id: string; marks: [number, number, number][]; need: number; until: number } | null;
+  /** The tactical map is up (radio raised) for streak `id` until room time `until`. */
+  map: { id: string; until: number } | null;
   /** Driving / gunning one: the entity id the camera follows and when it ends (room time). */
   control: { id: string; entity: number; until: number } | null;
 }
@@ -33,8 +35,15 @@ declare module '../protocol' {
   interface RpcMap {
     /** Pick which ready streak the STREAK button calls. */
     'killstreaks.select': { req: { index: number }; res: { selected: number } };
-    /** Call a ready streak. Targets default to where the caller aims (server-side raycast). */
+    /** Call a ready streak. Targets default to where the caller aims (server-side raycast). Map-targeted streaks answer `use_map`. */
     'killstreaks.call': { req: { id: string; target?: [number, number, number]; targets?: [number, number, number][] }; res: { ok: boolean; reason?: string } };
+    /**
+     * The tactical map's choice for the streak whose map is up (opened with STREAK): `points` as
+     * [x, z] (Mortar Team three, others one), `yaw` the run direction for Napalm / Rolling Thunder.
+     */
+    'killstreaks.mapTarget': { req: { id: string; points: [number, number][]; yaw?: number }; res: { ok: boolean; reason?: string } };
+    /** Put the radio away (the streak is kept). */
+    'killstreaks.mapCancel': { req: Record<string, never>; res: { ok: boolean } };
     /** Current streak state (also pushed as `killstreaks.state`). */
     'killstreaks.state': { req: Record<string, never>; res: KillstreakStateMsg | null };
     /** Dev only (server started with LOFI_CHEATS=1): grant a ready streak and/or add enemy bots. */

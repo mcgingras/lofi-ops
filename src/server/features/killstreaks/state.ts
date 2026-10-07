@@ -5,7 +5,7 @@ import type { PlayerState } from '../../player';
 import type { Room } from '../../room';
 import type { KillstreakExt } from './events';
 
-export const ksOf = (p: PlayerState): KillstreakExt => (p.ext.killstreaks ??= { count: 0, earnedLife: [], ready: [], selected: 0, armed: null, control: null });
+export const ksOf = (p: PlayerState): KillstreakExt => (p.ext.killstreaks ??= { count: 0, earnedLife: [], ready: [], selected: 0, armed: null, map: null, control: null });
 
 /** The player's three picks (from the loadout in use; next loadout if not spawned yet). */
 export const chosenStreaks = (p: PlayerState): string[] => (p.loadout ?? p.nextLoadout)?.killstreaks.filter((id) => KILLSTREAK_BY_ID.has(id)).slice(0, 3) ?? [];
@@ -36,6 +36,7 @@ export function stateMsg(room: Room, p: PlayerState): KillstreakStateMsg {
     ready: [...ks.ready],
     selected: ks.selected,
     armed: ks.armed ? { id: ks.armed.id, marks: ks.armed.marks.map((m) => [m.x, m.y, m.z] as [number, number, number]), need: ks.armed.need, until: ks.armed.until } : null,
+    map: ks.map ? { id: ks.map.id, until: ks.map.until } : null,
     control: ks.control ? { ...ks.control } : null,
   };
 }
@@ -85,6 +86,8 @@ export function resetPlayer(room: Room, p: PlayerState): void {
   ks.ready = [];
   ks.selected = 0;
   ks.armed = null;
+  if (ks.map) room.entities.remove(ks.map.entity);
+  ks.map = null;
   ks.control = null;
   ks.botNextCall = undefined;
   markDirty(room, p);

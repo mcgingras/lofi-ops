@@ -5,16 +5,21 @@
  * STREAK button (4); selection cycles with 5.
  *
  * `targeting` says how a streak is aimed:
- *   none   - just called (Spy Plane, Counter-Spy Plane, Blackbird, Attack Dogs, Attack Helicopter)
+ *   none   - just called (Spy Plane, Counter-Spy Plane, Blackbird, Attack Dogs)
  *   point  - one designated spot where the caller aims (Care Package)
- *   line   - a spot plus the caller's facing as the run direction (Napalm, Rolling Thunder)
- *   points - several designated spots (`marks`; Mortar Team)
+ *   line   - a spot plus the caller's facing as the run direction (unused since the tactical map)
+ *   points - several designated spots where the caller aims (unused since the tactical map)
+ *   map    - chosen on the overhead tactical map (BO1: the radio). `mapPick` says how:
+ *            'line' a spot plus a run direction (Napalm, Rolling Thunder), 'points' `marks` spots
+ *            (Mortar Team), 'area' one patrol point (Attack Helicopter). See defs/tactical-map.ts.
  *   place  - placed on the ground in front of the caller (Sentry Gun, SAM Turret)
  *   control- the caller drives/aims it (RC-XD, Chopper Gunner, Valkyrie Rockets)
  */
 import { indexById } from './registry';
 
-export type StreakTargeting = 'none' | 'point' | 'line' | 'points' | 'place' | 'control';
+export type StreakTargeting = 'none' | 'point' | 'line' | 'points' | 'map' | 'place' | 'control';
+/** How a `map`-targeted streak is placed on the tactical map. */
+export type MapPick = 'line' | 'points' | 'area';
 
 export interface KillstreakDef {
   id: string;
@@ -29,7 +34,9 @@ export interface KillstreakDef {
   durationSec?: number;
   icon?: string;
   targeting?: StreakTargeting;
-  /** Designations needed for `points` targeting. */
+  /** For `map` targeting: a run line, several points, or a patrol area. */
+  mapPick?: MapPick;
+  /** Designations needed for `points` targeting / `mapPick: 'points'`. */
   marks?: number;
   /** It flies (SAM Turrets shoot it, Ghost Pro hides from it). */
   air?: boolean;
@@ -44,13 +51,13 @@ export const KILLSTREAKS: KillstreakDef[] = [
   { id: 'counter_uav', name: 'Counter-Spy Plane', kills: 4, description: "Jams the enemy's minimap.", unlockLevel: 1, kind: 'called', durationSec: 30, targeting: 'none', air: true, hp: 700, icon: 'ks_cuav' },
   { id: 'sam_turret', name: 'SAM Turret', kills: 4, description: 'Placeable turret that shoots down enemy aircraft.', unlockLevel: 8, kind: 'called', durationSec: 60, targeting: 'place', hp: 450, icon: 'ks_sam' },
   { id: 'care_package', name: 'Care Package', kills: 5, description: 'Airdrop a random killstreak where you aim.', unlockLevel: 1, kind: 'called', targeting: 'point', icon: 'ks_package' },
-  { id: 'napalm', name: 'Napalm Strike', kills: 5, description: 'A jet burns a line through the target, facing your direction.', unlockLevel: 1, kind: 'called', targeting: 'line', icon: 'ks_napalm' },
+  { id: 'napalm', name: 'Napalm Strike', kills: 5, description: 'Pick a spot and a direction on the map: a jet burns a line through it.', unlockLevel: 1, kind: 'called', targeting: 'map', mapPick: 'line', icon: 'ks_napalm' },
   { id: 'sentry_gun', name: 'Sentry Gun', kills: 6, description: 'Placeable automated gun.', unlockLevel: 14, kind: 'called', durationSec: 90, targeting: 'place', hp: 450, icon: 'ks_sentry' },
-  { id: 'mortar', name: 'Mortar Team', kills: 6, description: 'Mark three spots for a mortar barrage.', unlockLevel: 1, kind: 'called', targeting: 'points', marks: 3, icon: 'ks_mortar' },
-  { id: 'attack_helicopter', name: 'Attack Helicopter', kills: 7, description: 'A helicopter patrols the map and attacks enemies.', unlockLevel: 1, kind: 'called', durationSec: 60, targeting: 'none', air: true, hp: 1500, icon: 'ks_heli' },
+  { id: 'mortar', name: 'Mortar Team', kills: 6, description: 'Mark three spots on the map for a mortar barrage.', unlockLevel: 1, kind: 'called', targeting: 'map', mapPick: 'points', marks: 3, icon: 'ks_mortar' },
+  { id: 'attack_helicopter', name: 'Attack Helicopter', kills: 7, description: 'Pick an area on the map: a helicopter patrols it and attacks enemies.', unlockLevel: 1, kind: 'called', durationSec: 60, targeting: 'map', mapPick: 'area', air: true, hp: 1500, icon: 'ks_heli' },
   { id: 'valkyrie', name: 'Valkyrie Rockets', kills: 7, description: 'Two guided rockets. Steer with your view, fire to detonate.', unlockLevel: 26, kind: 'controlled', targeting: 'control', icon: 'ks_valkyrie' },
   { id: 'blackbird', name: 'Blackbird', kills: 8, description: 'Shows enemy positions and facing. Cannot be shot down.', unlockLevel: 32, kind: 'called', durationSec: 30, targeting: 'none', air: true, icon: 'ks_blackbird' },
-  { id: 'rolling_thunder', name: 'Rolling Thunder', kills: 8, description: 'Carpet bombing along your facing through the target.', unlockLevel: 36, kind: 'called', targeting: 'line', icon: 'ks_thunder' },
+  { id: 'rolling_thunder', name: 'Rolling Thunder', kills: 8, description: 'Pick a spot and a direction on the map: a B-52 carpet-bombs along it.', unlockLevel: 36, kind: 'called', targeting: 'map', mapPick: 'line', icon: 'ks_thunder' },
   { id: 'chopper_gunner', name: 'Chopper Gunner', kills: 9, description: 'Man the explosive gun of a circling helicopter.', unlockLevel: 40, kind: 'controlled', durationSec: 40, targeting: 'control', air: true, hp: 2000, icon: 'ks_gunner' },
   { id: 'attack_dogs', name: 'Attack Dogs', kills: 11, description: 'A pack of dogs hunts down the enemy.', unlockLevel: 44, kind: 'called', durationSec: 60, targeting: 'none', icon: 'ks_dogs' },
 ];
@@ -86,6 +93,8 @@ export const KS_ENTITY = {
   bomber: 'ks_bomber',
   fire: 'ks_fire',
   mortarMark: 'ks_mark',
+  /** A player holding the radio for the tactical map (others see the pose). */
+  radio: 'ks_radio',
   sentry: 'ks_sentry',
   sam: 'ks_sam',
   missile: 'ks_missile',

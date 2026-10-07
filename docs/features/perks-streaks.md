@@ -6,14 +6,17 @@ Code lives in the pre-made feature folders (`perks` and `killstreaks`, already l
 
 ```
 src/shared/defs/perks.ts                  PerkDef x15, PERK_TUNING, PERK_PRO_CHALLENGES (ChallengeDef[])
-src/shared/defs/killstreaks.ts            KillstreakDef x14 (+targeting/air/hp), CARE_PACKAGE_WEIGHTS, KS_ENTITY kinds
+src/shared/defs/killstreaks.ts            KillstreakDef x14 (+targeting/mapPick/air/hp), CARE_PACKAGE_WEIGHTS, KS_ENTITY kinds
+src/shared/defs/tactical-map.ts           tactical map: STRIKE footprints/timings, validateMapTarget, yawFromDrag, strikeFootprint, rate-limit bucket
 src/shared/defs/perks-streaks-protocol.ts RPC + feature message types (declaration-merged into protocol.ts)
 src/server/features/perks/                index (modifiers, stamina, challenges, public lists), laststand, scavenger, common
 src/server/features/killstreaks/          index (buttons, RPCs, wiring), api (bot API), state (ladder), world (per-room ctx),
-                                          skill, streaks/{radar,airstrike,mortar,package,turrets,heli,vehicles,dogs}
+                                          mapmode (radio / tactical map), skill, streaks/{radar,airstrike,mortar,package,turrets,heli,vehicles,dogs}
 src/client/features/perks/                footstep filter, last stand, scavenger packs, perk list, state (my loadout/pro)
-src/client/features/killstreaks/          models, renderers, textures, sounds, fx, hud, radar, control, store
-tests/perks.test.ts, tests/killstreaks.test.ts, tests/perks-streaks.integration.test.ts (+ helpers)
+src/client/features/killstreaks/          models, renderers, textures, sounds, fx, hud, radar, control, store,
+                                          tacmap (map mode), tacmap-logic (placement, no DOM), overhead (satellite picture), radio
+tests/perks.test.ts, tests/killstreaks.test.ts, tests/perks-streaks.integration.test.ts (+ helpers),
+tests/tacmap.test.ts, tests/tacmap.integration.test.ts, tests/tacmap.client.test.ts
 ```
 
 ## Perks
@@ -49,19 +52,33 @@ tests/perks.test.ts, tests/killstreaks.test.ts, tests/perks-streaks.integration.
 | counter_uav | Counter-Spy Plane | 4 | `radarJammed` for your enemies (static on their radar) 30 s; 700 hp |
 | sam_turret | SAM Turret | 4 | placed in front; homing missiles (1000 dmg) at enemy aircraft in 160 m, 8 missiles, 60 s; 450 hp |
 | care_package | Care Package | 5 | designate a spot; Chinook drops a crate (crushes); hold USE: owner 0.5 s, team 1.25 s, enemy 3 s; random streak or ammo |
-| napalm | Napalm Strike | 5 | designate; jet runs along your facing; 3 canisters (7 m) + 8 s burning ground (`fire` 30/s) |
+| napalm | Napalm Strike | 5 | tactical map: spot + direction; F-4 releases ~4 s after the call; 3 canisters (7 m) + 8 s burning ground (`fire` 30/s) |
 | sentry_gun | Sentry Gun | 6 | placed in front; turns to nearest visible enemy, spins up, 8 rounds/s; 90 s; 450 hp |
-| mortar | Mortar Team | 6 | designate 3 spots; red ring warning, 2 shells per spot from 2.6 s |
-| attack_helicopter | Attack Helicopter | 7 | flies in, patrols, minigun bursts at the nearest visible enemy; 60 s; 1500 hp; airspace max 3 helis |
+| mortar | Mortar Team | 6 | tactical map: 3 spots; red ring warning, 2 rounds per spot from 3 s, 3.5 m blast radius (BO1: ~7 m across) |
+| attack_helicopter | Attack Helicopter | 7 | tactical map: patrol point; flies in, orbits it (14 m), minigun bursts at the nearest visible enemy; 60 s; 1500 hp; airspace max 3 helis |
 | valkyrie | Valkyrie Rockets | 7 | (simplified) two rockets in turn, steered by your view (rocket cam); impact / proximity / FIRE / fuse detonates |
 | blackbird | Blackbird | 8 | like the Spy Plane but live with facing arrows on the radar; cannot be shot down |
-| rolling_thunder | Rolling Thunder | 8 | designate; B-52 carpet-bombs 14 bombs along your facing through the spot |
+| rolling_thunder | Rolling Thunder | 8 | tactical map: spot + direction; B-52 carpet-bombs 14 bombs (4 m apart) through the spot, ~7 s out |
 | chopper_gunner | Chopper Gunner | 9 | you work its explosive cannon from the air (camera in the seat, FIRE shoots); your body stays put and dying ends it; 2000 hp |
 | attack_dogs | Attack Dogs | 11 | 8 dogs, 3 at a time, from your spawn side, hunt the nearest enemy and bite (55); 60 s; 80 hp each |
 
 Rules: kills toward streaks reset on death; streak kills don't count (`isStreakWeapon`); each picked streak is earned once per life at its cost (Hardline: -1); earned streaks wait in `ready` until called and survive deaths until match end. Calling needs you alive and not already driving one.
 
-**Controls.** `4` (STREAK button): call the selected streak; targeted ones (`point`, `line`, `points`) arm a designator (weapon lowered, HUD reticle): press `4` again at each spot (mortar: three). `5` cycles the selection (RPC `killstreaks.select`). Designating cancels on weapon switch, death or after 15 s. While designating or driving, core firing is refused (the feature holds `swapEnd`), and while driving the body's speed is 0.
+**Controls.** `4` (STREAK button): call the selected streak. The Care Package (`targeting: 'point'`) arms a designator (weapon lowered, HUD reticle): press `4` again where you aim; it cancels on weapon switch, death or after 15 s. Sentry Gun and SAM Turret are placed in front of you. Napalm, Mortar Team, Rolling Thunder and the Attack Helicopter (`targeting: 'map'`) open the **tactical map** (below). `5` cycles the selection (RPC `killstreaks.select`). While designating, holding the radio or driving, core firing is refused (the feature holds `swapEnd`); holding the radio or driving, the body's speed is 0.
+
+## Tactical map (BO1 radio targeting)
+
+What Black Ops did (Call of Duty Wiki pages for Napalm Strike, Rolling Thunder, Mortar Team, Attack Helicopter; gameplay footage, e.g. "Black Ops | Power of the Rolling Thunder" on YouTube): the player calls these in "via a radio" (a handset comes up in the right hand), and an overhead map of the level is laid over the view: a translucent panel with the map name in a black header, a lettered/numbered grid (A1..E5, labels in each cell's top-left), friendly arrows, a prompt bar at the bottom ("Press A to call in Rolling Thunder" / "B Back"). Napalm and Rolling Thunder: position the target and adjust the angle of entry (PC: hold the left mouse button and turn the mouse), shown as orange chevrons along the run; Napalm releases about 4 s after the call, Rolling Thunder about 7 s. Mortar Team: three locations selected one after another, then a delay, two rounds on each, explosions about seven metres across. Attack Helicopter: you designate an area and it hovers near it. MW2's laptop (Precision Airstrike, rotatable arrow) is the secondary reference.
+
+Ours:
+- **Open.** STREAK with a map streak selected: the server opens map mode (`ks.map`, pushed as `killstreaks.state.map {id, until}`), spawns a `ks_radio` entity on the caller and holds them still (`speedMultiplier` 0, no sprint, weapon down). The client raises a handset in first person (`radio.ts`, drawn over the world), cuts to the feed with ~0.3 s of static, and shows the map. Other players see the soldier with the rifle slung low and a handset at the ear (`ks_radio` renderer poses the remote soldier). The attack helicopter's radio does not open with a full airspace.
+- **Picture.** `overhead.ts` renders the real map straight down with our renderer (orthographic camera over `map.bounds`, same baked lighting and developed textures, sky/fog/wobble off) at the panel's pixel size, then a satellite treatment (a little desaturated, green-grey tint, contrast, scanlines, vignette). Cached per map + time preset + size, re-taken as photos finish developing. The panel sits over a 3-in-4 screen-door of the world (BO1's translucency in our pixel look) with the map name, streak name and a timer in the header, grid with per-cell labels, compass N, rolling feed noise, prompts and the cursor's grid reference in the footer.
+- **Shown.** You (yellow arrow with facing), team mates (blue arrows), enemies only when your radar lists them (`snap.radar`: Spy Plane / Blackbird / unsuppressed fire; nothing when jammed), friendly streaks already up (helicopters with their patrol ring, mortar marks, napalm fire, planes, sentry `S`, SAM `A`, crates, dogs, RC-XD).
+- **Cursor.** Pointer-lock mouse deltas (1 screen pixel = 1 displayed map pixel), WASD/arrows, gamepad left stick / d-pad; clamped to the bounds. In `?devlook=1` (no real pointer lock) the cursor follows the absolute mouse position, so a real click or drag on the map works.
+- **Placement** (`tacmap-logic.ts`, pure): Napalm / Rolling Thunder: press at the target, drag to swing the run (arrow + chevrons + the burn/bomb circles to scale), release to call in; Q/E or the right stick rotate, Enter/Space/A tap confirms at the cursor; the default direction is your facing. Mortar Team: three numbered marks with their 3.5 m blast circles, right click / Backspace / X removes the last, the third confirms. Attack Helicopter: one click picks the patrol point (14 m ring). Esc, STREAK or gamepad B cancels and keeps the streak; dying, the 30 s timeout, changing selection or losing pointer lock also put it away.
+- **Server.** RPC `killstreaks.mapTarget {id, points: [x, z][], yaw?}` (`mapmode.ts`): token-bucket rate limit (4 burst, 2/s), the streak must be ready and its map open, then `validateMapTarget` (right count, finite numbers, inside the bounds with 0.5 m slack then clamped 1 m in, finite yaw for line strikes wrapped to (-PI, PI]); the strike logic is unchanged (`callKillstreak` with the chosen targets and yaw). `killstreaks.mapCancel {}` puts the radio away. `killstreaks.call` answers `use_map` for map streaks (no crosshair fallback); the bot API's `callKillstreak` also has no crosshair fallback for them (the helicopter defaults to the map centre).
+- **Bots** never open the map: `suggestTarget` aims at clusters of enemies they know about (on their radar or in sight), guessing with twice the error when they know nobody, and passes a run direction along the cluster.
+- **Dev:** `window.__lofi.tacmap` (devlook builds): `state()`, `moveTo(x, z)`, `rotate(d)`, `press()`, `release()`, `undo()`, `cancel()`, `screenOf(x, z)` (client pixels of a world point for real clicks). Grant streaks with `killstreaks.cheat` (server with `LOFI_CHEATS=1`).
 
 **Everything targets bots like players.** All AI target selection iterates `room.players` (bots included); all damage goes through `room.damage` / `room.radiusDamage` with `means: 'killstreak'` (napalm ground fire `fire`) and `weapon` = streak id, credited to the owner. Every `fire` event (bots' `room.fire` too) is ray-tested against enemy hardware, so bots can shoot down helicopters and destroy sentries; destroying hardware gives score and emits `killstreaks.destroyed`.
 
@@ -71,7 +88,8 @@ Rules: kills toward streaks reset on death; streak kills don't count (`isStreakW
 import { callKillstreak, readyKillstreaks, suggestTarget, enemyStreakTargets, isDrivingStreak, isDesignating, killstreakState } from '../killstreaks/api';
 readyKillstreaks(bot)                              // ['uav', 'napalm']
 callKillstreak(room, bot, 'napalm', { target, yaw })   // { ok: true } | { ok: false, reason: 'not_ready'|'dead'|'busy'|'no_target'|'airspace_full'|'phase'|'unknown' }
-suggestTarget(room, bot, 'mortar', skill)          // { target, targets, yaw } aimed at enemy clusters, error shrinks with skill
+suggestTarget(room, bot, 'mortar', skill)          // { target, targets, yaw } aimed at clusters of known enemies, error shrinks with skill
+knownEnemies(room, bot)                            // enemies on its radar or in line of sight (90 m)
 enemyStreakTargets(room, bot)                      // [{ entity, kind, streak, x, y, z, air, hp }] to shoot at
 isDrivingStreak(bot)                               // RC-XD / gunner / rockets running (the AI drives them for bots)
 ```
@@ -94,9 +112,13 @@ isDrivingStreak(bot)                               // RC-XD / gunner / rockets r
 
 - `src/server/modifiers.ts` + `src/server/sim.ts`: new `canSprint` modifier key, consulted by `moveParamsFor` (sprint stamina / Marathon, last stand, driving streaks).
 - `src/client/registry.ts` + `src/client/game/remotes.ts`: `registerFootstepFilter(id, fn)` / `footstepVolume(playerId, volume)` so Ninja can silence remote footsteps.
+- `src/client/game/controls.ts`: `Controls.enabled = false` now also ignores mouse buttons, devlook drag taps and the wheel (it already zeroed buttons and look), so the tactical map can own the mouse.
+- `src/client/render/mapbuilder.ts`: `MapScene.sky` is public (hidden for the top-down capture).
 - `docs/CONTRACTS.md` (documents both), `NOTICE` (Blockyard attribution for the mortar pattern and rule shapes).
 
 ## Not done / simplified
+
+- Tactical map: the picture is the whole `map.bounds` (BO1 cut out just the playable area with a white outline); BO1's translucent panel is a 3-in-4 screen-door over the world here; planes start far outside the map (to match BO1's release times) so they only show on the map once over it; no announcer voice lines (HUD text as before).
 
 - Valkyrie is simplified (no launcher weapon; two auto-launched guided rockets).
 - Care Packages hold streaks or ammo only (no Death Machine / Grim Reaper weapons). Crates have no collision.

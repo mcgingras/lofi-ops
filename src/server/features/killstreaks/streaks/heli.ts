@@ -1,12 +1,15 @@
 /**
  * Attack Helicopter and Chopper Gunner.
- * - Attack Helicopter: flies in from the edge, patrols over the map, and fires its minigun in bursts
- *   at the nearest visible enemy (Ghost Pro hides). Can be shot down. Leaves when time is up.
+ * - Attack Helicopter: flies in from the edge, patrols around the area chosen on the tactical map
+ *   (BO1: "hovers near" the designated area; `STRIKE.attack_helicopter.patrolR`), and fires its
+ *   minigun in bursts at the nearest visible enemy (Ghost Pro hides). Can be shot down. Leaves when
+ *   time is up.
  * - Chopper Gunner: circles the map while the caller works its explosive cannon from the air (their
  *   camera rides it; yaw/pitch aim it, FIRE shoots). The caller's body stays put and can be killed,
  *   which ends it. Bots aim it themselves (skill-dependent error). Can be shot down.
  */
 import { KILLSTREAK_BY_ID, KS_ENTITY } from '../../../../shared/defs/killstreaks';
+import { STRIKE } from '../../../../shared/defs/tactical-map';
 import { Buttons } from '../../../../shared/input';
 import { viewDir, type Vec3 } from '../../../../shared/math';
 import type { PlayerState } from '../../../player';
@@ -26,16 +29,17 @@ export function airspaceFull(ctx: KsRoom): boolean {
   return ctx.activeKind('attack_helicopter').length + ctx.activeKind('chopper_gunner').length >= AIRSPACE;
 }
 
-export function callHeli(ctx: KsRoom, p: PlayerState, _args: CallArgs): string | null {
+export function callHeli(ctx: KsRoom, p: PlayerState, args: CallArgs): string | null {
   if (airspaceFull(ctx)) return 'airspace_full';
   const room = ctx.room;
   const def = KILLSTREAK_BY_ID.get('attack_helicopter')!;
   const y = ctx.heliY(ctx.activeKind('attack_helicopter').length * 3);
   const start = ctx.edgePoint(Math.random() * Math.PI * 2, 30, y);
-  const ent = room.entities.add({ kind: KS_ENTITY.heli, ...start, yaw: 0, owner: p.id, team: p.team, s: { f: 0 } });
+  // Patrol centre: the chosen area (kept far enough inside that the orbit stays over the map).
+  const c = args.target ? ctx.clampToMap(args.target) : ctx.center;
+  const orbitR = Math.min(STRIKE.attack_helicopter.patrolR, Math.max(6, ctx.radius * 0.6));
+  const ent = room.entities.add({ kind: KS_ENTITY.heli, ...start, yaw: 0, owner: p.id, team: p.team, s: { f: 0, px: Math.round(c.x * 10) / 10, pz: Math.round(c.z * 10) / 10, pr: orbitR } });
   const until = room.time + (def.durationSec ?? 60);
-  const c = ctx.center;
-  const orbitR = Math.max(6, ctx.radius * 0.4);
   let a = Math.atan2(start.z - c.z, start.x - c.x);
   let target: PlayerState | null = null;
   let acquired = 0;

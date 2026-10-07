@@ -194,7 +194,9 @@ Each file exports a typed array and a `*_BY_ID` map (`indexById` throws on dupli
 | `attachments.ts` | `AttachmentDef` (`unlockKills`, `price`), `ATTACHMENTS`, `effectiveWeapon(def, ids)`, `validAttachments(def, ids, max)`, `canAttach`, `BASE_ATTACHMENT_SLOTS` (1) | weapons |
 | `equipment.ts` | `EquipmentDef`, `EQUIPMENT` (frag, semtex, flashbang, concussion), `LETHALS`, `TACTICALS`, `MELEE`, `GL_ROUND`, `NADE_ENTITY`, weapons feature messages | weapons |
 | `perks.ts` | `PerkDef`, `PERKS` (seeded: lightweight, hardline (T1), steady_aim (T2)) | perks-streaks |
-| `killstreaks.ts` | `KillstreakDef`, `KILLSTREAKS` (seeded: `uav` "Spy Plane", 3) | perks-streaks |
+| `killstreaks.ts` | `KillstreakDef` (`targeting`, `mapPick`, `marks`...), `KILLSTREAKS` (BO1's 14), `KS_ENTITY` | perks-streaks |
+| `tactical-map.ts` | tactical map (BO1 radio targeting): `STRIKE` footprints/timings, `validateMapTarget`, `yawFromDrag`, `strikeFootprint`, `MAP_MODE` | perks-streaks |
+| `perks-streaks-protocol.ts` | killstreak/perk RPCs and pushes, incl. `killstreaks.mapTarget {id, points, yaw?}`, `killstreaks.mapCancel`, `KillstreakStateMsg.map` | perks-streaks |
 | `modes.ts` | `ModeDef`, `CORE_MODES` (tdm 75 kills / ffa 30 kills / dom 200 / sd 4 rounds / hq 250 / kc 65), `MODES` = core + `WAGER_MODES`, `MODE_TUNING`, `MODE_XP` | modes |
 | `modestate.ts` | modes wire types (`modes.state`, `modes.event`, `modes.killcam`), `MatchSummaryExt` (`results.ext.modes`), `MODE_ENTITY` kinds | modes |
 | `economy.ts` | `CP_REWARDS`, `STARTING_COD_POINTS`, `DEFAULT_PRICES`, `codPointsForMatch` / `codPointsBreakdown` (score, win, podium, streak, time share), `ANTE_TIERS` (0/10/1,000/10,000), `wagerPayouts`, `WAGER_MODES` (oitc, gungame, sharpshooter, sticks), wager mode data | economy |
@@ -347,7 +349,9 @@ registerFootstepFilter('perks.ninja', (playerId, volume) => volume);   // remote
 
 ### Match (`game/match.ts`, read via `currentMatch()`)
 
-`myId`, `me` (MeSnap), `myTeam`, `isEnemy(id)`, `nameOf(id)`, `roster` (Map<id, RosterEntry>), `scores`, `teamScores`, `phase`, `phaseEndsAt`, `results`, `killfeed`, `notices`, `death`, `alive`, `serverTime` (room time now), `netRtt`, `weapon(slot?)` (EffectiveWeapon), `ammo(slot?)`, `reloadProgress()`, `raiseProgress()`, `yaw`/`pitch` (with recoil), `spread`, `time` (local secs), `map` (MapScene: `map`, `time` preset, `lightAt`, `world`), `renderer` (`scene`, `cam`, `vmScene`), `remotes.views` (interpolated soldiers: x, y, z, yaw, alive, team...), `effects` (`puff(kind, at, normal)`, `tracer(a, b)`), `controls` (`isHeld(action)`, `consume(action)`, `locked`; key map `KEYMAP` in controls.ts), `net` (MatchNet: `predictor`, `interp`, `lastSnap`, `world`).
+`myId`, `me` (MeSnap), `myTeam`, `isEnemy(id)`, `nameOf(id)`, `roster` (Map<id, RosterEntry>), `scores`, `teamScores`, `phase`, `phaseEndsAt`, `results`, `killfeed`, `notices`, `death`, `alive`, `serverTime` (room time now), `netRtt`, `weapon(slot?)` (EffectiveWeapon), `ammo(slot?)`, `reloadProgress()`, `raiseProgress()`, `yaw`/`pitch` (with recoil), `spread`, `time` (local secs), `map` (MapScene: `map`, `time` preset, `lightAt`, `world`, `root`, `sky`), `renderer` (`scene`, `cam`, `vmScene`, `gl`), `remotes.views` (interpolated soldiers: x, y, z, yaw, alive, team...), `effects` (`puff(kind, at, normal)`, `tracer(a, b)`), `controls` (`isHeld(action)`, `consume(action)`, `locked`, `enabled`; key map `KEYMAP` in controls.ts), `net` (MatchNet: `predictor`, `interp`, `lastSnap`, `world`).
+
+`controls.enabled = false` hands the input to a feature (the killstreaks tactical map does this): no buttons go out, mouse look, mouse buttons, devlook drag taps and the wheel are ignored, key releases still register. Set it back to `true` when done.
 
 Feature buttons: held keys go out as `Buttons` bits (G lethal, Q tactical, 4 streak, V/E melee, F use, Z prone); the server sees edges in the `buttons` room event. Rebind by assigning `KEYMAP[code] = action` (frontend owns key settings); keys that are not game buttons (menus, streak selection) can use plain `keydown` listeners while `controls.locked`.
 
