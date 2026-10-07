@@ -6,5 +6,7 @@ Portions adapted from Blockyard (https://github.com/Potrock/blockyard), MIT Lice
   src/server/room.ts and combat.ts (room step loop, spawn selection and kill/assist flow patterns from
   src/platform/host/room.ts and src/games/callofblocky/server.ts),
   src/client/netcode/interp.ts (snapshot playback against quickest delivery, from src/platform/client/interp.ts),
-  src/client/netcode/predict.ts (predict/replay/ease-in reconciliation, from src/platform/client/predict.ts).
+  src/client/netcode/predict.ts (predict/replay/ease-in reconciliation, from src/platform/client/predict.ts),
+  src/server/features/progression/tracker.ts (XP medal rules: first blood, multi-kill window, revenge, assists, and
+  bots-never-earn, from src/games/callofblocky/progression.ts).
 Textures in assets/textures from Poly Haven (https://polyhaven.com), CC0.
