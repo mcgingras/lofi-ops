@@ -3,11 +3,16 @@
  * (snapshot entity with its weapon, attachments, ammo), a human holding USE next to it swaps (the
  * `me` snapshot carries the new gun and its ammo, the old one lies on the floor), the server refuses
  * from too far away, kills with a picked-up gun count for the picker's weapon stats and not for
- * the gun's previous owner, and a dry bot (real bots brain) walks to a gun and takes it.
+ * the gun's previous owner, a care package in reach owns USE, and a dry bot (real bots brain)
+ * walks to a gun and takes it.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startServer, type GameServer } from '../src/server/app';
 import { configureRoomBots } from '../src/server/features/bots/api';
+import { callKillstreak } from '../src/server/features/killstreaks/api';
+import { grant, ksOf } from '../src/server/features/killstreaks/state';
+import { cratesOf } from '../src/server/features/killstreaks/streaks/package';
+import { ksRoom } from '../src/server/features/killstreaks/world';
 import { dropsOf, spawnDrop } from '../src/server/features/pickups/index';
 import { eyeOf } from '../src/server/combat';
 import { makeWeapon, type PlayerState } from '../src/server/player';
@@ -129,6 +134,31 @@ describe('weapon pickups over the wire', () => {
     expect(await until(() => !bot.alive, 3000)).toBe(true);
     expect(A.profile!.stats['weapon.famas.kills']).toBe(1);
     expect(B.profile!.stats['weapon.famas.kills'] ?? 0).toBe(0);
+    room.close();
+  });
+
+  it('a care package in reach owns F: holding it takes the crate, not the gun next to it', async () => {
+    const room = server.lobby.createRoom({ mode: 'tdm', map: 'yard', closeWhenEmpty: false, private: true });
+    configureRoomBots(room, { fill: false });
+    const { client: a, me: A } = await join(room, 'Crater');
+    place(A, -1, 12);
+    grant(room, A, 'care_package');
+    expect(callKillstreak(room, A, 'care_package', { target: { x: -1, y: 0, z: 2 } }).ok).toBe(true);
+    expect(await until(() => cratesOf(ksRoom(room)).some((c) => c.landed), 15000)).toBe(true);
+    const crate = cratesOf(ksRoom(room))[0]!;
+    crate.contents = 'uav';
+    const gun = spawnDrop(room, makeWeapon({ weapon: 'famas', attachments: [], camo: 'none' }, 'famas'), { x: crate.ent.x + 1.2, y: crate.ent.y, z: crate.ent.z }, { x: 0, y: 0, z: 0 }, null, null, 'death')!;
+    expect(await until(() => gun.data.landed)).toBe(true);
+    place(A, crate.ent.x + 1.5, crate.ent.z, crate.ent.y);
+    const aim = aimAt(A, gun);
+    await holdFor(a, Buttons.USE, aim.yaw, aim.pitch, 1200);
+    expect(ksOf(A).ready).toContain('uav');
+    expect(A.weapons[0]!.def.base.id).toBe('ak47');
+    expect(room.entities.get(gun.id)).toBeDefined();
+    // Let go, hold again: now it's the gun.
+    await holdFor(a, 0, aim.yaw, aim.pitch, 100);
+    await holdFor(a, Buttons.USE, aim.yaw, aim.pitch, 500);
+    expect(await until(() => A.weapons[0]!.def.base.id === 'famas', 2000)).toBe(true);
     room.close();
   });
 
