@@ -45,6 +45,17 @@ cold cache; the current map's textures land first.
 Editing a knob turns the preset label into **Custom**; setting it back to a preset's values shows
 that preset again.
 
+## Vertex snap and depth
+
+Snapping moves triangles sideways in screen space. Without care that changes their depth too, and
+layered coplanar surfaces (decals, the map's depth levels) fight. While snap is on, look
+materials compile a `SNAP_DEPTH` variant that undoes the pixel's snap shift with the screen-space
+depth gradient (exact for flat triangles) and writes `gl_FragDepth`; since that bypasses the
+hardware polygon offset, the material's `polygonOffsetFactor/Units` are mirrored in the shader
+(`uPolyOffset`, synced in `onBeforeRender`). The variant is only compiled while snap > 0 (writing
+depth costs early-z). What snapping still does: brushes that meet at T-junctions can open
+pixel-wide cracks at 240 lines (authentic PS1 "sparkles"), which is why Full PS1 snaps at 0.5 px.
+
 ## Persistence
 
 Flat keys on `Settings` (`settings.ts`, localStorage `lofi.settings`): `retro`, `res`, `palette`,
