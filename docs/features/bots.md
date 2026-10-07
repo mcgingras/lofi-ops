@@ -55,7 +55,7 @@ Owner: bots. Covers DESIGN.md section 8a (hard requirement): every lobby runs wi
 - **Links.** Each cell links to its 8 neighbours:
   - `walk`: up to the step height, with no corner cutting on diagonals.
   - `jump`: up to about 0.98 m, with headroom.
-  - `drop`: up to 4.5 m, one way.
+  - `drop`: up to 4.5 m, one way, only where the whole fall is clear (no drops through an upper floor).
 - **Reachable set.** Cells that can be reached from the spawns and can get back to them are marked `core`; roaming only picks core cells.
 - **Doors.** Doorways are just gaps a body fits through. There are no openable doors yet; if a map adds them as brushes, a rebuild hook would be needed (`navFor` caches per `MapData`).
 - **Cost.** On the Yard the grid has 13k cells, builds in about 120 ms once per map (shared by every room), and a cross-map A* takes about 0.4 ms.
