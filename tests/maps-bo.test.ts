@@ -14,6 +14,7 @@ import type { Vec3 } from '../src/shared/math';
 import { createMoveState, stepMove } from '../src/shared/movement';
 import { MapKit } from '../src/shared/maps/bo-kit';
 import { buildCollisionWorld, mapSolids, type MapData, type SpawnPoint } from '../src/shared/maps/types';
+import { NavGrid } from '../src/server/features/bots/nav';
 import { floodFill, walkRoute, type Reach } from './maps-bo-nav';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -196,7 +197,7 @@ for (const id of IDS) {
       for (const s of allSpawns(map)) expect(r.near(s, 0.9), `spawn ${JSON.stringify(s)}`).toBe(true);
       for (const [kind, list] of Object.entries(map.objectives)) for (const o of list) expect(r.near(o, o.radius), `${kind} ${o.id}`).toBe(true);
       for (const h of map.hotspots ?? []) expect(r.near(h, 1.5), `hotspot ${JSON.stringify(h)}`).toBe(true);
-      expect(r.nodes.filter((n) => n.y > 3).length).toBeGreaterThan(60);
+      expect(r.nodes.filter((n) => n.y > 2.5).length).toBeGreaterThan(60);
     });
 
     it('bounds are closed: no reachable spot is outside, and sprinting outwards stops at the clip', () => {
@@ -221,21 +222,49 @@ for (const id of IDS) {
 }
 
 describe('maps-bo walks', () => {
-  it('nuketown: green backyard -> through the green house -> street -> through the yellow house -> yellow backyard', () => {
+  it('nuketown: green garden -> green back door, kitchen, living room, front door -> circle -> yellow front door, kitchen, back door -> deck -> yellow garden', () => {
     const map = getMapData('nuketown');
     const w = buildCollisionWorld(map);
-    const route = [v(-29, 0, -7.6), v(-24, 0, -7.6), v(-23, 0, -4.5), v(-20.5, 0, -4.5), v(-17.5, 0, -4), v(-14.8, 0.2, -4), v(-6, 0, -4), v(0, 0, 0), v(7, 0, 0), v(7, 0, 4), v(14.8, 0.2, 4), v(17.5, 0, 4), v(20.5, 0, 4.5), v(23, 0, 4.5), v(24, 0, 7.6), v(29, 0, 7.6), v(34.8, 0, 1)];
+    const route = [v(-30, 0, -9.1), v(-21.5, 0, -9.1), v(-19, 0, -7), v(-14, 0, -7), v(-11, 0, -8.4), v(-8.4, 0.18, -8.4), v(-3, 0, -8.4), v(-0.3, 0, -4), v(0.4, 0, 3.6), v(7, 0, 3.6), v(9, 0, -0.1), v(12.6, 0.18, -0.1), v(15, 0, -0.1), v(19, 0, -1.5), v(22.5, 0, -1.5), v(26, 0, 0.6), v(28.5, 0.25, 0.6), v(36, 0.25, 0.6), v(38.5, 0, 0.6), v(44, 0, 0.6)];
     const r = walkRoute(w, map.spawns.teams[0][2]!, route);
-    expect(r.seconds).toBeLessThan(30);
+    // Garden to garden through both houses, at walking pace (sprinting is ~1.45x faster).
+    expect(r.seconds).toBeLessThan(25);
   });
 
-  it('nuketown: up the green house stairs to the upper floor, out to the garage, round the bus lane', () => {
+  it('nuketown: green stairs up to the study and the front bedroom, out on the balcony, down the back stairs to the patio, round the south side', () => {
     const map = getMapData('nuketown');
     const w = buildCollisionWorld(map);
-    const up = walkRoute(w, v(-20.5, 0, -4.5), [v(-17, 0, -10.15), v(-23.6, 3.3, -10.15), v(-24.5, 3.3, -8), v(-20.2, 3.3, -5), v(-20.2, 3.3, -3), v(-24, 3.3, -1.6 + 1.4)]);
-    expect(up.state.y).toBeCloseTo(3.3, 1);
-    const down = walkRoute(w, up.state, [v(-20.2, 3.3, -3), v(-20.2, 3.3, -5), v(-24.5, 3.3, -8), v(-23.6, 3.3, -10.15), v(-17, 0, -10.15), v(-19.9, 0, -0.5), v(-19.9, 0, 2.5), v(-22.5, 0, 4.5), v(-16, 0, 4.5), v(-7, 0, 9), v(-6.2, 0, 19.5), v(-0.9, 0, 21.4), v(-0.9, 0, 6)]);
-    expect(down.state.y).toBeCloseTo(0, 1);
+    const up = walkRoute(w, v(-12, 0, -10), [v(-12.6, 0, -11.6), v(-19.4, 3, -11.6), v(-20, 3, -9.75), v(-15, 3, -9.75), v(-12, 3, -8)]);
+    expect(up.state.y).toBeCloseTo(3, 1);
+    const out = walkRoute(w, up.state, [v(-15, 3, -9.75), v(-21, 3, -10), v(-24.2, 3, -10), v(-23.85, 3, -7.7), v(-23.85, 0, -1.9), v(-21, 0, 6.4), v(-8, 0, 6.6), v(-4.4, 0, 11)]);
+    expect(out.maxY).toBeGreaterThan(2.9);
+    expect(out.state.y).toBeCloseTo(0, 1);
+  });
+
+  it('nuketown: yellow front door, stairs up, bedroom, balcony, stairs down onto the deck, round the north side through the garage', () => {
+    const map = getMapData('nuketown');
+    const w = buildCollisionWorld(map);
+    const up = walkRoute(w, v(10.5, 0, -0.1), [v(15, 0, -0.1), v(15.5, 0, 3.07), v(16.6, 0, 3.07), v(23.4, 3, 3.07), v(23.4, 3, 1.3), v(18, 3, 1.3), v(16, 3, -1)]);
+    expect(up.state.y).toBeCloseTo(3, 1);
+    const out = walkRoute(w, up.state, [v(18, 3, 1.3), v(23, 3, 1.3), v(26, 3, 0), v(26, 3, -4), v(28.5, 3, -4), v(29.6, 3, -4.95), v(35.4, 0.25, -4.95), v(36, 0.25, -12), v(30, 0, -13.2), v(24.5, 0, -13), v(22, 0, -12), v(15, 0, -10), v(10, 0, -10)]);
+    expect(out.maxY).toBeGreaterThan(2.9);
+    expect(out.state.y).toBeCloseTo(0, 1);
+  });
+
+  it('nuketown: the porch-side upstairs window is reachable from outside (planter, pillar, porch roof)', () => {
+    const map = getMapData('nuketown');
+    const w = buildCollisionWorld(map);
+    const s = { ...createMoveState(-6.5, 0, -2.6), onGround: true };
+    for (const p of [v(-8.6, 0.85, -3.0), v(-8.35, 1.7, -3.7), v(-8.8, 2.55, -4.6), v(-9.0, 2.55, -5.7), v(-10.6, 3.0, -5.7)]) {
+      for (let i = 0; i < 240; i++) {
+        const d = Math.hypot(p.x - s.x, p.z - s.z);
+        if (d < 0.15 && s.onGround) break;
+        stepMove(w, s, (d > 0.15 ? Buttons.FORWARD : 0) | (s.onGround && p.y > s.y + 0.3 ? Buttons.JUMP : 0), Math.atan2(-(p.x - s.x), -(p.z - s.z)), 1 / 60);
+      }
+      for (let i = 0; i < 60 && !s.onGround; i++) stepMove(w, s, 0, 0, 1 / 60);
+      expect(s.y, `hop to ${JSON.stringify(p)}`).toBeCloseTo(p.y, 1);
+    }
+    expect(s.x).toBeLessThan(-9.9);
   });
 
   it('firing range: west spawn -> booths -> cabin stairs -> catwalk -> NE tower -> east spawn', () => {
@@ -257,15 +286,48 @@ describe('maps-bo walks', () => {
   });
 });
 
+describe('maps-bo bot nav: nuketown', () => {
+  it('the bots NavGrid finds a path from both team spawns to every objective, hotspot and spawn, both upper floors included', () => {
+    const map = getMapData('nuketown');
+    const nav = new NavGrid(map);
+    const targets: { name: string; p: Vec3; r: number }[] = [
+      ...Object.entries(map.objectives).flatMap(([kind, list]) => list.map((o) => ({ name: `${kind} ${o.id}`, p: v(o.x, o.y, o.z), r: o.radius }))),
+      ...(map.hotspots ?? []).map((h, i) => ({ name: `hotspot ${i}`, p: h, r: 1.5 })),
+      ...allSpawns(map).map((s, i) => ({ name: `spawn ${i}`, p: v(s.x, s.y, s.z), r: 1.2 })),
+    ];
+    for (const from of [map.spawns.teams[0][0]!, map.spawns.teams[1][0]!]) {
+      for (const t of targets) {
+        const path = nav.path(from, t.p);
+        expect(path, `${t.name} from ${from.x},${from.z}`).not.toBeNull();
+        const end = path!.at(-1)!;
+        expect(Math.hypot(end.x - t.p.x, end.z - t.p.z), t.name).toBeLessThan(t.r + 0.6);
+        expect(Math.abs(end.y - t.p.y), t.name).toBeLessThan(0.6);
+      }
+    }
+    // Upstairs in both houses is in the graph.
+    expect(nav.cellAt(v(-13, 3, -8.6))!.y).toBeCloseTo(3, 1);
+    expect(nav.cellAt(v(17, 3, 0))!.y).toBeCloseTo(3, 1);
+  });
+});
+
 describe('maps-bo sightlines', () => {
   const eye = PLAYER.eye;
-  it('nuketown: the street is a clear lane end to end; the upstairs front windows see each other; the houses block', () => {
+  it('nuketown: window to window over the truck; the bedrooms overlook the circle; the side alleys run clear; houses, bus and trailer block', () => {
     const w = buildCollisionWorld(getMapData('nuketown'));
-    expect(w.lineOfSight(v(0, eye, 23.5), v(0, eye, -23.5))).toBe(true);
-    expect(w.lineOfSight(v(-16.6, 3.3 + eye, -8), v(16.6, 3.3 + eye, 8))).toBe(true);
-    expect(w.lineOfSight(v(-34, eye, -4), v(34, eye, 4))).toBe(false);
-    // The bus blocks the view down its west side lane from the east side of the street.
-    expect(w.lineOfSight(v(-6.5, eye, 12), v(0, eye, 12))).toBe(false);
+    // The classic: green upstairs bedroom window to the yellow one, over the trailer.
+    expect(w.lineOfSight(v(-10.2, 3 + eye, -5.7), v(14.2, 3 + eye, -2.8))).toBe(true);
+    expect(w.lineOfSight(v(-10.2, 3 + eye, -10.1), v(14.2, 3 + eye, 1.6))).toBe(true);
+    // Each front bedroom looks down into the circle.
+    expect(w.lineOfSight(v(-11, 3 + eye, -10.1), v(0, eye, -4))).toBe(true);
+    expect(w.lineOfSight(v(15, 3 + eye, -2.8), v(1, eye, 5.5))).toBe(true);
+    // Side alleys: green south (stepping stones) and north, yellow south.
+    expect(w.lineOfSight(v(-28, eye, 6.6), v(-8, eye, 6.6))).toBe(true);
+    expect(w.lineOfSight(v(-36, eye, -14.2), v(-10, eye, -14.2))).toBe(true);
+    expect(w.lineOfSight(v(24, eye, 5.4), v(40, eye, 5.4))).toBe(true);
+    // Garden to garden is blocked by both houses; the bus and the trailer block across the circle.
+    expect(w.lineOfSight(v(-37, eye, -6), v(44, eye, 0))).toBe(false);
+    expect(w.lineOfSight(v(-5, eye, 4), v(0.5, eye, 4))).toBe(false);
+    expect(w.lineOfSight(v(0, eye, -6), v(6, eye, -6))).toBe(false);
   });
 
   it('firing range: the lanes are a long sightline; the berm shields the east spawn; the bunker slit sees out', () => {
