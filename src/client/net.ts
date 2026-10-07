@@ -297,6 +297,14 @@ export const net = new Net();
 // One room session
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * Input sequence numbers keep counting across MatchNet instances. A room that rotates to a new map
+ * re-sends `joined`, and the client builds a fresh MatchNet, but the server keeps the same
+ * PlayerState and drops every command with seq <= its lastSeq. Restarting at 0 meant all movement
+ * was ignored for as long as the previous match had lasted (stuck in place after a map change).
+ */
+let lastInputSeq = 0;
+
 export class MatchNet {
   readonly world;
   readonly predictor;
@@ -304,7 +312,7 @@ export class MatchNet {
   /** Latest authoritative state of the local player. */
   me: MeSnap | null = null;
   lastSnap: ServerMsgOf<'snap'> | null = null;
-  seq = 0;
+  seq = lastInputSeq;
   private outbox: InputCmd[] = [];
   private lastSend = 0;
   private offs: (() => void)[] = [];
@@ -352,6 +360,7 @@ export class MatchNet {
       this.predictor.apply(cmd, alive);
       this.outbox.push(cmd);
     }
+    lastInputSeq = this.seq;
     return this.seq;
   }
 
