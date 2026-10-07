@@ -53,7 +53,7 @@ If a screen owned by another area (`barracks`, `store`, `wager`) isn't registere
 - **Video**: look preset, resolution, FOV, PS1 toggles, grade, time of day, FPS.
 - **Controls**: sensitivity, ADS sensitivity, invert, crouch toggle.
 - **Key bindings**: rebind every action and the class key. Backspace resets one, and there is a Reset all.
-- **Audio**: master volume and a test sound.
+- **Audio**: master volume and a test sound (an M16 shot through `sfx.gunshot`).
 
 ## Server (`src/server/features/frontend/`)
 

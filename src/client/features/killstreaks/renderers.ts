@@ -69,7 +69,7 @@ function heli(kind: 'heli' | 'gunner' | 'drop') {
       kit.root.add(flash);
     }
     const thump = looper('ks_rotor', 0.11, kind === 'drop' ? 1.6 : 1.2);
-    const gun = looper('ks_sentry', 0.16, 1.4);
+    const gun = looper(kind === 'gunner' ? 'ks_gunner' : 'ks_sentry', 0.16, 1.4);
     let spin = 0;
     return {
       object: kit.root,

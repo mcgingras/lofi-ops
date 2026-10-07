@@ -320,6 +320,7 @@ render/            renderer.ts (low-res target + post + HUD composite), shader.t
                    developer queue + IndexedDB), developer.ts (quantize16/photoify/fromPhoto), bake.ts,
                    mapbuilder.ts (MapData -> meshes, bake per time preset), recipes/*.ts, models/
 game/              match.ts (the session + frame loop), controls.ts, viewmodel.ts, remotes.ts, effects.ts, audio.ts
+                   (+ sfx-mix.ts: variation/voice-cap/distance helpers, surfaces.ts: footstep surfaces)
 hud/               hud.ts, widgets.ts (core widgets), draw.ts (pixel helpers)
 menus/             main-menu.ts, settings.ts, match-screen.ts, dom.ts (`h()`), menus.css
 features/<area>/   your client code; every features/*/index.ts is auto-imported (import.meta.glob), no list to edit
@@ -379,7 +380,13 @@ registerTexture('nuke_house', { w: 64, h: 64, draw(g, w, h, R) { ... }, photos: 
 registerViewmodel('famas', (c) => { const gm = c.mat('gunmetal', { rep: 0.25 }); c.box(...); return { muzzle, hip, ads }; });
 registerPropBuilder('gltf', (prop, ctx) => object3d);      // render custom MapData prop kinds
 sfx.register('dogbark', (ctx) => audioBuffer); sfx.play('dogbark', { at: { x, y, z } });
+sfx.registerSample('dogbark', { files: ['ks_bark'], pitchJitter: 0.08, maxVoices: 4 });   // recorded variants (assets/sfx/<file>.mp3)
 ```
+
+- Sounds: an id can have a synthesized voice (`sfx.register`) and recorded variants (`sfx.registerSample(id, SfxBinding)`). Recordings load lazily (fetch + decodeAudioData, cached) after the first user gesture; until an id's files have decoded, or if they fail, its synth voice plays (or `binding.fallback`'s), so nothing goes silent. The game's recordings are declared in `src/shared/defs/sfx-recipes.ts`: `SFX_RECIPES` (how `scripts/sfx-build.ts` cuts each file from the approved raw downloads in docs/audio/sfx-manifest.md) and `SFX_BINDINGS` (id -> variants, gain, pitch, EQ, pitch/volume jitter, `maxVoices`), registered by `audio.ts` itself. Ids that stay synth-only are listed in `SFX_SYNTH_ONLY`; `tests/sfx.client.test.ts` fails on an id that is in neither. To add one: add a recipe + binding, run `npx tsx scripts/sfx-build.ts --manifest`, commit `assets/sfx/`.
+- `sfx.play(id, { at, volume, rate, lowpass, range })`: positional sounds go to the world bus (ducked under your own gunshot) and darken with distance (`airLowpass`); `range: 'far'` uses a long-range panner. Each play picks a variant (no back-to-back repeat) and varies pitch/volume; each id has a voice cap (oldest stops) and there are 48 voices overall. Master: volume -> glue compressor -> limiter.
+- `sfx.gunshot(weaponId, at?, suppressed?)`: `shot.<id>` / `shot.<id>.sup` recordings (per-weapon pitch/EQ over shared class recordings, `WEAPON_SHOTS`); remote shots get a distance low-pass and blend in `shot.distant`; your own shot ducks the world.
+- Footsteps: `stepSound(map, x, y, z)` (`game/surfaces.ts`) picks `step.<surface>` (concrete, grass, dirt, wood, metal, carpet) from the texture recipe id of the brush under the feet.
 
 - Texture recipes: one id per MapData material texture. Put a map's recipes in `src/client/render/recipes/<map>.ts` (auto-imported). `draw` is the lo-fi/PS1 version (posterised, also the instant fallback); `photo` is the developed look (`'auto'` photoifies the drawing, `'sky'`, `'small'`, `'none'`, or a function using `c.fromPhoto(id, {w,h,tile,filter,over})`, `c.photoify`, `c.photo(id)`, `c.rr`); list photo ids in `photos` (files in `assets/textures/<id>.jpg`). Results are cached in IndexedDB by recipe source hash. Unknown ids render magenta and warn once.
 - Camos: register recipes named `camo.<camoId>`; viewmodel builders receive it as `c.camo`.

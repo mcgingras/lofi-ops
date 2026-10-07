@@ -124,7 +124,7 @@ registerScreen('settings', (root, params) => {
     'div',
     { class: 'fe-form' },
     ...row('Master volume', rangeOf('volume', 0, 1, 0.05, (v) => `${Math.round(v * 100)}%`)),
-    ...row('Test', h('button', { class: 'lf-btn small', type: 'button', onclick: () => sfx.play('shot', { volume: 0.6 }) }, 'Play a shot')),
+    ...row('Test', h('button', { class: 'lf-btn small', type: 'button', onclick: () => (sfx.unlock(), sfx.gunshot('m16')) }, 'Play a shot')),
   );
 
   const panes: Record<Tab, HTMLElement> = { video, controls, keys: h('div', {}, keys, keyNote), audio, account: accountPane() };

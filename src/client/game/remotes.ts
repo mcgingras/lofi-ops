@@ -13,6 +13,7 @@ import { FFA_LOOK, Soldier, TEAM_LOOKS, type SoldierLook } from '../render/model
 import { getTexture } from '../render/textures';
 import { footstepVolume } from '../registry';
 import { sfx } from './audio';
+import { stepSound } from './surfaces';
 
 export interface RemoteView {
   id: string;
@@ -96,7 +97,7 @@ export class Remotes {
         if (v.stride > (sprint ? 2.2 : 1.7)) {
           v.stride = 0;
           const volume = footstepVolume(id, sprint ? 0.9 : 0.5);
-          if (volume > 0) sfx.play('step', { at: { x: s.x, y: s.y, z: s.z }, volume, rate: 0.9 + Math.random() * 0.2, lowpass: 1800 });
+          if (volume > 0) sfx.play(stepSound(map?.map, s.x, s.y, s.z), { at: { x: s.x, y: s.y, z: s.z }, volume, rate: 0.95 + Math.random() * 0.1 });
         }
       }
     }

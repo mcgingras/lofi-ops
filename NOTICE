@@ -20,3 +20,5 @@ Portions adapted from Blockyard (https://github.com/Potrock/blockyard), MIT Lice
   surface under the spot, from src/games/callofblocky/streaks/mortar.ts), and the perk/streak rule shapes in
   src/server/features/perks and src/server/features/killstreaks (from src/games/callofblocky/perks.ts and streaks/).
 Textures in assets/textures from Poly Haven (https://polyhaven.com), CC0.
+Sound effects in assets/sfx cut from CC0 recordings: the Free Firearm Sound Library (Still North Media), Freesound,
+  Kenney (Impact Sounds, Interface Sounds) and OpenGameArt contributors; per-file provenance in docs/audio/sfx-manifest.md.

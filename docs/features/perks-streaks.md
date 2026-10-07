@@ -19,6 +19,8 @@ tests/perks.test.ts, tests/killstreaks.test.ts, tests/perks-streaks.integration.
 tests/tacmap.test.ts, tests/tacmap.integration.test.ts, tests/tacmap.client.test.ts
 ```
 
+Sounds: `killstreaks/sounds.ts` holds the synthesized `ks_*` voices; the recorded versions (radio static and beeps, jet / prop / rotor, sentry and chopper-gunner fire `ks_gunner`, rocket launch, mortar whistle, explosions, dog bark / bite, klaxon) are bindings in `src/shared/defs/sfx-recipes.ts`. `ks_buzz` (RC-XD motor) and `ks_fire` (napalm crackle) stay synthesized (no recording in the manifest).
+
 ## Perks
 
 | tier | perk | effect | Pro |

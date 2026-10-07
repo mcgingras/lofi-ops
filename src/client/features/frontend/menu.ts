@@ -121,7 +121,7 @@ registerScreen('menu', (root) => {
       status,
       dev,
       h('div', { class: 'lf-spacer' }),
-      h('div', { class: 'lf-hint' }, h('kbd', {}, 'WASD'), ' move · ', h('kbd', {}, 'Shift'), ' sprint · ', h('kbd', {}, 'C'), ' crouch · mouse fire / aim · ', h('kbd', {}, 'R'), ' reload · ', h('kbd', {}, 'Tab'), ' scores · ', h('kbd', {}, 'B'), ' change class · ', h('kbd', {}, 'Esc'), ' pause. Textures from Poly Haven (CC0).'),
+      h('div', { class: 'lf-hint' }, h('kbd', {}, 'WASD'), ' move · ', h('kbd', {}, 'Shift'), ' sprint · ', h('kbd', {}, 'C'), ' crouch · mouse fire / aim · ', h('kbd', {}, 'R'), ' reload · ', h('kbd', {}, 'Tab'), ' scores · ', h('kbd', {}, 'B'), ' change class · ', h('kbd', {}, 'Esc'), ' pause. Textures from Poly Haven (CC0). Sounds: Free Firearm Sound Library, Freesound, Kenney and OpenGameArt contributors (CC0).'),
     ),
   );
   renderProfile();

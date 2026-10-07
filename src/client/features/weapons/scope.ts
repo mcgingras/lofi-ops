@@ -47,8 +47,11 @@ function clearSway(m: Match) {
   applied = { yaw: 0, pitch: 0 };
 }
 
-// Local mechanical sounds: watch ammo and reload progress.
-let last = { key: '', mag: -1, reload: -1 };
+// Local mechanical sounds: watch ammo and reload progress. `empty`: the running reload started
+// from an empty magazine (adds the charging handle at the end, like BO1's empty reloads).
+let last = { key: '', mag: -1, reload: -1, empty: false };
+/** Guns that keep their cases (revolver, break-action). */
+const NO_BRASS = new Set(['python', 'olympia']);
 
 function mechanics(m: Match) {
   const def = m.weapon();
@@ -58,26 +61,31 @@ function mechanics(m: Match) {
   const key = `${m.slot}|${w?.id}`;
   const { mag } = m.ammo();
   const reload = m.reloadProgress();
+  let empty = reload >= 0 && last.empty;
   if (key === last.key && m.alive) {
+    if (reload >= 0 && last.reload < 0) empty = last.mag === 0;
     if (mag === last.mag - 1) {
       if (def.mode === 'bolt') setTimeout(() => sfx.play('weapons.bolt', { volume: 0.7 }), 180);
       else if (def.mode === 'pump') setTimeout(() => sfx.play('weapons.pump', { volume: 0.7 }), 120);
+      // Brass hitting the ground now and then (the voice cap keeps auto fire from stacking it).
+      else if (!NO_BRASS.has(def.base.id) && def.base.class !== 'launcher' && !def.shellReload && Math.random() < 0.3) setTimeout(() => sfx.play('weapons.brass', { volume: 0.35 }), 350 + Math.random() * 250);
     }
     if (def.shellReload && mag > last.mag && last.mag >= 0 && reload >= 0) sfx.play('weapons.shell', { volume: 0.6, rate: 0.95 + Math.random() * 0.1 });
     if (reload >= 0 && !def.shellReload) {
       const cross = (x: number) => last.reload < x && reload >= x;
       if (def.base.model === 'olympia') {
         if (cross(0.12)) sfx.play('weapons.break', { volume: 0.7 });
-        if (cross(0.85)) sfx.play('weapons.break', { volume: 0.7, rate: 1.2 });
+        if (cross(0.85)) sfx.play('weapons.breakclose', { volume: 0.7, rate: 1.2 });
       } else {
         if (cross(0.2)) sfx.play('weapons.magout', { volume: 0.6 });
         if (cross(0.68)) sfx.play('weapons.magin', { volume: 0.7 });
         if (def.mode === 'bolt' && cross(0.9)) sfx.play('weapons.bolt', { volume: 0.6 });
+        else if (empty && def.mode !== 'bolt' && cross(0.86)) sfx.play('weapons.charge', { volume: 0.6 });
       }
     }
     if (def.shellReload && reload >= 0 && last.reload < 0.88 && reload >= 0.88 && me.weapons[m.slot]?.mag === 0) sfx.play('weapons.pump', { volume: 0.6 });
   }
-  last = { key, mag, reload };
+  last = { key, mag, reload, empty };
 }
 
 registerMatchHook('weapons.scope', {
