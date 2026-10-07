@@ -64,9 +64,10 @@ export function createFrontendFeature(timings: Partial<LobbyTimings> = {}): Feat
     },
     room(room) {
       // Warlord-aware attachment cap and one perk per tier, whatever path the loadout came from.
+      // Priority 90: after progression's unlock gating (100), which may swap in a different class.
       room.bus.on('beforeSpawn', (e) => {
         if (!e.player.isBot) trimSpawnLoadout(e.loadout);
-      }, { priority: 100 });
+      }, { priority: 90 });
     },
   };
 }

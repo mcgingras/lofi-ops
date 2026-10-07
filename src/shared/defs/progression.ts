@@ -310,6 +310,22 @@ export function readProgressionExt(p: { ext: Record<string, unknown> } | null | 
   return { weaponKills: e?.weaponKills ?? {}, emblem: e?.emblem, lastMatch: e?.lastMatch };
 }
 
+/**
+ * Kills with `weapon` that count toward its attachment unlocks: kills since the last prestige
+ * (`ext.progression.weaponKills`). Before the first prestige that equals lifetime kills, so the
+ * combat record (`stats['weapon.<id>.kills']`) also counts there; this keeps progression's spawn
+ * gating, the Create-a-Class locks (frontend) and the store's kill gates (economy) in agreement.
+ */
+export function attachmentKillsFor(
+  p: { prestige: number; stats?: Record<string, number>; ext?: Record<string, unknown> },
+  weapon: string,
+): number {
+  const since = p.ext ? (readProgressionExt(p as { ext: Record<string, unknown> }).weaponKills[weapon] ?? 0) : null;
+  const lifetime = p.stats?.[`weapon.${weapon}.kills`] ?? 0;
+  if (since === null) return p.prestige > 0 ? 0 : lifetime;
+  return p.prestige > 0 ? since : Math.max(since, lifetime);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Match summary (results.ext.progression[playerId], `progression.summary` push)
 // ---------------------------------------------------------------------------------------------

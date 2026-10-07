@@ -445,3 +445,33 @@ describe('progression in a room', () => {
     expect(profile.challengeProgress.career_triple).toBe(1);
   });
 });
+
+describe('attachment kill progress shared with frontend and economy', () => {
+  it('counts lifetime kills before the first prestige and kills since prestige after it', async () => {
+    const { attachmentKillsFor } = await import('../src/shared/defs/progression');
+    const { itemLock } = await import('../src/shared/frontend/loadout-rules');
+    const { gateReason, storeItem, keyOf } = await import('../src/shared/defs/store');
+    const w = WEAPONS.find((x) => x.slot === 'primary' && x.attachments.some((a) => (ATTACHMENT_BY_ID.get(a)?.unlockKills ?? 0) > 0))!;
+    const att = w.attachments.find((a) => (ATTACHMENT_BY_ID.get(a)?.unlockKills ?? 0) > 0)!;
+    const need = ATTACHMENT_BY_ID.get(att)!.unlockKills!;
+
+    const p = atLevel(50);
+    p.stats[`weapon.${w.id}.kills`] = need; // combat record only (e.g. a profile from before progression)
+    expect(attachmentKillsFor(p, w.id)).toBe(need);
+    expect(isUnlocked(p, 'attachment', att, w.id)).toBe(true);
+    expect(itemLock(p, 'attachment', att, w.id).unlocked).toBe(true);
+
+    p.prestige = 1; // after prestige only kills since prestige count, everywhere
+    expect(attachmentKillsFor(p, w.id)).toBe(0);
+    expect(isUnlocked(p, 'attachment', att, w.id)).toBe(false);
+    expect(itemLock(p, 'attachment', att, w.id).unlocked).toBe(false);
+    const item = storeItem(keyOf.attachment(w.id, att));
+    if (item?.unlock.weaponKills) {
+      p.owned.push(keyOf.weapon(w.id));
+      expect(gateReason(p, item)).toBe('kills');
+    }
+    progressionExt(p).weaponKills[w.id] = need;
+    expect(isUnlocked(p, 'attachment', att, w.id)).toBe(true);
+    expect(itemLock(p, 'attachment', att, w.id).unlocked).toBe(true);
+  });
+});

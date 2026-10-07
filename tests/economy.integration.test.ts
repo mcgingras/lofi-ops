@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startServer, type GameServer } from '../src/server/app';
 import type { EconomyResultsExt } from '../src/shared/defs/economy-net';
+import { matchSummaryFor } from '../src/shared/defs/progression';
 import { FakeClient } from './fake-client';
 
 let rid = 1000;
@@ -88,7 +89,10 @@ describe('economy over sockets', () => {
     const end = await c.waitFor('matchEnd');
     const w = (end.results.ext.economy as EconomyResultsExt).wager!;
     expect(w.lines.map((l) => [l.name, l.payout])).toEqual([['Winner', 2000], ['Loser', 0]]);
-    const prof = await c.waitFor('profile', (m) => m.profile.codPoints === 2000);
+    // Progression pays challenge CoD Points on top (the kill is first blood: career_firstblood).
+    const challengeCp = matchSummaryFor(end.results, wc.sessionId)?.codPoints ?? 0;
+    expect(challengeCp).toBeGreaterThan(0);
+    const prof = await c.waitFor('profile', (m) => m.profile.codPoints === 2000 + challengeCp);
     expect((prof.profile.ext.economy as { wagerWon: number }).wagerWon).toBe(1000);
     // The loser's settled profile: ante gone, no escrow left.
     const dp = await d.waitFor('profile', (m) => (m.profile.ext.economy as { escrow: unknown }).escrow === null && m.profile.codPoints === 0);

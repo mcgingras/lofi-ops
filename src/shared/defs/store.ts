@@ -16,6 +16,7 @@ import { ATTACHMENT_BY_ID, ATTACHMENTS } from './attachments';
 import { CAMO_BY_ID, CAMOS } from './camos';
 import { CHALLENGE_BY_ID } from './challenges';
 import { DEFAULT_PRICES } from './economy';
+import { attachmentKillsFor } from './progression';
 import { indexById } from './registry';
 import { WAGER_ONLY_WEAPONS } from './wager-weapons';
 import { WEAPON_BY_ID, WEAPONS } from './weapons';
@@ -175,7 +176,7 @@ export function storeItem(key: string): StoreItem | undefined {
 // Rules
 // ---------------------------------------------------------------------------------------------
 
-export type ProfileLike = Pick<Profile, 'level' | 'prestige' | 'codPoints' | 'owned' | 'stats' | 'challengeProgress'>;
+export type ProfileLike = Pick<Profile, 'level' | 'prestige' | 'codPoints' | 'owned' | 'stats' | 'challengeProgress'> & Partial<Pick<Profile, 'ext'>>;
 
 export type LockReason = 'unknown' | 'owned' | 'level' | 'prestige' | 'weapon' | 'kills' | 'challenge' | 'funds';
 
@@ -190,7 +191,7 @@ export function gateReason(p: ProfileLike, item: StoreItem): Exclude<LockReason,
   if (item.kind === 'attachment' && item.weapon) {
     const w = storeItem(keyOf.weapon(item.weapon));
     if (!w || !owns(p, w) || gateReason(p, w)) return 'weapon';
-    if (u.weaponKills && (p.stats[`weapon.${item.weapon}.kills`] ?? 0) < u.weaponKills) return 'kills';
+    if (u.weaponKills && attachmentKillsFor(p, item.weapon) < u.weaponKills) return 'kills';
   }
   if (u.challenge) {
     const c = CHALLENGE_BY_ID.get(u.challenge);

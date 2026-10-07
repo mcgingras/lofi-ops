@@ -15,6 +15,7 @@ import { CAMO_BY_ID, type CamoDef } from '../defs/camos';
 import { CHALLENGES } from '../defs/challenges';
 import { KILLSTREAK_BY_ID, type KillstreakDef } from '../defs/killstreaks';
 import { PERK_BY_ID, type PerkDef } from '../defs/perks';
+import { attachmentKillsFor } from '../defs/progression';
 import { WEAPON_BY_ID, type WeaponDef } from '../defs/weapons';
 import { DEFAULT_LOADOUTS, type Loadout, type WeaponLoadout } from '../loadout';
 import type { Profile } from '../profile';
@@ -39,7 +40,7 @@ export const CATALOG: Catalog = {
 };
 
 export type ItemKind = 'weapon' | 'attachment' | 'perk' | 'killstreak' | 'camo' | 'equipment';
-export type UnlockProfile = Pick<Profile, 'level' | 'prestige' | 'unlocks' | 'owned' | 'stats' | 'challengeProgress'>;
+export type UnlockProfile = Pick<Profile, 'level' | 'prestige' | 'unlocks' | 'owned' | 'stats' | 'challengeProgress'> & Partial<Pick<Profile, 'ext'>>;
 
 export interface ItemLock {
   unlocked: boolean;
@@ -81,7 +82,7 @@ export function itemLock(p: UnlockProfile, kind: ItemKind, id: string, weapon: s
       const d = cat.attachments.get(id);
       if (!d) return locked('Unknown');
       const need = d.unlockKills ?? 0;
-      const kills = weapon ? (p.stats[`weapon.${weapon}.kills`] ?? 0) : 0;
+      const kills = weapon ? attachmentKillsFor(p, weapon) : 0;
       if (kills >= need) return OPEN;
       const wName = weapon ? (cat.weapons.get(weapon)?.name ?? weapon) : 'this weapon';
       return locked(`${need} kills with ${wName} (${kills}/${need})${orPrice(d.price)}`);

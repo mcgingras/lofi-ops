@@ -19,7 +19,7 @@ import { ATTACHMENT_BY_ID } from './attachments';
 import { challengeComplete } from './challenges';
 import { KILLSTREAK_BY_ID, KILLSTREAKS } from './killstreaks';
 import { PERK_BY_ID, PERKS } from './perks';
-import { MAX_PRESTIGE, prestigeEmblem, readProgressionExt } from './progression';
+import { attachmentKillsFor, MAX_PRESTIGE, prestigeEmblem } from './progression';
 import { WEAPON_BY_ID, WEAPONS } from './weapons';
 import { cloneLoadout, DEFAULT_LOADOUTS, type Loadout, type WeaponLoadout } from '../loadout';
 import type { Profile } from '../profile';
@@ -37,7 +37,7 @@ export interface UnlockEntry {
 }
 
 /** The parts of a profile the unlock rules read. */
-export type UnlockProfile = Pick<Profile, 'level' | 'prestige' | 'unlocks' | 'challengeProgress' | 'ext'> & Partial<Pick<Profile, 'owned'>>;
+export type UnlockProfile = Pick<Profile, 'level' | 'prestige' | 'unlocks' | 'challengeProgress' | 'ext'> & Partial<Pick<Profile, 'owned' | 'stats'>>;
 
 // ---------------------------------------------------------------------------------------------
 // Tables owned here
@@ -128,7 +128,7 @@ export function unlockLevelOf(kind: UnlockKind, id: string): number {
 /** Kills with `weapon` (since the last prestige) needed for an attachment. */
 export const attachmentKillsNeeded = (attachment: string) => Math.max(0, ATTACHMENT_BY_ID.get(attachment)?.unlockKills ?? 0);
 
-export const weaponKillsOf = (p: UnlockProfile, weapon: string) => readProgressionExt(p).weaponKills[weapon] ?? 0;
+export const weaponKillsOf = (p: UnlockProfile, weapon: string) => attachmentKillsFor(p, weapon);
 
 export const featureUnlocked = (p: UnlockProfile, id: string) => isUnlocked(p, 'feature', id);
 export const hasCreateAClass = (p: UnlockProfile) => featureUnlocked(p, 'createAClass');
