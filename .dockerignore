@@ -1,0 +1,16 @@
+# Keep the build context small and free of local state. tests/ stays: `npm run build`
+# typechecks them (tsconfig.tests-client.json has no other inputs).
+.git
+.github
+.claude
+node_modules
+dist
+data
+reference
+*.log
+.DS_Store
+.env
+.env.*
+Dockerfile
+.dockerignore
+fly.toml

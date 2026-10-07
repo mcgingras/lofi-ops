@@ -74,6 +74,6 @@ export type Team = 0 | 1;
 export const TEAM_NAMES: readonly [string, string] = ['Spetsnaz', 'Black Ops'];
 
 /** Default server port (`PORT` env overrides). The client connects to `/ws` on its own origin. */
-export const DEFAULT_PORT = 8787;
+export const DEFAULT_PORT = 8080;
 export const WS_PATH = '/ws';
 export const PROTOCOL_VERSION = 1;

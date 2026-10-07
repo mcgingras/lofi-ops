@@ -1,23 +1,21 @@
 /**
  * Server entry. `npm run dev` runs it under tsx watch (Vite serves the client and proxies /ws);
- * `npm start` runs it with --prod, serving the built client from dist/client on the same port.
+ * `npm start` (and the Docker image) runs it with --prod, serving the built client from
+ * dist/client on the same port. Env: PORT (8080), HOST (0.0.0.0), DATA_DIR (./data) or LOFI_DB.
+ * SIGINT/SIGTERM drain gracefully (features/deploy/shutdown.ts).
  */
 import { resolve } from 'node:path';
 import { startServer } from './app';
+import { installGracefulShutdown, resolveConfig } from './features/deploy/index';
 
-const prod = process.argv.includes('--prod') || process.env.NODE_ENV === 'production';
+const config = resolveConfig();
 
 const server = await startServer({
-  staticDir: prod ? resolve(import.meta.dirname, '../../dist/client') : null,
-  dbPath: process.env.LOFI_DB ?? 'data/lofi.db',
+  port: config.port,
+  host: config.host,
+  staticDir: config.prod ? resolve(import.meta.dirname, '../../dist/client') : null,
+  dbPath: config.dbPath,
 });
+console.log(`[server] data: ${config.dbPath}`);
 
-let stopping = false;
-async function stop() {
-  if (stopping) return;
-  stopping = true;
-  await server.close();
-  process.exit(0);
-}
-process.on('SIGINT', stop);
-process.on('SIGTERM', stop);
+installGracefulShutdown(server);

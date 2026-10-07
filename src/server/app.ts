@@ -1,17 +1,20 @@
 /**
- * The game server: HTTP (static client in prod, /api/health, /api/rooms) + WebSocket on /ws.
- * `startServer` is what index.ts runs and what integration tests start in-process.
+ * The game server: HTTP (static client in prod, /healthz + /api/health, /api/rooms) + WebSocket
+ * on /ws. `startServer` is what index.ts runs and what integration tests start in-process.
+ * `close()` is the graceful shutdown (DESIGN.md section 10): refuse new joins, save every
+ * profile, close sockets with 1012 so clients retry ("Waking server..."), then stop.
  */
 import { randomUUID } from 'node:crypto';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { DEFAULT_PORT, PROTOCOL_VERSION, WS_PATH } from '../shared/constants';
+import { PROTOCOL_VERSION, WS_PATH } from '../shared/constants';
 import { DEFAULT_LOADOUTS } from '../shared/loadout';
 import { decodeClientMsg, isInputCmd, isNum, isStr, isVec3Tuple, type ClientMsg } from '../shared/protocol';
 import { registerWeaponBehavior } from './combat';
 import type { Feature, ServerApi } from './feature';
+import { appVersion, HEALTH_PATHS, healthReport, resolveDbPath, resolvePort, type HealthReport } from './features/deploy/index';
 import { FEATURES } from './features/index';
 import { Lobby, LobbyError } from './lobby';
 import { registerMode } from './modes/index';
@@ -21,11 +24,14 @@ import { Session } from './session';
 import { cleanName, Store } from './store';
 
 export interface ServerOptions {
-  /** 0 = random free port. Default PORT env or 8787. */
+  /** 0 = random free port. Default PORT env or 8080. */
   port?: number;
+  /** Bind address. Default 0.0.0.0 (all interfaces; required on Fly). */
   host?: string;
-  /** SQLite path; ':memory:' for tests. Default data/lofi.db. */
+  /** SQLite path; ':memory:' for tests. Default LOFI_DB env, else DATA_DIR/lofi.db (DATA_DIR default ./data). */
   dbPath?: string;
+  /** Reported by /healthz. Default package.json version (+GIT_SHA). */
+  version?: string;
   /** Directory of the built client to serve (prod). null = don't serve files. */
   staticDir?: string | null;
   /** Feature list (default: all of features/index.ts). */
@@ -45,6 +51,10 @@ export interface GameServer {
   rpc: RpcRegistry;
   api: ServerApi;
   sessions: Map<string, Session>;
+  /** True once close() started: upgrades get 503, joins are refused. */
+  readonly draining: boolean;
+  health(): HealthReport;
+  /** Graceful shutdown: stop joins, save profiles, close sockets (1012), stop listening. */
   close(): Promise<void>;
 }
 
@@ -67,10 +77,17 @@ const MIME: Record<string, string> = {
 };
 
 const HELLO_TIMEOUT_MS = 10_000;
+/** How long close() waits for clients to finish the close handshake before terminating them. */
+const SOCKET_CLOSE_GRACE_MS = 1000;
 
 export async function startServer(opts: ServerOptions = {}): Promise<GameServer> {
   const log = opts.log ?? ((m: string) => console.log(m));
-  const store = new Store(opts.dbPath ?? 'data/lofi.db');
+  const store = new Store(opts.dbPath ?? resolveDbPath(process.env));
+  const version = opts.version ?? appVersion();
+  const startedAt = Date.now();
+  let draining = false;
+  let storeClosed = false;
+  let closing: Promise<void> = Promise.resolve();
   const features = opts.features ?? FEATURES;
   const rpc = new RpcRegistry();
   const sessions = new Map<string, Session>();
@@ -87,12 +104,17 @@ export async function startServer(opts: ServerOptions = {}): Promise<GameServer>
   }
 
   const staticDir = opts.staticDir ? resolve(opts.staticDir) : null;
-  const http = createServer((req, res) => handleHttp(req, res, lobby, staticDir));
+  const health = (): HealthReport => healthReport({ rooms: lobby.rooms, sessions: sessions.size, version, startedAt, draining });
+  const http = createServer((req, res) => handleHttp(req, res, lobby, staticDir, health));
   const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
   http.on('upgrade', (req, socket, head) => {
     const path = (req.url ?? '').split('?')[0];
     if (path !== WS_PATH) {
       socket.destroy();
+      return;
+    }
+    if (draining) {
+      socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nRetry-After: 2\r\nContent-Length: 0\r\n\r\n');
       return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => onConnection(ws));
@@ -106,6 +128,10 @@ export async function startServer(opts: ServerOptions = {}): Promise<GameServer>
     ws.on('message', (data, isBinary) => {
       const msg = decodeClientMsg(isBinary ? new Uint8Array(data as Buffer) : (data as Buffer).toString());
       if (!msg) return;
+      if (draining) {
+        if (session && (msg.t === 'quickplay' || msg.t === 'joinRoom')) session.send({ t: 'error', code: 'server_restarting', message: 'server is restarting' });
+        return;
+      }
       if (!session) {
         if (msg.t !== 'hello') return;
         clearTimeout(helloTimer);
@@ -134,7 +160,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<GameServer>
       clearTimeout(helloTimer);
       if (!session) return;
       lobby.leave(session, 'disconnect');
-      store.save(session.profile);
+      if (!storeClosed) store.save(session.profile);
       sessions.delete(session.id);
     });
     ws.on('error', () => ws.terminate());
@@ -184,9 +210,16 @@ export async function startServer(opts: ServerOptions = {}): Promise<GameServer>
     }
   }
 
-  await new Promise<void>((res) => http.listen(opts.port ?? Number(process.env.PORT ?? DEFAULT_PORT), opts.host ?? '0.0.0.0', res));
+  const listenPort = opts.port ?? resolvePort(process.env);
+  await new Promise<void>((res, rej) => {
+    http.once('error', rej);
+    http.listen(listenPort, opts.host ?? '0.0.0.0', () => {
+      http.off('error', rej);
+      res();
+    });
+  });
   const addr = http.address();
-  const port = typeof addr === 'object' && addr ? addr.port : (opts.port ?? DEFAULT_PORT);
+  const port = typeof addr === 'object' && addr ? addr.port : listenPort;
   log(`[server] listening on :${port}${staticDir ? ` (serving ${staticDir})` : ''}`);
 
   return {
@@ -197,13 +230,50 @@ export async function startServer(opts: ServerOptions = {}): Promise<GameServer>
     rpc,
     api,
     sessions,
+    get draining() {
+      return draining;
+    },
+    health,
     async close() {
-      lobby.shutdown();
-      for (const s of sessions.values()) store.save(s.profile);
-      for (const c of wss.clients) c.terminate();
-      await new Promise<void>((res) => wss.close(() => res()));
-      await new Promise<void>((res) => http.close(() => res()));
-      store.close();
+      if (draining) return closing;
+      draining = true;
+      closing = (async () => {
+        for (const s of sessions.values()) s.sendFeature('core.notice', { text: 'Server restarting...' });
+        lobby.shutdown();
+        const saved = new Set<string>();
+        for (const s of sessions.values()) {
+          if (saved.has(s.profile.id)) continue;
+          saved.add(s.profile.id);
+          try {
+            store.save(s.profile);
+          } catch (err) {
+            log(`[server] saving profile ${s.profile.id} failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+        // 1012 = service restart: the browser client treats it as a drop and retries (waking).
+        const clients = [...wss.clients];
+        await Promise.race([
+          Promise.all(
+            clients.map(
+              (c) =>
+                new Promise<void>((res) => {
+                  if (c.readyState === c.CLOSED) return res();
+                  c.once('close', () => res());
+                  c.close(1012, 'server restarting');
+                }),
+            ),
+          ),
+          new Promise<void>((res) => setTimeout(res, SOCKET_CLOSE_GRACE_MS).unref()),
+        ]);
+        for (const c of wss.clients) c.terminate();
+        await new Promise<void>((res) => wss.close(() => res()));
+        http.closeAllConnections();
+        await new Promise<void>((res) => http.close(() => res()));
+        storeClosed = true;
+        store.close();
+        log(`[server] closed (${saved.size} profiles saved)`);
+      })();
+      return closing;
     },
   };
 }
@@ -221,9 +291,12 @@ function registerCoreRpcs(rpc: RpcRegistry, store: Store) {
   });
 }
 
-function handleHttp(req: IncomingMessage, res: ServerResponse, lobby: Lobby, staticDir: string | null) {
+function handleHttp(req: IncomingMessage, res: ServerResponse, lobby: Lobby, staticDir: string | null, health: () => HealthReport) {
   const url = new URL(req.url ?? '/', 'http://x');
-  if (url.pathname === '/api/health') return json(res, { ok: true, rooms: lobby.rooms.size });
+  if (HEALTH_PATHS.has(url.pathname)) {
+    const report = health();
+    return json(res, report, report.ok ? 200 : 503, { 'cache-control': 'no-store' });
+  }
   if (url.pathname === '/api/rooms') return json(res, { rooms: lobby.list({ mode: url.searchParams.get('mode') ?? undefined }) });
   if (!staticDir || (req.method !== 'GET' && req.method !== 'HEAD')) {
     res.writeHead(404).end('not found');
@@ -248,6 +321,6 @@ function handleHttp(req: IncomingMessage, res: ServerResponse, lobby: Lobby, sta
   createReadStream(file).pipe(res);
 }
 
-function json(res: ServerResponse, body: unknown) {
-  res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(body));
+function json(res: ServerResponse, body: unknown, status = 200, headers: Record<string, string> = {}) {
+  res.writeHead(status, { 'content-type': 'application/json', ...headers }).end(JSON.stringify(body));
 }
