@@ -151,9 +151,9 @@ describe('bots: navigation grid', () => {
     }
     // Nuketown's green house: the upstairs bedroom links only to the upstairs floor.
     const nt = new NavGrid(getMapData('nuketown'));
-    const up = nt.cellAt({ x: -26.2, y: 3.3, z: -7.8 })!;
-    expect(up.y).toBeCloseTo(3.3, 1);
-    expect(up.edges.every((e) => nt.cells[e.to]!.y > 3)).toBe(true);
+    const up = nt.cellAt({ x: -13.0, y: 3.0, z: -8.6 })!;
+    expect(up.y).toBeCloseTo(3.0, 1);
+    expect(up.edges.every((e) => nt.cells[e.to]!.y > 2.9)).toBe(true);
   });
 
   it('climbs stairs and ramps by walking, jumps onto low ledges, never walks up walls', () => {

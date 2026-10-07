@@ -221,19 +221,107 @@ registerTexture('nt_busWin', {
   },
 });
 
+/** The red "Welcome to Nuketown" board by the green house (population counter, hazard badges). */
 registerTexture('nt_sign', {
   w: 256,
-  h: 72,
+  h: 128,
   wrap: false,
   draw(g, w, h, R) {
-    grain(g, R, 0, 0, w, h, '#2f6f8f', 0.05);
-    g.fillStyle = '#f2e6c0';
+    grain(g, R, 0, 0, w, h, '#a8402e', 0.06);
+    g.fillStyle = '#efe6cc';
     g.fillRect(4, 4, w - 8, 3);
     g.fillRect(4, h - 7, w - 8, 3);
-    stencilText(g, ['NUKETOWN'], 18, 40, [36], '#f6d24a');
-    stencilText(g, ['POPULATION  40'], 38, 62, [16], '#f2e6c0');
+    stencilText(g, ['Welcome to'], 30, 34, [18], '#efe6cc');
+    stencilText(g, ['NUKETOWN'], 22, 72, [40], '#efe6cc');
+    stencilText(g, ['Population'], 64, 102, [14], '#efe6cc');
+    g.fillStyle = '#e8e4da';
+    g.fillRect(168, 86, 16, 22);
+    g.fillRect(188, 86, 16, 22);
+    stencilText(g, ['0'], 171, 104, [16], '#222');
+    stencilText(g, ['1'], 191, 104, [16], '#222');
+    g.fillStyle = '#f2c230';
+    g.beginPath();
+    g.arc(222, 112, 8, 0, 7);
+    g.fill();
+    g.fillStyle = '#222';
+    for (let i = 0; i < 3; i++) {
+      g.beginPath();
+      g.moveTo(222, 112);
+      g.arc(222, 112, 7, (i * 2 * Math.PI) / 3 - 0.5, (i * 2 * Math.PI) / 3 + 0.5);
+      g.fill();
+    }
   },
   photo: 'small',
+});
+
+/** Black-and-white checkerboard kitchen linoleum. */
+registerTexture('nt_tile', {
+  w: 32,
+  h: 32,
+  draw(g, w, h, R) {
+    for (let y = 0; y < h; y += 8)
+      for (let x = 0; x < w; x += 8) grain(g, R, x, y, 8, 8, (x + y) % 16 ? '#2e2a26' : '#e8e2d2', 0.05);
+  },
+  photos: ['concrete_floor_worn_001'],
+  photo: (c) =>
+    c.fromPhoto('concrete_floor_worn_001', {
+      filter: 'grayscale(1) brightness(1.5) contrast(.6)',
+      over: (g, w, h) => {
+        // Multiply the checker over the worn-floor photo so the squares pick up its grime.
+        g.globalCompositeOperation = 'multiply';
+        g.drawImage(c.base, 0, 0, w, h);
+        g.globalCompositeOperation = 'source-over';
+      },
+    }),
+});
+
+/** Green garden lattice (alpha cut-out) for the screened porch. */
+registerTexture('nt_lattice', {
+  w: 32,
+  h: 32,
+  posterize: false,
+  draw(g, w, h, R) {
+    g.clearRect(0, 0, w, h);
+    for (let i = -h; i < w; i += 8) {
+      for (let t = 0; t < h; t++) {
+        grain(g, R, i + t, t, 2, 1, '#4fb27e', 0.06);
+        grain(g, R, i + h - t, t, 2, 1, '#4fb27e', 0.06);
+      }
+    }
+    grain(g, R, 0, 0, w, 2, '#f2efe8', 0.04);
+    grain(g, R, 0, h - 2, w, 2, '#f2efe8', 0.04);
+  },
+  photo: 'none',
+});
+
+/** "Westward Moving & Delivery" box trailer side: brushed aluminium, red band, lettering. */
+registerTexture('nt_trailer', {
+  w: 128,
+  h: 64,
+  wrap: false,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#c9ccc8', 0.06);
+    g.fillStyle = 'rgba(90,92,90,.5)';
+    for (let x = 0; x < w; x += 6) g.fillRect(x, 0, 1, h);
+    g.fillStyle = '#b3352a';
+    g.fillRect(0, 34, w, 10);
+    g.fillRect(0, h - 6, w, 6);
+    stencilText(g, ['WESTWARD'], 10, 26, [18], '#b3352a');
+    stencilText(g, ['MOVING & DELIVERY'], 12, 42, [8], '#f4efe2');
+  },
+  photos: ['blue_metal_plate'],
+  photo: (c) =>
+    c.fromPhoto('blue_metal_plate', {
+      w: 256,
+      h: 128,
+      tile: 128,
+      filter: 'grayscale(1) brightness(1.5) contrast(.8)',
+      over: (g, w, h) => {
+        g.globalCompositeOperation = 'multiply';
+        g.drawImage(c.base, 0, 0, w, h);
+        g.globalCompositeOperation = 'source-over';
+      },
+    }),
 });
 
 /** Distant desert range: an alpha-cut ridgeline (backdrop cards, `MapKit.backdropRing`). */
