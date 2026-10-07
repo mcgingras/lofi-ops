@@ -28,6 +28,7 @@ Owner: bots. Covers DESIGN.md section 8a (hard requirement): every lobby runs wi
 - **Back to the lobby phase:** bots leave, and come back at the next start.
 - **Fill off, or a lower target:** extra bots retire, live ones at their next death.
 - Changing settings mid-match takes effect at once: bots are added or retired, and every bot's skill is recomputed.
+- **Names.** Bots get callsigns (`pickBotName`); bots added by core backfill (`botFill`, named "Bot 7") are renamed on join.
 - **Bots never earn CoD Points or XP** because they have no profile. `matchEnd` adds `results.ext.bots = { bots, humans, difficulty, practice }`; `practice` is true for a wager mode with bots in it.
 
 ### Skill

@@ -140,6 +140,10 @@ describe('bots <- frontend lobbies', () => {
     expect(rb.managed).toBe(false);
     expect(rb.settings.difficulty).toBe('veteran');
     for (const b of room.bots()) expect(botBrain(room, b)).toBeDefined();
+    // Core backfill's "Bot 7" names become callsigns, all different.
+    const names = room.bots().map((b) => b.name);
+    expect(names.some((n) => /^Bot \d+$/.test(n))).toBe(false);
+    expect(new Set(names).size).toBe(names.length);
     // A second human joins mid-match: core trims one bot; the bots feature must not retire another.
     lobby.join(session(), room.id);
     steps(room, 8);

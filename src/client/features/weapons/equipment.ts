@@ -13,6 +13,7 @@ import { onFeature, registerEntityRenderer, registerHudWidget, registerMatchHook
 import { makeLookMaterial, setDynLight, type LookMaterial } from '../../render/shader';
 import { getTexture, unbindTexture } from '../../render/textures';
 import { currentMatch } from '../../state';
+import { shakeAmplitude, stunStrength } from './camfx';
 
 export const equipState = {
   lethal: null as string | null,
@@ -134,6 +135,9 @@ registerMatchHook('weapons.equipment', {
   start(m) {
     equipState.flash = { at: -99, dur: 0, amount: 0 };
     equipState.stun = { at: -99, dur: 0, amount: 0 };
+    // Times are room times: a shake left over from the previous room (whose clock was further
+    // along) would read as "in the future" here and shake the camera for minutes.
+    equipState.shake = { at: -99, amount: 0 };
     prevHeld = { melee: false, lethal: false, tactical: false };
     const offs = [
       onFeature('weapons.flash', (d) => {
@@ -203,18 +207,14 @@ registerMatchHook('weapons.equipment', {
 
     // Camera: explosion shake and concussion wobble (visual only), slowed look while stunned.
     const cam = m.renderer.cam;
-    const sk = equipState.shake;
-    const st = m.time - sk.at;
-    if (st < 0.5) {
-      const a = sk.amount * (1 - st / 0.5) * 0.03;
+    const a = shakeAmplitude(m.time, equipState.shake);
+    if (a > 0) {
       cam.position.x += (Math.random() - 0.5) * a;
       cam.position.y += (Math.random() - 0.5) * a;
       cam.rotation.z += (Math.random() - 0.5) * a;
     }
-    const sn = equipState.stun;
-    const se = m.time - sn.at;
-    if (se < sn.dur && m.alive) {
-      const k = sn.amount * Math.min(1, (sn.dur - se) / 1.2);
+    const k = m.alive ? stunStrength(m.time, equipState.stun) : 0;
+    if (k > 0) {
       cam.rotation.z += Math.sin(m.time * 2.1) * 0.06 * k;
       cam.rotation.x += Math.sin(m.time * 1.4 + 1) * 0.02 * k;
       m.controls.lookScale *= 1 - 0.65 * k;
@@ -236,7 +236,7 @@ registerHudWidget(
     if (!m) return;
     const f = equipState.flash;
     const t = m.time - f.at;
-    if (t >= f.dur || !m.alive) return;
+    if (t < 0 || t >= f.dur || !m.alive) return;
     // Full white for the first 40 % (scaled by strength), then a dithered fade.
     const k = f.amount * (t < f.dur * 0.4 ? 1 : 1 - (t - f.dur * 0.4) / (f.dur * 0.6));
     if (k <= 0) return;

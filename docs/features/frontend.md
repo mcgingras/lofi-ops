@@ -14,7 +14,7 @@ Owner: frontend. Lobbies can always run: if not enough humans join, empty slots 
 - **Create a Class**.
 - **Barracks** opens the `barracks` screen.
 - **Store** opens the `store` screen.
-- Feature `registerMenuItem` entries (any id not starting with `core.`).
+- Feature `registerMenuItem` entries (any id not starting with `core.`), except the ones this menu already covers: `modes.*` (Quick Play playlists, which would bypass matchmaking), `bots.play`, `economy.wager`, `economy.store` and `progression.barracks`.
 - **Settings**.
 
 If a screen owned by another area (`barracks`, `store`, `wager`) isn't registered yet, a placeholder screen (`frontend.soon`) shows instead.

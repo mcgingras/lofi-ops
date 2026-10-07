@@ -9,6 +9,8 @@
  * `unregisterHudWidget`. All read `currentMatch()`.
  */
 import * as THREE from 'three';
+import { EQUIPMENT_BY_ID } from '../../shared/defs/equipment';
+import { KILLSTREAK_BY_ID } from '../../shared/defs/killstreaks';
 import { WEAPON_BY_ID } from '../../shared/defs/weapons';
 import { TEAM_NAMES } from '../../shared/constants';
 import { registerHudWidget } from '../registry';
@@ -16,7 +18,8 @@ import { settings } from '../settings';
 import { currentMatch } from '../state';
 import { blink, box, clock, HUD_COLORS as C, rect, txt, unit } from './draw';
 
-const weaponName = (id: string) => WEAPON_BY_ID.get(id)?.name ?? id.toUpperCase();
+/** Display name for a kill's weapon id: guns, lethals, killstreaks ("Attack Helicopter", not "ATTACK_HELICOPTER"). */
+const weaponName = (id: string) => WEAPON_BY_ID.get(id)?.name ?? EQUIPMENT_BY_ID.get(id)?.name ?? KILLSTREAK_BY_ID.get(id)?.name ?? id.replace(/_/g, ' ').toUpperCase();
 const v = new THREE.Vector3();
 
 // Name tags over teammates (always) and enemies under the crosshair.
@@ -264,7 +267,7 @@ registerHudWidget(
       let x = W - 8 * u;
       const vw = txt(g, m.nameOf(f.victim), x, y, 8, victimCol, 'right', u);
       x -= vw + 4 * u;
-      const wtxt = `[${f.means === 'bullet' ? weaponName(f.weapon) : f.weapon.toUpperCase()}${f.headshot ? ' HS' : ''}]`;
+      const wtxt = `[${weaponName(f.weapon).toUpperCase()}${f.headshot ? ' HS' : ''}]`;
       const ww = txt(g, wtxt, x, y, 8, C.paper, 'right', u);
       x -= ww + 4 * u;
       if (f.attacker && f.attacker !== f.victim) txt(g, m.nameOf(f.attacker), x, y, 8, attCol, 'right', u);

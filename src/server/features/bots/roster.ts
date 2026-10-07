@@ -169,8 +169,11 @@ export class RoomBots {
     const bus = this.room.bus;
     this.offs.push(
       bus.on('playerJoin', ({ player }) => {
-        if (player.isBot) this.attachBrain(player);
-        else if (this.managed && this.playing() && this.fillAt === null) {
+        if (player.isBot) {
+          // Core backfill (lobby botFill) names bots "Bot 7": give them a callsign like ours.
+          if (/^Bot \d+$/.test(player.name)) player.name = pickBotName([...this.room.players.values()].filter((p) => p !== player).map((p) => p.name));
+          this.attachBrain(player);
+        } else if (this.managed && this.playing() && this.fillAt === null) {
           this.trimExcess(player.team);
           this.balanceTeams();
         }

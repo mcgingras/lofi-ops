@@ -97,7 +97,10 @@ registerScreen('menu', (root) => {
     mpBtn.setAttribute('aria-current', String(panel === 'mp'));
     renderSub();
   }, true);
-  const extra = [...menuItems.values()].filter((it) => !it.id.startsWith('core.')).sort((a, b) => (a.order ?? 50) - (b.order ?? 50));
+  // Feature entries this menu already has (Barracks, Store, Wager, Play with Bots, the Quick Play
+  // playlists) would show up twice, the Quick Play ones bypassing matchmaking: leave them out.
+  const covered = (id: string) => id.startsWith('core.') || id.startsWith('modes.') || ['bots.play', 'economy.wager', 'economy.store', 'progression.barracks'].includes(id);
+  const extra = [...menuItems.values()].filter((it) => !covered(it.id)).sort((a, b) => (a.order ?? 50) - (b.order ?? 50));
   const navEl = h(
     'nav',
     { class: 'fe-nav', 'aria-label': 'Main menu' },
