@@ -68,7 +68,8 @@ export const DEFAULT_TIMINGS: LobbyTimings = {
   privateCountdownSec: 5,
   soloCountdownSec: 3,
   spawnCountdownSec: 5,
-  postMatchSec: 10,
+  // The final killcam takes ~5 s of this; the rest is the summary screen (scoreboard, MVP, XP).
+  postMatchSec: 15,
   reserveMs: 10_000,
   updateSec: 0.25,
 };

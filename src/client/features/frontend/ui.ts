@@ -1,4 +1,5 @@
 /** Small DOM helpers shared by the frontend screens. */
+import { pixelCanvas, prestigeEmblemPixels } from '../progression/emblems';
 import { h } from '../../menus/dom';
 import { screens } from '../../registry';
 import { navigate } from '../../router';
@@ -13,8 +14,10 @@ export function go(id: string, params: Record<string, string> = {}): void {
 
 /** Prestige emblem slot: the progression feature's emblem id, or a prestige number badge. */
 export function emblem(prestige: number, emblemId: string | null = null, big = false): HTMLElement {
-  const label = prestige > 0 ? String(prestige) : '·';
-  return h('span', { class: `fe-emblem${prestige > 0 ? '' : ' p0'}${big ? ' big' : ''}`, title: emblemId ?? (prestige > 0 ? `Prestige ${prestige}` : 'No prestige'), 'data-emblem': emblemId ?? '' }, label);
+  // The chosen prestige emblem (progression's pixel art; `prestige_<n>`), else the current prestige.
+  const shown = /^prestige_\d+$/.test(emblemId ?? '') ? Number(emblemId!.slice(9)) : prestige;
+  const art = shown > 0 ? pixelCanvas(prestigeEmblemPixels(shown), big ? 26 : 18) : null;
+  return h('span', { class: `fe-emblem${prestige > 0 ? '' : ' p0'}${big ? ' big' : ''}`, title: emblemId ?? (prestige > 0 ? `Prestige ${prestige}` : 'No prestige'), 'data-emblem': emblemId ?? '' }, art ?? (prestige > 0 ? String(prestige) : '·'));
 }
 
 /** A segmented control. `get` is read on every `update()`. */
