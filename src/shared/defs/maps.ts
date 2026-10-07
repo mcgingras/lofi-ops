@@ -31,7 +31,7 @@ const supported = (...ids: string[]) => ids.filter((id) => MODE_BY_ID.has(id));
 const mw2Modes = () => [...supported('tdm', 'ffa', 'dom', 'sd', 'hq', 'kc'), ...MODES.filter((m) => m.playlist === 'wager').map((m) => m.id)];
 
 export const MAPS: MapDef[] = [
-  { id: 'yard', name: 'Yard', inspiredBy: 'Original (approved look prototype)', build: buildYard, modes: ['tdm', 'ffa'], size: 'small' },
+  { id: 'yard', name: 'Yard', inspiredBy: 'Original (approved look prototype)', build: buildYard, modes: ['tdm', 'ffa', 'dom', 'sd', 'hq', 'kc'], size: 'small' },
   // maps-mw2
   { id: 'rust', name: 'Rust', inspiredBy: 'Rust (Call of Duty: Modern Warfare 2, 2009)', build: buildRust, modes: mw2Modes(), size: 'small' },
   { id: 'scrapyard', name: 'Scrapyard', inspiredBy: 'Scrapyard (Call of Duty: Modern Warfare 2, 2009)', build: buildScrapyard, modes: mw2Modes(), size: 'medium' },

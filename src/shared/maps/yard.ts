@@ -175,6 +175,20 @@ export function buildYard(): MapData {
         { id: 'B', x: 0, y: 0, z: 4, radius: 3 },
         { id: 'C', x: 0, y: 0, z: 22, radius: 3 },
       ],
+      // Search and Destroy sites on the container-wall side (team 1 spawns defend). Owner: modes.
+      sd: [
+        { id: 'A', x: -15, y: 0, z: 15, radius: 2.5, team: 1 },
+        { id: 'B', x: 15, y: 0, z: 13, radius: 2.5, team: 1 },
+      ],
+      // Headquarters rotation (random order, never the same twice running). Owner: modes.
+      hq: [
+        { id: 'HQ1', x: 0, y: 0, z: 4, radius: 3 },
+        { id: 'HQ2', x: -14, y: 0, z: -4, radius: 3 },
+        { id: 'HQ3', x: 13, y: 0, z: -4, radius: 3 },
+        { id: 'HQ4', x: -10, y: 0, z: 11, radius: 3 },
+        { id: 'HQ5', x: 12, y: 0, z: 12, radius: 3 },
+        { id: 'HQ6', x: 0, y: 0, z: -13, radius: 3 },
+      ],
     },
     times: [
       { id: 'night', name: 'Night', clock: '23:40', sky: 'skyNight', unlit: [0.55, 0.6, 0.8], skyRot: PI, sunDir: unitVec(0.15, 0.75, -0.6), sun: [0.13, 0.16, 0.28], amb: [0.13, 0.14, 0.22], fog: [0.08, 0.09, 0.17], fogNear: 8, fogFar: 62, lights: { lamp: 1, exit: 1, hut: 1 }, glow: 1 },
