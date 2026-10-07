@@ -27,13 +27,13 @@ export interface ViewmodelSpec {
   /** Group offset from the camera at the hip and fully aimed. */
   hip: THREE.Vector3;
   ads: THREE.Vector3;
-  /** Reload animation style (default 'tilt'). */
-  reload?: 'tilt' | 'drop';
+  /** Reload animation style (default 'tilt'; 'none' when `animate` does its own). */
+  reload?: 'tilt' | 'drop' | 'none';
   /**
-   * Optional per-frame animation of the model's own parts (bolt, pump, hands, knife...), after the
-   * rig has placed the group. Return true to skip the rig's generic reload dip.
+   * Optional per-frame animation of the model's own parts (bolt, pump, hands, knife...), called
+   * after the rig has placed `group` (it may add to the group's transform too).
    */
-  animate?(s: ViewmodelAnimState): boolean | void;
+  animate?(s: ViewmodelAnimState): void;
 }
 
 /** What `ViewmodelSpec.animate` gets every frame. */

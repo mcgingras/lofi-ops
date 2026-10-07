@@ -187,8 +187,9 @@ Each file exports a typed array and a `*_BY_ID` map (`indexById` throws on dupli
 
 | file | exports | owner |
 |---|---|---|
-| `weapons.ts` | `WeaponDef`, `WEAPONS`, `WEAPON_BY_ID` (seeded: `ak47`, `m1911`) | weapons |
-| `attachments.ts` | `AttachmentDef`, `ATTACHMENTS`, `effectiveWeapon(def, ids)` (seeded: `reddot`, `extmag`) | weapons |
+| `weapons.ts` | `WeaponDef`, `WEAPONS`, `WEAPON_BY_ID`, `LOADOUT_WEAPONS` (create-a-class picks; `knife` and `gl` have slots `melee` / `attachment`), `shotsToKill`, `ttkMs`, `cycleSec` | weapons |
+| `attachments.ts` | `AttachmentDef` (`unlockKills`, `price`), `ATTACHMENTS`, `effectiveWeapon(def, ids)`, `validAttachments(def, ids, max)`, `canAttach`, `BASE_ATTACHMENT_SLOTS` (1) | weapons |
+| `equipment.ts` | `EquipmentDef`, `EQUIPMENT` (frag, semtex, flashbang, concussion), `LETHALS`, `TACTICALS`, `MELEE`, `GL_ROUND`, `NADE_ENTITY`, weapons feature messages | weapons |
 | `perks.ts` | `PerkDef`, `PERKS` (seeded: lightweight, hardline (T1), steady_aim (T2)) | perks-streaks |
 | `killstreaks.ts` | `KillstreakDef`, `KILLSTREAKS` (seeded: `uav` "Spy Plane", 3) | perks-streaks |
 | `modes.ts` | `ModeDef`, `CORE_MODES` (tdm 75 kills / ffa 30 kills, 10 min), `MODES` = core + `WAGER_MODES` | modes |
@@ -377,6 +378,13 @@ api.registerWeaponBehavior('launcher', {
   },
 });
 ```
+
+Weapons-area extensions (see `docs/features/weapons.md`):
+
+- `WeaponBehavior` stays as above. Burst cadence (`mode: 'burst'`, `burst`, `burstDelayMs`) is enforced in core `fire()`; torso hits below the torso middle use `multipliers.lowerTorso` when a weapon defines it (`isLowerTorso` / `partMultiplier(w, part, lower)` in `ballistics.ts`).
+- Modifier keys added by the weapons feature: `attachmentSlotsOffset` (sum; Warlord returns 1), `tacticalMultiplier` (product; Tactical Mask), `equipmentCountOffset` (sum, `(p, 'lethal' | 'tactical')`).
+- Room events: `weapons.thrown {player, equipment}`, `weapons.tactical {player, victim, equipment, amount}`, `weapons.melee {player, victim}`.
+- Client: `ViewmodelSpec.animate(state)` (runs after the rig placed the group; `reload: 'none'` skips the generic dip) and `ViewmodelRig.action(kind, dur)`; `Soldier.gun` (the default rifle group, hidden by the weapons feature's third-person models); `sfx.gunshot` plays a registered `shot.<weaponId>` voice when present; key `Digit3` = action `weapon3` (slot 2, the underbarrel launcher).
 
 ## 14. Tests
 

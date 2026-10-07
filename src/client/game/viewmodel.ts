@@ -90,10 +90,7 @@ export class ViewmodelRig {
     const free = 1 - p.ads * 0.85;
     const mv = p.move;
     const drop = vm.spec.reload === 'drop';
-    if (this.act && p.time - this.act.start > this.act.dur) this.act = null;
-    const act = this.act;
-    const custom = vm.spec.animate?.({ dt, time: p.time, ads: p.ads, reload: p.reload, raise: p.raise, sinceShot: p.time - this.lastShot, sprint: p.sprint, action: act?.kind ?? null, actionT: act ? (p.time - act.start) / act.dur : 0 }) === true;
-    const rl = p.reload >= 0 && !custom ? Math.sin(p.reload * Math.PI) : 0;
+    const rl = p.reload >= 0 && vm.spec.reload !== 'none' ? Math.sin(p.reload * Math.PI) : 0;
     const raise = p.raise >= 0 ? 1 - p.raise : 0;
     this.aim.lerpVectors(vm.spec.hip, vm.spec.ads, p.ads);
     const sb = this.sprintBlend;
@@ -104,6 +101,9 @@ export class ViewmodelRig {
       this.aim.z + this.kick * 0.06 * (1 - p.ads * 0.5),
     );
     g.rotation.set(this.kickRot * 0.12 * (1 - p.ads * 0.6) - rl * (drop ? 0.3 : 0.7) - raise * 0.6 - sb * 0.35, this.swayX * 1.6 + sb * 0.7, rl * (drop ? 0.1 : 0.45) + Math.cos(this.bob) * 0.02 * mv * free + sb * 0.25);
+    if (this.act && p.time - this.act.start > this.act.dur) this.act = null;
+    const act = this.act;
+    vm.spec.animate?.({ dt, time: p.time, ads: p.ads, reload: p.reload, raise: p.raise, sinceShot: p.time - this.lastShot, sprint: p.sprint, action: act?.kind ?? null, actionT: act ? (p.time - act.start) / act.dur : 0 });
     const flashing = p.time - this.lastShot < 0.05;
     this.flash.visible = flashing;
     if (flashing) {
