@@ -16,7 +16,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { getMapData, MAPS } from '../src/shared/defs/maps';
-import type { MapData } from '../src/shared/maps/types';
+import type { Brush, MapData } from '../src/shared/maps/types';
 
 const PX = 8; // pixels per metre
 const PAD = 40;
@@ -41,18 +41,31 @@ function render(map: MapData, sliceY: number | null): string {
   for (let x = Math.ceil(b.min.x / 5) * 5; x <= b.max.x; x += 5) out.push(`<line x1="${X(x)}" y1="${PAD}" x2="${X(x)}" y2="${H - PAD}" stroke="${x % 10 === 0 ? '#2c3038' : '#20232a'}" stroke-width="1"/>` + (x % 10 === 0 ? `<text x="${X(x)}" y="${PAD - 8}" fill="#6b7280" font-size="10" text-anchor="middle">${x}</text>` : ''));
   for (let z = Math.ceil(b.min.z / 5) * 5; z <= b.max.z; z += 5) out.push(`<line x1="${PAD}" y1="${Z(z)}" x2="${W - PAD}" y2="${Z(z)}" stroke="${z % 10 === 0 ? '#2c3038' : '#20232a'}" stroke-width="1"/>` + (z % 10 === 0 ? `<text x="${PAD - 6}" y="${Z(z) + 3}" fill="#6b7280" font-size="10" text-anchor="end">${z}</text>` : ''));
   // brushes, low to high so tall things draw on top
-  const order = map.brushes.map((r, i) => ({ r, i })).filter(({ r }) => !r.noRender && r.max.y > floorY + 0.05 && (sliceY === null || r.min.y < sliceY)).sort((a, c) => a.r.max.y - c.r.max.y);
+  // Invisible brushes that stop players and bullets are drawn too: they are the collision of
+  // buildings turned with `ry` (render-only rotated boxes, see Brush.ry), which draw as rotated outlines.
+  const blocks = (r: Brush) => (r.players ?? r.collide ?? true) !== false && (r.bullets ?? r.collide ?? true) !== false;
+  // Bounds clips (bo-kit `perimeter` tag) show where the playable area ends.
+  for (const r of map.brushes) if (r.tag === 'perimeter' && (sliceY === null || r.min.y < sliceY)) out.push(`<rect x="${X(r.min.x)}" y="${Z(r.min.z)}" width="${(r.max.x - r.min.x) * PX}" height="${(r.max.z - r.min.z) * PX}" fill="#3a1414" fill-opacity="0.55"/>`);
+  const order = map.brushes.map((r, i) => ({ r, i })).filter(({ r }) => (!r.noRender || blocks(r)) && r.max.y > floorY + 0.05 && (sliceY === null || r.min.y < sliceY)).sort((a, c) => a.r.max.y - c.r.max.y);
   for (const { r } of order) {
     const x = X(r.min.x), z = Z(r.min.z), w = (r.max.x - r.min.x) * PX, h = (r.max.z - r.min.z) * PX;
     const solid = (r.players ?? r.collide ?? true) !== false;
     if (!solid) {
+      if (r.ry) {
+        let hw = (r.max.x - r.min.x) / 2, hd = (r.max.z - r.min.z) / 2;
+        if (Math.abs(Math.sin(r.ry)) > 0.5) [hw, hd] = [hd, hw];
+        const cx = (r.min.x + r.max.x) / 2, cz = (r.min.z + r.max.z) / 2, c = Math.cos(r.ry), s = Math.sin(r.ry);
+        const pts = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([a, b]) => `${X(cx + a! * c + b! * s)},${Z(cz - a! * s + b! * c)}`).join(' ');
+        out.push(`<polygon points="${pts}" fill="none" stroke="#7b8494" stroke-width="1"/>`);
+        continue;
+      }
       out.push(`<rect x="${x}" y="${z}" width="${w}" height="${h}" fill="none" stroke="#5b6472" stroke-width="1" stroke-dasharray="2 2"/>`);
       continue;
     }
     out.push(`<rect x="${x}" y="${z}" width="${w}" height="${h}" fill="${shade(r.max.y)}" stroke="#0b0c0e" stroke-width="0.6"/>`);
     if (r.ramp) {
       const cx = x + w / 2, cz = z + h / 2;
-      const d = { px: [1, 0], nx: [-1, 0], pz: [0, 1], nz: [0, -1] }[r.ramp as 'px' | 'nx' | 'pz' | 'nz'] ?? [0, 0];
+      const d = { '+x': [1, 0], '-x': [-1, 0], '+z': [0, 1], '-z': [0, -1] }[r.ramp] ?? [0, 0];
       const len = Math.min(w, h) * 0.35;
       out.push(`<line x1="${cx - d[0]! * len}" y1="${cz - d[1]! * len}" x2="${cx + d[0]! * len}" y2="${cz + d[1]! * len}" stroke="#f2c14e" stroke-width="2" marker-end="url(#a)"/>`);
     }

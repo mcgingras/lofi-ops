@@ -270,3 +270,124 @@ registerTexture('fr_skyMorning', {
   },
   photo: 'sky',
 });
+
+/** Plywood sheathing: 1.2 x 2.4 m sheets with dark seams and nail lines. */
+registerTexture('fr_ply', {
+  w: 32,
+  h: 32,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#b8996e', 0.08);
+    blotch(g, R, w, h, 8, '#8a6e4c', 0.3, 2, 8);
+    g.fillStyle = 'rgba(40,26,14,.7)';
+    g.fillRect(0, 0, w, 1);
+    g.fillRect(0, 0, 1, h);
+    g.fillRect(w / 2, 0, 1, h);
+  },
+  photos: ['brown_planks_05'],
+  photo: (c) =>
+    c.fromPhoto('brown_planks_05', {
+      filter: 'sepia(.5) saturate(.8) brightness(1.55) contrast(.75)',
+      over: (g, w, h) => {
+        // Boards stood upright, then the sheet seams and nail lines.
+        const ph = c.photo('brown_planks_05');
+        if (ph) {
+          g.save();
+          g.filter = 'sepia(.5) saturate(.8) brightness(1.55) contrast(.75)';
+          g.translate(w / 2, h / 2);
+          g.rotate(Math.PI / 2);
+          g.drawImage(ph, -w / 2, -h / 2, w, h);
+          g.restore();
+        }
+        g.fillStyle = 'rgba(40,26,14,.55)';
+        g.fillRect(0, 0, w, 2);
+        g.fillRect(0, 0, 2, h);
+        g.fillRect(w / 2, 0, 2, h);
+        g.fillStyle = 'rgba(30,20,10,.35)';
+        for (let y = 8; y < h; y += 16) for (const x of [4, w / 2 - 4, w / 2 + 4, w - 4]) g.fillRect(x, y, 1, 1);
+      },
+    }),
+});
+
+/** Corrugated metal siding, a neutral blue-grey meant to be tinted per material. */
+registerTexture('fr_corr', {
+  w: 32,
+  h: 32,
+  draw(g, _w, _h, R) {
+    for (let x = 0; x < 32; x++) grain(g, R, x, 0, 1, 32, Math.sin((x / 32) * Math.PI * 10) > 0 ? '#9aa4aa' : '#6e7880', 0.05);
+    blotch(g, R, 32, 32, 6, '#7a5a40', 0.35, 1, 5);
+  },
+  photos: ['box_profile_metal_sheet'],
+  photo: (c) => c.fromPhoto('box_profile_metal_sheet', { filter: 'grayscale(1) brightness(2.5) contrast(1.15)' }),
+});
+
+/** Painted concrete block (the Bunker). */
+registerTexture('fr_block', {
+  w: 32,
+  h: 32,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#a8a296', 0.06);
+    g.fillStyle = 'rgba(60,56,50,.5)';
+    for (let y = 0; y < h; y += 8) {
+      g.fillRect(0, y, w, 1);
+      for (let x = (y / 8) % 2 ? 0 : 8; x < w; x += 16) g.fillRect(x, y, 1, 8);
+    }
+  },
+  photos: ['concrete_block_wall_02'],
+  photo: (c) => c.fromPhoto('concrete_block_wall_02', { filter: 'saturate(.55) sepia(.2) brightness(1.08)' }),
+});
+
+/** Palm crown seen from below or above: fronds radiating from the middle (alpha cut-out). */
+registerTexture('fr_frondTop', {
+  w: 64,
+  h: 64,
+  wrap: false,
+  posterize: false,
+  draw(g, w, h, R) {
+    g.clearRect(0, 0, w, h);
+    const n = 9;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + R.rr(-0.2, 0.2);
+      const L = R.rr(24, 31);
+      for (let s = 3; s < L; s += 1.5) {
+        const x = w / 2 + Math.cos(a) * s;
+        const y = h / 2 + Math.sin(a) * s;
+        const lw = Math.sin((s / L) * Math.PI) * 4.5 + 0.5;
+        const k = R.rr(0.75, 1.1);
+        g.fillStyle = `rgb(${(58 * k) | 0},${(96 * k) | 0},${(34 * k) | 0})`;
+        g.beginPath();
+        g.ellipse(x, y, 1.2, lw, a, 0, 7);
+        g.fill();
+      }
+    }
+    g.fillStyle = '#4a3a24';
+    g.beginPath();
+    g.arc(w / 2, h / 2, 3, 0, 7);
+    g.fill();
+  },
+  photo: 'none',
+});
+
+/** Palm crown from the side: drooping fronds (alpha cut-out). */
+registerTexture('fr_frondSide', {
+  w: 64,
+  h: 32,
+  wrap: false,
+  posterize: false,
+  draw(g, w, h, R) {
+    g.clearRect(0, 0, w, h);
+    for (let i = 0; i < 8; i++) {
+      const dir = i % 2 ? 1 : -1;
+      const L = R.rr(18, 30);
+      const lift = R.rr(4, 12);
+      for (let s = 0; s < L; s += 1.2) {
+        const t = s / L;
+        const x = w / 2 + dir * s;
+        const y = h * 0.35 - lift * Math.sin(t * Math.PI * 0.6) + t * t * 14;
+        const k = R.rr(0.75, 1.1);
+        g.fillStyle = `rgb(${(56 * k) | 0},${(92 * k) | 0},${(32 * k) | 0})`;
+        g.fillRect(x - 0.6, y - 1, 1.4, 2 + Math.sin(t * Math.PI) * 4);
+      }
+    }
+  },
+  photo: 'none',
+});
