@@ -17,6 +17,7 @@ import {
   BOT_KILL_XP_MULT,
   BUZZKILL_STREAK,
   canonicalObjective,
+  OBJECTIVE_IGNORED,
   COMEBACK_DEATHS,
   LONGSHOT_M,
   MATCH_BONUS_CAP_SEC,
@@ -334,7 +335,7 @@ export function attachProgression(room: Room): ProgressionRoom {
   });
 
   room.bus.on('objective', ({ kind, player, data }) => {
-    if (!player || !earns(player)) return;
+    if (!player || !earns(player) || OBJECTIVE_IGNORED.has(kind)) return;
     const k = canonicalObjective(kind);
     award(player, `obj.${k}`, objectiveLabel(k), objectiveXp(kind, data));
     metric(player, `obj.${k}`, 1, { mode: room.mode.id });

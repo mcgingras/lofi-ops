@@ -143,7 +143,25 @@ export const OBJECTIVE_ALIASES: Record<string, string> = {
   gungame_humiliate: 'humiliate',
   sticks_bankrupt: 'bankrupt',
   oitc_survive: 'survive',
+  // The modes feature's event kinds (`<mode>.<event>`, see server/features/modes/common.ts announce).
+  'dom.capture': 'capture',
+  'dom.defend': 'defend',
+  'dom.neutralize': 'neutralize',
+  'sd.plant': 'plant',
+  'sd.defuse': 'defuse',
+  'sd.last_alive': 'last_alive',
+  'hq.capture': 'hq_capture',
+  'hq.destroy': 'hq_destroy',
+  'hq.defend': 'hq_defend',
+  'kc.confirm': 'confirm',
+  'kc.deny': 'deny',
 };
+
+/**
+ * Announcements the modes feature also sends as `objective` events: they pay no XP and count for
+ * nothing (a bomb pickup/drop must not be farmable for objective XP).
+ */
+export const OBJECTIVE_IGNORED: ReadonlySet<string> = new Set(['sd.pickup', 'sd.drop', 'sd.explode', 'sd.round_start', 'sd.round_end', 'sd.halftime', 'hq.online', 'hq.move', 'hq.expire']);
 
 export const OBJECTIVE_LABELS: Record<string, string> = {
   capture: 'CAPTURE',

@@ -73,7 +73,7 @@ describe('perks and killstreaks over the wire', () => {
     // Bots killed above respawn on their own timer, so compare against who is alive for that
     // snapshot rather than the first radar snapshot (flaked under load).
     const aliveIds = () => bots.filter((b) => b.alive).map((b) => b.id).sort();
-    const snap = await a.waitFor('snap', (s) => s.ents.some((e) => e.kind === KS_ENTITY.uav) && s.radar.length > 0 && [...s.radar].sort().join() === aliveIds().join());
+    const snap = await a.waitFor('snap', (s) => s.ents.some((e) => e.kind === KS_ENTITY.uav) && s.radar.length > 0 && [...s.radar].sort().join() === aliveIds().join(), 10000);
     expect(snap.radar.sort()).toEqual(aliveIds());
     expect(snap.ents.find((e) => e.kind === KS_ENTITY.uav)!.owner).toBe(me.id);
 

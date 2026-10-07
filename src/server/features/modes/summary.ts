@@ -7,7 +7,7 @@
  */
 import type { MatchResults, PlayerResult } from '../../../shared/events';
 import type { MatchSummaryExt, PlayerSummary, XpLine } from '../../../shared/defs/modestate';
-import { XP_SOURCES } from '../../../shared/defs/progression';
+import { matchSummaryFor, XP_SOURCES } from '../../../shared/defs/progression';
 import type { Room } from '../../room';
 import { controllerOf } from './common';
 
@@ -36,6 +36,9 @@ export function pickMvp(players: readonly PlayerResult[]): string | null {
 
 /** XP lines from the progression feature, if it published them (any of a few plausible shapes). */
 export function progressionXp(results: MatchResults, r: PlayerResult): XpLine[] | null {
+  // The progression feature's real shape: results.ext.progression[playerId] = MatchXpSummary.
+  const summary = matchSummaryFor(results, r.id);
+  if (summary) return summary.lines.filter((l) => l.xp > 0).map((l) => ({ label: l.count > 1 ? `${l.label} x${l.count}` : l.label, amount: l.xp }));
   const ext = results.ext.progression;
   if (!ext || typeof ext !== 'object') return null;
   const players = (ext as { players?: unknown }).players;

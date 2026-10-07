@@ -31,6 +31,8 @@ import {
   MAX_LEVEL,
   MAX_PRESTIGE,
   matchSummaryFor,
+  canonicalObjective,
+  OBJECTIVE_IGNORED,
   objectiveXp,
   progressionExt,
   rankFor,
@@ -105,6 +107,12 @@ describe('XP math', () => {
   it('objective XP: table, aliases, per-event override, generic fallback', () => {
     expect(objectiveXp('capture')).toBe(200);
     expect(objectiveXp('bomb_plant')).toBe(500);
+    // The modes feature's own event kinds map to the same table (and challenges' obj.<kind>).
+    for (const [kind, canon] of [['dom.capture', 'capture'], ['sd.plant', 'plant'], ['sd.defuse', 'defuse'], ['hq.capture', 'hq_capture'], ['hq.destroy', 'hq_destroy'], ['kc.confirm', 'confirm'], ['kc.deny', 'deny']] as const) {
+      expect(canonicalObjective(kind)).toBe(canon);
+      expect(objectiveXp(kind)).toBe(objectiveXp(canon));
+    }
+    expect(OBJECTIVE_IGNORED.has('sd.pickup') && OBJECTIVE_IGNORED.has('hq.online')).toBe(true);
     expect(objectiveXp('capture', { xp: 0 })).toBe(0);
     expect(objectiveXp('capture', { xp: 75 })).toBe(75);
     expect(objectiveXp('something_new')).toBe(XP_SOURCES.objective);

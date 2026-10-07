@@ -54,6 +54,13 @@ describe('summary view', () => {
     expect(v.xpTotal).toBe(1000);
   });
 
+  it('uses the XP progression actually awarded when it is in the results', () => {
+    const progression = { me: { playerId: 'me', profileId: 'x', mode: 'dom', total: 776, xpBefore: 0, xpAfter: 776, levelBefore: 1, levelAfter: 1, prestige: 0, lines: [{ key: 'kill', label: 'KILL', count: 5, xp: 500 }, { key: 'complete', label: 'MATCH COMPLETE', count: 1, xp: 100 }, { key: 'time', label: 'TIME PLAYED', count: 1, xp: 76 }, { key: 'zero', label: 'NOTHING', count: 1, xp: 0 }], challenges: [], unlocked: [], codPoints: 0 } };
+    const v = buildSummaryView({ ...results, ext: { modes: ext, progression } }, 'me', 1);
+    expect(v.xp).toEqual([{ label: 'KILL x5', amount: 500 }, { label: 'MATCH COMPLETE', amount: 100 }, { label: 'TIME PLAYED', amount: 76 }]);
+    expect(v.xpTotal).toBe(776);
+  });
+
   it('falls back to the scoreboard without the modes summary; FFA has one table', () => {
     const ffa: MatchResults = { ...results, mode: 'ffa', teamScores: null, winnerTeam: null, winners: ['p2'], ext: {} };
     const v = buildSummaryView(ffa, 'me', null);

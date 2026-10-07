@@ -1,14 +1,15 @@
 /**
  * The end-of-match summary as plain data (pure; tested in tests/modes.client.test.ts): title,
  * team tables or the FFA table, MVP, objective stat columns and this player's XP breakdown.
- * Reads `results.ext.modes` (server summary, which itself prefers the progression feature's XP)
- * and falls back to the scoreboard when it is missing (e.g. a mode from another feature).
+ * XP comes from the progression feature's summary (`results.ext.progression[me]`, the XP actually
+ * awarded, including the match-complete bonus) when present; otherwise `results.ext.modes`, then
+ * the scoreboard (e.g. a mode from another feature).
  */
 import { TEAM_NAMES, type Team } from '../../../shared/constants';
 import { MODE_BY_ID } from '../../../shared/defs/modes';
 import { MAP_BY_ID } from '../../../shared/defs/maps';
 import type { MatchSummaryExt, XpLine } from '../../../shared/defs/modestate';
-import { XP_SOURCES } from '../../../shared/defs/progression';
+import { matchSummaryFor, XP_SOURCES } from '../../../shared/defs/progression';
 import type { MatchResults, PlayerResult } from '../../../shared/events';
 
 export const STAT_COLUMNS: Record<string, string> = {
@@ -89,7 +90,11 @@ export function buildSummaryView(results: MatchResults, myId: string, myTeam: Te
     const order: Team[] = myTeam === 1 ? [1, 0] : [0, 1];
     teams = order.map((t) => ({ team: t, name: TEAM_NAMES[t]!, score: results.teamScores![t], rows: rows.filter((r) => r.team === t), mine: t === myTeam }));
   }
-  const xp = (meRes && ext?.players[myId]?.xp) || (meRes ? fallbackXp(meRes) : []);
+  // The XP progression awarded wins: the modes summary is built at the same matchEnd priority and
+  // may run first, so its own guess missed lines such as MATCH COMPLETE.
+  const prog = meRes ? matchSummaryFor(results, myId) : null;
+  const progXp = prog?.lines.filter((l) => l.xp > 0).map((l) => ({ label: l.count > 1 ? `${l.label} x${l.count}` : l.label, amount: l.xp }));
+  const xp = progXp ?? ((meRes && ext?.players[myId]?.xp) || (meRes ? fallbackXp(meRes) : []));
   const view: SummaryView = {
     title,
     modeName: MODE_BY_ID.get(results.mode)?.name ?? results.mode.toUpperCase(),
@@ -101,7 +106,7 @@ export function buildSummaryView(results: MatchResults, myId: string, myTeam: Te
     mvp: rows.find((r) => r.mvp) ?? null,
     me,
     xp,
-    xpTotal: xp.reduce((s, l) => s + l.amount, 0),
+    xpTotal: progXp ? prog!.total : xp.reduce((s, l) => s + l.amount, 0),
   };
   if (ext?.rounds !== undefined) view.rounds = ext.rounds;
   return view;

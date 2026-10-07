@@ -119,7 +119,9 @@ describe('modes over real sockets', () => {
     expect(end.results.reason).toBe('rounds');
     const ext = end.results.ext.modes as MatchSummaryExt;
     expect(ext.players[attacker.id]?.stats.plants).toBe(1);
-    expect(ext.players[attacker.id]?.xp.some((l) => l.label === 'Bomb plants')).toBe(true);
+    // XP lines are the ones progression awarded (results.ext.progression), not a modes-side guess.
+    expect(ext.xpSource).toBe('progression');
+    expect(ext.players[attacker.id]?.xp.some((l) => l.label === 'BOMB PLANTED')).toBe(true);
     expect(ext.mvp).toBe(attacker.id);
   });
 
