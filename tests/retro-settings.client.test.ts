@@ -120,7 +120,7 @@ describe('persistence', () => {
     let S = await import('../src/client/settings');
     expect(S.settings.retro).toBe('classic');
     S.updateSettings(presetSettings('ps1'));
-    expect(JSON.parse(store.get(S.SETTINGS_KEY)!)).toMatchObject({ retro: 'ps1', res: '240', palette: '15bit', vertexSnap: 1 });
+    expect(JSON.parse(store.get(S.SETTINGS_KEY)!)).toMatchObject({ retro: 'ps1', res: '240', palette: '15bit', vertexSnap: RETRO_PRESETS.ps1.vertexSnap });
 
     vi.resetModules();
     S = await import('../src/client/settings');

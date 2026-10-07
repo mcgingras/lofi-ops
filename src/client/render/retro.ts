@@ -50,10 +50,11 @@ export const RETRO_PRESETS: Record<RetroPreset, RetroKnobs> = {
   subtle: { res: '480', palette: '32', ditherType: 'pattern', ditherStrength: 0.5, vertexSnap: 0, affineWarp: 0, fogScale: 1, texFilter: 'pixel-mip' },
   // The approved look (default): 360 lines, 16-colour textures, 4x4 crosshatch at 75%.
   classic: { res: '360', palette: '16', ditherType: 'pattern', ditherStrength: 0.75, vertexSnap: 0, affineWarp: 0, fogScale: 1, texFilter: 'pixel-mip' },
-  // The PS1's signature: 240 lines, whole-pixel vertex snap, affine warp, a 15-bit framebuffer
-  // with an ordered dither, fog pulled in. Mipmaps stay on: without them 240 lines turns every
+  // The PS1's signature: 240 lines, vertex snap, affine warp, a 15-bit framebuffer with an
+  // ordered dither, fog pulled in. Snap is half a pixel: a whole pixel (true PS1) opens visible
+  // cracks at T-junctions between brushes at 240 lines (Advanced allows up to 3). Mipmaps stay on: without them 240 lines turns every
   // distant photo into sparkling noise (authentic, but it reads as broken; 'pixel' in Advanced).
-  ps1: { res: '240', palette: '15bit', ditherType: 'bayer', ditherStrength: 0.85, vertexSnap: 1, affineWarp: 0.7, fogScale: 0.65, texFilter: 'pixel-mip' },
+  ps1: { res: '240', palette: '15bit', ditherType: 'bayer', ditherStrength: 0.85, vertexSnap: 0.5, affineWarp: 0.7, fogScale: 0.65, texFilter: 'pixel-mip' },
 };
 
 export const DEFAULT_RETRO: RetroPreset = 'classic';

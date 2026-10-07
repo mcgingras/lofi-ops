@@ -10,7 +10,7 @@ Settings → **Graphics** → **Retro strength**: one control for how retro the 
 | Internal resolution | 720 lines | 480 | 360 | 240 |
 | Palette depth | full colour | 32 colours / texture | 16 colours / texture | 16 colours + 15-bit framebuffer |
 | Dither | none | crosshatch 50% | crosshatch 75% | Bayer 85% (texture and screen) |
-| Vertex snap | off | off | off | 1 internal pixel |
+| Vertex snap | off | off | off | 0.5 internal pixel |
 | Affine texture warp | 0 | 0 | 0 | 70% |
 | Fog distance | map value (x1) | x1 | x1 | x0.65 |
 | Texture filter | smooth (trilinear) | pixel + mips | pixel + mips | pixel + mips |

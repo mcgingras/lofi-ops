@@ -49,7 +49,7 @@ varying vec3 vLight;
 varying vec3 vUvA;
 varying float vFog;
 #ifdef SNAP_DEPTH
-varying vec3 vView, vViewS, vNormV;
+varying vec4 vSnapD;
 #endif
 float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
 void main() {
@@ -63,11 +63,9 @@ void main() {
   gl_Position = p;
   vec3 n = normalize(mat3(modelMatrix) * normal);
 #ifdef SNAP_DEPTH
-  // The snapped vertex as a view-space point (same depth, moved sideways), so the fragment shader
-  // can rebuild the pixel's camera ray.
-  vView = mv.xyz;
-  vViewS = mv.xyz + vec3((p.xy - p0) / vec2(projectionMatrix[0][0], projectionMatrix[1][1]), 0.0);
-  vNormV = mat3(viewMatrix) * n;
+  // Clip-space snap offset, z and w: divided by the interpolated w in the fragment shader they give
+  // the screen-linear snap shift and depth of this pixel.
+  vSnapD = vec4(p.xy - p0, p.z, p.w);
 #endif
   vec3 light = uAmb + uSun * max(dot(n, uSunDir), 0.0);
 #ifdef USE_COLOR
@@ -93,28 +91,20 @@ varying vec3 vLight;
 varying vec3 vUvA;
 varying float vFog;
 #ifdef SNAP_DEPTH
-uniform mat4 projectionMatrix;
-uniform vec2 uPolyOffset;
-varying vec3 vView, vViewS, vNormV;
+uniform vec2 uPolyOffset, uSnap;
+varying vec4 vSnapD;
 #endif
 void main() {
 #ifdef SNAP_DEPTH
-  // Vertex snap moves triangles but must not move depth: layered coplanar surfaces (decals on the
-  // ground) would otherwise fight. Intersect this pixel's ray with the unsnapped surface plane
-  // (interpolated unsnapped positions stay on it) and write that depth.
-  vec3 nn = normalize(vNormV);
-  float den = dot(nn, vViewS);
-  float z = gl_FragCoord.z;
-  if (abs(den) > 1e-5 * length(vViewS)) {
-    float t = dot(nn, vView) / den;
-    if (t > 0.0) {
-      vec4 c = projectionMatrix * vec4(vViewS * t, 1.0);
-      z = 0.5 * c.z / c.w + 0.5;
-    }
-  }
+  // Vertex snap moves triangles sideways but must not move depth: layered coplanar surfaces
+  // (decals, depth levels) would otherwise fight. Depth is affine in screen space over a flat
+  // triangle, so undo the pixel's snap shift with the depth gradient: the unsnapped surface depth.
+  float z = 0.5 * vSnapD.z / vSnapD.w + 0.5;
+  vec2 g = vec2(dFdx(z), dFdy(z));
+  z -= dot(g, vSnapD.xy / vSnapD.w * uSnap);
   // gl_FragDepth bypasses the material's polygon offset (map depth levels), so apply it here, as
   // GL defines it: factor * max depth slope + units * the depth buffer's resolution (24-bit).
-  if (uPolyOffset != vec2(0.0)) z += uPolyOffset.x * max(abs(dFdx(z)), abs(dFdy(z))) + uPolyOffset.y / 16777216.0;
+  if (uPolyOffset != vec2(0.0)) z += uPolyOffset.x * max(abs(g.x), abs(g.y)) + uPolyOffset.y / 16777216.0;
   gl_FragDepth = clamp(z, 0.0, 1.0);
 #endif
   vec4 t = texture2D(tMap, vUvA.xy / vUvA.z);
@@ -159,7 +149,7 @@ const SIDES = { front: THREE.FrontSide, back: THREE.BackSide, double: THREE.Doub
 const snapping = new Set<LookMaterial>();
 let snapDepth = false;
 function applySnapDepth(m: LookMaterial): void {
-  if (Boolean(m.defines.SNAP_DEPTH) === snapDepth) return;
+  if (('SNAP_DEPTH' in m.defines) === snapDepth) return;
   if (snapDepth) m.defines.SNAP_DEPTH = '';
   else delete m.defines.SNAP_DEPTH;
   m.needsUpdate = true;
