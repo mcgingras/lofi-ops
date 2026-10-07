@@ -2,8 +2,12 @@
  * Map registry (owners: maps-bo, maps-mw2). `build()` returns MapData; use `getMapData(id)`, which
  * builds once and caches. `inspiredBy` keeps the original for any future rename.
  */
+import { buildRust } from '../maps/rust';
+import { buildScrapyard } from '../maps/scrapyard';
+import { buildTerminal } from '../maps/terminal';
 import { buildYard } from '../maps/yard';
 import type { MapData } from '../maps/types';
+import { MODE_BY_ID, MODES } from './modes';
 import { indexById } from './registry';
 
 export interface MapDef {
@@ -18,8 +22,20 @@ export interface MapDef {
   preview?: string;
 }
 
+/**
+ * Mode ids a map is built for, kept to the modes that exist right now (maps-mw2 maps carry
+ * Domination / S&D / HQ data before the modes area registers those modes; they light up then).
+ */
+const supported = (...ids: string[]) => ids.filter((id) => MODE_BY_ID.has(id));
+/** Team/FFA/objective modes the maps-mw2 maps carry data for, plus every wager mode (spawns only). */
+const mw2Modes = () => [...supported('tdm', 'ffa', 'dom', 'sd', 'hq', 'kc'), ...MODES.filter((m) => m.playlist === 'wager').map((m) => m.id)];
+
 export const MAPS: MapDef[] = [
   { id: 'yard', name: 'Yard', inspiredBy: 'Original (approved look prototype)', build: buildYard, modes: ['tdm', 'ffa'], size: 'small' },
+  // maps-mw2
+  { id: 'rust', name: 'Rust', inspiredBy: 'Rust (Call of Duty: Modern Warfare 2, 2009)', build: buildRust, modes: mw2Modes(), size: 'small' },
+  { id: 'scrapyard', name: 'Scrapyard', inspiredBy: 'Scrapyard (Call of Duty: Modern Warfare 2, 2009)', build: buildScrapyard, modes: mw2Modes(), size: 'medium' },
+  { id: 'terminal', name: 'Terminal', inspiredBy: 'Terminal (Call of Duty: Modern Warfare 2, 2009), compact gate + apron section', build: buildTerminal, modes: mw2Modes(), size: 'medium' },
 ];
 
 export const MAP_BY_ID = indexById(MAPS);
