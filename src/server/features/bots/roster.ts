@@ -24,7 +24,8 @@ import { applyVariance, defaultSettings, rollBot, sanitizeSettings, skillRating,
 
 declare module '../../player' {
   interface PlayerExt {
-    bots?: { rolls: BotRolls };
+    /** `skill` is the bot's current (varied) skill; other features read it, e.g. killstreaks' `streakUse`. */
+    bots?: { rolls: BotRolls; skill?: BotSkill };
   }
 }
 
@@ -122,8 +123,9 @@ export class RoomBots {
   }
 
   skillFor(p: PlayerState): BotSkill {
-    const rolls = (p.ext.bots ??= { rolls: rollBot() }).rolls;
-    return applyVariance(this.baseSkill(), this.settings.variance, rolls);
+    const ext = (p.ext.bots ??= { rolls: rollBot() });
+    ext.skill = applyVariance(this.baseSkill(), this.settings.variance, ext.rolls);
+    return ext.skill;
   }
 
   state(forSessionId: string | null = null): BotsState {

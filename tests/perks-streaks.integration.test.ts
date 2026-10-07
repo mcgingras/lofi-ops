@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startServer, type GameServer } from '../src/server/app';
 import { ksOf } from '../src/server/features/killstreaks/state';
 import { KS_ENTITY } from '../src/shared/defs/killstreaks';
+import { MAX_LEVEL, XP_TABLE } from '../src/shared/defs/progression';
 import type { KillstreakStateMsg } from '../src/shared/defs/perks-streaks-protocol';
 import { Buttons } from '../src/shared/input';
 import { cloneLoadout, DEFAULT_LOADOUTS } from '../src/shared/loadout';
@@ -31,6 +32,9 @@ describe('perks and killstreaks over the wire', () => {
     const joined = await a.waitFor('joined');
     const room = server.lobby.get(joined.roomId)!;
     const me = room.players.get(welcome.sessionId)!;
+    // Max level so progression's unlock gating (Create-a-Class, Ninja at 15) keeps the custom class.
+    me.profile!.xp = XP_TABLE[MAX_LEVEL]!;
+    me.profile!.level = MAX_LEVEL;
     // Ninja + Hardline + the Spy Plane, set as the next life's loadout and respawned.
     me.profile!.loadouts[0] = { ...cloneLoadout(DEFAULT_LOADOUTS[0]!), perks: ['hardline', 'steady_aim', 'ninja'], killstreaks: ['uav', 'counter_uav', 'care_package'] };
     me.profile!.selectedLoadout = 0;

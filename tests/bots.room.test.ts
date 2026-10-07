@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import botsFeature from '../src/server/features/bots/index';
 import { botBrain, configureRoomBots, createBotRoom, getRoomBots, registerBotGoal } from '../src/server/features/bots/api';
+import { botStreakSkill } from '../src/server/features/killstreaks/skill';
 import { Lobby } from '../src/server/lobby';
 import type { PlayerState } from '../src/server/player';
 import type { Room, RoomOptions } from '../src/server/room';
@@ -284,6 +285,17 @@ describe('bots: lobby backfill and replacement', () => {
     for (const b of [...r.bots()]) r.kill(b, null, { weapon: 'world', means: 'world' });
     steps(r, 2);
     expect(r.bots().length).toBe(0);
+  });
+
+  it('lobby skill settings reach the killstreak skill (streakUse), live', () => {
+    const r = room({ private: true, autoStart: false, countdownSec: 0 });
+    human(r);
+    configureRoomBots(r, { targetPlayers: 4, difficulty: 'recruit', variance: 0 });
+    r.startMatch();
+    expect(r.bots().length).toBeGreaterThan(0);
+    for (const b of r.bots()) expect(botStreakSkill(b)).toBe(preset('recruit').streakUse);
+    configureRoomBots(r, { difficulty: 'custom', custom: { ...preset('regular'), streakUse: 0.95 } });
+    for (const b of r.bots()) expect(botStreakSkill(b)).toBe(0.95);
   });
 
   it('bots leave when the room goes back to the lobby and come back at the next start', () => {

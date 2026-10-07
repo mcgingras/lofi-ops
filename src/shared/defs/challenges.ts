@@ -426,13 +426,24 @@ let sourcesFolded = 0;
 let perkFolded = false;
 const PERK_PRO_KEY = 'PERK_PRO_CHALLENGES';
 
+/**
+ * PERK_PRO_CHALLENGES are owned by the perks feature (it counts their `perks.*` metrics and writes
+ * challengeProgress itself), so progression only fills in the bookkeeping fields it reads:
+ * category, the perk id, and the `pro:<perk>` unlock it grants.
+ */
+function withPerkProFields(d: ChallengeDef): ChallengeDef {
+  const perk = PERKS.find((p) => p.pro.challenge === d.id);
+  if (!perk) return d;
+  return { ...d, category: d.category ?? 'perk', perk: d.perk ?? perk.id, grants: d.grants ?? `pro:${perk.id}` };
+}
+
 function ensureFolded(): void {
   if (!perkFolded) {
     try {
       // Looked up by a computed name so this compiles (and bundles) whether or not perks.ts exports it.
       const extra = (perkDefs as unknown as Record<string, unknown>)[PERK_PRO_KEY];
       perkFolded = true;
-      if (Array.isArray(extra)) registerChallenges(extra.filter(isChallengeDef));
+      if (Array.isArray(extra)) registerChallenges(extra.filter(isChallengeDef).map(withPerkProFields));
     } catch {
       // perks.ts still initialising (import cycle): try again on the next lookup.
     }
