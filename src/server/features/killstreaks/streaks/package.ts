@@ -195,6 +195,11 @@ function take(ctx: KsRoom, c: Crate, q: PlayerState): void {
   } else grant(room, q, c.contents);
 }
 
+/** Is a landed crate within taking reach of `p`? (USE belongs to the crate then: weapon pickups stand aside.) */
+export function crateInReach(ctx: KsRoom, p: PlayerState): boolean {
+  return cratesOf(ctx).some((c) => c.landed && Math.hypot(p.move.x - c.ent.x, p.move.z - c.ent.z) <= PACKAGE.radius && Math.abs(p.move.y - c.ent.y) < CRATE_REACH.dy);
+}
+
 /** USE pressed: Hardline Pro owners reroll a landed crate once. */
 export function onUsePressed(ctx: KsRoom, p: PlayerState): void {
   if (!isPro(p, 'hardline')) return;

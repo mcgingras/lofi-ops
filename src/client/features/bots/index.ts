@@ -70,6 +70,7 @@ const KNOB_LABELS: Record<keyof BotSkill, [string, (v: number) => string]> = {
   objectivePlay: ['Objective play', (v) => `${Math.round(v * 100)}%`],
   streakUse: ['Streak use', (v) => `${Math.round(v * 100)}%`],
   aggression: ['Aggression', (v) => `${Math.round(v * 100)}%`],
+  weaponPickup: ['Weapon pickups', (v) => `${Math.round(v * 100)}%`],
 };
 
 const STORE_KEY = 'lofi.bots.setup';

@@ -17,7 +17,7 @@ Env: `PORT` (default 8080), `HOST` (default `0.0.0.0`), `DATA_DIR` (default `./d
 - Everything is TypeScript strict, ESM, extensionless relative imports, `import type` for types (`verbatimModuleSyntax`).
 - `src/shared` is pure: no DOM, no Node APIs. The client tsconfig has no Node types and the server tsconfig has no DOM, so a violation fails `npm run typecheck`.
 - You own your folders: `src/server/features/<area>/`, `src/client/features/<area>/`, your defs file(s), your maps, your tests. Core files (`protocol.ts`, `events.ts`, `room.ts`, `combat.ts`, `sim.ts`, `main.ts`) are extended through the hooks below, not edited. If you truly need a core change, keep it minimal and call it out.
-- Namespacing: your feature id (`perks`, `killstreaks`, `progression`, `economy`, `frontend`, `bots`, `modes`, `weapons`) prefixes your RPC ids, feature messages, custom events, `profile.ext` key and modifier ids: `killstreaks.call`, `profile.ext.economy`.
+- Namespacing: your feature id (`perks`, `killstreaks`, `progression`, `economy`, `frontend`, `bots`, `modes`, `weapons`, `pickups`) prefixes your RPC ids, feature messages, custom events, `profile.ext` key and modifier ids: `killstreaks.call`, `profile.ext.economy`.
 - Extending core types is done by **declaration merging** from your own folder (examples in each section). The `declare module` path is relative to the file you write it in.
 
 ## 1. Feature registration (server)
@@ -110,6 +110,7 @@ Timers (room time, pause with the room): `room.schedule(sec, fn)` and `room.ever
 | `radarVisible` | `(target, viewer) => boolean` | any false wins, else any true | minimap (`snap.radar`) |
 | `radarJammed` | `(viewer) => boolean` | same | `snap.jammed` |
 | `canSprint` | `(p) => boolean` | same (false = no sprint) | movement params (`me.params.canSprint`): sprint stamina / Marathon, last stand, driving a streak |
+| `useClaimed` | `(p) => boolean` | same | weapon pickups: true = another USE action owns the key here (care package in reach, S&D plant/defuse, last stand / revive, driving a streak); pickups stand aside until USE is let go. Register one for any new hold-USE action |
 
 The perks feature adds more keys (declared in `src/server/features/perks/common.ts`): `attachmentSlots` (mul, Warlord 2), `lethalCountOffset` / `tacticalCountOffset` (sum, Warlord Pro), `penetrationMultiplier`, `flinchMultiplier`, `holdBreathMultiplier`, `meleeSpeedMultiplier`, `stunDurationMultiplier` (mul), `grenadeFuseReset`, `silentFootsteps` (any), `hearingMultiplier` (mul), `streakTargetable(target, kind)`, `killstreakDamageDealt(attacker, kind)`. See docs/features/perks-streaks.md.
 
@@ -207,6 +208,7 @@ Each file exports a typed array and a `*_BY_ID` map (`indexById` throws on dupli
 | `maps.ts` | `MapDef {id, name, inspiredBy, build, modes, size}`, `MAPS`, `getMapData(id)` (cached), `mapsForMode` | maps-bo, maps-mw2 |
 | `progression.ts` | `MAX_LEVEL` 50, `MAX_PRESTIGE` 15, `XP_TABLE`, `levelForXp`, `xpForLevel`, `addXp`, `canPrestige`, `applyPrestige`, `XP_SOURCES` | progression |
 | `challenges.ts` | `ChallengeDef`, `CHALLENGES` (seeded: `tdm_kills`) | progression |
+| `pickups.ts` | weapon drops and pickups: `PICKUP` tuning (reach, hold time, life, room cap), `PICKUP_ENTITY` (`pickups_weapon`, `s = {w,a,c,l,m,r,o}`), `canDropWeapon`, `pickDropTarget` / `dropScore` (the same target maths on both sides), `pickups.swapped` / `pickups.ammo` messages; see docs/features/pickups.md | pickups |
 | `camos.ts` | `CamoDef {price, unlock, tier, recipe: CamoRecipe | null}`, `CAMOS` (16: Woodland ... Gold, Ice, Dragon); client texture `camo.<id>`, picker swatch `camoPreview(id)` from `src/client/features/economy` | economy |
 
 Also shared: `loadout.ts` (`Loadout`, `DEFAULT_LOADOUTS`, `sanitizeLoadout` = structural only, no unlock checks), `profile.ts` (`Profile`, `newProfile`, `bumpStat`), `ballistics.ts`, `collision.ts`, `movement.ts`, `math.ts` (`viewDir`: yaw 0 looks down -z).
@@ -365,6 +367,8 @@ const res = await net.rpc('economy.buy', { item: 'camo_tiger' });   // typed by 
 net.profile;  net.on('profile', ...);  net.serverTime();  net.rtt;  net.onStatus((s) => ...)  // idle|connecting|waking|online|offline
 net.quickplay('tdm'); net.joinRoom(id); net.leaveRoom();   // the match screen does this for you: navigate('match', { room: id })
 ```
+
+When the server replaces the gun in the current slot (a weapon pickup, a wager handing out the next gun), `Match` drops the predictions for the old gun and raises the new one over its swap time.
 
 Netcode as built: inputs every frame (split to <= 50 ms), sent in batches at <= 60 Hz; prediction with `stepMove` and `snap.me.params`, replay of unacked inputs on each snapshot, error eased (snap past 0.5 m); remotes drawn 100 ms behind the quickest snapshot delivery, extrapolated up to 100 ms; `fire.time` = that render time; spread tracer uses the server's seed (`hashString(myId)`). Ammo, reload and weapon switch are predicted until the server acks the input that caused them.
 

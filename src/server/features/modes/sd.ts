@@ -102,6 +102,16 @@ export class SdRules extends TdmRules {
     room.bus.on('beforeDamage', (e) => {
       if (room.phase === 'playing' && this.phase === 'prep') e.cancel = true;
     });
+    // Plant / defuse own the USE key where they are possible (weapon pickups stand aside).
+    room.modifiers.add('useClaimed', (p) => (room.phase === 'playing' && this.canUseObjective(p) ? true : undefined), 'modes.sd.use');
+  }
+
+  /** Could `p` plant or defuse right here by holding USE? */
+  canUseObjective(p: PlayerState): boolean {
+    if (!p.alive) return false;
+    if (this.acting.has(p)) return true;
+    if (this.phase === 'live' && this.bomb.state === 'carried' && this.bomb.carrier === p) return !!this.inSite(p);
+    return this.phase === 'planted' && this.canDefuse(p);
   }
 
   override reset(room: Room): void {
