@@ -20,7 +20,7 @@ import type { Room } from '../../room';
 import { RpcError } from '../../rpc';
 import { botAutoStreaks, botCallDelay, callKillstreak } from './api';
 import { botStreakSkill } from './skill';
-import { flushState, ksOf, markDirty, onKill, resetPlayer, stateMsg } from './state';
+import { flushState, grant, ksOf, markDirty, onKill, resetPlayer, stateMsg } from './state';
 import { onUsePressed } from './streaks/package';
 import { registerRadarModifiers } from './streaks/radar';
 import { ksRoom } from './world';
@@ -100,6 +100,19 @@ const feature: Feature = {
       return res.ok ? { ok: true } : { ok: false, reason: res.reason };
     });
     api.rpc.handle('killstreaks.state', (ctx) => (ctx.player && ctx.room ? stateMsg(ctx.room, ctx.player) : null));
+    // Dev only: LOFI_CHEATS=1 lets a client grant itself streaks and add enemy bots (browser testing).
+    if (process.env.LOFI_CHEATS === '1') {
+      api.rpc.handle('killstreaks.cheat', (ctx, data) => {
+        const p = ctx.player;
+        const room = ctx.room;
+        if (!p || !room) throw new RpcError('not_in_match');
+        const d = (data ?? {}) as { id?: unknown; bots?: unknown };
+        if (typeof d.id === 'string' && KILLSTREAK_BY_ID.has(d.id)) grant(room, p, d.id);
+        const n = typeof d.bots === 'number' ? Math.min(8, Math.max(0, Math.floor(d.bots))) : 0;
+        for (let i = 0; i < n; i++) room.addBot({ team: room.mode.teams ? (p.team === 0 ? 1 : 0) : null });
+        return { ready: [...ksOf(p).ready] };
+      });
+    }
   },
   room(room) {
     const ctx = ksRoom(room);

@@ -109,6 +109,9 @@ Timers (room time, pause with the room): `room.schedule(sec, fn)` and `room.ever
 | `streakCostOffset` | `(p) => number` | sum | for the killstreaks feature to read |
 | `radarVisible` | `(target, viewer) => boolean` | any false wins, else any true | minimap (`snap.radar`) |
 | `radarJammed` | `(viewer) => boolean` | same | `snap.jammed` |
+| `canSprint` | `(p) => boolean` | same (false = no sprint) | movement params (`me.params.canSprint`): sprint stamina / Marathon, last stand, driving a streak |
+
+The perks feature adds more keys (declared in `src/server/features/perks/common.ts`): `attachmentSlots` (mul, Warlord 2), `lethalCountOffset` / `tacticalCountOffset` (sum, Warlord Pro), `penetrationMultiplier`, `flinchMultiplier`, `holdBreathMultiplier`, `meleeSpeedMultiplier`, `stunDurationMultiplier` (mul), `grenadeFuseReset`, `silentFootsteps` (any), `hearingMultiplier` (mul), `streakTargetable(target, kind)`, `killstreakDamageDealt(attacker, kind)`. See docs/features/perks-streaks.md.
 
 Read them yourself with `room.modifiers.mul(key, ...args)`, `.sum(...)`, `.any(...)`. Radar default when nobody votes: enemies who fired an unsuppressed weapon in the last 1.5 s. A UAV returns `true` for enemies of its owner's team; Ghost returns `false` from its own `radarVisible` only when the target isn't revealed by firing (so the two compose).
 
@@ -324,6 +327,7 @@ unregisterHudWidget('core.compass');
 onFeature('killstreaks.earned', (data) => { ... });        // typed by FeatureMessages; returns unsubscribe
 registerEntityRenderer('rcxd', (e, match) => ({ object: mesh, update(e, dt) {}, dispose() {} }));
 registerMatchHook('perks.ui', { start(match) { return cleanup; }, frame(match, dt) {} });
+registerFootstepFilter('perks.ninja', (playerId, volume) => volume);   // remote footstep volume (0 = silent)
 ```
 
 - Screens: `mount(root, params)` returns an optional unmount. Replacing a core id (`menu`) replaces the core screen; feature folders load after core, so the last registration wins. `params.overlay === '1'` when shown with `openOverlay` over a match; use `back(params)` for a Back button.

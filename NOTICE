@@ -6,5 +6,8 @@ Portions adapted from Blockyard (https://github.com/Potrock/blockyard), MIT Lice
   src/server/room.ts and combat.ts (room step loop, spawn selection and kill/assist flow patterns from
   src/platform/host/room.ts and src/games/callofblocky/server.ts),
   src/client/netcode/interp.ts (snapshot playback against quickest delivery, from src/platform/client/interp.ts),
-  src/client/netcode/predict.ts (predict/replay/ease-in reconciliation, from src/platform/client/predict.ts).
+  src/client/netcode/predict.ts (predict/replay/ease-in reconciliation, from src/platform/client/predict.ts),
+  src/server/features/killstreaks/streaks/mortar.ts (Mortar Team marks, staggered shells landing on the first
+  surface under the spot, from src/games/callofblocky/streaks/mortar.ts), and the perk/streak rule shapes in
+  src/server/features/perks and src/server/features/killstreaks (from src/games/callofblocky/perks.ts and streaks/).
 Textures in assets/textures from Poly Haven (https://polyhaven.com), CC0.
