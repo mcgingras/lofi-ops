@@ -83,6 +83,9 @@ export const CARE_PACKAGE_WEIGHTS: Record<string, number> = {
 };
 
 /** Entity kinds the killstreaks feature puts in snapshots (client renderers key on these). */
+/** How close you must be to a landed crate to take it: horizontal reach and height difference (m). */
+export const CRATE_REACH = { r: 1.8, dy: 2 };
+
 export const KS_ENTITY = {
   uav: 'ks_uav',
   counterUav: 'ks_cuav',

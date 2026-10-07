@@ -5,7 +5,7 @@
  * Hacker Pro: an enemy hacker booby-traps it instead of taking it; the next of the owner's side to
  * take it blows up (credited to the hacker). Landing on someone crushes them.
  */
-import { CARE_PACKAGE_WEIGHTS, KS_ENTITY } from '../../../../shared/defs/killstreaks';
+import { CARE_PACKAGE_WEIGHTS, CRATE_REACH, KS_ENTITY } from '../../../../shared/defs/killstreaks';
 import { Buttons } from '../../../../shared/input';
 import type { Vec3 } from '../../../../shared/math';
 import type { Entity } from '../../../entities';
@@ -15,7 +15,7 @@ import { grant } from '../state';
 import type { Active, KsRoom } from '../world';
 import type { CallArgs } from './types';
 
-export const PACKAGE = { heliSpeed: 24, hover: 1.2, fall: 12, life: 60, radius: 1.8, owner: 0.5, friend: 1.25, enemy: 3, hacker: 1.25, crush: 1.2, trap: { r: 5, max: 300, min: 80 } };
+export const PACKAGE = { heliSpeed: 24, hover: 1.2, fall: 12, life: 60, radius: CRATE_REACH.r, owner: 0.5, friend: 1.25, enemy: 3, hacker: 1.25, crush: 1.2, trap: { r: 5, max: 300, min: 80 } };
 
 export interface Crate {
   ent: Entity;
@@ -149,7 +149,7 @@ function updateCrates(ctx: KsRoom, act: Active, dt: number): void {
       continue;
     }
     for (const q of room.players.values()) {
-      const near = q.alive && Math.hypot(q.move.x - c.ent.x, q.move.z - c.ent.z) <= PACKAGE.radius && Math.abs(q.move.y - c.ent.y) < 2;
+      const near = q.alive && Math.hypot(q.move.x - c.ent.x, q.move.z - c.ent.z) <= PACKAGE.radius && Math.abs(q.move.y - c.ent.y) < CRATE_REACH.dy;
       if (!near || !(q.buttons & Buttons.USE)) {
         if (c.takers.delete(q.id) && q.session) room.sendFeature(q, 'killstreaks.crate', null);
         continue;

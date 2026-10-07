@@ -9,20 +9,17 @@
  *   modes.announcer  72  centre banner (big lines) and the small objective feed
  *   modes.spectate   81  S&D: "you join at the next round" for mid-round joiners
  */
-import * as THREE from 'three';
 import type { Team } from '../../../shared/constants';
 import { MODE_TUNING } from '../../../shared/defs/modes';
 import { MODE_ENTITY, type ModeStatePayload, type ZoneState } from '../../../shared/defs/modestate';
-import { KEYMAP } from '../../game/controls';
 import type { Match } from '../../game/match';
 import { blink, box, clock, HUD_COLORS as C, rect, textWidth, txt, unit } from '../../hud/draw';
+import { useKey, drawWaypoint, type Waypoint, type WaypointSlot } from '../../hud/waypoints';
 import { registerHudWidget } from '../../registry';
 import { currentMatch } from '../../state';
 import { modes, myAction, now } from './store';
 import type { LineColor } from './text';
 
-const v = new THREE.Vector3();
-const useKey = () => (Object.entries(KEYMAP).find(([, a]) => a === 'use')?.[0] ?? 'KeyF').replace(/^Key|^Digit/, '');
 
 export const lineColor = (c: LineColor): string => ({ friend: C.friend, enemy: C.enemy, hi: C.hi, paper: C.paper, warn: C.warn })[c];
 
@@ -45,76 +42,8 @@ function live(): { m: Match; st: ModeStatePayload } | null {
 // Waypoints
 // ---------------------------------------------------------------------------------------------
 
-interface Marker {
-  x: number;
-  y: number;
-  z: number;
-  label: string;
-  caption?: string;
-  color: string;
-  /** Fill colour of the label box (default dark). */
-  fill?: string;
-  blink?: boolean;
-  /** Hide when farther than this (m). */
-  maxDist?: number;
-  small?: boolean;
-  /** Hide when closer than this (m): you are standing in it. */
-  hideWithin?: number;
-}
 
-interface Placed {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-function drawMarker(m: Match, g: CanvasRenderingContext2D, W: number, H: number, k: Marker, placed: Placed[]): void {
-  const u = unit(H);
-  const cam = m.renderer.cam;
-  const d = Math.hypot(k.x - cam.position.x, k.z - cam.position.z);
-  if (k.maxDist !== undefined && d > k.maxDist) return;
-  if (k.hideWithin !== undefined && d < k.hideWithin) return;
-  // Camera space first: behind the camera, pin it to the left/right edge it is closer to.
-  v.set(k.x, k.y, k.z).applyMatrix4(cam.matrixWorldInverse);
-  const behind = v.z > -0.1;
-  const side = v.x;
-  v.set(k.x, k.y, k.z).project(cam);
-  let sx = (v.x * 0.5 + 0.5) * W;
-  let sy = (-v.y * 0.5 + 0.5) * H;
-  if (behind) {
-    sx = side < 0 ? 0 : W;
-    sy = H / 2;
-  }
-  const size = k.small ? 6 : 8;
-  const tw = Math.max(textWidth(g, k.label, size, u), 5 * u);
-  const bw = tw + 4 * u;
-  const bh = (size + 3) * u;
-  const cap = k.small ? '' : k.caption ? `${k.caption} ${Math.round(d)}M` : `${Math.round(d)}M`;
-  const cw = cap ? textWidth(g, cap, 6, u) : 0;
-  const halfW = Math.max(bw, cw) / 2 + 2 * u;
-  const totalH = bh + (cap ? 9 * u : 0);
-  const top = 24 * u;
-  const bottom = H - 40 * u;
-  const off = behind || sx < halfW || sx > W - halfW || sy < top || sy > bottom;
-  if (off && k.small) return;
-  sx = Math.max(halfW, Math.min(W - halfW, sx));
-  sy = Math.max(top, Math.min(bottom, sy));
-  // Don't stack on markers already drawn: slide down until clear.
-  for (let tries = 0; tries < 6; tries++) {
-    const hit = placed.find((p) => Math.abs(p.x - sx) < (p.w + halfW * 2) / 2 && Math.abs(p.y - sy) < (p.h + totalH) / 2);
-    if (!hit) break;
-    sy = hit.y + (hit.h + totalH) / 2 + u;
-  }
-  placed.push({ x: sx, y: sy, w: halfW * 2, h: totalH });
-  if (k.blink && !blink(m.time, 0.6, 0.4)) return;
-  box(g, sx - bw / 2, sy - bh / 2, bw, bh, k.fill ?? 'rgba(10,10,10,.7)', u);
-  rect(g, sx - bw / 2, sy + bh / 2, bw, u, k.color);
-  txt(g, k.label, sx, sy - bh / 2 + u, size, k.color, 'center', u);
-  if (cap) txt(g, cap, sx, sy + bh / 2 + 2 * u, 6, k.caption ? k.color : C.dim, 'center', u);
-}
-
-function zoneMarker(z: ZoneState, myTeam: Team | null, label: string): Marker {
+function zoneMarker(z: ZoneState, myTeam: Team | null, label: string): Waypoint {
   const col = teamColor(z.owner, myTeam);
   const verb = z.owner === myTeam && myTeam !== null ? 'DEFEND' : z.owner === null ? 'CAPTURE' : label === 'HQ' ? 'DESTROY' : 'CAPTURE';
   const taking = z.capTeam !== null && z.cap > 0 ? teamColor(z.capTeam, myTeam) : undefined;
@@ -128,7 +57,7 @@ registerHudWidget(
     if (!L) return;
     const { m, st } = L;
     const my = m.myTeam;
-    const marks: Marker[] = [];
+    const marks: Waypoint[] = [];
     if (st.flags) for (const f of st.flags) marks.push(zoneMarker(f, my, f.id));
     if (st.hq?.zone) marks.push(zoneMarker(st.hq.zone, my, 'HQ'));
     const sd = st.sd;
@@ -152,8 +81,8 @@ registerHudWidget(
         marks.push({ x: e.x, y: e.y + 0.9, z: e.z, label: e.team === my ? 'DENY' : 'TAG', color: teamColor(e.team, my), maxDist: 25, small: true });
       }
     }
-    const placed: Placed[] = [];
-    for (const k of marks) drawMarker(m, g, W, H, k, placed);
+    const placed: WaypointSlot[] = [];
+    for (const k of marks) drawWaypoint(m, g, W, H, k, placed);
   },
   6,
 );

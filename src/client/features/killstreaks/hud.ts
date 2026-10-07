@@ -1,13 +1,16 @@
 /**
  * Killstreak HUD: the streak ladder with pips (bottom right, above the ammo), the ready prompt,
- * announcements, the target designator, crate prompts, driving overlays and a mortar warning.
+ * announcements, the target designator, crate prompts, driving overlays and a mortar warning, plus
+ * care package waypoints and the "HOLD F" prompt when you stand at a crate.
  */
-import { KILLSTREAK_BY_ID, KS_ENTITY } from '../../../shared/defs/killstreaks';
+import { CRATE_REACH, KILLSTREAK_BY_ID, KS_ENTITY } from '../../../shared/defs/killstreaks';
 import { blink, box, clock, rect, txt, textWidth, unit, HUD_COLORS as C } from '../../hud/draw';
+import { drawWaypoint, useKey, type Waypoint, type WaypointSlot } from '../../hud/waypoints';
 import { registerHudWidget } from '../../registry';
 import { currentMatch } from '../../state';
 import { STRIKE } from '../../../shared/defs/tactical-map';
-import { ksClient, streakName } from './store';
+import { iHavePro } from '../perks/state';
+import { friendly, ksClient, streakName } from './store';
 
 const SHORT: Record<string, string> = {
   uav: 'SPY PLANE',
@@ -120,7 +123,7 @@ registerHudWidget(
     const crate = ksClient.crate;
     if (crate && m.time - crate.at < 1) {
       const bw = 70 * u;
-      txt(g, `HOLD [F]  ${crate.contents === '?' ? 'CARE PACKAGE' : streakName(crate.contents).toUpperCase()}`, cx, cy + 34 * u, 8, C.hi, 'center', u);
+      txt(g, `HOLD ${useKey()}  ${crate.contents === '?' ? 'CARE PACKAGE' : streakName(crate.contents).toUpperCase()}`, cx, cy + 34 * u, 8, C.hi, 'center', u);
       box(g, cx - bw / 2, cy + 44 * u, bw, 3 * u, C.empty, u);
       rect(g, cx - bw / 2, cy + 44 * u, bw * crate.progress, 3 * u, C.hi);
     }
@@ -139,4 +142,34 @@ registerHudWidget(
     }
   },
   63,
+);
+
+// Care packages: a waypoint over every crate on your side (enemy crates only up close), and the
+// "HOLD F" prompt as soon as you are in reach, before you start taking it.
+registerHudWidget(
+  'killstreaks.crates',
+  (g, W, H) => {
+    const m = currentMatch();
+    if (!m || !m.alive || !m.net.lastSnap) return;
+    const u = unit(H);
+    const pos = m.net.predictor.shown();
+    const marks: Waypoint[] = [];
+    let inReach: { ours: boolean } | null = null;
+    for (const e of m.net.lastSnap.ents) {
+      if (e.kind !== KS_ENTITY.crate) continue;
+      const ours = friendly(e.owner ?? '', e.team ?? null);
+      const landed = e.s?.l === true;
+      const d = Math.hypot(pos.x - e.x, pos.z - e.z);
+      if (landed && d <= CRATE_REACH.r && Math.abs(pos.y - e.y) < CRATE_REACH.dy) inReach = { ours };
+      marks.push({ x: e.x, y: e.y + 1.4, z: e.z, label: 'CARE PACKAGE', caption: landed ? undefined : 'INCOMING', color: ours ? C.friend : C.enemy, hideWithin: CRATE_REACH.r + 0.7, ...(ours ? {} : { maxDist: 20, small: true }) });
+    }
+    const placed: WaypointSlot[] = [];
+    for (const k of marks) drawWaypoint(m, g, W, H, k, placed);
+    // While taking it, the progress prompt in killstreaks.overlay takes over.
+    const taking = ksClient.crate && m.time - ksClient.crate.at < 1;
+    if (!inReach || taking) return;
+    const verb = inReach.ours ? 'FOR CARE PACKAGE' : iHavePro('hacker') ? 'TO BOOBY-TRAP CARE PACKAGE' : 'TO STEAL CARE PACKAGE';
+    txt(g, `HOLD ${useKey()} ${verb}`, W / 2, H / 2 + 34 * u, 8, blink(m.time, 1, 0.7) ? C.hi : C.paper, 'center', u);
+  },
+  7,
 );
