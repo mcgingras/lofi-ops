@@ -235,6 +235,7 @@ interface MapData {
   lights: MapLight[];                            // { x, y, z, color, radius, group } baked into vertex colours
   spawns: { teams: [SpawnPoint[], SpawnPoint[]]; ffa: SpawnPoint[] };   // { x, y, z, yaw }
   objectives: Record<string, ObjectivePoint[]>;  // 'dom' A/B/C, 'sd' sites, 'hq'... { id, x, y, z, radius, team? }
+  modeSpawns?: Record<string, Record<string, SpawnPoint[]>>;  // per-mode role spawns: modeSpawns.sd.attackers / .defenders (fallback: spawns)
   times: TimePreset[]; defaultTime;              // sky recipe id, sun/amb/fog, light group intensities
   hotspots?: Vec3[];                             // bot roam targets
 }
@@ -244,6 +245,8 @@ interface MapData {
 - UVs: world-scaled metres x `uvMul` (prototype `worldUV`), or `uv: 'raw'` for 0..1 per face. Renderer subdivides ~1 segment per 1.1 m for vertex lighting.
 - `buildCollisionWorld(map)` (cached) gives the `CollisionWorld` for server, prediction, bots and the bake's shadow rays (`sight` mask).
 - `tests/collision.test.ts` checks every registered map: spawns on the ground, free and in bounds; every material referenced exists.
+- Objective conventions (maps-bo maps follow them; modes read them): `objectives.dom` = A/B/C (A nearest team 0's spawns), `objectives.sd` = sites A/B (S&D roles swap between halves, so use `modeSpawns.sd.attackers` / `.defenders`; `team: 1` on a site only marks the default defenders), `objectives.hq` = the rotation of Headquarters points. Kill Confirmed and wagers use `spawns`. Brush `tag`s from `maps/bo-kit.ts`: `stairs` (invisible clip ramps players climb), `fence-low` (0.9 m jumpable clips), `perimeter` (bounds clips), useful for bot nav.
+- `maps/bo-kit.ts` (`MapKit`) is an optional authoring helper: walls with door/window holes, stairs, ground with holes, half-turn symmetric lots (`with('rot180', ...)`), backdrop silhouette rings.
 
 Texture recipe ids used by the Yard (the client texture developer must provide them, names = prototype `TX` keys): `ground warehouse steel shutter hazard lamp num01 num02 num03 winRow door exit shed fence container0..container5 hut hutWin tank yellow rubber crate pallet barrel barrier paint`, skies `skyNight skyGrey skyDusk`. `none` is for invisible clip brushes.
 
