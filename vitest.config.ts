@@ -6,5 +6,8 @@ export default defineConfig({
     environment: 'node',
     testTimeout: 20000,
     hookTimeout: 20000,
+    // Real-server socket tests are timing-sensitive; capping workers keeps a loaded machine from
+    // starving their 60 Hz loops (seen as rare flakes once the bigger maps landed).
+    maxWorkers: 8,
   },
 });
