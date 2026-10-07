@@ -288,7 +288,7 @@ interface Profile {
 }
 ```
 
-Loaded at `hello` (`session.profile`, also `player.profile` in a room). Mutate it on the server; core saves it at match end (after `matchEnd` handlers), when leaving a room and on disconnect, and sends the owner a `profile` message after match end. Save immediately yourself (`api.store.save(profile)`) for menu purchases. No schema migrations needed: add fields under `ext.<you>` or new `stats` keys.
+Loaded at `hello` (`session.profile`, also `player.profile` in a room). Mutate it on the server; core saves it at match end (after `matchEnd` handlers), when leaving a room and on disconnect, and sends the owner a `profile` message after match end. Save immediately yourself (`api.store.save(profile)`) for menu purchases. No schema migrations needed: add fields under `ext.<you>` or new `stats` keys. One account open in two tabs (same token) gets the same live `Profile` object in both sessions, so writes from either never overwrite the other; still never keep a stale copy of a profile across awaits (re-read `session.profile`). Economy code should still check balances at the moment it spends.
 
 ## 12. Client (src/client)
 
@@ -310,6 +310,8 @@ features/<area>/   your client code; every features/*/index.ts is auto-imported 
 ```
 
 Dev console: `window.__lofi.client.match` (dev builds only).
+
+Driving the game from an automated browser (dev builds only): open `http://localhost:5173/?devlook=1`. Pointer lock is replaced by drag-to-look: click the canvas to "lock", drag to look, click without dragging to fire a short tap, Esc to "unlock" (pause menu). Key and click taps are held for at least 120 ms so synthetic presses reach a frame. Scripted helpers live at `window.__lofi.input`: `lock()`, `unlock()`, `hold(action | 'fire' | 'ads', ms)` (actions are `KEYMAP` names: `forward`, `sprint`, `scores`...), `look(dYaw, dPitch)`, `state()`. A hidden tab or browser pane throttles `requestAnimationFrame`, so only the visible tab moves smoothly; drive the other client headlessly (FakeClient) if you need two active players.
 
 ### Registries (`registry.ts`)
 
@@ -379,3 +381,5 @@ api.registerWeaponBehavior('launcher', {
 ## 14. Tests
 
 `tests/fake-client.ts` (`FakeClient.connect(url, name)`, `.send`, `.input(buttons, yaw, pitch)`, `.waitFor(type, pred)`) and `startServer({ port: 0, dbPath: ':memory:', staticDir: null, log: () => {} })` give you headless integration tests through the real server; `tests/integration.test.ts` is the example (two clients, a kill, killfeed and score). For rules-level tests drive a room directly: `new Lobby({ store: new Store(':memory:'), features: [yourFeature], log: () => {}, autoTick: false }).createRoom({...})` and call `room.step()` (see `tests/room.test.ts`).
+
+`tests/playtest.client.test.ts` covers respawn, health regen, prediction holding under steady input (the browser's `MatchNet` reconciling every snapshot), lag compensation against a sprinting target (with a no-rewind control shot) and match end on the score limit, all over real sockets. Tests that import browser modules (`src/client/net.ts` and friends) must be named `tests/**/*.client.test.ts`: the root tsconfig skips them and `tsconfig.tests-client.json` typechecks them with the DOM lib (part of `npm run typecheck`). Note that `FakeClient.waitFor` also matches messages already received: filter by `time` or message index when waiting for a second `spawned`, a later `snap`, etc.

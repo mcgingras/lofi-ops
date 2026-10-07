@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "npm run typecheck && vite build",
-    "typecheck": "tsc -p tsconfig.json && tsc -p src/client/tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p src/client/tsconfig.json && tsc -p tsconfig.tests-client.json",
     "test": "vitest run",
     "start": "tsx src/server/index.ts --prod"
   },

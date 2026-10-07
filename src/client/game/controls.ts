@@ -2,6 +2,12 @@
  * Local input: pointer lock, mouse look, keyboard and mouse buttons -> the `Buttons` bitmask.
  * Key bindings are in `KEYMAP` (frontend may make them configurable). Edge presses are queued and
  * read once with `consume(action)`.
+ *
+ * Dev only: `?devlook=1` (dev server builds) replaces pointer lock with drag-to-look so automated
+ * browsers can drive a match: clicking the canvas "locks", dragging looks, a click without a drag
+ * fires one tap, Esc "unlocks", and key/click taps are held for at least DEVLOOK_MIN_HOLD_MS so a
+ * synthetic press that releases instantly still reaches a frame. `window.__lofi.input` adds
+ * scripted helpers: `hold(action | 'fire' | 'ads', ms)`, `look(dYaw, dPitch)`, `state()`.
  */
 import { Buttons } from '../../shared/input';
 import { clamp } from '../../shared/math';
@@ -54,6 +60,20 @@ const HELD_BITS: Partial<Record<Action, number>> = {
   prone: Buttons.PRONE,
 };
 
+const DEVLOOK_MIN_HOLD_MS = 120;
+
+/** `?devlook=1` on a dev build (see the file comment). */
+export function devlookEnabled(): boolean {
+  if (!import.meta.env.DEV) return false;
+  try {
+    const q = new URLSearchParams(location.search);
+    const v = q.get('devlook');
+    return v !== null && v !== '0';
+  } catch {
+    return false;
+  }
+}
+
 export class Controls {
   yaw = 0;
   pitch = 0;
@@ -69,6 +89,11 @@ export class Controls {
   /** Extra look multiplier (ADS sensitivity, scopes). */
   lookScale = 1;
   enabled = true;
+  /** Drag-to-look instead of pointer lock (dev only, `?devlook=1`). */
+  readonly devlook = devlookEnabled();
+  private dragging = false;
+  private dragMoved = 0;
+  private holdUntil = new Map<Action | 'fire' | 'ads', number>();
 
   constructor(private canvas: HTMLElement) {
     const on = <K extends keyof WindowEventMap>(t: K, fn: (e: WindowEventMap[K]) => void, target: Window | Document | HTMLElement = window) => {
@@ -87,14 +112,24 @@ export class Controls {
     });
     on('keyup', (e) => {
       const a = KEYMAP[e.code];
-      if (a) this.held.delete(a);
+      if (a) this.release(a);
     });
+    if (this.devlook) {
+      on('keydown', (e) => {
+        if (e.code === 'Escape' && this.locked) this.setDevLocked(false);
+        const a = KEYMAP[e.code];
+        if (a && !e.repeat) this.holdUntil.set(a, performance.now() + DEVLOOK_MIN_HOLD_MS);
+      });
+      this.installDevHelpers();
+    }
     on('blur', () => this.releaseAll());
     on('mousemove', (e) => {
       if (!this.locked || !this.enabled) return;
-      const k = (settings.sensitivity / 1000) * this.lookScale;
-      this.yaw -= e.movementX * k;
-      this.pitch = clamp(this.pitch - e.movementY * k * (settings.invertY ? -1 : 1), -1.5, 1.5);
+      if (this.devlook) {
+        if (!this.dragging) return;
+        this.dragMoved += Math.abs(e.movementX) + Math.abs(e.movementY);
+      }
+      this.look(e.movementX, e.movementY);
     });
     on('mousedown', (e) => {
       sfx.unlock();
@@ -102,12 +137,24 @@ export class Controls {
         if (e.target === this.canvas && e.button === 0) this.requestLock();
         return;
       }
+      if (this.devlook && e.button === 0) {
+        // Drag looks; a click without a drag fires a tap on mouseup.
+        this.dragging = true;
+        this.dragMoved = 0;
+        return;
+      }
       if (e.button === 0) this.fire = true;
       if (e.button === 2) this.ads = true;
+      if (this.devlook && e.button === 2) this.holdUntil.set('ads', performance.now() + DEVLOOK_MIN_HOLD_MS);
     });
     on('mouseup', (e) => {
-      if (e.button === 0) this.fire = false;
-      if (e.button === 2) this.ads = false;
+      if (this.devlook && e.button === 0) {
+        if (this.dragging && this.dragMoved < 6) this.hold('fire', DEVLOOK_MIN_HOLD_MS);
+        this.dragging = false;
+        return;
+      }
+      if (e.button === 0) this.release('fire');
+      if (e.button === 2) this.release('ads');
     });
     on('wheel', (e) => {
       if (this.locked) this.wheel += Math.sign(e.deltaY);
@@ -116,6 +163,7 @@ export class Controls {
       if (this.locked || e.target === this.canvas) e.preventDefault();
     });
     const lockChange = () => {
+      if (this.devlook) return;
       this.locked = document.pointerLockElement === this.canvas;
       if (!this.locked) this.releaseAll();
       for (const fn of this.lockFns) fn(this.locked);
@@ -124,8 +172,72 @@ export class Controls {
     this.offs.push(() => document.removeEventListener('pointerlockchange', lockChange));
   }
 
+  /** Mouse-look by a pixel delta (pointer lock movement, or a dev drag). */
+  private look(dx: number, dy: number): void {
+    const k = (settings.sensitivity / 1000) * this.lookScale;
+    this.yaw -= dx * k;
+    this.pitch = clamp(this.pitch - dy * k * (settings.invertY ? -1 : 1), -1.5, 1.5);
+  }
+
+  /** Let go of a held action/trigger, honouring a dev minimum hold. */
+  private release(a: Action | 'fire' | 'ads'): void {
+    const until = this.holdUntil.get(a) ?? 0;
+    const left = until - performance.now();
+    if (left > 0) {
+      setTimeout(() => this.release(a), left + 1);
+      return;
+    }
+    this.holdUntil.delete(a);
+    if (a === 'fire') this.fire = false;
+    else if (a === 'ads') this.ads = false;
+    else this.held.delete(a);
+  }
+
+  /** Hold an action (or the trigger / ADS) for `ms`, then release it. */
+  private hold(a: Action | 'fire' | 'ads', ms: number): void {
+    if (a === 'fire') this.fire = true;
+    else if (a === 'ads') this.ads = true;
+    else {
+      if (!this.held.has(a)) this.pressed.add(a);
+      this.held.add(a);
+      if (a === 'crouch') this.crouchToggled = !this.crouchToggled;
+    }
+    this.holdUntil.set(a, performance.now() + ms);
+    setTimeout(() => this.release(a), ms + 1);
+  }
+
+  private setDevLocked(locked: boolean): void {
+    if (this.locked === locked) return;
+    this.locked = locked;
+    if (!locked) this.releaseAll();
+    for (const fn of this.lockFns) fn(locked);
+  }
+
+  /** `window.__lofi.input` for scripted browsers (devlook only). */
+  private installDevHelpers(): void {
+    const w = window as unknown as { __lofi?: Record<string, unknown> };
+    w.__lofi = w.__lofi ?? {};
+    w.__lofi.input = {
+      lock: () => this.setDevLocked(true),
+      unlock: () => this.setDevLocked(false),
+      hold: (a: Action | 'fire' | 'ads', ms = 200) => this.hold(a, ms),
+      look: (dYaw: number, dPitch = 0) => {
+        this.yaw += dYaw;
+        this.pitch = clamp(this.pitch + dPitch, -1.5, 1.5);
+      },
+      state: () => ({ locked: this.locked, yaw: this.yaw, pitch: this.pitch, held: [...this.held], fire: this.fire, ads: this.ads }),
+    };
+    this.offs.push(() => {
+      if (w.__lofi) delete w.__lofi.input;
+    });
+  }
+
   requestLock(): void {
     sfx.unlock();
+    if (this.devlook) {
+      this.setDevLocked(true);
+      return;
+    }
     try {
       const p = this.canvas.requestPointerLock() as unknown as Promise<void> | undefined;
       p?.catch?.(() => {});
@@ -135,6 +247,7 @@ export class Controls {
   }
 
   releaseLock(): void {
+    if (this.devlook) return this.setDevLocked(false);
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
   }
 
@@ -145,8 +258,10 @@ export class Controls {
 
   private releaseAll() {
     this.held.clear();
+    this.holdUntil.clear();
     this.fire = false;
     this.ads = false;
+    this.dragging = false;
   }
 
   isHeld(a: Action): boolean {

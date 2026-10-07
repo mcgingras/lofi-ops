@@ -376,10 +376,11 @@ registerHudWidget(
     const x0 = (W - bw) / 2;
     let y = (m.phase === 'ended' ? 38 : 30) * u;
     const cols = [
-      { k: 'SCORE', x: bw - 82 * u },
-      { k: 'K', x: bw - 56 * u },
-      { k: 'A', x: bw - 38 * u },
-      { k: 'D', x: bw - 20 * u },
+      // Right edges; PING is ~28 units wide, so D sits clear of it.
+      { k: 'SCORE', x: bw - 86 * u },
+      { k: 'K', x: bw - 68 * u },
+      { k: 'A', x: bw - 53 * u },
+      { k: 'D', x: bw - 38 * u },
       { k: 'PING', x: bw - 2 * u },
     ];
     const header = (label: string, col: string) => {

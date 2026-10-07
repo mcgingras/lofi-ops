@@ -89,7 +89,7 @@ describe('headless match (real server, real sockets)', () => {
 
     // Snapshots agree, and the target respawns after the delay.
     await a.waitFor('snap', (s) => s.teams?.[ja.team!] === 1);
-    const spawned = await b.waitFor('spawned', () => true, 6000);
+    const spawned = await b.waitFor('spawned', (m) => b.all('spawned').indexOf(m) >= 1, 6000);
     expect(spawned.loadout.primary.weapon).toBe('ak47');
   });
 
@@ -104,6 +104,26 @@ describe('headless match (real server, real sockets)', () => {
     expect((r2.data as { name: string }).name).toBe('Renamed');
     client.send({ t: 'rpc', id: 'nope.nothing', data: {}, rid: 3 });
     expect((await client.waitFor('rpcResult', (r) => r.rid === 3)).ok).toBe(false);
+  });
+
+  it('two tabs with one token share the live profile (no lost updates)', async () => {
+    const { client: t1, welcome } = await FakeClient.connect(server.url, 'TwoTabs');
+    const { client: t2 } = await FakeClient.connect(server.url, undefined, welcome.token);
+    clients.push(t1, t2);
+    const s1 = server.sessions.get(welcome.sessionId)!;
+    const s2 = [...server.sessions.values()].find((s) => s !== s1 && s.profile.id === welcome.profile.id)!;
+    expect(s2.profile).toBe(s1.profile);
+    s2.profile.codPoints += 500;
+    t1.send({ t: 'rpc', id: 'core.setName', data: { name: 'Renamed2' }, rid: 1 });
+    await t1.waitFor('rpcResult', (r) => r.rid === 1);
+    t1.close();
+    await sleep(50);
+    t2.send({ t: 'rpc', id: 'core.profile', data: {}, rid: 2 });
+    const p = (await t2.waitFor('rpcResult', (r) => r.rid === 2)).data as { name: string; codPoints: number };
+    expect(p.name).toBe('Renamed2');
+    t2.close();
+    await sleep(50);
+    expect(server.store.load(welcome.profile.id)).toMatchObject({ name: 'Renamed2', codPoints: welcome.profile.codPoints + 500 });
   });
 
   it('a returning token gets the same profile', async () => {

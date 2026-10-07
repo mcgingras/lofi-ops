@@ -1,0 +1,10 @@
+{
+  // Tests that import browser-side modules (src/client/net.ts etc.) run in Node but need the DOM
+  // lib to typecheck. Name them tests/**/*.client.test.ts; the root tsconfig skips them.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"]
+  },
+  "include": ["tests/**/*.client.test.ts", "tests/fake-client.ts", "tests/helpers.ts"]
+}

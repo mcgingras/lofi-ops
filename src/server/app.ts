@@ -109,7 +109,12 @@ export async function startServer(opts: ServerOptions = {}): Promise<GameServer>
       if (!session) {
         if (msg.t !== 'hello') return;
         clearTimeout(helloTimer);
-        const { profile, token } = store.authenticate(isStr(msg.token, 128) ? msg.token : null, cleanName(msg.name));
+        const auth = store.authenticate(isStr(msg.token, 128) ? msg.token : null, cleanName(msg.name));
+        const { token } = auth;
+        // One in-memory profile per account: a second tab with the same token shares the live
+        // object, so saves from either connection never overwrite the other's progress or CP.
+        let profile = auth.profile;
+        for (const other of sessions.values()) if (other.profile.id === profile.id) profile = other.profile;
         session = new Session(randomUUID().slice(0, 12), ws, profile, token);
         sessions.set(session.id, session);
         session.send({ t: 'welcome', sessionId: session.id, token, profile, version: PROTOCOL_VERSION, defaultLoadouts: DEFAULT_LOADOUTS });
