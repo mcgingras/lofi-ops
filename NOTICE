@@ -13,5 +13,7 @@ Portions adapted from Blockyard (https://github.com/Potrock/blockyard), MIT Lice
   src/server/features/bots/nav.ts (walk/jump/drop cell grid and typed-array A* with a binary heap, from
   src/platform/kits/navgrid.ts), src/server/features/bots/brain.ts and aim.ts (react-then-settle aim,
   bursts, strafe timers, chasing heard/seen positions and unsticking, from src/platform/kits/shooterbot.ts
-  and src/games/callofblocky/bots.ts).
+  and src/games/callofblocky/bots.ts),
+  src/server/features/progression/tracker.ts (XP medal rules: first blood, multi-kill window, revenge, assists, and
+  bots-never-earn, from src/games/callofblocky/progression.ts).
 Textures in assets/textures from Poly Haven (https://polyhaven.com), CC0.

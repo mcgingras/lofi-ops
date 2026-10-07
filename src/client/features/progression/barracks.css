@@ -1,0 +1,92 @@
+/* Barracks (progression): levels, prestige, challenges, combat record. Uses the menu tokens. */
+.pg-page { gap: 14px; }
+.pg-top { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.pg-head { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.pg-head canvas { flex: none; }
+.pg-who { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.pg-name { font-size: 18px; color: var(--paper); letter-spacing: 0.04em; overflow-wrap: anywhere; }
+.pg-rank { font-size: 10px; color: var(--dim); letter-spacing: 0.08em; text-transform: uppercase; }
+.pg-rank b { color: var(--hi); font-weight: 400; }
+.pg-xp { height: 8px; background: #000; border: 1px solid var(--line); width: min(360px, 62vw); position: relative; }
+.pg-xp > i, .pg-bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--hi); }
+.pg-xpnum { font-size: 9px; color: var(--dim); letter-spacing: 0.06em; text-transform: uppercase; }
+.pg-body { max-width: 1000px; width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.pg-sec { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--hi); margin: 10px 0 2px; font-weight: 400; }
+.pg-note { font-size: 10px; color: var(--dim); letter-spacing: 0.04em; line-height: 1.6; text-transform: uppercase; margin: 0; }
+
+/* Levels */
+.pg-list { display: flex; flex-direction: column; gap: 2px; }
+.pg-level { display: grid; grid-template-columns: 36px 150px 1fr; gap: 10px; align-items: center; padding: 6px 8px; background: var(--chip); border: 1px solid transparent; }
+.pg-level.current { border-color: var(--hi); background: rgba(40, 34, 10, 0.85); }
+.pg-level.locked { opacity: 0.6; }
+.pg-lv { display: flex; flex-direction: column; gap: 2px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+.pg-lv b { font-size: 13px; color: var(--paper); font-weight: 400; }
+.pg-level.done .pg-lv b { color: var(--hi); }
+.pg-lv span { color: var(--dim); font-size: 9px; }
+.pg-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.pg-u { font-size: 10px; padding: 2px 6px; border: 1px solid var(--line); text-transform: uppercase; letter-spacing: 0.05em; color: var(--paper); background: rgba(0, 0, 0, 0.35); }
+.pg-u small { color: var(--dim); font-size: 9px; margin-left: 4px; }
+.pg-u[data-kind='weapon'] { border-color: #e8c060; color: #e8c060; }
+.pg-u[data-kind='attachment'] { border-color: #d8b880; color: #d8b880; }
+.pg-u[data-kind='perk'], .pg-u[data-kind='pro'] { border-color: var(--friend); color: var(--friend); }
+.pg-u[data-kind='killstreak'] { border-color: var(--warn); color: var(--warn); }
+.pg-u[data-kind='feature'] { border-color: var(--hi); color: var(--hi); }
+.pg-u[data-kind='class'] { border-color: #9ad66a; color: #9ad66a; }
+.pg-u[data-kind='lethal'], .pg-u[data-kind='tactical'] { border-color: #c8a0ff; color: #c8a0ff; }
+.pg-u.locked { opacity: 0.55; }
+.pg-empty { font-size: 10px; color: var(--dim); text-transform: uppercase; }
+.pg-weapon { display: grid; grid-template-columns: 150px 1fr; gap: 10px; align-items: center; padding: 6px 8px; background: var(--chip); }
+.pg-weapon .pg-lv b { font-size: 12px; }
+
+/* Prestige */
+.pg-ppanel { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; background: var(--chip-solid); border: 1px solid var(--line); padding: 14px; }
+.pg-ppanel > div { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 220px; }
+.pg-ppanel ul { margin: 0; padding-left: 16px; font-size: 10px; color: var(--dim); line-height: 1.7; text-transform: uppercase; letter-spacing: 0.04em; }
+.pg-ppanel ul b { color: var(--paper); font-weight: 400; }
+.pg-pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+.pg-pcard { background: var(--chip); border: 1px solid var(--line); padding: 10px 8px; display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--dim); }
+.pg-pcard b { color: var(--paper); font-weight: 400; font-size: 11px; }
+.pg-pcard.earned b { color: var(--hi); }
+.pg-pcard.current { border-color: var(--hi); }
+.pg-pcard.shown { outline: 1px dashed var(--friend); outline-offset: -4px; }
+.pg-pcard.locked canvas { filter: grayscale(1) brightness(0.5); }
+.pg-pcard .lf-btn { font-size: 9px; padding: 3px 7px; }
+
+/* Challenges */
+.pg-filters { display: flex; gap: 8px 12px; flex-wrap: wrap; align-items: center; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--dim); }
+.pg-filters select, .pg-filters input[type='search'] { font-family: var(--ui); font-size: 10px; background: #000; color: var(--paper); border: 1px solid var(--line); padding: 4px 6px; text-transform: uppercase; }
+.pg-filters input[type='search'] { width: 150px; }
+.pg-filters label { display: inline-flex; gap: 6px; align-items: center; }
+.pg-filters input[type='checkbox'] { accent-color: var(--hi); }
+.pg-ch { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, 240px); gap: 4px 14px; align-items: center; padding: 8px 10px; background: var(--chip); border-left: 3px solid var(--line); }
+.pg-ch.complete { border-left-color: var(--hi); }
+.pg-ch h4 { margin: 0; font-size: 12px; font-weight: 400; color: var(--paper); letter-spacing: 0.04em; }
+.pg-ch.complete h4 { color: var(--hi); }
+.pg-ch p { margin: 2px 0 0; font-size: 10px; color: var(--dim); letter-spacing: 0.03em; }
+.pg-ch .pg-tag { font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
+.pg-prog { display: flex; flex-direction: column; gap: 3px; font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; }
+.pg-prog .row { display: flex; justify-content: space-between; gap: 8px; }
+.pg-prog .row b { color: var(--paper); font-weight: 400; }
+.pg-bar { height: 6px; background: #000; border: 1px solid var(--line); position: relative; }
+.pg-more { align-self: flex-start; }
+
+/* Combat record */
+.pg-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 6px; }
+.pg-tile { background: var(--chip); border: 1px solid var(--line); padding: 8px 10px; }
+.pg-tile b { display: block; font-size: 18px; color: var(--hi); font-weight: 400; letter-spacing: 0.02em; }
+.pg-tile span { font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
+.pg-tablewrap { overflow-x: auto; max-width: 100%; }
+.pg-table { width: 100%; border-collapse: collapse; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; background: var(--chip); }
+.pg-table th, .pg-table td { padding: 5px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.pg-table th:first-child, .pg-table td:first-child { text-align: left; }
+.pg-table th { color: var(--dim); font-weight: 400; }
+.pg-table td { color: var(--paper); }
+.pg-table tr.zero td { color: var(--dim); }
+
+@media (max-width: 640px) {
+  .pg-level { grid-template-columns: 32px 1fr; }
+  .pg-level .pg-chips { grid-column: 1 / -1; }
+  .pg-weapon { grid-template-columns: 1fr; }
+  .pg-ch { grid-template-columns: 1fr; }
+  .pg-page { padding-left: 16px; padding-right: 16px; }
+}
