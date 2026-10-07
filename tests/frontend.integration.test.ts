@@ -110,13 +110,13 @@ describe('frontend lobbies (real server)', () => {
       perks: ['lightweight', 'hardline', 'steady_aim'],
       killstreaks: ['uav'],
       lethal: 'frag',
-      tactical: 'flash',
+      tactical: 'flashbang',
     };
     const res = await rpc<{ index: number; loadout: Loadout; loadouts: Loadout[]; problems: string[] }>(d, 'frontend.saveLoadout', { index: prof.loadouts.length, loadout: cls });
     expect(res.index).toBe(3);
     expect(res.loadout.perks).toEqual(['lightweight', 'steady_aim']); // one tier-1 perk
     expect(res.loadout.primary.attachments).toEqual(['reddot']); // no Warlord: one attachment
-    expect(res.loadout).toMatchObject({ name: 'My Class', lethal: 'frag', tactical: 'flash' });
+    expect(res.loadout).toMatchObject({ name: 'My Class', lethal: 'frag', tactical: 'flashbang' });
     expect(res.problems.length).toBe(2);
     await expect(rpc(d, 'frontend.saveLoadout', { index: 9, loadout: cls })).rejects.toThrow(/bad_index/);
     const sel = await rpc<{ selectedLoadout: number }>(d, 'frontend.selectClass', { index: 3 });

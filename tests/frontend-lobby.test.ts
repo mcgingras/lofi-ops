@@ -50,7 +50,10 @@ describe('matchmaking', () => {
     expect(la.room.phase).toBe('lobby');
     expect(la.room.options.private).toBe(false);
     expect(() => m.matchmake(a, 'nope')).toThrow(/unknown playlist/);
-    expect(() => m.matchmake(a, 'dom')).toThrow(/coming soon|unknown/);
+    // Playlists turn on once their mode is in MODE_BY_ID (DOM is merged now).
+    const ld = m.matchmake(a, 'dom');
+    expect(ld).not.toBe(la);
+    expect(ld.room.mode.id).toBe('dom');
   });
 
   it('reservations hold slots so a full lobby is not handed out twice', () => {
@@ -141,15 +144,18 @@ describe('map vote', () => {
     const l = m.matchmake(a, 'tdm');
     lobby.join(a, l.room.id);
     lobby.join(b, l.room.id);
-    expect(l.voteOptions).toEqual(['yard', RANDOM_MAP]); // only the Yard supports TDM in core
+    const opts = l.voteOptions!;
+    expect(opts).toHaveLength(3); // two TDM maps + random
+    expect(opts[2]).toBe(RANDOM_MAP);
+    expect(opts[0]).not.toBe(opts[1]);
     m.vote(l.room, a.player, 1);
     m.vote(l.room, b.player, 1);
     m.vote(l.room, b.player, 0); // changed mind: tie 1-1 -> first option
-    expect(m.state(l).vote!.counts).toEqual([1, 1]);
+    expect(m.state(l).vote!.counts).toEqual([1, 1, 0]);
     expect(() => m.vote(l.room, a.player, 7)).toThrow(/bad option/);
     steps(l.room, 4);
     expect(l.room.phase).toBe('countdown');
-    expect(l.room.mapId).toBe('yard');
+    expect(l.room.mapId).toBe(opts[0]);
     expect(l.voteOptions).toBeNull();
   });
 });

@@ -129,7 +129,7 @@ The client joins a lobby by getting a ticket and then calling `navigate('match',
 - Warlord is recognised by id `warlord`, or by any PerkDef with `attachmentSlots: number`. The total is capped at 2, matching core `sanitizeLoadout`.
 
 **weapons/perks**:
-- `src/shared/frontend/equipment.ts` lists the lethal and tactical ids the menu offers (frag, semtex, tomahawk, flash, concussion, smoke, decoy). Whoever implements throwables can move these into a defs file and keep the ids.
+- `src/shared/frontend/equipment.ts` builds the lethal and tactical list the menu offers from the weapons area's `src/shared/defs/equipment.ts` (frag, semtex, flashbang, concussion), so new throwables added there show up in create-a-class automatically.
 
 **modes**:
 - Playlists `dom`, `sd`, `hq` and `kc` light up automatically once those ids are in `MODE_BY_ID`.

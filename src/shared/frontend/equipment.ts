@@ -1,9 +1,10 @@
 /**
- * Lethal and tactical equipment the create-a-class menu offers (owner: frontend, until a feature
- * area ships equipment defs; then point these lists at those defs and keep the ids).
- * `Loadout.lethal` / `Loadout.tactical` store these ids; the server feature that implements the
- * throwables reads them from the spawn loadout.
+ * Lethal and tactical equipment the create-a-class menu offers. The list comes from the weapons
+ * area's defs (src/shared/defs/equipment.ts), which the server simulates, so every pick works in a
+ * match and the default loadouts' ids (frag, semtex, flashbang, concussion) validate.
+ * `Loadout.lethal` / `Loadout.tactical` store these ids.
  */
+import { EQUIPMENT as EQUIPMENT_DEFS } from '../defs/equipment';
 import { indexById } from '../defs/registry';
 
 export interface EquipmentDef {
@@ -14,14 +15,12 @@ export interface EquipmentDef {
   unlockLevel: number;
 }
 
-export const EQUIPMENT: EquipmentDef[] = [
-  { id: 'frag', name: 'Frag', kind: 'lethal', description: 'Cookable fragmentation grenade.', unlockLevel: 1 },
-  { id: 'semtex', name: 'Semtex', kind: 'lethal', description: 'Sticky grenade with a short fuse.', unlockLevel: 1 },
-  { id: 'tomahawk', name: 'Tomahawk', kind: 'lethal', description: 'Thrown axe. One hit kill. Retrievable.', unlockLevel: 1 },
-  { id: 'flash', name: 'Flashbang', kind: 'tactical', description: 'Blinds and deafens enemies.', unlockLevel: 1 },
-  { id: 'concussion', name: 'Concussion', kind: 'tactical', description: 'Slows enemy movement and aim.', unlockLevel: 1 },
-  { id: 'smoke', name: 'Willy Pete', kind: 'tactical', description: 'Smoke screen for cover.', unlockLevel: 1 },
-  { id: 'decoy', name: 'Decoy', kind: 'tactical', description: 'Fakes gunfire on enemy radar.', unlockLevel: 1 },
-];
+export const EQUIPMENT: EquipmentDef[] = EQUIPMENT_DEFS.map((e) => ({
+  id: e.id,
+  name: e.name,
+  kind: e.kind,
+  description: e.blurb ?? '',
+  unlockLevel: e.unlockLevel,
+}));
 
 export const EQUIPMENT_BY_ID = indexById(EQUIPMENT);

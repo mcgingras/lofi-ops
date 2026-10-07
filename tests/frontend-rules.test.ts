@@ -134,7 +134,8 @@ describe('playlists', () => {
 // ---------------------------------------------------------------------------------------------
 
 const ak = WEAPON_BY_ID.get('ak47')!;
-const gun = (id: string, extra: Partial<WeaponDef>): WeaponDef => ({ ...ak, id, name: id.toUpperCase(), ...extra });
+// price: 0 so fixtures lock by level/kills only (the real AK-47 has a CP price since the weapons merge).
+const gun = (id: string, extra: Partial<WeaponDef>): WeaponDef => ({ ...ak, id, name: id.toUpperCase(), price: 0, ...extra });
 const testCatalog: Catalog = {
   ...CATALOG,
   weapons: new Map<string, WeaponDef>([
@@ -187,7 +188,7 @@ describe('create-a-class validation', () => {
   });
 
   it('accepts a valid class untouched (killstreaks sorted by kills)', () => {
-    const input = { name: 'Rusher', primary: { weapon: 'famas', attachments: ['reddot'], camo: 'none' }, secondary: { weapon: 'm1911', attachments: [], camo: 'none' }, perks: ['lightweight'], killstreaks: ['dogs', 'napalm', 'uav'], lethal: 'semtex', tactical: 'flash' };
+    const input = { name: 'Rusher', primary: { weapon: 'famas', attachments: ['reddot'], camo: 'none' }, secondary: { weapon: 'm1911', attachments: [], camo: 'none' }, perks: ['lightweight'], killstreaks: ['dogs', 'napalm', 'uav'], lethal: 'semtex', tactical: 'flashbang' };
     const { loadout, problems } = validateLoadout(prof(), input, DEFAULT_LOADOUTS[0], testCatalog);
     expect(problems).toEqual([]);
     expect(loadout.killstreaks).toEqual(['uav', 'napalm', 'dogs']);
@@ -202,7 +203,7 @@ describe('create-a-class validation', () => {
       secondary: { weapon: 'ak47', attachments: [], camo: 'none' },
       perks: ['lightweight', 'hardline', 'ninja'],
       killstreaks: ['uav', 'rcxd', 'napalm', 'dogs', 'heli'],
-      lethal: 'flash',
+      lethal: 'flashbang', // a tactical, not a lethal
       tactical: 'nope',
     };
     const { loadout, problems } = validateLoadout(prof(), input, DEFAULT_LOADOUTS[0], testCatalog);
@@ -227,6 +228,15 @@ describe('create-a-class validation', () => {
     expect(twoOptics.loadout.primary.attachments).toEqual(['reddot']);
     expect(attachmentSlotsFor(['warlord'], testCatalog)).toBe(2);
     expect(attachmentSlotsFor(['lightweight'], testCatalog)).toBe(1);
+  });
+
+  it('default loadouts keep their lethal and tactical (ids match the weapons equipment defs)', () => {
+    for (const d of DEFAULT_LOADOUTS) {
+      const { loadout } = validateLoadout(prof(), d, DEFAULT_LOADOUTS[0]);
+      expect(loadout.lethal).toBe(d.lethal);
+      expect(loadout.tactical).toBe(d.tactical);
+    }
+    expect(CATALOG.equipment.get('flashbang')?.kind).toBe('tactical');
   });
 
   it('garbage in, default-shaped loadout out', () => {
