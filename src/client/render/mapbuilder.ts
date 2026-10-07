@@ -11,6 +11,7 @@ import { buildCollisionWorld, type Brush, type Decal, type Face, type GlowProp, 
 import { hashString, type Vec3 } from '../../shared/math';
 import { Baker, DynLight } from './bake';
 import { cacheGet, cachePut } from './idb';
+import { applyGrade } from './grade';
 import { G, makeLookMaterial, type LookMaterial } from './shader';
 import { bindTexture, getTexture, unbindTexture } from './textures';
 
@@ -146,7 +147,7 @@ export class MapScene {
     this.dyn = new DynLight(this.baker, this.time);
     this.signature = hashString(JSON.stringify([BAKE_VERSION, map.brushes, map.decals, map.props, map.lights])).toString(36);
     this.build();
-    this.skyMat = makeLookMaterial({ texture: this.time.sky, emissive: 1, fog: false, side: 'back', affine: 0, bake: false });
+    this.skyMat = makeLookMaterial({ texture: this.time.sky, emissive: 1, fog: false, side: 'back', affine: 0, bake: false, sky: true });
     this.sky = new THREE.Mesh(new THREE.SphereGeometry(450, 32, 16), this.skyMat);
     this.sky.frustumCulled = false;
     this.sky.renderOrder = -1;
@@ -372,6 +373,7 @@ export function applyTimeUniforms(T: TimePreset): void {
   G.uFogNear.value = T.fogNear;
   G.uFogFar.value = T.fogFar;
   G.uUnlitColor.value.setRGB(T.unlit[0], T.unlit[1], T.unlit[2]);
+  applyGrade(T);
 }
 
 function appendGeometry(b: Bucket, geo: THREE.BufferGeometry) {

@@ -1,9 +1,10 @@
 /**
- * Core settings screen (`settings`): look (Photo / PS1 preset and the individual toggles),
+ * Core settings screen (`settings`): Retro strength preset (the frontend screen adds the knobs),
  * render resolution, grade, FOV, sensitivity, volume, time of day, controls. Persisted by
  * settings.ts. Works as a page or as an overlay over a running match.
  */
-import { lookPreset, settings, updateSettings, type Settings } from '../settings';
+import { presetSettings, type RetroPreset } from '../render/retro';
+import { settings, updateSettings, type Settings } from '../settings';
 import { cacheClear } from '../render/idb';
 import { registerScreen } from '../registry';
 import { back } from '../router';
@@ -78,12 +79,8 @@ registerScreen('settings', (root, params) => {
   const form = h(
     'div',
     { class: 'lf-form' },
-    ...row('Look', seg('look', [['photo', 'Photo'], ['ps1', 'PS1']], (v) => updateSettings(lookPreset(v as Settings['look'])))),
-    ...row('Render res', seg('res', [['240', '240p'], ['360', '360p'], ['480', '480p'], ['720', '720p'], ['full', 'Full']])),
-    ...row('Vertex snap', check('snap')),
-    ...row('Texture warp', check('affine')),
-    ...row('Screen dither', check('dither')),
-    ...row('Grade', seg('grade', [['natural', 'Natural'], ['warm', 'Warm'], ['duotone', 'Duotone']])),
+    ...row('Retro strength', seg('retro', [['off', 'Off'], ['subtle', 'Subtle'], ['classic', 'Classic'], ['ps1', 'Full PS1']], (v) => updateSettings(presetSettings(v as RetroPreset)))),
+    ...row('Grade', seg('grade', [['map', 'Map'], ['natural', 'Natural'], ['warm', 'Warm'], ['duotone', 'Duotone']])),
     ...row('Time of day', seg('time', [['map', 'Map'], ['night', 'Night'], ['overcast', 'Overcast'], ['dusk', 'Dusk']])),
     ...row('Field of view', range('fov', 55, 100, 1, (v) => `${v}°`)),
     ...row('Sensitivity', range('sensitivity', 0.4, 8, 0.1, (v) => v.toFixed(1))),

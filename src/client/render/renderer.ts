@@ -1,48 +1,63 @@
 /**
  * The look pipeline (reference/yard-lab.html): the world and the viewmodel render into a low-res
  * target (240/360/480/720 lines or full), then a post pass upscales it with nearest filtering,
- * grades it, optionally quantises with a 4x4 Bayer screen dither, and composites the pixel HUD
- * canvas (drawn at the same low resolution) on top.
+ * grades it (the per-map grade by default, render/grade.ts), optionally quantises to a 15-bit
+ * framebuffer with a 4x4 ordered screen dither (Retro strength palette '15bit'), and composites the
+ * pixel HUD canvas (drawn at the same low resolution) on top.
  */
 import * as THREE from 'three';
-import { G } from './shader';
+import { GRADE } from './grade';
+import { screenOptions, type DitherType, type PaletteDepth } from './retro';
+import { G, setSnapDepth } from './shader';
 
 export type ResSetting = '240' | '360' | '480' | '720' | 'full';
-export type Grade = 'natural' | 'warm' | 'duotone';
+export type Grade = 'map' | 'natural' | 'warm' | 'duotone';
 
+/** The retro knobs the renderer applies (render/retro.ts); texture filter and palette develop live in textures.ts. */
 export interface LookOptions {
   res: ResSetting;
-  /** Vertex snap (PS1 wobble). */
-  snap: boolean;
-  /** Affine texture warp. */
-  affine: boolean;
-  /** Screen colour quantise + Bayer dither. */
-  dither: boolean;
+  /** Vertex snap grid in internal pixels (0 off). */
+  vertexSnap: number;
+  /** 0..1 affine texture warp. */
+  affineWarp: number;
+  palette: PaletteDepth;
+  ditherType: DitherType;
+  ditherStrength: number;
+  /** Fog distance multiplier. */
+  fogScale: number;
   grade: Grade;
   /** Vertical field of view, degrees. */
   fov: number;
 }
 
 const QVS = /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
-const QFS = /* glsl */ `uniform sampler2D tSrc, tHud; uniform vec2 uLow; uniform float uLevels, uDither, uRed; uniform int uGrade; varying vec2 vUv;
+const QFS = /* glsl */ `uniform sampler2D tSrc, tHud; uniform vec2 uLow; uniform float uLevels, uDither, uRed, uSat, uGamma; uniform int uGrade, uPattern; uniform vec3 uLift, uGain; varying vec2 vUv;
 const float BAYER[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
+const float PATTERN[16] = float[16](0.,5.,10.,15.,7.,8.,13.,2.,10.,15.,0.,5.,13.,2.,7.,8.);
 void main(){
   vec2 px = floor(vUv * uLow), uv = (px + 0.5) / uLow;
   vec3 c = texture2D(tSrc, uv).rgb;
   float l = dot(c, vec3(0.299, 0.587, 0.114));
-  if (uGrade == 1) c = pow(max(c, 0.0), vec3(0.88)) * vec3(1.07, 1.0, 0.88) + vec3(0.025, 0.015, 0.03);
+  if (uGrade == 3) {
+    // Map grade: rein in only the loudest colours, lift shadows towards the fog, tint highlights.
+    float ch = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+    c = mix(vec3(l), c, mix(1.0, uSat, smoothstep(0.12, 0.5, ch)));
+    c = pow(max(uLift + c * (uGain - uLift), 0.0), vec3(uGamma));
+  } else if (uGrade == 1) c = pow(max(c, 0.0), vec3(0.88)) * vec3(1.07, 1.0, 0.88) + vec3(0.025, 0.015, 0.03);
   else if (uGrade == 2) c = mix(vec3(0.12, 0.04, 0.08), vec3(1.0, 0.82, 0.58), smoothstep(0.02, 0.8, l));
   vec2 q = vUv - 0.5; c *= 1.0 - dot(q, q) * 0.5;
   // Damage: desaturate and redden towards the edges.
   if (uRed > 0.0) { float e = smoothstep(0.15, 0.75, length(q * vec2(1.6, 1.0))); c = mix(c, vec3(l * 0.6 + 0.25, l * 0.25, l * 0.2), uRed * (0.35 + 0.65 * e)); }
-  float d = uDither > 0.5 ? (BAYER[int(mod(px.x, 4.0)) + int(mod(px.y, 4.0)) * 4] + 0.5) / 16.0 - 0.5 : 0.0;
+  int di = int(mod(px.x, 4.0)) + int(mod(px.y, 4.0)) * 4;
+  float d = uDither > 0.0 ? ((uPattern == 1 ? PATTERN[di] : BAYER[di]) + 0.5) / 16.0 - 0.5 : 0.0;
+  d *= uDither;
   c = floor(clamp(c, 0.0, 1.0) * (uLevels - 1.0) + 0.5 + d) / (uLevels - 1.0);
   vec4 h = texture2D(tHud, uv);
   if (h.a > 0.5) c = h.rgb;
   gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 }`;
 
-const GRADES: Record<Grade, number> = { natural: 0, warm: 1, duotone: 2 };
+const GRADES: Record<Grade, number> = { natural: 0, warm: 1, duotone: 2, map: 3 };
 
 export class Renderer {
   readonly canvas: HTMLCanvasElement;
@@ -58,7 +73,7 @@ export class Renderer {
   private post: THREE.ShaderMaterial;
   private postScene = new THREE.Scene();
   private postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  private opts: LookOptions = { res: '360', snap: false, affine: false, dither: false, grade: 'natural', fov: 70 };
+  private opts: LookOptions = { res: '360', vertexSnap: 0, affineWarp: 0, palette: '16', ditherType: 'pattern', ditherStrength: 0.75, fogScale: 1, grade: 'map', fov: 70 };
   /** Current low-res size. */
   width = 640;
   height = 360;
@@ -86,7 +101,7 @@ export class Renderer {
     this.hudTex.generateMipmaps = false;
     this.hudTex.colorSpace = THREE.NoColorSpace;
     this.post = new THREE.ShaderMaterial({
-      uniforms: { tSrc: { value: this.rt.texture }, tHud: { value: this.hudTex }, uLow: { value: new THREE.Vector2(640, 360) }, uLevels: { value: 256 }, uDither: { value: 0 }, uGrade: { value: 0 }, uRed: { value: 0 } },
+      uniforms: { tSrc: { value: this.rt.texture }, tHud: { value: this.hudTex }, uLow: { value: new THREE.Vector2(640, 360) }, uLevels: { value: 256 }, uDither: { value: 0 }, uPattern: { value: 0 }, uGrade: { value: 3 }, uRed: { value: 0 }, ...GRADE },
       vertexShader: QVS,
       fragmentShader: QFS,
       depthTest: false,
@@ -102,10 +117,14 @@ export class Renderer {
 
   setOptions(o: Partial<LookOptions>): void {
     this.opts = { ...this.opts, ...o };
-    G.uJitter.value = this.opts.snap ? 1 : 0;
-    G.uAffine.value = this.opts.affine ? 1 : 0;
-    this.post.uniforms.uDither!.value = this.opts.dither ? 1 : 0;
-    this.post.uniforms.uLevels!.value = this.opts.dither ? 32 : 256;
+    G.uJitter.value = this.opts.vertexSnap;
+    setSnapDepth(this.opts.vertexSnap > 0);
+    G.uAffine.value = this.opts.affineWarp;
+    G.uFogScale.value = this.opts.fogScale;
+    const scr = screenOptions(this.opts);
+    this.post.uniforms.uDither!.value = scr.dither;
+    this.post.uniforms.uPattern!.value = scr.type === 'pattern' ? 1 : 0;
+    this.post.uniforms.uLevels!.value = scr.levels;
     this.post.uniforms.uGrade!.value = GRADES[this.opts.grade];
     this.resize();
   }

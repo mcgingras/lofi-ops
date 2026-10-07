@@ -1,6 +1,6 @@
 /**
- * Settings (replaces the core 'settings' screen): tabs for Video (look preset, resolution, PS1
- * toggles, grade, time of day, FOV), Controls (sensitivity, ADS sensitivity, invert, crouch
+ * Settings (replaces the core 'settings' screen): tabs for Graphics (Retro strength preset with
+ * an Advanced panel for its knobs, grade, time of day, FOV), Controls (sensitivity, ADS sensitivity, invert, crouch
  * toggle), Key bindings (rebind any action, incl. the class menu key) and Audio. Same persisted
  * settings as core (settings.ts); works as a page or as an overlay over a match.
  */
@@ -9,12 +9,14 @@ import { cacheClear } from '../../render/idb';
 import { adoptToken, currentToken, formatRecoveryCode, net, normalizeRecoveryCode } from '../../net';
 import { registerScreen } from '../../registry';
 import { back } from '../../router';
-import { lookPreset, settings, updateSettings, type Settings } from '../../settings';
+import { knobPatch, presetSettings, RETRO_BLURBS, RETRO_LABELS, RETRO_RANGES, type RetroKnobs, type RetroPreset } from '../../render/retro';
+import { settings, updateSettings, type Settings } from '../../settings';
 import { BINDABLE, conflictFor, keyFor, keyLabel, resetBinds, setBind, type BindAction } from './keybinds';
 import { h, seg, slider } from './ui';
 
 type Tab = 'video' | 'controls' | 'keys' | 'audio' | 'account';
 let lastTab: Tab = 'video';
+let advancedOpen = false;
 
 registerScreen('settings', (root, params) => {
   const updates: (() => void)[] = [];
@@ -47,16 +49,69 @@ registerScreen('settings', (root, params) => {
     cacheBtn.textContent = 'Cleared (reload to re-develop)';
   });
 
+  // Retro strength: presets set the knobs; Advanced edits single knobs (the preset then reads Custom).
+  const knob = <K extends keyof RetroKnobs>(key: K, v: RetroKnobs[K]) => {
+    updateSettings(knobPatch(settings, { [key]: v } as Partial<RetroKnobs>));
+    refresh();
+  };
+  const knobSeg = <K extends keyof RetroKnobs>(key: K, opts: [RetroKnobs[K] & string, string][]) => {
+    const s = seg(opts, () => settings[key] as RetroKnobs[K] & string, (v) => knob(key, v), String(key));
+    updates.push(() => s.update());
+    return s;
+  };
+  // Sliders that re-develop textures apply on release; the cheap ones apply while dragging.
+  const knobRange = <K extends 'ditherStrength' | 'vertexSnap' | 'affineWarp' | 'fogScale'>(key: K, fmt: (v: number) => string, onRelease = false) => {
+    const r = RETRO_RANGES[key];
+    const s = slider(r.min, r.max, r.step, () => settings[key], (v, final) => {
+      if (final || !onRelease) knob(key, v);
+    }, fmt, String(key));
+    updates.push(() => s.update());
+    return s;
+  };
+  const presetSeg = seg(
+    (['off', 'subtle', 'classic', 'ps1'] as RetroPreset[]).map((id) => [id, RETRO_LABELS[id]] as [RetroPreset, string]),
+    () => settings.retro as RetroPreset,
+    (id) => {
+      updateSettings(presetSettings(id));
+      refresh();
+    },
+    'Retro strength',
+  );
+  updates.push(() => presetSeg.update());
+  const blurb = h('p', { class: 'fe-help', 'aria-live': 'polite' });
+  updates.push(() => (blurb.textContent = `${RETRO_LABELS[settings.retro]}: ${RETRO_BLURBS[settings.retro]}`));
+  const advToggle = h('input', { type: 'checkbox', 'aria-label': 'Show advanced retro settings' });
+  const advanced: HTMLElement[] = [
+    ...row('Render res', knobSeg('res', [['240', '240p'], ['360', '360p'], ['480', '480p'], ['720', '720p'], ['full', 'Full']])),
+    ...row('Palette', knobSeg('palette', [['full', 'Full'], ['32', '32 col'], ['16', '16 col'], ['15bit', '15-bit']])),
+    ...row('Dither', knobSeg('ditherType', [['pattern', 'Crosshatch'], ['bayer', 'Bayer'], ['none', 'None']])),
+    ...row('Dither strength', knobRange('ditherStrength', (v) => `${Math.round(v * 100)}%`, true)),
+    ...row('Vertex snap', knobRange('vertexSnap', (v) => (v ? `${v} px` : 'Off'))),
+    ...row('Texture warp', knobRange('affineWarp', (v) => (v ? `${Math.round(v * 100)}%` : 'Off'))),
+    ...row('Fog distance', knobRange('fogScale', (v) => `${v.toFixed(2)}×`)),
+    ...row('Texture filter', knobSeg('texFilter', [['pixel', 'Pixel'], ['pixel-mip', 'Pixel + mips'], ['smooth', 'Smooth']])),
+    ...row('Textures', segOf('look', [['photo', 'Photo'], ['ps1', 'Drawn']])),
+  ];
+  const showAdvanced = () => {
+    advToggle.checked = advancedOpen;
+    for (const el of advanced) el.hidden = !advancedOpen;
+  };
+  advToggle.addEventListener('change', () => {
+    advancedOpen = advToggle.checked;
+    showAdvanced();
+  });
+  showAdvanced();
+
   const video = h(
     'div',
     { class: 'fe-form' },
-    ...row('Look', segOf('look', [['photo', 'Photo'], ['ps1', 'PS1']], (v) => updateSettings(lookPreset(v as Settings['look'])))),
-    ...row('Render res', segOf('res', [['240', '240p'], ['360', '360p'], ['480', '480p'], ['720', '720p'], ['full', 'Full']])),
+    ...row('Retro strength', presetSeg),
+    h('span', {}),
+    blurb,
+    ...row('Advanced', advToggle),
+    ...advanced,
     ...row('Field of view', rangeOf('fov', 55, 100, 1, (v) => `${v}°`)),
-    ...row('Vertex snap', checkOf('snap')),
-    ...row('Texture warp', checkOf('affine')),
-    ...row('Screen dither', checkOf('dither')),
-    ...row('Grade', segOf('grade', [['natural', 'Natural'], ['warm', 'Warm'], ['duotone', 'Duotone']])),
+    ...row('Grade', segOf('grade', [['map', 'Map'], ['natural', 'Natural'], ['warm', 'Warm'], ['duotone', 'Duotone']])),
     ...row('Time of day', segOf('time', [['map', 'Map'], ['night', 'Night'], ['overcast', 'Overcast'], ['dusk', 'Dusk']])),
     ...row('Show FPS', checkOf('showFps')),
     ...row('Cache', cacheBtn),
@@ -128,7 +183,7 @@ registerScreen('settings', (root, params) => {
   );
 
   const panes: Record<Tab, HTMLElement> = { video, controls, keys: h('div', {}, keys, keyNote), audio, account: accountPane() };
-  const labels: [Tab, string][] = [['video', 'Video'], ['controls', 'Controls'], ['keys', 'Key bindings'], ['audio', 'Audio'], ['account', 'Account']];
+  const labels: [Tab, string][] = [['video', 'Graphics'], ['controls', 'Controls'], ['keys', 'Key bindings'], ['audio', 'Audio'], ['account', 'Account']];
   const tabBtns = labels.map(([t, l]) => h('button', { class: 'fe-tab', type: 'button', role: 'tab', onclick: () => select(t) }, l));
   const panel = h('div', { class: 'lf-panel', role: 'tabpanel' });
   const select = (t: Tab) => {
