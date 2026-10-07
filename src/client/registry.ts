@@ -140,3 +140,25 @@ export const menuItems = new Map<string, MenuItem>();
 export function registerMenuItem(item: MenuItem): void {
   menuItems.set(item.id, item);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Footsteps (Ninja / Ninja Pro, or anything else that changes what you hear)
+// ---------------------------------------------------------------------------------------------
+
+/** Return the volume for a remote player's footstep (0 = silent). Filters chain in registration order. */
+export type FootstepFilter = (playerId: string, volume: number) => number;
+export const footstepFilters = new Map<string, FootstepFilter>();
+export function registerFootstepFilter(id: string, fn: FootstepFilter): void {
+  footstepFilters.set(id, fn);
+}
+/** Called by remotes.ts for each remote footstep. */
+export function footstepVolume(playerId: string, volume: number): number {
+  for (const fn of footstepFilters.values()) {
+    try {
+      volume = fn(playerId, volume);
+    } catch (err) {
+      console.error('[footsteps]', err);
+    }
+  }
+  return volume;
+}

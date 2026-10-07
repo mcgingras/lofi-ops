@@ -29,7 +29,7 @@ export function moveParamsFor(room: Room, p: PlayerState): MoveParams {
     adsTime: ((w?.def.adsMs ?? 250) / 1000) * room.modifiers.mul('adsMultiplier', p),
     adsMove: MOVE.ads,
     sprint: room.modifiers.mul('sprintMultiplier', p),
-    canSprint: true,
+    canSprint: room.modifiers.any('canSprint', p) !== false,
     canMove: p.alive && room.phase === 'playing',
   };
 }

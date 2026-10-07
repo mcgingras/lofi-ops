@@ -11,6 +11,7 @@ import type { SnapshotBuffer } from '../netcode/interp';
 import type { MapScene } from '../render/mapbuilder';
 import { FFA_LOOK, Soldier, TEAM_LOOKS, type SoldierLook } from '../render/models/soldier';
 import { getTexture } from '../render/textures';
+import { footstepVolume } from '../registry';
 import { sfx } from './audio';
 
 export interface RemoteView {
@@ -94,7 +95,8 @@ export class Remotes {
         v.stride += speed * dt;
         if (v.stride > (sprint ? 2.2 : 1.7)) {
           v.stride = 0;
-          sfx.play('step', { at: { x: s.x, y: s.y, z: s.z }, volume: sprint ? 0.9 : 0.5, rate: 0.9 + Math.random() * 0.2, lowpass: 1800 });
+          const volume = footstepVolume(id, sprint ? 0.9 : 0.5);
+          if (volume > 0) sfx.play('step', { at: { x: s.x, y: s.y, z: s.z }, volume, rate: 0.9 + Math.random() * 0.2, lowpass: 1800 });
         }
       }
     }

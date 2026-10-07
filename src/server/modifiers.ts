@@ -6,7 +6,7 @@
  * Combination rules by key:
  *   - `...Multiplier`, `damageTaken`, `damageDealt`: product of all results (undefined counts as 1)
  *   - `...Offset`: sum (undefined counts as 0)
- *   - boolean keys (`radarVisible`, `radarJammed`): any `false` wins, else any `true`, else undefined
+ *   - boolean keys (`radarVisible`, `radarJammed`, `canSprint`): any `false` wins, else any `true`, else undefined
  *
  * Add new keys from a feature by declaration merging:
  *   declare module '../../modifiers' { interface ModifierMap { myMultiplier: (p: PlayerState) => number | undefined } }
@@ -47,6 +47,8 @@ export interface ModifierMap {
   radarVisible: (target: PlayerState, viewer: PlayerState) => boolean | undefined;
   /** Is `viewer`'s minimap jammed (Counter-Spy Plane)? */
   radarJammed: (viewer: PlayerState) => boolean | undefined;
+  /** May this player sprint now? false = no (sprint stamina / Marathon, last stand, driving a streak). */
+  canSprint: (p: PlayerState) => boolean | undefined;
 }
 
 export type ModifierKey = keyof ModifierMap;
