@@ -1,5 +1,5 @@
 /** Bots through real rooms (rules level: Lobby + room.step(), no sockets). */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import botsFeature from '../src/server/features/bots/index';
 import { botBrain, configureRoomBots, createBotRoom, getRoomBots, registerBotGoal } from '../src/server/features/bots/api';
 import { Lobby } from '../src/server/lobby';
@@ -40,6 +40,7 @@ const teamSizes = (r: Room) => [0, 1].map((t) => [...r.players.values()].filter(
 const preset = (id: string): BotSkill => ({ ...BOT_DIFFICULTY_BY_ID.get(id as 'regular')!.skill });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   lobby?.shutdown();
   store?.close();
   lobby = undefined;
@@ -110,6 +111,9 @@ describe('bots: combat', () => {
 
   it('accuracy scales with difficulty (hit rate against a still target at 14-20 m)', () => {
     const rate = (id: string) => {
+      // Same bot loadout, rolls and timing jitter for every difficulty: only the skill differs.
+      let mr = 12345;
+      const spy = vi.spyOn(Math, 'random').mockImplementation(() => (mr = (mr * 48271) % 2147483647) / 2147483647);
       setupLobby();
       const r = room({ private: true });
       configureRoomBots(r, { fill: false, difficulty: id as 'regular', variance: 0 }, { waitSec: 0 });
@@ -144,6 +148,7 @@ describe('bots: combat', () => {
       store!.close();
       lobby = undefined;
       store = undefined;
+      spy.mockRestore();
       return { shots, hits, rate: hits / Math.max(1, shots) };
     };
     const recruit = rate('recruit');

@@ -75,6 +75,10 @@ describe('weapons over real sockets', () => {
     // A Stakeout from the profile loadout: shell-by-shell reload over the wire.
     const prof = server.sessions.get(wa.sessionId)!.profile;
     prof.loadouts[prof.selectedLoadout]!.primary = { weapon: 'stakeout', attachments: ['grip'], camo: 'none' };
+    // The economy's spawn-time class check only lets owned, unlocked items through.
+    prof.level = 50;
+    prof.owned.push('weapon.stakeout', 'att.stakeout.grip');
+    prof.stats['weapon.stakeout.kills'] = 100;
     room.spawn(knifer);
     const sp = await a.waitFor('spawned', (m) => m.loadout.primary.weapon === 'stakeout');
     expect(sp.loadout.primary.attachments).toEqual(['grip']);

@@ -32,6 +32,7 @@ import type { PlayerState } from '../../player';
 import type { Room } from '../../room';
 import { RpcError } from '../../rpc';
 import type { Session } from '../../session';
+import { configureRoomBots, getRoomBots } from '../bots/api';
 import { credit, debit, econ } from './ledger';
 import { byScore, isWagerRules, wx } from './modes/common';
 
@@ -118,6 +119,9 @@ export class WagerManager {
         botFill: 0,
       });
       state = this.create(room, { ante, practiceRequested: practice, managed: true, bots });
+      // Economy owns the bot count here (core botFill at match start); the bots feature only
+      // supplies brains, at the lobby's skill settings.
+      configureRoomBots(room, bots, { managed: false, waitSec: 0 });
     }
     return { roomId: state.room.id, practice: state.practiceRequested };
   }
@@ -145,7 +149,11 @@ export class WagerManager {
     if (!s) throw new Error('not a wager room');
     s.ante = ante;
     s.practiceRequested = ante === 0;
-    if (bots) s.bots = sanitizeBots(room.mode.id, bots);
+    if (bots) {
+      s.bots = sanitizeBots(room.mode.id, bots);
+      const rb = getRoomBots(room);
+      if (rb) rb.update({ difficulty: s.bots.difficulty, custom: s.bots.custom, variance: s.bots.variance });
+    }
     s.hudDirty = true;
   }
 
@@ -242,7 +250,12 @@ export class WagerManager {
       const s = this.stateFor(room);
       if (!s) return;
       s.hudDirty = true;
-      if (player.isBot) wx(player).skill = jitterSkill(skillFor(s.bots), s.bots.variance);
+      if (player.isBot) {
+        const skill = (wx(player).skill = jitterSkill(skillFor(s.bots), s.bots.variance));
+        // The bots feature's brain plays at exactly this (jittered) skill.
+        const brain = getRoomBots(room)?.attachBrain(player);
+        if (brain) brain.skill = { ...skill };
+      }
     });
     room.bus.on('playerLeave', ({ player, reason }) => {
       const s = this.stateFor(room);

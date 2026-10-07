@@ -6,7 +6,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { WebSocket } from 'ws';
 import { registerWeaponBehavior } from '../src/server/combat';
+import bots from '../src/server/features/bots/index';
+import { botBrain, getRoomBots } from '../src/server/features/bots/api';
 import economy, { wagersFor } from '../src/server/features/economy/index';
+import type { Feature } from '../src/server/feature';
 import { gunGameLadder } from '../src/server/features/economy/modes/gungame';
 import type { ServerApi } from '../src/server/feature';
 import { Lobby } from '../src/server/lobby';
@@ -38,13 +41,13 @@ interface Human extends Session {
   log: ServerMsg[];
 }
 
-function world() {
+function world(features: Feature[] = [economy]) {
   const store = new Store(':memory:');
   const sessions: Session[] = [];
   const rpc = new RpcRegistry();
-  const lobby = new Lobby({ store, features: [economy], log: () => {}, autoTick: false });
+  const lobby = new Lobby({ store, features, log: () => {}, autoTick: false });
   const api: ServerApi = { lobby, store, rpc, registerMode, registerWeaponBehavior, sessions: () => sessions.values(), log: () => {} };
-  economy.setup!(api);
+  for (const f of features) f.setup?.(api);
   worlds.push({ lobby, store });
   let n = 0;
   const human = (name: string, cp = 20000): Human => {
@@ -401,6 +404,45 @@ describe('practice wagers and bot backfill', () => {
     expect(room.players.size).toBe(4);
     expect(room.bots().every((b) => b.ext.wager?.skill !== undefined)).toBe(true);
     expect(a.profile.codPoints).toBe(0);
+  });
+});
+
+describe('wager lobbies with the bots feature loaded', () => {
+  it('backfilled bots get brains at the lobby skill, and economy alone owns the bot count', async () => {
+    const w = world([economy, bots]);
+    const a = w.human('A');
+    const r = await w.call(a, 'economy.wagerQueue', { mode: 'oitc', ante: 0, bots: { fill: true, difficulty: 'hardened', variance: 0.3, targetPlayers: 5 } });
+    w.lobby.join(a, r.roomId as string);
+    const room = w.lobby.get(r.roomId as string)!;
+    expect(getRoomBots(room)?.managed).toBe(false);
+    steps(room, 4);
+    expect(room.phase).toBe('countdown');
+    expect(room.players.size).toBe(5);
+    for (const b of room.bots()) {
+      const brain = botBrain(room, b);
+      expect(brain).toBeDefined();
+      expect(b.brain).toBe(brain);
+      expect(brain!.skill).toEqual(b.ext.wager!.skill);
+    }
+    steps(room, 8);
+    expect(room.phase).toBe('playing');
+    expect(room.players.size).toBe(5); // the bots feature didn't add or retire any
+  });
+
+  it('with bot fill off, the bots feature adds nobody', async () => {
+    const w = world([economy, bots]);
+    const hs = [w.human('A'), w.human('B')];
+    let roomId = '';
+    for (const h of hs) {
+      const r = await w.call(h, 'economy.wagerQueue', { mode: 'gungame', ante: 10, bots: { fill: false } });
+      roomId ||= r.roomId as string;
+      w.lobby.join(h, roomId);
+    }
+    const room = w.lobby.get(roomId)!;
+    expect((await w.call(hs[0]!, 'economy.wagerStart', {})).ok).toBe(true);
+    steps(room, 8);
+    expect(room.phase).toBe('playing');
+    expect(room.bots().length).toBe(0);
   });
 });
 

@@ -1,6 +1,7 @@
 /** Economy rules: CP earning, payouts, store gates/purchases, class enforcement, bot settings. */
 import { describe, expect, it } from 'vitest';
 import { jitterSkill, sanitizeBots } from '../src/server/features/economy/wager';
+import { ATTACHMENT_BY_ID } from '../src/shared/defs/attachments';
 import { BOT_SKILL_RANGES, skillFor } from '../src/shared/defs/bots';
 import { CAMOS } from '../src/shared/defs/camos';
 import { codPointsBreakdown, codPointsForMatch, paidPlaces, wagerPayouts, WAGER_MODES } from '../src/shared/defs/economy';
@@ -90,8 +91,17 @@ describe('store', () => {
     const att = keyOf.attachment('testgun', 'extmag');
     expect(lockReason(p, att)).toBe('weapon');
     expect(purchase(p, keyOf.weapon('testgun')).ok).toBe(true);
+    // Extended Mag needs weapon kills (weapons area's AttachmentDef.unlockKills).
+    const need = ATTACHMENT_BY_ID.get('extmag')?.unlockKills ?? 0;
+    if (need > 0) {
+      expect(lockReason(p, att)).toBe('kills');
+      p.stats['weapon.testgun.kills'] = need;
+    }
     expect(lockReason(p, att)).toBe('funds');
-    p.codPoints = 2000;
+    const price = storeItem(att)!.price;
+    p.codPoints = price - 1;
+    expect(lockReason(p, att)).toBe('funds');
+    p.codPoints = price;
     expect(purchase(p, att).ok).toBe(true);
     expect(p.codPoints).toBe(0);
   });
@@ -130,6 +140,9 @@ describe('store', () => {
     expect(enforceLoadout(p, l).loadout.primary.weapon).toBe('ak47');
     // Starter classes always pass untouched.
     for (const d of DEFAULT_LOADOUTS) expect(enforceLoadout(newProfile('x', 'y'), d).changed).toEqual([]);
+    // ...even when a starter attachment has a kill gate a fresh profile hasn't met.
+    for (const d of DEFAULT_LOADOUTS)
+      for (const a of d.primary.attachments) expect(canUse(newProfile('x', 'y'), keyOf.attachment(d.primary.weapon, a))).toBe(true);
   });
 });
 

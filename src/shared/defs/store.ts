@@ -103,8 +103,10 @@ export interface StoreItem {
   name: string;
   price: number;
   unlock: StoreUnlock;
-  /** Starter item: usable without buying. */
+  /** Usable without buying (starter item or price 0); unlock gates still apply. */
   free: boolean;
+  /** Part of a default class: always usable, even when its unlock gate (e.g. weapon kills) is closed. */
+  starter?: boolean;
 }
 
 export const keyOf = {
@@ -138,27 +140,27 @@ export function storeCatalog(): StoreItem[] {
     if (WAGER_ONLY_WEAPONS.has(w.id)) continue;
     const key = keyOf.weapon(w.id);
     const price = w.price ?? DEFAULT_PRICES.weapon;
-    items.push({ key, kind: 'weapon', id: w.id, name: w.name, price, unlock: { level: w.unlockLevel }, free: free.has(key) || price === 0 });
+    items.push({ key, kind: 'weapon', id: w.id, name: w.name, price, unlock: { level: w.unlockLevel }, starter: free.has(key), free: free.has(key) || price === 0 });
     for (const aid of w.attachments) {
       const a = ATTACHMENT_BY_ID.get(aid);
       if (!a) continue;
       const akey = keyOf.attachment(w.id, aid);
       const aprice = a.price ?? DEFAULT_PRICES.attachment;
-      items.push({ key: akey, kind: 'attachment', id: aid, weapon: w.id, name: `${a.name} (${w.name})`, price: aprice, unlock: a.unlockKills ? { weaponKills: a.unlockKills } : {}, free: free.has(akey) || aprice === 0 });
+      items.push({ key: akey, kind: 'attachment', id: aid, weapon: w.id, name: `${a.name} (${w.name})`, price: aprice, unlock: a.unlockKills ? { weaponKills: a.unlockKills } : {}, starter: free.has(akey), free: free.has(akey) || aprice === 0 });
     }
   }
   for (const c of CAMOS) {
     const key = keyOf.camo(c.id);
     const price = c.price ?? DEFAULT_PRICES.camo;
-    items.push({ key, kind: 'camo', id: c.id, name: c.name, price, unlock: { ...c.unlock }, free: free.has(key) || price === 0 });
+    items.push({ key, kind: 'camo', id: c.id, name: c.name, price, unlock: { ...c.unlock }, starter: free.has(key), free: free.has(key) || price === 0 });
   }
   for (const r of RETICLES) {
     const key = keyOf.reticle(r.id);
-    items.push({ key, kind: 'reticle', id: r.id, name: r.name, price: r.price, unlock: { level: r.unlockLevel, prestige: r.unlockPrestige }, free: free.has(key) || r.price === 0 });
+    items.push({ key, kind: 'reticle', id: r.id, name: r.name, price: r.price, unlock: { level: r.unlockLevel, prestige: r.unlockPrestige }, starter: free.has(key), free: free.has(key) || r.price === 0 });
   }
   for (const e of EMBLEM_BACKGROUNDS) {
     const key = keyOf.emblem(e.id);
-    items.push({ key, kind: 'emblem', id: e.id, name: e.name, price: e.price, unlock: { level: e.unlockLevel, prestige: e.unlockPrestige }, free: free.has(key) || e.price === 0 });
+    items.push({ key, kind: 'emblem', id: e.id, name: e.name, price: e.price, unlock: { level: e.unlockLevel, prestige: e.unlockPrestige }, starter: free.has(key), free: free.has(key) || e.price === 0 });
   }
   cache = { n, items, byKey: new Map(items.map((i) => [i.key, i])) };
   return items;
@@ -223,6 +225,7 @@ export const LOCK_TEXT: Record<LockReason, string> = {
 export function canUse(p: ProfileLike, key: string): boolean {
   const item = storeItem(key);
   if (!item) return false;
+  if (item.starter) return true;
   return owns(p, item) && !gateReason(p, item);
 }
 

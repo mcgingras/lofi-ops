@@ -11,7 +11,7 @@ import { BOT_DIFFICULTY_BY_ID } from '../../../shared/defs/bots';
 import { WAGER_MODES } from '../../../shared/defs/economy';
 import type { WagerHud, WagerModeHud } from '../../../shared/defs/economy-net';
 import type { CpLine } from '../../../shared/defs/economy';
-import { RETICLE_BY_ID } from '../../../shared/defs/store';
+import { DEFAULT_RETICLE, RETICLE_BY_ID } from '../../../shared/defs/store';
 import { blink, box, clock, HUD_COLORS as C, rect, textWidth, txt, unit } from '../../hud/draw';
 import { net } from '../../net';
 import { onFeature, registerHudWidget, registerMatchHook } from '../../registry';
@@ -197,7 +197,10 @@ registerHudWidget(
     const optic = wpn.attachmentIds.some((id) => ATTACHMENT_BY_ID.get(id)?.slot === 'optic');
     if (!optic) return;
     const e = (net.profile?.ext.economy ?? {}) as { equipped?: { reticle?: string } };
-    const r = RETICLE_BY_ID.get(e.equipped?.reticle ?? 'dot') ?? RETICLE_BY_ID.get('dot')!;
+    // The weapons area already paints the default red dot / ring / chevron on the optic glass;
+    // only an equipped (bought) reticle is drawn on top, so the default isn't shown twice.
+    const r = RETICLE_BY_ID.get(e.equipped?.reticle ?? DEFAULT_RETICLE);
+    if (!r || r.id === DEFAULT_RETICLE) return;
     const u = unit(H);
     drawReticle(g, Math.floor(W / 2) + 0.5, Math.floor(H / 2) + 0.5, 9 * u, r.shape, r.color);
   },
