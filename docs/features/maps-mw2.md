@@ -8,7 +8,7 @@ every mode it supports. Each one can also run a full lobby of bots (see "Bots" b
 | id | name | size | play space | default time | other presets |
 |---|---|---|---|---|---|
 | `rust` | Rust | small | ~60 x 60 m | `dusk` (hazy desert dusk) | `day` (dust haze), `night` |
-| `scrapyard` | Scrapyard | medium | ~88 x 76 m | `overcast` | `dusk`, `night` |
+| `scrapyard` | Scrapyard | medium | 51 x 80 m (true scale, see `docs/maps/scrapyard-reference.md`) | `overcast` | `dusk`, `night` |
 | `terminal` | Terminal | medium | ~72 x 50 m | `day` (clear afternoon) | `overcast`, `dusk` |
 
 Screenshots (headless Chrome, dev server, free camera) are in `docs/features/maps-mw2/*.jpg`:
@@ -27,17 +27,30 @@ raised pipe rack runs on the west (walk under it), and a third pipe runs along t
 east side also has the site trailer, a chain-link fence and an open-front shed. Sand berms rise to
 the north, south and west edges, with scenery dunes beyond.
 
-**Scrapyard.** The hangar to the north (28 x 20 m, 9 m tall) has a main door to the south, a back
-door, side doors and high windows. Catwalks at 3.6 m run along both side walls, a bridge joins them
-across the north end, and there is a stair ramp up on each side. Inside are an engine on a stand, a
-wing panel, crates and a tug. To the south-west lies the walk-through airliner fuselage (cabin floor
-at 0.8 m). You can enter through the open front, a tail door or two hull breaches, each with a
-debris ramp; there are seat rows either side of the aisle, plus a tail fin, a sloped wing and loose
-engines. The broken-off nose section to the south-east has a nose-cone ramp up onto its roof (3.4 m
-perch). Containers include an east roost (a scrap ramp up onto a container at 2.6 m), a north-east
-stack, west cover and mid-field singles. There are two trailers, junk-pile slopes in two corners and
-a taxi strip across the middle. The boundary is corrugated walls plus a fence section with wrecks
-beyond.
+**Scrapyard.** Rebuilt from the MW2 overhead minimap at true scale (1 m = 9.5 minimap px). The
+reference, callouts and sources are in `docs/maps/scrapyard-reference.md`. The yard is a 51 x 80 m
+rectangle running north-south, with a building on each side:
+- **Red Warehouse** (north): a two-storey L-shaped office. Stairs run along its back wall, and the
+  upstairs offices have windows looking down the yard. The corner office overlooks Domination A.
+  It has a walled front yard and a dead-end back alley.
+- **Blue Warehouse** (south): a tall open hall with a grated catwalk at 3.6 m along its north wall
+  (stair ramps at both ends). Its windows duel with the Red Warehouse across the map.
+- **Storage** (west): one floor, four entries. Outside are a low wall along its front, the box truck
+  and a white container.
+- **Forklift building** (east): a big opening onto the centre. Nearby are the shed, the burning
+  truck, an engine bay and the gas tanks.
+
+The north-west has the helipad with a walk-through Sea Knight. The centre has the fuselages, all
+walk-through with cabin floors one step up:
+- an L of long fuselages with a blue roof;
+- the north tube, under a fallen lattice tower;
+- a closed tail section;
+- the "818" pair.
+
+A crate stack and a fallen wing lead up onto the fuselage roofs (3.6 m). There are three lanes:
+west (truck, low wall), centre (fuselages) and east (an open service road). The boundary is
+corrugated walls and chain-link, with dirt berms beyond. A crane outside the south wall swings its
+boom over the yard.
 
 **Terminal (compact section).** The gate level is a solid 3 m plinth. On it are the bookstore (its
 own walls and ceiling, shelves and a till), the food counter, a gate desk with a sign, gate seating
@@ -50,12 +63,12 @@ and cones, with a blast fence to the south and chain-link fences to the sides.
 
 ## Data conventions (for modes, bots and frontend)
 
-- **Team spawns.** `spawns.teams[0]` is on one side (Rust north, Scrapyard west, Terminal inside
-  the terminal) and `spawns.teams[1]` is on the other. Every team spawn is more than 20 m from every
+- **Team spawns.** `spawns.teams[0]` is on one side (Rust north, Scrapyard north-west as in MW2, Terminal
+  inside the terminal) and `spawns.teams[1]` is on the other. Every team spawn is more than 20 m from every
   enemy team spawn. Spawns face into the map. Each team has 8 or more spawns, plus 12 or more FFA
   spawns.
 - **Domination:** `objectives.dom` = `A`, `B`, `C`. A is on team 0's side, B is in the middle (Rust:
-  under the tower; Scrapyard: inside the hangar; Terminal: under the jet bridge), and C is on team
+  under the tower; Scrapyard: inside Storage, the west building; Terminal: under the jet bridge), and C is on team
   1's side.
 - **Search and Destroy:** `objectives.sd` = sites `A`, `B`, both with `team: 1`. Team 1's spawn side
   defends and team 0's spawns are the attacker starts. `objectives.sdBomb` = one point (`id: 'bomb'`,
@@ -63,7 +76,7 @@ and cones, with a blast fence to the south and chain-link fences to the sides.
   defending team `spawns.teams[1]` through `ModeRules.spawnPoints`.
 - **Headquarters:** `objectives.hq` = 5 named points per map (some on upper floors; read `y`).
 - **Bots:** `hotspots` = 10 to 12 roam points per map, including the upper levels (the tower decks,
-  the building's upper floor, catwalks, the fuselage cabin, the nose roof, the container roost,
+  the building's upper floor, catwalks, the fuselage cabins and roofs, the Sea Knight cabin,
   the gate level and the jet bridge).
 - **Stairs:** the ramp brushes for stairs carry `tag: 'stairs'`. Railings are player-only clips
   tagged `rail` (bullets and sight pass), and map-edge and fence clips are tagged `clip`. A nav
@@ -102,7 +115,7 @@ Recipe files (auto-imported):
   rust_skyHaze`
 - `src/client/render/recipes/scrapyard.ts`: `scrap_ground scrap_asphalt scrap_hangar
   scrap_concrete scrap_grate scrap_fuse scrap_alu scrap_cabin scrap_carpet scrap_seat
-  scrap_cockpit scrap_junk scrap_wall scrap_trailer`
+  scrap_cockpit scrap_junk scrap_wall scrap_trailer scrap_blueclad`
 - `src/client/render/recipes/terminal.ts`: `term_apron term_facade term_floor term_wall term_books
   term_counter term_signBooks term_signGate term_signFood term_jet term_bridge term_blast
   term_truck term_skyDay`
@@ -132,6 +145,10 @@ can use it for more maps.
     from both team spawns. These assert that the space is closed (no escape past the bounds, no
     falling out), and that every spawn, objective point and hotspot can be reached from both
     sides. This covers the stairs to every deck.
+- `tests/maps-scrapyard.test.ts`: Scrapyard against its reference (scale, building positions,
+  diagonal spawns, objective placement, the warehouse-to-warehouse and lane sightlines). It also
+  checks that the bots' `NavGrid` reaches every objective, roam point, S&D site and upper floor
+  from both team spawns.
 - `tests/maps-mw2-walk.ts` is the flood-fill helper (`floodWalk`, `reaches`). Other map areas can
   use it.
 - `tests/maps-mw2.integration.test.ts`: real server and socket, plus simulated bot-filled rooms

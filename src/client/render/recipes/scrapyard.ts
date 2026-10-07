@@ -1,8 +1,9 @@
 /**
  * Texture recipes for Scrapyard (maps-mw2): dirt and asphalt, the hangar's ribbed cladding and
  * floor, catwalk grating, the airliner (livery side with window band, bare aluminium, cabin
- * panels, carpet, seats, cockpit glazing), scrap piles, the yard wall and a white trailer. Photo
- * looks develop the CC0 Poly Haven photos in assets/textures. Ids are prefixed `scrap_`.
+ * panels, carpet, seats, cockpit glazing), scrap piles, the yard wall, a white trailer and the blue
+ * corrugated cladding of the Blue Warehouse. Photo looks develop the CC0 Poly Haven photos in
+ * assets/textures. Ids are prefixed `scrap_`.
  */
 import { blotch, col, dirtBottom, drips, grain, hex, stencilText, streaks } from '../developer';
 import { registerTexture } from '../textures';
@@ -390,6 +391,35 @@ registerTexture('scrap_trailer', {
         stencilText(g, ['AERO SALVAGE CO.'], w * 0.08, h * 0.4, [56], 'rgba(170,40,30,.8)');
         drips(g, c, w, 0, 50, h * 0.6, 0.45);
         dirtBottom(g, w, h, 0.55, 0.65);
+      },
+    }),
+});
+
+/** Blue-painted corrugated cladding (the Blue Warehouse and the blue skirts of the white buildings). */
+registerTexture('scrap_blueclad', {
+  w: 64,
+  h: 64,
+  draw(g, w, h, R) {
+    const b = hex('#3c5a86');
+    for (let x = 0; x < w; x++)
+      for (let y = 0; y < h; y++) {
+        const ph = (x / 8) % 1;
+        g.fillStyle = col(b, (ph < 0.25 ? 1.2 : ph < 0.35 ? 0.72 : 0.96) * R.rr(0.94, 1.05));
+        g.fillRect(x, y, 1, 1);
+      }
+    streaks(g, R, w, 0, 12, 40, 0.3, '50,36,28');
+  },
+  photos: ['box_profile_metal_sheet'],
+  photo: (c) =>
+    c.fromPhoto('box_profile_metal_sheet', {
+      filter: 'saturate(0) brightness(1.1) contrast(1.15)',
+      over: (g, w, h) => {
+        g.globalCompositeOperation = 'multiply';
+        g.fillStyle = '#4a6fa8';
+        g.fillRect(0, 0, w, h);
+        g.globalCompositeOperation = 'source-over';
+        drips(g, c, w, 0, 22, h * 0.5, 0.4);
+        dirtBottom(g, w, h, 0.65, 0.6);
       },
     }),
 });
