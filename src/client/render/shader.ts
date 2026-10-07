@@ -3,6 +3,10 @@
  * affine texture warp, baked per-vertex light (vertex colours) or a per-object light sampled from
  * the bake (`dyn`, for players and the viewmodel), emissive, fog. Global uniforms (`G`) are shared
  * by every material, so time of day / look toggles are one assignment.
+ *
+ * Atmosphere (all retro presets): the sky dome fades to the fog colour at the horizon so the world
+ * dissolves into the sky instead of meeting it at a seam, and unfogged backdrops (mountains, hills)
+ * take a partial haze by distance (aerial perspective) instead of standing out as dark cut-outs.
  */
 import * as THREE from 'three';
 import { bindTexture } from './textures';
@@ -23,6 +27,12 @@ export const G = {
   uFogColor: { value: new THREE.Color() },
   uFogNear: { value: 20 },
   uFogFar: { value: 80 },
+  /** Retro strength fog distance multiplier (1 = the map's own fog). */
+  uFogScale: { value: 1 },
+  /** Max haze on unfogged backdrops (0..1), per time of day (render/grade.ts). */
+  uHaze: { value: 0.6 },
+  /** Sky horizon band: fully fog-coloured below x, pure sky above y (dome elevation, -1..1). */
+  uHorizon: { value: new THREE.Vector2(-0.03, 0.2) },
   /** Muzzle flash light around the camera. */
   uFlash: { value: 0 },
   uUnlit: { value: 0 },
@@ -31,20 +41,32 @@ export const G = {
 
 const VS = /* glsl */ `
 uniform vec2 uSnap, uRepeat;
-uniform float uJitter, uAffine, uAffMul, uBake, uDynOn, uFogNear, uFogFar, uNoFog, uFlash, uUnlit;
+uniform float uJitter, uSnapMul, uAffine, uAffMul, uBake, uDynOn, uFogNear, uFogFar, uFogScale, uNoFog, uHaze, uHazeOn, uSky, uFlash, uUnlit;
+uniform vec2 uHorizon;
 uniform vec3 uUnlitColor;
 uniform vec3 uSunDir, uSun, uAmb, uDyn;
 varying vec3 vLight;
 varying vec3 vUvA;
 varying float vFog;
+#ifdef SNAP_DEPTH
+varying vec4 vSnapD;
+#endif
 float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
 void main() {
   vec4 wp = modelMatrix * vec4(position, 1.0);
   vec4 mv = viewMatrix * wp;
   vec4 p = projectionMatrix * mv;
-  if (uJitter > 0.0) { vec2 s = uSnap / uJitter; p.xy = floor(p.xy / p.w * s + 0.5) / s * p.w; }
+#ifdef SNAP_DEPTH
+  vec2 p0 = p.xy;
+#endif
+  if (uJitter * uSnapMul > 0.0) { vec2 s = uSnap / uJitter; p.xy = floor(p.xy / p.w * s + 0.5) / s * p.w; }
   gl_Position = p;
   vec3 n = normalize(mat3(modelMatrix) * normal);
+#ifdef SNAP_DEPTH
+  // Clip-space snap offset, z and w: divided by the interpolated w in the fragment shader they give
+  // the screen-linear snap shift and depth of this pixel.
+  vSnapD = vec4(p.xy - p0, p.z, p.w);
+#endif
   vec3 light = uAmb + uSun * max(dot(n, uSunDir), 0.0);
 #ifdef USE_COLOR
   light = mix(light, color, uBake);
@@ -55,7 +77,10 @@ void main() {
   vLight = light + vec3(1.0, 0.8, 0.5) * uFlash * (1.0 - smoothstep(0.0, 9.0, length(mv.xyz)));
   float w = mix(1.0, p.w, uAffine * uAffMul);
   vUvA = vec3(uv * uRepeat * w, w);
-  vFog = uNoFog > 0.5 ? 0.0 : smoothstep(uFogNear, uFogFar, length(mv.xyz));
+  float d = length(mv.xyz);
+  if (uSky > 0.5) vFog = 1.0 - smoothstep(uHorizon.x, uHorizon.y, normalize(position).y);
+  else if (uNoFog > 0.5) vFog = uHazeOn * uHaze * clamp(d / (2.0 * uFogFar * uFogScale), 0.0, 1.0);
+  else vFog = smoothstep(uFogNear * uFogScale, uFogFar * uFogScale, d);
 }`;
 
 const FS = /* glsl */ `
@@ -65,7 +90,23 @@ uniform float uEmissive, uOpacity;
 varying vec3 vLight;
 varying vec3 vUvA;
 varying float vFog;
+#ifdef SNAP_DEPTH
+uniform vec2 uPolyOffset, uSnap;
+varying vec4 vSnapD;
+#endif
 void main() {
+#ifdef SNAP_DEPTH
+  // Vertex snap moves triangles sideways but must not move depth: layered coplanar surfaces
+  // (decals, depth levels) would otherwise fight. Depth is affine in screen space over a flat
+  // triangle, so undo the pixel's snap shift with the depth gradient: the unsnapped surface depth.
+  float z = 0.5 * vSnapD.z / vSnapD.w + 0.5;
+  vec2 g = vec2(dFdx(z), dFdy(z));
+  z -= dot(g, vSnapD.xy / vSnapD.w * uSnap);
+  // gl_FragDepth bypasses the material's polygon offset (map depth levels), so apply it here, as
+  // GL defines it: factor * max depth slope + units * the depth buffer's resolution (24-bit).
+  if (uPolyOffset != vec2(0.0)) z += uPolyOffset.x * max(abs(g.x), abs(g.y)) + uPolyOffset.y / 16777216.0;
+  gl_FragDepth = clamp(z, 0.0, 1.0);
+#endif
   vec4 t = texture2D(tMap, vUvA.xy / vUvA.z);
   if (t.a < 0.5) discard;
   vec3 c = t.rgb * uTint * mix(vLight, vec3(1.0), uEmissive);
@@ -89,11 +130,36 @@ export interface LookMaterialOpts {
   affine?: number;
   /** Lit by a per-object light (`setDynLight`) instead of vertex colours: players, viewmodel. */
   dyn?: boolean;
+  /** The sky dome: fades to the fog colour at the horizon. */
+  sky?: boolean;
+  /** Vertex snap on/off (default on, except the viewmodel: `dyn` + `fog: false`, which would jitter while it sways). */
+  snap?: boolean;
+  /**
+   * Distance haze for `fog: false` materials (0..1). Default 1 for baked world materials (map
+   * backdrops such as mountains), 0 for the sky, `dyn` objects and unbaked ones.
+   */
+  haze?: number;
 }
 
-export type LookMaterial = THREE.ShaderMaterial & { uniforms: { tMap: { value: THREE.Texture }; uTint: { value: THREE.Color }; uDyn: { value: THREE.Color }; uOpacity: { value: number } } };
+export type LookMaterial = THREE.ShaderMaterial & { uniforms: { tMap: { value: THREE.Texture }; uTint: { value: THREE.Color }; uDyn: { value: THREE.Color }; uOpacity: { value: number }; uSnapMul: { value: number }; uPolyOffset?: { value: THREE.Vector2 } } };
 
 const SIDES = { front: THREE.FrontSide, back: THREE.BackSide, double: THREE.DoubleSide } as const;
+
+/** Snapping look materials, so the depth fix-up (SNAP_DEPTH) compiles in only while snap is on. */
+const snapping = new Set<LookMaterial>();
+let snapDepth = false;
+function applySnapDepth(m: LookMaterial): void {
+  if (('SNAP_DEPTH' in m.defines) === snapDepth) return;
+  if (snapDepth) m.defines.SNAP_DEPTH = '';
+  else delete m.defines.SNAP_DEPTH;
+  m.needsUpdate = true;
+}
+/** Vertex snap on/off (renderer). Writing gl_FragDepth costs early-z, so it is only compiled in while snapping. */
+export function setSnapDepth(on: boolean): void {
+  if (on === snapDepth) return;
+  snapDepth = on;
+  for (const m of snapping) applySnapDepth(m);
+}
 
 export function makeLookMaterial(o: LookMaterialOpts): LookMaterial {
   let mul: [number, number] = o.uvMul ?? [1, 1];
@@ -106,6 +172,10 @@ export function makeLookMaterial(o: LookMaterialOpts): LookMaterial {
       uEmissive: { value: o.emissive ?? 0 },
       uRepeat: { value: new THREE.Vector2(mul[0], mul[1]) },
       uNoFog: { value: o.fog === false ? 1 : 0 },
+      uHazeOn: { value: o.haze ?? (o.fog === false && !o.dyn && !o.sky && o.bake !== false ? 1 : 0) },
+      uSky: { value: o.sky ? 1 : 0 },
+      uSnapMul: { value: (o.snap ?? !(o.dyn && o.fog === false)) ? 1 : 0 },
+      uPolyOffset: { value: new THREE.Vector2() },
       uAffMul: { value: o.affine ?? 1 },
       uDynOn: { value: o.dyn ? 1 : 0 },
       uDyn: { value: new THREE.Color(1, 1, 1) },
@@ -116,6 +186,18 @@ export function makeLookMaterial(o: LookMaterialOpts): LookMaterial {
     side: SIDES[o.side ?? 'front'],
     vertexColors: !o.dyn && o.bake !== false,
   }) as LookMaterial;
+  m.defines ??= {};
+  if (m.uniforms.uSnapMul.value) {
+    // polygonOffset is set by the caller after creation (map depth levels): mirror it for SNAP_DEPTH.
+    const po = m.uniforms.uPolyOffset!.value as THREE.Vector2;
+    m.onBeforeRender = () => {
+      if (m.polygonOffset) po.set(m.polygonOffsetFactor, m.polygonOffsetUnits);
+      else po.set(0, 0);
+    };
+    snapping.add(m);
+    m.addEventListener('dispose', () => snapping.delete(m));
+    applySnapDepth(m);
+  }
   bindTexture(m, o.texture);
   return m;
 }

@@ -3,18 +3,21 @@
  * `updateSettings({...})`, react with `onSettings(fn)`. Features may store their own keys under
  * `settings.ext.<area>` (typed by declaration merging on SettingsExt).
  */
-import type { Grade, ResSetting } from './render/renderer';
+import type { Grade } from './render/renderer';
+import { DEFAULT_RETRO, migrateRetro, presetSettings, type RetroId, type RetroKnobs } from './render/retro';
 import type { Look } from './render/textures';
 
 export interface SettingsExt {}
 
-export interface Settings {
+/**
+ * The retro knobs (`res`, `palette`, `ditherType`, `ditherStrength`, `vertexSnap`, `affineWarp`,
+ * `fogScale`, `texFilter`) live flat on Settings; `retro` names the preset they equal ('custom'
+ * otherwise). See render/retro.ts.
+ */
+export interface Settings extends RetroKnobs {
+  /** Texture source: developed photos, or the drawn lo-fi canvases. */
   look: Look;
-  res: ResSetting;
-  /** PS1 vertex snap / affine texture warp / screen dither (the PS1 preset turns them on). */
-  snap: boolean;
-  affine: boolean;
-  dither: boolean;
+  retro: RetroId;
   grade: Grade;
   /** Vertical field of view (degrees). */
   fov: number;
@@ -34,11 +37,8 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   look: 'photo',
-  res: '360',
-  snap: false,
-  affine: false,
-  dither: false,
-  grade: 'natural',
+  ...presetSettings(DEFAULT_RETRO),
+  grade: 'map',
   fov: 70,
   sensitivity: 2.2,
   adsSensitivity: 0.75,
@@ -50,19 +50,31 @@ export const DEFAULT_SETTINGS: Settings = {
   ext: {},
 };
 
-const KEY = 'lofi.settings';
+export const SETTINGS_KEY = 'lofi.settings';
 
-function load(): Settings {
+/** Stored JSON (any version, or null) → complete, valid settings. */
+export function parseSettings(raw: string | null): Settings {
   try {
-    const raw = localStorage.getItem(KEY);
     if (raw) {
-      const v = JSON.parse(raw) as Partial<Settings>;
-      return { ...DEFAULT_SETTINGS, ...v, ext: { ...(v.ext ?? {}) } };
+      const v = JSON.parse(raw) as Partial<Settings> & Record<string, unknown>;
+      // Drop keys from older versions (the snap/affine/dither booleans became retro knobs).
+      const { snap: _s, affine: _a, dither: _d, ...rest } = v;
+      // Settings from before the per-map grade existed: 'natural' was simply the default then.
+      if (!('retro' in v) && v.grade === 'natural') rest.grade = 'map';
+      return { ...DEFAULT_SETTINGS, ...rest, ...migrateRetro(v), ext: { ...(v.ext ?? {}) } };
     }
   } catch {
     /* ignore */
   }
   return { ...DEFAULT_SETTINGS, ext: {} };
+}
+
+function load(): Settings {
+  try {
+    return parseSettings(localStorage.getItem(SETTINGS_KEY));
+  } catch {
+    return parseSettings(null);
+  }
 }
 
 export const settings: Settings = load();
@@ -72,7 +84,7 @@ export function updateSettings(patch: Partial<Settings>): void {
   const changed = (Object.keys(patch) as (keyof Settings)[]).filter((k) => JSON.stringify(settings[k]) !== JSON.stringify(patch[k]));
   Object.assign(settings, patch);
   try {
-    localStorage.setItem(KEY, JSON.stringify(settings));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   } catch {
     /* ignore */
   }
@@ -84,9 +96,4 @@ export function onSettings(fn: (s: Settings, changed: (keyof Settings)[]) => voi
   fns.add(fn);
   fn(settings, Object.keys(settings) as (keyof Settings)[]);
   return () => fns.delete(fn);
-}
-
-/** The two looks as presets of the individual toggles (prototype `P` key). */
-export function lookPreset(look: Look): Partial<Settings> {
-  return look === 'ps1' ? { look, snap: true, affine: true, dither: true, res: '240' } : { look, snap: false, affine: false, dither: false, res: '360' };
 }

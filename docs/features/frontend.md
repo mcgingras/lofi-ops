@@ -50,7 +50,7 @@ If a screen owned by another area (`barracks`, `store`, `wager`) isn't registere
 **In-match class picker** (`class-picker` overlay): press **B** (rebindable) at any time in a match. On the death screen a HUD hint (`frontend.classHint`) shows the key and the class picked for the next spawn.
 
 **Settings** (`settings` screen, replaces the core one), in four tabs:
-- **Video**: look preset, resolution, FOV, PS1 toggles, grade, time of day, FPS.
+- **Graphics** (tab id `video`): Retro strength preset with an Advanced panel (resolution, palette, dither, vertex snap, texture warp, fog distance, texture filter, photo/drawn textures; see `retro.md`), FOV, grade, time of day, FPS.
 - **Controls**: sensitivity, ADS sensitivity, invert, crouch toggle.
 - **Key bindings**: rebind every action and the class key. Backspace resets one, and there is a Reset all.
 - **Audio**: master volume and a test sound (an M16 shot through `sfx.gunshot`).

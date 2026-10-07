@@ -6,7 +6,8 @@
 import './menus/menus.css';
 import './render/shader';
 import { Renderer } from './render/renderer';
-import { develop, setLook } from './render/textures';
+import { developOptions, knobsOf } from './render/retro';
+import { develop, setDevelopOptions, setLook, setTextureFilter } from './render/textures';
 import { initRouter } from './router';
 import { net } from './net';
 import { onSettings } from './settings';
@@ -43,8 +44,10 @@ try {
 }
 
 onSettings((s, changed) => {
-  renderer?.setOptions({ res: s.res, snap: s.snap, affine: s.affine, dither: s.dither, grade: s.grade, fov: s.fov });
+  renderer?.setOptions({ ...knobsOf(s), grade: s.grade, fov: s.fov });
   setLook(s.look);
+  setTextureFilter(s.texFilter);
+  setDevelopOptions(developOptions(s));
   sfx.setVolume(s.volume);
   if (changed.includes('time') && changed.length < 4) void client.match?.setTime(s.time);
 });

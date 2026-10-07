@@ -190,9 +190,36 @@ const PATTERN = Array.from({ length: 16 }, (_, i) => {
   const y = i >> 2;
   return ((x + y) & 3) * 4 + ((x - y) & 3);
 });
+/** 4x4 Bayer ordered dither (the PS1 GPU's matrix is a variant of it). */
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 
-/** Reduce a canvas (in place) to `k` colours in YCoCg with the pattern dither at `strength`. */
+/**
+ * Developer variant (Settings → Retro strength): `k` scales every recipe's palette size relative
+ * to the house 16 colours (0 = keep full colour, no quantising), `strength` scales the dither
+ * relative to the house 75%, `type` picks the dither matrix. Textures cache per variant.
+ */
+export interface DevelopVariant {
+  k: number;
+  strength: number;
+  type: 'pattern' | 'bayer' | 'none';
+}
+export const HOUSE_VARIANT: DevelopVariant = { k: 16, strength: 0.75, type: 'pattern' };
+let variant: DevelopVariant = HOUSE_VARIANT;
+export function setDevelopVariant(v: DevelopVariant): void {
+  variant = v;
+}
+export const developVariant = (): DevelopVariant => variant;
+export const variantKey = (v: DevelopVariant = variant): string => (v.k === 0 ? 'full' : `${v.k}.${v.type}.${Math.round(v.strength * 100)}`);
+
+/**
+ * Reduce a canvas (in place) to `k` colours in YCoCg with the pattern dither at `strength`
+ * (both relative to the current developer variant; see `setDevelopVariant`).
+ */
 export function quantize16(R: Rand, c: HTMLCanvasElement, k = 16, strength = 0.75, grainAmt = 6): HTMLCanvasElement {
+  if (variant.k === 0) return c;
+  k = clamp(Math.round((k * variant.k) / 16), 2, 256);
+  strength = variant.type === 'none' ? 0 : (strength * variant.strength) / 0.75;
+  const MATRIX = variant.type === 'bayer' ? BAYER : PATTERN;
   const g = ctx2d(c);
   const W = c.width;
   const H = c.height;
@@ -228,7 +255,7 @@ export function quantize16(R: Rand, c: HTMLCanvasElement, k = 16, strength = 0.7
         d[i + 3] = 0;
         continue;
       }
-      const t = (PATTERN[(y & 3) * 4 + (x & 3)]! + 0.5) / 16 - 0.5;
+      const t = (MATRIX[(y & 3) * 4 + (x & 3)]! + 0.5) / 16 - 0.5;
       const yy = Y[j]! + t * spread;
       const co = Co[j]! + t * spread * 0.35;
       const cg = Cg[j]! + t * spread * 0.35;

@@ -14,7 +14,8 @@
  */
 import * as THREE from 'three';
 import { hashString } from '../../shared/math';
-import { cnv, ctx2d, fromPhoto, makeRand, photoify, posterize, type FromPhotoOpts, type PhotoifyOpts, type Rand } from './developer';
+import { cnv, ctx2d, developVariant, fromPhoto, makeRand, photoify, posterize, setDevelopVariant, variantKey, type DevelopVariant, type FromPhotoOpts, type PhotoifyOpts, type Rand } from './developer';
+import type { TexFilter } from './retro';
 import { cacheGet, cachePut } from './idb';
 
 export type Look = 'photo' | 'ps1';
@@ -61,10 +62,12 @@ interface Slot {
   state: 'none' | 'queued' | 'done';
 }
 
-const DEV_VERSION = 3;
+// 4: skies develop at full colour (the texture palette/crosshatch read as bands and a screen door).
+const DEV_VERSION = 4;
 const slots = new Map<string, Slot>();
 const bound = new Map<THREE.ShaderMaterial, string>();
 let look: Look = 'photo';
+let filter: TexFilter = 'pixel-mip';
 
 export function registerTexture(id: string, recipe: TextureRecipe): void {
   const old = slots.get(id);
@@ -79,11 +82,18 @@ export function registerTexture(id: string, recipe: TextureRecipe): void {
 export const hasTexture = (id: string) => slots.has(id);
 export const textureIds = () => [...slots.keys()];
 
+/** Sampling for the current texture filter (Settings → Retro strength → Texture filter). */
+function applyFilter(t: THREE.Texture): void {
+  const mip = t.generateMipmaps;
+  const smooth = filter === 'smooth';
+  t.magFilter = smooth ? THREE.LinearFilter : THREE.NearestFilter;
+  t.minFilter = !mip || filter === 'pixel' ? (smooth ? THREE.LinearFilter : THREE.NearestFilter) : smooth ? THREE.LinearMipmapLinearFilter : THREE.NearestMipmapNearestFilter;
+}
+
 function makeTexture(c: HTMLCanvasElement, wrap: boolean, mip: boolean): THREE.Texture {
   const t = new THREE.CanvasTexture(c);
-  t.magFilter = THREE.NearestFilter;
-  t.minFilter = mip ? THREE.NearestMipmapNearestFilter : THREE.NearestFilter;
   t.generateMipmaps = mip;
+  applyFilter(t);
   t.wrapS = t.wrapT = wrap ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
   t.colorSpace = THREE.NoColorSpace;
   t.needsUpdate = true;
@@ -157,6 +167,37 @@ export function setLook(l: Look): void {
 }
 export const getLook = () => look;
 
+/** Change texture sampling for every texture, live (re-uploads; no re-developing). */
+export function setTextureFilter(f: TexFilter): void {
+  if (f === filter) return;
+  filter = f;
+  for (const s of slots.values())
+    for (const t of [s.base, s.photo]) {
+      if (!t) continue;
+      applyFilter(t);
+      t.needsUpdate = true;
+    }
+}
+
+/**
+ * Change the developer variant (palette size / dither). Photos already developed stay bound until
+ * their re-developed version lands, textures on screen first; each variant caches separately in
+ * IndexedDB, so switching back is a cache read.
+ */
+export function setDevelopOptions(v: DevelopVariant): void {
+  if (variantKey(v) === variantKey()) return;
+  setDevelopVariant(v);
+  const redo: string[] = [];
+  for (const s of slots.values())
+    if (s.state === 'done') {
+      s.state = 'none';
+      redo.push(s.id);
+    }
+  const onScreen = [...new Set(bound.values())];
+  void develop(redo);
+  prioritize(onScreen);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Developing
 // ---------------------------------------------------------------------------------------------
@@ -184,16 +225,29 @@ function loadPhoto(id: string): Promise<HTMLImageElement | null> {
 function recipeKey(s: Slot): string {
   const r = s.recipe;
   const src = [r.w, r.h, r.posterize, r.wrap, r.draw.toString(), typeof r.photo === 'function' ? r.photo.toString() : r.photo, typeof r.fallback === 'function' ? r.fallback.toString() : r.fallback, (r.photos ?? []).join(',')].join('|');
-  return `${s.id}@${DEV_VERSION}.${hashString(src).toString(36)}`;
+  return `${s.id}@${DEV_VERSION}.${variantKey()}.${hashString(src).toString(36)}`;
 }
 
-function runPreset(mode: PhotoMode, ctx: PhotoCtx, base: HTMLCanvasElement): HTMLCanvasElement | null {
+function runPreset(mode: PhotoMode, ctx: PhotoCtx, base: HTMLCanvasElement, s: Slot): HTMLCanvasElement | null {
   const big = Math.max(base.width, base.height);
   switch (mode) {
     case 'none':
       return null;
-    case 'sky':
-      return ctx.photoify(base, { long: 1024, noise: 0, k: 64, grain: 2, strength: 0.35 });
+    case 'sky': {
+      // Skies stay full colour (Crow Country, BRC: smooth painted gradients). Sky texels are
+      // larger than screen pixels, so a texture palette shows as stair-stepped bands and a texture
+      // dither as a magnified screen door. The 15-bit preset dithers the sky in screen space.
+      // Redrawn without the base's 16-level posterise for the same reason.
+      const { w, h } = s.recipe;
+      const src = cnv(w, h);
+      s.recipe.draw(ctx2d(src), w, h, makeRand(hashString(s.id)));
+      const c = cnv(1024, Math.round((1024 * h) / w));
+      const g = ctx2d(c);
+      g.imageSmoothingEnabled = true;
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(src, 0, 0, c.width, c.height);
+      return c;
+    }
     case 'small':
       return ctx.photoify(base, { long: 128, noise: 0, k: 8 });
     default:
@@ -211,7 +265,7 @@ function developNow(s: Slot): HTMLCanvasElement | null {
     fromPhoto: (id, o) => fromPhoto(R, photoLoaded.get(id) ?? null, o),
     photoify: (src, o) => photoify(R, src, o),
   };
-  const run = (p: TextureRecipe['photo']) => (typeof p === 'function' ? p(ctx) : runPreset(p ?? 'auto', ctx, base));
+  const run = (p: TextureRecipe['photo']) => (typeof p === 'function' ? p(ctx) : runPreset(p ?? 'auto', ctx, base, s));
   const mode = s.recipe.photo ?? 'auto';
   if (mode === 'none') return null;
   return run(mode) ?? run(s.recipe.fallback ?? 'auto');
@@ -276,6 +330,7 @@ async function pump() {
   while (queue.length) {
     // Maps' textures first: a queue entry asked for again by develop(ids) jumps ahead naturally.
     const s = queue.shift()!;
+    const v = developVariant();
     try {
       const key = recipeKey(s);
       const hit = await cacheGet<Blob>('textures', key);
@@ -290,14 +345,22 @@ async function pump() {
         }
       }
       if (c) {
+        const old = s.photo;
         s.photo = makeTexture(c, s.recipe.wrap !== false, true);
         refreshBindings(s.id);
+        old?.dispose();
       }
     } catch (err) {
       console.warn(`[textures] developing ${s.id} failed`, err);
     }
     s.state = 'done';
     done++;
+    // The variant changed while this one was developing: develop it again.
+    if (v !== developVariant()) {
+      s.state = 'queued';
+      queue.unshift(s);
+      total++;
+    }
     emit();
     await yieldFrame();
   }
