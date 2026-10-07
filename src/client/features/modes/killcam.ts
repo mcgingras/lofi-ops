@@ -4,27 +4,20 @@
  * replay it through the killer's eyes with stand-in soldiers (the live remotes are hidden), slow
  * motion for the last moment, then hand over to the summary screen.
  */
-import type { Team } from '../../../shared/constants';
 import { WEAPON_BY_ID } from '../../../shared/defs/weapons';
 import { PlayerFlags } from '../../../shared/protocol';
 import type { Match } from '../../game/match';
 import { blink, HUD_COLORS as C, rect, txt, unit } from '../../hud/draw';
 import { registerHudWidget, registerMatchHook } from '../../registry';
-import { FFA_LOOK, Soldier, TEAM_LOOKS } from '../../render/models/soldier';
-import { getTexture } from '../../render/textures';
 import { currentMatch } from '../../state';
-import { clipTime, playSeconds, posesAt, SLOW_RATE, SLOW_SEC, type Pose } from './killcam-math';
+import { clipTime, playSeconds, posesAt, SLOW_RATE, SLOW_SEC } from './killcam-math';
+import { ReplayActors } from './replay';
 import { modes, now } from './store';
 
-let soldiers = new Map<string, { s: Soldier; last: Pose | null }>();
+const actors = new ReplayActors();
 
 function stop(): void {
-  for (const v of soldiers.values()) v.s.dispose();
-  soldiers = new Map();
-}
-
-function lookFor(team: Team | null) {
-  return team === 0 || team === 1 ? TEAM_LOOKS[team]! : FFA_LOOK;
+  actors.dispose();
 }
 
 /** True while the final killcam is on screen. */
@@ -33,7 +26,7 @@ export const killcamPlaying = () => modes.killcamStart !== null;
 function frame(m: Match, dt: number): void {
   const clip = modes.killcam;
   if (!clip || !modes.results || modes.killcamDone || m.phase !== 'ended' || !m.map) {
-    if (soldiers.size) stop();
+    if (actors.size) stop();
     if (modes.killcamStart !== null) modes.killcamStart = null;
     return;
   }
@@ -49,27 +42,8 @@ function frame(m: Match, dt: number): void {
   }
   const t = first.t + clipTime(elapsed, span);
   const poses = posesAt(clip.frames, t);
-  for (const r of m.remotes.views.values()) r.soldier.root.visible = false;
   const slow = elapsed > Math.max(0, span - SLOW_SEC);
-  for (const [id, p] of poses) {
-    if (id === clip.killer) continue;
-    let v = soldiers.get(id);
-    if (!v) {
-      const s = new Soldier(lookFor(m.roster.get(id)?.team ?? null), getTexture('flash'));
-      m.renderer.scene.add(s.root);
-      v = { s, last: null };
-      soldiers.set(id, v);
-    }
-    const speed = v.last ? Math.hypot(p.x - v.last.x, p.z - v.last.z) / Math.max(1e-3, dt) * (slow ? SLOW_RATE : 1) : 0;
-    const fwd = v.last ? -Math.sin(p.yaw) * (p.x - v.last.x) - Math.cos(p.yaw) * (p.z - v.last.z) : 1;
-    v.last = p;
-    v.s.root.position.set(p.x, p.y, p.z);
-    v.s.root.rotation.y = p.yaw + Math.PI;
-    const alive = (p.f & PlayerFlags.ALIVE) !== 0;
-    v.s.root.visible = true;
-    v.s.animate(dt * (slow ? SLOW_RATE : 1), { speed: alive ? Math.min(8, speed) : 0, forward: fwd, pitch: p.pitch, crouch: p.f & PlayerFlags.CROUCH ? 1 : 0, sprint: (p.f & PlayerFlags.SPRINT) !== 0, firing: (p.f & PlayerFlags.FIRING) !== 0, alive, time: m.time });
-    v.s.setLight(m.map.lightAt(p.x, p.y + 1.2, p.z));
-  }
+  actors.update(m, poses, clip.killer, dt, slow ? SLOW_RATE : 1);
   const k = poses.get(clip.killer);
   if (k) {
     const eye = k.f & PlayerFlags.CROUCH ? 1.0 : 1.6;

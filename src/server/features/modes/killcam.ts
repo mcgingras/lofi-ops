@@ -3,9 +3,12 @@
  * credited kill. When the match ends shortly after a kill, the clip (3.5 s up to the kill) goes
  * to everyone as `modes.killcam`; the client replays it from the killer's eyes before the summary.
  * Core's lag-comp history only keeps 1 s of hitboxes without view angles, so this keeps its own.
+ * The per-death killcam (deathcam.ts) cuts its clips from the same history.
  */
 import { PlayerFlags } from '../../../shared/protocol';
+import type { DeathcamShot } from '../../../shared/defs/deathcam';
 import type { KillcamFrame, KillcamPayload } from '../../../shared/defs/modestate';
+import type { Vec3 } from '../../../shared/math';
 import type { PlayerState } from '../../player';
 import type { Room } from '../../room';
 
@@ -28,13 +31,15 @@ export function poseFrame(room: Room): KillcamFrame {
     if (m.ads > 0.5) f |= PlayerFlags.ADS;
     if (m.onGround) f |= PlayerFlags.GROUND;
     if (room.time - q.lastFireTime < 0.12) f |= PlayerFlags.FIRING;
-    p.push([q.id, r3(m.x), r3(m.y), r3(m.z), r3(q.yaw), r3(q.pitch), f]);
+    p.push([q.id, r3(m.x), r3(m.y), r3(m.z), r3(q.yaw), r3(q.pitch), f, Math.round((100 * Math.max(0, q.health)) / Math.max(1, q.maxHealth))]);
   }
   return { t: r3(room.time), p };
 }
 
 export class KillcamRecorder {
   frames: KillcamFrame[] = [];
+  /** Hitscan shots of the last few seconds (per-death killcam: tracers and the killer's trigger pulls). */
+  shots: DeathcamShot[] = [];
   last: { killer: PlayerState; victim: PlayerState; weapon: string; headshot: boolean; at: number; frames: KillcamFrame[] } | null = null;
   private every = Math.max(1, Math.round(60 / RATE));
 
@@ -42,7 +47,20 @@ export class KillcamRecorder {
 
   clear(): void {
     this.frames = [];
+    this.shots = [];
     this.last = null;
+  }
+
+  onShot(player: PlayerState, end: Vec3, hit: boolean): void {
+    if (this.room.phase !== 'playing') return;
+    this.shots.push({ t: r3(this.room.time), id: player.id, end: [r3(end.x), r3(end.y), r3(end.z)], hit });
+    const cut = this.room.time - KEEP_SEC;
+    while (this.shots.length && this.shots[0]!.t < cut) this.shots.shift();
+  }
+
+  /** Frames and shots recorded between two room times (inclusive). */
+  between(from: number, to: number): { frames: KillcamFrame[]; shots: DeathcamShot[] } {
+    return { frames: this.frames.filter((f) => f.t >= from - 1e-6 && f.t <= to + 1e-6), shots: this.shots.filter((s) => s.t >= from && s.t <= to) };
   }
 
   onTick(tick: number): void {

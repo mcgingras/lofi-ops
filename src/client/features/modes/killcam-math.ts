@@ -13,6 +13,8 @@ export interface Pose {
   yaw: number;
   pitch: number;
   f: number;
+  /** Health % (frames from before it was recorded read as 100). */
+  hp: number;
 }
 
 /** Clip time for real seconds since the start (1x, then slow motion near the kill). */
@@ -39,7 +41,7 @@ export function posesAt(frames: KillcamFrame[], t: number): Map<string, Pose> {
     let dy = q[4] - p[4];
     if (dy > Math.PI) dy -= Math.PI * 2;
     if (dy < -Math.PI) dy += Math.PI * 2;
-    out.set(p[0], { x: p[1] + (q[1] - p[1]) * k, y: p[2] + (q[2] - p[2]) * k, z: p[3] + (q[3] - p[3]) * k, yaw: p[4] + dy * k, pitch: p[5] + (q[5] - p[5]) * k, f: k < 0.5 ? p[6] : q[6] });
+    out.set(p[0], { x: p[1] + (q[1] - p[1]) * k, y: p[2] + (q[2] - p[2]) * k, z: p[3] + (q[3] - p[3]) * k, yaw: p[4] + dy * k, pitch: p[5] + (q[5] - p[5]) * k, f: k < 0.5 ? p[6] : q[6], hp: p[7] ?? 100 });
   }
   return out;
 }

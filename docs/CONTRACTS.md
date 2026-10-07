@@ -198,7 +198,8 @@ Each file exports a typed array and a `*_BY_ID` map (`indexById` throws on dupli
 | `tactical-map.ts` | tactical map (BO1 radio targeting): `STRIKE` footprints/timings, `validateMapTarget`, `yawFromDrag`, `strikeFootprint`, `MAP_MODE` | perks-streaks |
 | `perks-streaks-protocol.ts` | killstreak/perk RPCs and pushes, incl. `killstreaks.mapTarget {id, points, yaw?}`, `killstreaks.mapCancel`, `KillstreakStateMsg.map` | perks-streaks |
 | `modes.ts` | `ModeDef`, `CORE_MODES` (tdm 75 kills / ffa 30 kills / dom 200 / sd 4 rounds / hq 250 / kc 65), `MODES` = core + `WAGER_MODES`, `MODE_TUNING`, `MODE_XP` | modes |
-| `modestate.ts` | modes wire types (`modes.state`, `modes.event`, `modes.killcam`), `MatchSummaryExt` (`results.ext.modes`), `MODE_ENTITY` kinds | modes |
+| `modestate.ts` | modes wire types (`modes.state`, `modes.event`, `modes.killcam`, `modes.deathcam`), `MatchSummaryExt` (`results.ext.modes`), `MODE_ENTITY` kinds | modes |
+| `deathcam.ts` | per-death killcam: `DEATHCAM` timing, `deathcamWindow(at, respawnAt)` (clip cut so it ends by the respawn), `DeathcamPayload` / `KillerCard` (`modes.deathcam`, sent only to the victim), `packClip` / `unpackClip` | modes |
 | `economy.ts` | `CP_REWARDS`, `STARTING_COD_POINTS`, `DEFAULT_PRICES`, `codPointsForMatch` / `codPointsBreakdown` (score, win, podium, streak, time share), `ANTE_TIERS` (0/10/1,000/10,000), `wagerPayouts`, `WAGER_MODES` (oitc, gungame, sharpshooter, sticks), wager mode data | economy |
 | `store.ts` | `RETICLES`, `EMBLEM_BACKGROUNDS`, `storeCatalog()`, ownership keys `keyOf.*` (`weapon.<id>`, `att.<weapon>.<att>`, `camo.<id>`, `reticle.<id>`, `emblem.<id>` in `profile.owned`), `lockReason`, `canUse`, `purchase`, `enforceLoadout` | economy |
 | `economy-net.ts` | economy RPC / feature message types (`economy.*`), `EconomyResultsExt` (`results.ext.economy`) | economy |
