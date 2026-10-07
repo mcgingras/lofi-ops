@@ -1,38 +1,59 @@
 /**
- * Client boot. TODO(client stage): renderer, net (prediction/reconciliation/interpolation), HUD,
- * menus. For now: connect, say hello, show the profile, so the scaffold builds and runs.
+ * Client boot: styles, the shared renderer, settings wiring, core screens, texture recipes and
+ * feature folders (both auto-imported, so new files need no edit here), routing, the socket, and
+ * background photo developing.
  */
-import { PROTOCOL_VERSION, WS_PATH } from '../shared/constants';
-import { decodeServerMsg, encodeMsg } from '../shared/protocol';
-import { dispatchFeature } from './registry';
+import './menus/menus.css';
+import './render/shader';
+import { Renderer } from './render/renderer';
+import { develop, setLook } from './render/textures';
+import { initRouter } from './router';
+import { net } from './net';
+import { onSettings } from './settings';
+import { client } from './state';
+import { sfx } from './game/audio';
+import './menus/main-menu';
+import './menus/settings';
+import './menus/match-screen';
+
+// Texture recipes (one file per map/area) and feature folders register themselves on import.
+import.meta.glob('./render/recipes/*.ts', { eager: true });
+import.meta.glob('./features/*/index.ts', { eager: true });
 
 const app = document.getElementById('app')!;
-const status = document.createElement('pre');
-status.style.cssText = 'margin:16px;font:12px/1.5 Silkscreen,monospace;white-space:pre-wrap';
-status.textContent = 'Lo-Fi Ops\nconnecting...';
-app.append(status);
+const screen = document.createElement('div');
+screen.id = 'screen';
+const overlay = document.createElement('div');
+overlay.id = 'overlay';
+overlay.hidden = true;
+app.append(screen, overlay);
 
-const TOKEN_KEY = 'lofi.token';
-const readToken = () => {
-  try {
-    return localStorage.getItem(TOKEN_KEY) ?? undefined;
-  } catch {
-    return undefined;
-  }
-};
+let renderer: Renderer | null = null;
+try {
+  renderer = new Renderer(app);
+  client.renderer = renderer;
+  renderer.clear();
+} catch (err) {
+  console.error(err);
+  const msg = document.createElement('div');
+  msg.className = 'lf-center lf-banner';
+  msg.textContent = 'WebGL is not available in this browser.';
+  app.append(msg);
+}
 
-const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${WS_PATH}`);
-ws.onopen = () => ws.send(encodeMsg({ t: 'hello', token: readToken(), version: PROTOCOL_VERSION }) as string);
-ws.onmessage = (ev) => {
-  const msg = decodeServerMsg(ev.data as string);
-  if (!msg) return;
-  if (msg.t === 'welcome') {
-    try {
-      localStorage.setItem(TOKEN_KEY, msg.token);
-    } catch {
-      /* private mode */
-    }
-    status.textContent = `Lo-Fi Ops\nconnected as ${msg.profile.name} (level ${msg.profile.level}, ${msg.profile.codPoints} CP)\nclient coming in the next stage`;
-  } else if (msg.t === 'feat') dispatchFeature(msg.id, msg.data);
-};
-ws.onclose = () => (status.textContent += '\ndisconnected');
+onSettings((s, changed) => {
+  renderer?.setOptions({ res: s.res, snap: s.snap, affine: s.affine, dither: s.dither, grade: s.grade, fov: s.fov });
+  setLook(s.look);
+  sfx.setVolume(s.volume);
+  if (changed.includes('time') && changed.length < 4) void client.match?.setTime(s.time);
+});
+
+initRouter(screen, overlay, 'menu');
+net.connect();
+void document.fonts?.load('16px Silkscreen').catch(() => {});
+
+// Develop every registered photo texture in the background (cached in IndexedDB after the first time).
+setTimeout(() => void develop(), 300);
+
+// Dev-only console handle for debugging (window.__lofi.match, .renderer, net).
+if (import.meta.env.DEV) (window as unknown as { __lofi: unknown }).__lofi = { client, net };

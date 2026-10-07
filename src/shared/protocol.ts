@@ -187,7 +187,7 @@ export interface ClientMessages {
   hello: { token?: string; name?: string; version: number };
   quickplay: { mode: string; map?: string };
   joinRoom: { roomId: string };
-  leaveRoom: Record<string, never>;
+  leaveRoom: Record<never, never>;
   listRooms: { mode?: string };
   input: { cmds: InputCmd[] };
   fire: FireMsgBody;

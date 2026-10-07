@@ -46,13 +46,13 @@ src/server/
   features/<area>/     perks, killstreaks, progression, challenges, economy, bots
   store.ts             sqlite profile store
 src/client/
-  main.ts              boot, routing between menus and match
-  net.ts               socket, prediction, reconciliation, interpolation
+  main.ts              boot; router.ts (screens), registry.ts (extension points), settings.ts, state.ts
+  net.ts               socket + per-room MatchNet; netcode/ (predict, interp, clock: pure, tested)
   render/              renderer, look pipeline, texture developer, baked lighting, map builder
   game/                local player, viewmodel, effects, audio
   hud/                 pixel HUD (canvas at render res)
-  menus/               main menu, lobby, create-a-class, barracks, store, settings
-  features/<area>/     client side of each feature
+  menus/               main menu, settings, match screen (frontend adds lobby, create-a-class...)
+  features/<area>/     client side of each feature (auto-imported, see CONTRACTS.md section 12)
 assets/textures/       Poly Haven photos (512px JPG)
 reference/             approved prototypes, read-only
 docs/                  this file, CONTRACTS.md (written by core: exact extension APIs), per-feature notes

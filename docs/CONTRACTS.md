@@ -3,7 +3,7 @@
 What the core gives every feature area, and exactly how to plug in. Read `docs/DESIGN.md` first (the why); this file is the how. If you must change a contract here, change this file in the same commit and say so in your report.
 
 ```
-npm run dev        server (tsx watch, :8787) + Vite (:5173, proxies /ws and /api)
+npm run dev        server (tsx watch, :8787) + Vite (:5173, proxies /ws and /api); .claude/launch.json 'dev' for the preview tool
 npm run build      typecheck (server + client tsconfigs) then vite build -> dist/client
 npm run typecheck
 npm test           vitest: unit + headless integration (real server on a random port)
@@ -290,15 +290,79 @@ interface Profile {
 
 Loaded at `hello` (`session.profile`, also `player.profile` in a room). Mutate it on the server; core saves it at match end (after `matchEnd` handlers), when leaving a room and on disconnect, and sends the owner a `profile` message after match end. Save immediately yourself (`api.store.save(profile)`) for menu purchases. No schema migrations needed: add fields under `ext.<you>` or new `stats` keys.
 
-## 12. Client extension points (src/client/registry.ts)
+## 12. Client (src/client)
 
-```ts
-registerScreen('barracks', (root, params) => { root.append(...); return () => root.replaceChildren(); });
-registerHudWidget('killstreaks', (g, w, h, dt) => { /* draw at render resolution */ }, order);
-onFeature('killstreaks.earned', (data) => { ... });   // typed by FeatureMessages
+```
+main.ts            boot: styles, Renderer, settings wiring, core screens, auto-imports, router, socket
+router.ts          navigate(id, params) / back(params) / openOverlay(id) over registerScreen (hash routes: #/settings)
+registry.ts        ALL client extension points (below)
+state.ts           client.renderer, currentMatch()
+settings.ts        settings (localStorage `lofi.settings`), updateSettings, onSettings, lookPreset
+net.ts             net (socket singleton) + MatchNet (one room's netcode)
+netcode/           predict.ts, interp.ts, clock.ts: pure, unit-tested in tests/netcode.test.ts
+render/            renderer.ts (low-res target + post + HUD composite), shader.ts, textures.ts (registry +
+                   developer queue + IndexedDB), developer.ts (quantize16/photoify/fromPhoto), bake.ts,
+                   mapbuilder.ts (MapData -> meshes, bake per time preset), recipes/*.ts, models/
+game/              match.ts (the session + frame loop), controls.ts, viewmodel.ts, remotes.ts, effects.ts, audio.ts
+hud/               hud.ts, widgets.ts (core widgets), draw.ts (pixel helpers)
+menus/             main-menu.ts, settings.ts, match-screen.ts, dom.ts (`h()`), menus.css
+features/<area>/   your client code; every features/*/index.ts is auto-imported (import.meta.glob), no list to edit
 ```
 
-The client stage wires these into routing (`main.ts`), the pixel HUD and `net.ts`. Client feature code lives in `src/client/features/<area>/`.
+Dev console: `window.__lofi.client.match` (dev builds only).
+
+### Registries (`registry.ts`)
+
+```ts
+registerScreen('barracks', (root, params) => { root.append(h('div', {}, 'hi')); return () => {}; });
+navigate('barracks', { tab: 'prestige' });                 // router.ts; core screens: menu, settings, match
+registerMenuItem({ id: 'progression.barracks', label: 'Barracks', order: 40, action: () => navigate('barracks') });
+registerHudWidget('killstreaks.list', (g, w, h, dt) => { const m = currentMatch(); ... }, 45);
+unregisterHudWidget('core.compass');
+onFeature('killstreaks.earned', (data) => { ... });        // typed by FeatureMessages; returns unsubscribe
+registerEntityRenderer('rcxd', (e, match) => ({ object: mesh, update(e, dt) {}, dispose() {} }));
+registerMatchHook('perks.ui', { start(match) { return cleanup; }, frame(match, dt) {} });
+```
+
+- Screens: `mount(root, params)` returns an optional unmount. Replacing a core id (`menu`) replaces the core screen; feature folders load after core, so the last registration wins. `params.overlay === '1'` when shown with `openOverlay` over a match; use `back(params)` for a Back button.
+- Menu items: the core menu renders every `registerMenuItem` sorted by `order` (core: TDM 10, FFA 20, Settings 90). A frontend menu should render `menuItems` too so other features' entries keep showing.
+- HUD widgets draw at render resolution (`w x h`, 240..720 lines) onto a transparent canvas that the post pass composites wherever alpha > 0.5, so draw opaque pixels only. Use `hud/draw.ts`: `unit(h)`, `txt(g, s, x, y, size, color, align)`, `rect`, `box`, `HUD_COLORS`, `clock`, `blink`. Core widgets are `core.<name>` with orders listed at the top of `hud/widgets.ts` (names 5, damage 10, scope 15, crosshair 20, hitmarker 25, compass 30, health 40, ammo 41, score 50, killfeed 55, status 60, title 70, death 80, phase 85, scoreboard 90, fps 99); re-register an id to replace it.
+- Entities: one view per `EntitySnap.id`; core adds `object` to the scene and moves it to the smoothed position/yaw unless `update` returns `false`. Light it with `makeLookMaterial({ texture, dyn: true })` + `setDynLight(mats, match.map!.lightAt(x, y, z))`.
+- Match hooks: `start` runs when a match's map is ready (again after a map change), `frame` every frame before rendering.
+
+### Match (`game/match.ts`, read via `currentMatch()`)
+
+`myId`, `me` (MeSnap), `myTeam`, `isEnemy(id)`, `nameOf(id)`, `roster` (Map<id, RosterEntry>), `scores`, `teamScores`, `phase`, `phaseEndsAt`, `results`, `killfeed`, `notices`, `death`, `alive`, `serverTime` (room time now), `netRtt`, `weapon(slot?)` (EffectiveWeapon), `ammo(slot?)`, `reloadProgress()`, `raiseProgress()`, `yaw`/`pitch` (with recoil), `spread`, `time` (local secs), `map` (MapScene: `map`, `time` preset, `lightAt`, `world`), `renderer` (`scene`, `cam`, `vmScene`), `remotes.views` (interpolated soldiers: x, y, z, yaw, alive, team...), `effects` (`puff(kind, at, normal)`, `tracer(a, b)`), `controls` (`isHeld(action)`, `consume(action)`, `locked`; key map `KEYMAP` in controls.ts), `net` (MatchNet: `predictor`, `interp`, `lastSnap`, `world`).
+
+Feature buttons: held keys go out as `Buttons` bits (G lethal, Q tactical, 4 streak, V/E melee, F use, Z prone); the server sees edges in the `buttons` room event. Rebind by assigning `KEYMAP[code] = action` (frontend owns key settings); keys that are not game buttons (menus, streak selection) can use plain `keydown` listeners while `controls.locked`.
+
+### Net (`net.ts`)
+
+```ts
+import { net } from '../../net';
+net.on('snap', (m) => { ... });                            // any ServerMessages type; returns unsubscribe
+const res = await net.rpc('economy.buy', { item: 'camo_tiger' });   // typed by RpcMap; rejects on error/timeout
+net.profile;  net.on('profile', ...);  net.serverTime();  net.rtt;  net.onStatus((s) => ...)  // idle|connecting|waking|online|offline
+net.quickplay('tdm'); net.joinRoom(id); net.leaveRoom();   // the match screen does this for you: navigate('match', { room: id })
+```
+
+Netcode as built: inputs every frame (split to <= 50 ms), sent in batches at <= 60 Hz; prediction with `stepMove` and `snap.me.params`, replay of unacked inputs on each snapshot, error eased (snap past 0.5 m); remotes drawn 100 ms behind the quickest snapshot delivery, extrapolated up to 100 ms; `fire.time` = that render time; spread tracer uses the server's seed (`hashString(myId)`). Ammo, reload and weapon switch are predicted until the server acks the input that caused them.
+
+### Rendering extension
+
+```ts
+registerTexture('nuke_house', { w: 64, h: 64, draw(g, w, h, R) { ... }, photos: ['brick_wall'], photo: (c) => c.fromPhoto('brick_wall', { filter: 'sepia(.3)' }) });
+registerViewmodel('famas', (c) => { const gm = c.mat('gunmetal', { rep: 0.25 }); c.box(...); return { muzzle, hip, ads }; });
+registerPropBuilder('gltf', (prop, ctx) => object3d);      // render custom MapData prop kinds
+sfx.register('dogbark', (ctx) => audioBuffer); sfx.play('dogbark', { at: { x, y, z } });
+```
+
+- Texture recipes: one id per MapData material texture. Put a map's recipes in `src/client/render/recipes/<map>.ts` (auto-imported). `draw` is the lo-fi/PS1 version (posterised, also the instant fallback); `photo` is the developed look (`'auto'` photoifies the drawing, `'sky'`, `'small'`, `'none'`, or a function using `c.fromPhoto(id, {w,h,tile,filter,over})`, `c.photoify`, `c.photo(id)`, `c.rr`); list photo ids in `photos` (files in `assets/textures/<id>.jpg`). Results are cached in IndexedDB by recipe source hash. Unknown ids render magenta and warn once.
+- Camos: register recipes named `camo.<camoId>`; viewmodel builders receive it as `c.camo`.
+- Viewmodels: `WeaponDef.model` picks the builder (fallback `ak47`); `c.attachments` lists attachment ids to model.
+- Look materials: `makeLookMaterial({ texture, uvMul|rep, tint, emissive, side, bake, fog, affine, dyn })`.
+
+Settings: `settings.<key>` + `updateSettings`; feature settings go under `settings.ext.<area>` (declaration-merge `SettingsExt` in `settings.ts`).
 
 ## 13. Weapon behaviours
 

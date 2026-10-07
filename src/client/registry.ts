@@ -1,28 +1,66 @@
 /**
  * Client extension points (DESIGN.md section 6). Feature folders in src/client/features/<area>/
- * register screens, HUD widgets and handlers for namespaced server pushes here. The client stage
- * wires these into main.ts (routing), hud/ (drawing) and net.ts (dispatch).
+ * (auto-imported, see features/index.ts) register screens, HUD widgets, handlers for namespaced
+ * server pushes, entity renderers and match hooks here. Core wires them into routing (router.ts),
+ * the pixel HUD (hud/hud.ts), net.ts (feature dispatch) and the match loop (game/match.ts).
  */
-import type { FeatureId, FeatureMessages } from '../shared/protocol';
+import type * as THREE from 'three';
+import type { FeatureId, FeatureMessages, EntitySnap } from '../shared/protocol';
+import type { Match } from './game/match';
 
-/** A full-screen menu/page. `mount` renders into `root` and returns an unmount function. */
+// ---------------------------------------------------------------------------------------------
+// Screens
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * A full-screen menu/page. `mount` renders into `root` and may return an unmount function.
+ * `params` come from the route (`#/barracks?tab=prestige`) or `navigate(id, params)`; when the
+ * screen is shown as an overlay on top of a match, `params.overlay === '1'`.
+ */
 export type ScreenMount = (root: HTMLElement, params: Record<string, string>) => (() => void) | void;
 
-/** Draws onto the pixel HUD canvas (render resolution) every frame. */
-export type HudDraw = (g: CanvasRenderingContext2D, w: number, h: number, dt: number) => void;
-
 export const screens = new Map<string, ScreenMount>();
-export const hudWidgets = new Map<string, { draw: HudDraw; order: number }>();
-const featureHandlers = new Map<string, Set<(data: unknown) => void>>();
 
+/** Register (or replace) a screen. Core ids: `menu`, `settings`, `match`. */
 export function registerScreen(id: string, mount: ScreenMount): void {
   screens.set(id, mount);
 }
 
-/** Lower `order` draws first. */
+// ---------------------------------------------------------------------------------------------
+// HUD widgets
+// ---------------------------------------------------------------------------------------------
+
+/** Draws onto the pixel HUD canvas (render resolution) every frame while in a match. */
+export type HudDraw = (g: CanvasRenderingContext2D, w: number, h: number, dt: number) => void;
+
+export const hudWidgets = new Map<string, { draw: HudDraw; order: number }>();
+let hudSorted: HudDraw[] | null = null;
+
+/**
+ * Lower `order` draws first (on top: higher order). Re-registering an id replaces it; core widgets
+ * are `core.<name>` (see hud/widgets.ts for ids and orders) so features can replace or remove them.
+ */
 export function registerHudWidget(id: string, draw: HudDraw, order = 0): void {
   hudWidgets.set(id, { draw, order });
+  hudSorted = null;
 }
+
+export function unregisterHudWidget(id: string): void {
+  hudWidgets.delete(id);
+  hudSorted = null;
+}
+
+/** Widgets in draw order (cached). */
+export function hudDrawList(): HudDraw[] {
+  if (!hudSorted) hudSorted = [...hudWidgets.values()].sort((a, b) => a.order - b.order).map((w) => w.draw);
+  return hudSorted;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Feature pushes
+// ---------------------------------------------------------------------------------------------
+
+const featureHandlers = new Map<string, Set<(data: unknown) => void>>();
 
 /** Handle `{ t: 'feat', id, data }` pushes. Returns an unsubscribe function. */
 export function onFeature<K extends FeatureId>(id: K, fn: (data: FeatureMessages[K]) => void): () => void {
@@ -44,4 +82,61 @@ export function dispatchFeature(id: string, data: unknown): void {
       console.error(`[feature ${id}]`, err);
     }
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Entities (killstreaks, dogs, care packages, flags...)
+// ---------------------------------------------------------------------------------------------
+
+export interface EntityView {
+  /** Added to the world scene; positioned by core at the (smoothed) entity position + yaw. */
+  object: THREE.Object3D;
+  /** Every frame with the latest snapshot of the entity. Return false to let core skip positioning. */
+  update?(e: EntitySnap, dt: number, match: Match): boolean | void;
+  dispose?(): void;
+}
+
+export type EntityRenderer = (e: EntitySnap, match: Match) => EntityView | null;
+export const entityRenderers = new Map<string, EntityRenderer>();
+
+/** Render snapshot entities of a `kind` (server `room.entities.add({ kind })`). */
+export function registerEntityRenderer(kind: string, fn: EntityRenderer): void {
+  entityRenderers.set(kind, fn);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Match hooks
+// ---------------------------------------------------------------------------------------------
+
+export interface MatchHook {
+  /** A match session began (room joined, map loaded). Return a cleanup function if needed. */
+  start?(match: Match): (() => void) | void;
+  /** Every frame after the world updated and before rendering. */
+  frame?(match: Match, dt: number): void;
+}
+
+export const matchHooks = new Map<string, MatchHook>();
+export function registerMatchHook(id: string, hook: MatchHook): void {
+  matchHooks.set(id, hook);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Main menu entries
+// ---------------------------------------------------------------------------------------------
+
+export interface MenuItem {
+  id: string;
+  label: string;
+  /** Small text on the right of the button. */
+  hint?: string;
+  /** Lower first. Core: quick play TDM 10, FFA 20, settings 90. */
+  order?: number;
+  primary?: boolean;
+  action(): void;
+}
+
+export const menuItems = new Map<string, MenuItem>();
+/** Add (or replace by id) a main menu button; features add theirs without touching the menu. */
+export function registerMenuItem(item: MenuItem): void {
+  menuItems.set(item.id, item);
 }

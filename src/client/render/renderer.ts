@@ -1,0 +1,173 @@
+/**
+ * The look pipeline (reference/yard-lab.html): the world and the viewmodel render into a low-res
+ * target (240/360/480/720 lines or full), then a post pass upscales it with nearest filtering,
+ * grades it, optionally quantises with a 4x4 Bayer screen dither, and composites the pixel HUD
+ * canvas (drawn at the same low resolution) on top.
+ */
+import * as THREE from 'three';
+import { G } from './shader';
+
+export type ResSetting = '240' | '360' | '480' | '720' | 'full';
+export type Grade = 'natural' | 'warm' | 'duotone';
+
+export interface LookOptions {
+  res: ResSetting;
+  /** Vertex snap (PS1 wobble). */
+  snap: boolean;
+  /** Affine texture warp. */
+  affine: boolean;
+  /** Screen colour quantise + Bayer dither. */
+  dither: boolean;
+  grade: Grade;
+  /** Vertical field of view, degrees. */
+  fov: number;
+}
+
+const QVS = /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+const QFS = /* glsl */ `uniform sampler2D tSrc, tHud; uniform vec2 uLow; uniform float uLevels, uDither, uRed; uniform int uGrade; varying vec2 vUv;
+const float BAYER[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
+void main(){
+  vec2 px = floor(vUv * uLow), uv = (px + 0.5) / uLow;
+  vec3 c = texture2D(tSrc, uv).rgb;
+  float l = dot(c, vec3(0.299, 0.587, 0.114));
+  if (uGrade == 1) c = pow(max(c, 0.0), vec3(0.88)) * vec3(1.07, 1.0, 0.88) + vec3(0.025, 0.015, 0.03);
+  else if (uGrade == 2) c = mix(vec3(0.12, 0.04, 0.08), vec3(1.0, 0.82, 0.58), smoothstep(0.02, 0.8, l));
+  vec2 q = vUv - 0.5; c *= 1.0 - dot(q, q) * 0.5;
+  // Damage: desaturate and redden towards the edges.
+  if (uRed > 0.0) { float e = smoothstep(0.15, 0.75, length(q * vec2(1.6, 1.0))); c = mix(c, vec3(l * 0.6 + 0.25, l * 0.25, l * 0.2), uRed * (0.35 + 0.65 * e)); }
+  float d = uDither > 0.5 ? (BAYER[int(mod(px.x, 4.0)) + int(mod(px.y, 4.0)) * 4] + 0.5) / 16.0 - 0.5 : 0.0;
+  c = floor(clamp(c, 0.0, 1.0) * (uLevels - 1.0) + 0.5 + d) / (uLevels - 1.0);
+  vec4 h = texture2D(tHud, uv);
+  if (h.a > 0.5) c = h.rgb;
+  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+}`;
+
+const GRADES: Record<Grade, number> = { natural: 0, warm: 1, duotone: 2 };
+
+export class Renderer {
+  readonly canvas: HTMLCanvasElement;
+  readonly gl: THREE.WebGLRenderer;
+  readonly scene = new THREE.Scene();
+  readonly cam = new THREE.PerspectiveCamera(70, 1, 0.05, 1000);
+  readonly vmScene = new THREE.Scene();
+  readonly vmCam = new THREE.PerspectiveCamera(58, 1, 0.01, 10);
+  readonly hud: HTMLCanvasElement;
+  readonly hudCtx: CanvasRenderingContext2D;
+  private rt: THREE.WebGLRenderTarget;
+  private hudTex: THREE.CanvasTexture;
+  private post: THREE.ShaderMaterial;
+  private postScene = new THREE.Scene();
+  private postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  private opts: LookOptions = { res: '360', snap: false, affine: false, dither: false, grade: 'natural', fov: 70 };
+  /** Current low-res size. */
+  width = 640;
+  height = 360;
+  /** Extra zoom (ADS): effective fov = fov / zoom-ish. */
+  zoom = 1;
+  /** 0..1 red damage overlay. */
+  damage = 0;
+
+  constructor(parent: HTMLElement) {
+    this.canvas = document.createElement('canvas');
+    this.canvas.id = 'view';
+    this.canvas.setAttribute('aria-label', 'Game view');
+    parent.prepend(this.canvas);
+    this.gl = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, powerPreference: 'high-performance' });
+    this.gl.outputColorSpace = THREE.LinearSRGBColorSpace;
+    this.gl.setPixelRatio(1);
+    this.gl.autoClear = false;
+    this.rt = new THREE.WebGLRenderTarget(640, 360, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false, depthBuffer: true });
+    this.hud = document.createElement('canvas');
+    const g = this.hud.getContext('2d');
+    if (!g) throw new Error('2d canvas unavailable');
+    this.hudCtx = g;
+    this.hudTex = new THREE.CanvasTexture(this.hud);
+    this.hudTex.magFilter = this.hudTex.minFilter = THREE.NearestFilter;
+    this.hudTex.generateMipmaps = false;
+    this.hudTex.colorSpace = THREE.NoColorSpace;
+    this.post = new THREE.ShaderMaterial({
+      uniforms: { tSrc: { value: this.rt.texture }, tHud: { value: this.hudTex }, uLow: { value: new THREE.Vector2(640, 360) }, uLevels: { value: 256 }, uDither: { value: 0 }, uGrade: { value: 0 }, uRed: { value: 0 } },
+      vertexShader: QVS,
+      fragmentShader: QFS,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.post);
+    quad.frustumCulled = false;
+    this.postScene.add(quad);
+    this.cam.rotation.order = 'YXZ';
+    addEventListener('resize', () => this.resize());
+    this.resize();
+  }
+
+  setOptions(o: Partial<LookOptions>): void {
+    this.opts = { ...this.opts, ...o };
+    G.uJitter.value = this.opts.snap ? 1 : 0;
+    G.uAffine.value = this.opts.affine ? 1 : 0;
+    this.post.uniforms.uDither!.value = this.opts.dither ? 1 : 0;
+    this.post.uniforms.uLevels!.value = this.opts.dither ? 32 : 256;
+    this.post.uniforms.uGrade!.value = GRADES[this.opts.grade];
+    this.resize();
+  }
+
+  get options(): Readonly<LookOptions> {
+    return this.opts;
+  }
+
+  resize(): void {
+    const w = Math.max(1, innerWidth);
+    const h = Math.max(1, innerHeight);
+    const lh = this.opts.res === 'full' ? Math.round(h * Math.min(devicePixelRatio || 1, 2)) : Number(this.opts.res);
+    const lw = Math.max(1, Math.round((lh * w) / h));
+    this.gl.setSize(w, h, false);
+    this.rt.setSize(lw, lh);
+    if (this.hud.width !== lw || this.hud.height !== lh) {
+      this.hud.width = lw;
+      this.hud.height = lh;
+      // GPU storage is sized on first upload: a resized canvas needs a fresh texture.
+      this.hudTex.dispose();
+    }
+    this.width = lw;
+    this.height = lh;
+    this.post.uniforms.uLow!.value.set(lw, lh);
+    G.uSnap.value.set(lw / 2, lh / 2);
+    this.cam.aspect = this.vmCam.aspect = w / h;
+    this.updateFov();
+  }
+
+  updateFov(): void {
+    const half = (this.opts.fov * Math.PI) / 360;
+    this.cam.fov = (Math.atan(Math.tan(half) / Math.max(0.1, this.zoom)) * 360) / Math.PI;
+    this.cam.updateProjectionMatrix();
+    this.vmCam.updateProjectionMatrix();
+  }
+
+  /** Render one frame: world, viewmodel, then the post pass with the HUD drawn by `drawHud`. */
+  render(drawHud: (g: CanvasRenderingContext2D, w: number, h: number) => void, showViewmodel = true): void {
+    const gl = this.gl;
+    gl.setRenderTarget(this.rt);
+    gl.setClearColor(G.uFogColor.value, 1);
+    gl.clear();
+    gl.render(this.scene, this.cam);
+    if (showViewmodel) {
+      gl.clearDepth();
+      gl.render(this.vmScene, this.vmCam);
+    }
+    this.hudCtx.setTransform(1, 0, 0, 1, 0, 0);
+    this.hudCtx.clearRect(0, 0, this.width, this.height);
+    drawHud(this.hudCtx, this.width, this.height);
+    this.hudTex.needsUpdate = true;
+    this.post.uniforms.uRed!.value = this.damage;
+    gl.setRenderTarget(null);
+    gl.setClearColor(0x000000, 1);
+    gl.clear();
+    gl.render(this.postScene, this.postCam);
+  }
+
+  /** Blank the screen (menus). */
+  clear(): void {
+    this.gl.setRenderTarget(null);
+    this.gl.setClearColor(0x08090d, 1);
+    this.gl.clear();
+  }
+}

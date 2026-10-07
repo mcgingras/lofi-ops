@@ -1,0 +1,71 @@
+/* Menu chrome: pixel font, dark chips, warm paper text (palette of reference/yard-lab.html). */
+:root {
+  --void: #08090d;
+  --chip: rgba(10, 10, 14, 0.78);
+  --chip-solid: #101016;
+  --line: rgba(236, 226, 206, 0.18);
+  --line-hi: rgba(236, 226, 206, 0.5);
+  --paper: #ece2ce;
+  --dim: #9e97a8;
+  --hi: #ffd84a;
+  --warn: #ff6a4a;
+  --friend: #7ab0ff;
+  --ui: 'Silkscreen', 'Courier New', monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--void); color: var(--paper); font-family: var(--ui); }
+#app { position: fixed; inset: 0; }
+#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; touch-action: none; }
+#screen, #overlay { position: absolute; inset: 0; overflow: auto; }
+#screen[data-screen='match'] { pointer-events: none; overflow: hidden; }
+#screen[data-screen='match'] .interactive { pointer-events: auto; }
+#overlay { background: rgba(8, 9, 13, 0.82); z-index: 5; }
+#overlay[hidden] { display: none; }
+
+.lf-page { min-height: 100%; display: flex; flex-direction: column; padding: max(24px, env(safe-area-inset-top)) 24px 24px; gap: 18px; }
+.lf-bg { background: radial-gradient(ellipse at 30% 20%, #1c2240 0%, #0e1226 40%, #08090d 80%); }
+.lf-bg::before { content: ''; position: fixed; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 1px, transparent 1px 3px); }
+.lf-title { font-size: clamp(36px, 8vw, 72px); font-weight: 700; letter-spacing: 0.04em; line-height: 1; color: var(--paper); text-shadow: 4px 4px 0 #000, 0 0 24px rgba(255, 216, 74, 0.15); margin: 0; }
+.lf-title b { color: var(--hi); font-weight: 700; }
+.lf-sub { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+.lf-h2 { font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--hi); margin: 0; }
+.lf-col { display: flex; flex-direction: column; gap: 6px; align-items: stretch; max-width: 340px; width: 100%; }
+.lf-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.lf-spacer { flex: 1; }
+
+.lf-btn { all: unset; cursor: pointer; font-family: var(--ui); font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; background: var(--chip); border: 1px solid var(--line); padding: 9px 14px; color: var(--paper); display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+.lf-btn small { font-size: 10px; color: var(--dim); }
+.lf-btn:hover, .lf-btn:focus-visible { border-color: var(--hi); color: var(--hi); background: rgba(40, 34, 10, 0.8); }
+.lf-btn:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+.lf-btn[disabled] { opacity: 0.4; pointer-events: none; }
+.lf-btn.primary { border-color: var(--hi); color: var(--hi); }
+.lf-btn.small { font-size: 11px; padding: 5px 9px; }
+
+.lf-chip { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; background: var(--chip); border: 1px solid var(--line); padding: 3px 7px; color: var(--dim); }
+.lf-chip b { color: var(--hi); font-weight: 400; }
+.lf-status { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); min-height: 14px; }
+.lf-status.warn { color: var(--warn); }
+.lf-hint { font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--paper); opacity: 0.6; line-height: 1.7; max-width: 520px; }
+kbd { font-family: var(--ui); font-size: 9px; border: 1px solid var(--line); padding: 0 3px; color: var(--paper); }
+
+.lf-panel { background: var(--chip-solid); border: 1px solid var(--line); padding: 16px; max-width: 560px; width: 100%; }
+.lf-form { display: grid; grid-template-columns: minmax(120px, 180px) 1fr; gap: 10px 14px; align-items: center; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; }
+.lf-form label { color: var(--dim); }
+.lf-form .val { color: var(--hi); min-width: 3em; display: inline-block; text-align: right; }
+.lf-form select, .lf-form input[type='text'] { font-family: var(--ui); font-size: 11px; background: #000; color: var(--paper); border: 1px solid var(--line); padding: 4px 6px; text-transform: uppercase; }
+.lf-form input[type='range'] { accent-color: var(--hi); width: 100%; max-width: 260px; }
+.lf-form input[type='checkbox'] { accent-color: var(--hi); width: 16px; height: 16px; }
+.lf-seg { display: inline-flex; border: 1px solid var(--line); flex-wrap: wrap; }
+.lf-seg button { all: unset; cursor: pointer; font-family: var(--ui); font-size: 11px; padding: 4px 8px; color: var(--dim); text-transform: uppercase; }
+.lf-seg button[aria-pressed='true'] { background: var(--hi); color: #000; }
+.lf-seg button:focus-visible { outline: 2px solid var(--hi); }
+
+.lf-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; text-align: center; }
+.lf-banner { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; background: var(--chip); border: 1px solid var(--line); padding: 10px 16px; color: var(--paper); }
+.lf-pause { background: rgba(8, 9, 13, 0.78); }
+
+@media (max-width: 560px) {
+  .lf-form { grid-template-columns: 1fr; gap: 4px; }
+  .lf-form label { margin-top: 8px; }
+}

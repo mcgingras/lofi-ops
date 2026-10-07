@@ -11,6 +11,8 @@ export default defineConfig({
     outDir: resolve(import.meta.dirname, 'dist/client'),
     emptyOutDir: true,
     target: 'es2022',
+    // three.js alone is ~500 kB minified.
+    chunkSizeWarningLimit: 1000,
   },
   server: {
     port: 5173,

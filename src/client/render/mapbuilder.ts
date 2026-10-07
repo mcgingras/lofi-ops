@@ -1,0 +1,389 @@
+/**
+ * MapData -> three.js scene. Brushes, ramps, decals and cylinder props become quads subdivided
+ * about every 1.1 m (for vertex lighting), merged into one mesh per material, with world-scaled
+ * UVs (prototype `worldUV`) or raw 0..1 UVs. Lighting is baked into vertex colours per time of day
+ * (cached in memory and IndexedDB). Glow props become additive sprites; the sky is a dome.
+ *
+ * Extension: `registerPropBuilder(kind, fn)` renders custom prop kinds (e.g. 'gltf').
+ */
+import * as THREE from 'three';
+import { buildCollisionWorld, type Brush, type Decal, type Face, type GlowProp, type MapData, type MaterialDef, type Prop, type TimePreset } from '../../shared/maps/types';
+import { hashString, type Vec3 } from '../../shared/math';
+import { Baker, DynLight } from './bake';
+import { cacheGet, cachePut } from './idb';
+import { G, makeLookMaterial, type LookMaterial } from './shader';
+import { bindTexture, getTexture, unbindTexture } from './textures';
+
+const BAKE_VERSION = 2;
+const sg = (v: number) => Math.min(56, Math.max(1, Math.round(v / 1.1)));
+
+class Bucket {
+  pos: number[] = [];
+  nor: number[] = [];
+  uv: number[] = [];
+  idx: number[] = [];
+  get count() {
+    return this.pos.length / 3;
+  }
+}
+
+type V = [number, number, number];
+type Xf = (p: V) => V;
+
+/** A subdivided quad: corner o, full edges u and v (normal = u x v), UV size (uw, vh). */
+function quad(b: Bucket, o: V, u: V, v: V, su: number, sv: number, uw: number, vh: number, xf: Xf, nxf: Xf) {
+  const n = norm(cross(u, v));
+  const N = nxf(n);
+  const base = b.count;
+  for (let j = 0; j <= sv; j++)
+    for (let i = 0; i <= su; i++) {
+      const a = i / su;
+      const c = j / sv;
+      const p = xf([o[0] + u[0] * a + v[0] * c, o[1] + u[1] * a + v[1] * c, o[2] + u[2] * a + v[2] * c]);
+      b.pos.push(p[0], p[1], p[2]);
+      b.nor.push(N[0], N[1], N[2]);
+      b.uv.push(a * uw, c * vh);
+    }
+  const row = su + 1;
+  for (let j = 0; j < sv; j++)
+    for (let i = 0; i < su; i++) {
+      const a = base + j * row + i;
+      const bb = a + 1;
+      const c = a + row;
+      const d = c + 1;
+      b.idx.push(a, bb, d, a, d, c);
+    }
+}
+
+function tri(b: Bucket, p: [V, V, V], uv: [number, number][], xf: Xf, nxf: Xf) {
+  const n = nxf(norm(cross(sub(p[1], p[0]), sub(p[2], p[0]))));
+  const base = b.count;
+  for (let k = 0; k < 3; k++) {
+    const q = xf(p[k]!);
+    b.pos.push(q[0], q[1], q[2]);
+    b.nor.push(n[0], n[1], n[2]);
+    b.uv.push(uv[k]![0], uv[k]![1]);
+  }
+  b.idx.push(base, base + 1, base + 2);
+}
+
+const cross = (a: V, b: V): V => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const sub = (a: V, b: V): V => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+function norm(a: V): V {
+  const l = Math.hypot(a[0], a[1], a[2]) || 1;
+  return [a[0] / l, a[1] / l, a[2] / l];
+}
+
+/** Rotation about y by `ry` (three.js convention) then translation. */
+function xform(ry: number, c: V): { xf: Xf; nxf: Xf } {
+  const cs = Math.cos(ry);
+  const sn = Math.sin(ry);
+  const rot = (p: V): V => [p[0] * cs + p[2] * sn, p[1], -p[0] * sn + p[2] * cs];
+  return { xf: (p) => {
+    const r = rot(p);
+    return [r[0] + c[0], r[1] + c[1], r[2] + c[2]];
+  }, nxf: rot };
+}
+
+const FACES: Face[] = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
+
+/** Box faces in local space (centred), sized w x h x d. */
+function boxFace(f: Face, w: number, h: number, d: number): { o: V; u: V; v: V; uw: number; vh: number } {
+  const x = w / 2;
+  const y = h / 2;
+  const z = d / 2;
+  switch (f) {
+    case 'px':
+      return { o: [x, -y, z], u: [0, 0, -d], v: [0, h, 0], uw: d, vh: h };
+    case 'nx':
+      return { o: [-x, -y, -z], u: [0, 0, d], v: [0, h, 0], uw: d, vh: h };
+    case 'py':
+      return { o: [-x, y, z], u: [w, 0, 0], v: [0, 0, -d], uw: w, vh: d };
+    case 'ny':
+      return { o: [-x, -y, -z], u: [w, 0, 0], v: [0, 0, d], uw: w, vh: d };
+    case 'pz':
+      return { o: [-x, -y, z], u: [w, 0, 0], v: [0, h, 0], uw: w, vh: h };
+    case 'nz':
+      return { o: [x, -y, -z], u: [-w, 0, 0], v: [0, h, 0], uw: w, vh: h };
+  }
+}
+
+const RAMP_ANGLE = { '+x': 0, '-z': Math.PI / 2, '-x': Math.PI, '+z': -Math.PI / 2 } as const;
+
+export type PropBuilder = (prop: Prop, ctx: { map: MapData; root: THREE.Group; material(id: string): LookMaterial | null }) => THREE.Object3D | null;
+const propBuilders = new Map<string, PropBuilder>();
+/** Render custom prop kinds (MapData props with that `kind`). */
+export function registerPropBuilder(kind: string, fn: PropBuilder): void {
+  propBuilders.set(kind, fn);
+}
+
+interface BakedMesh {
+  mesh: THREE.Mesh;
+  pos: Float32Array;
+  nor: Float32Array;
+  color: THREE.BufferAttribute;
+}
+
+export class MapScene {
+  readonly root = new THREE.Group();
+  readonly world;
+  readonly baker: Baker;
+  dyn: DynLight;
+  time: TimePreset;
+  private baked: BakedMesh[] = [];
+  private materials: LookMaterial[] = [];
+  private glows: { sprite: THREE.Sprite; prop: GlowProp }[] = [];
+  private sky: THREE.Mesh;
+  private skyMat: LookMaterial;
+  private bakes = new Map<string, Float32Array>();
+  private signature: string;
+
+  constructor(readonly map: MapData) {
+    this.world = buildCollisionWorld(map);
+    this.baker = new Baker(this.world, map);
+    this.time = map.times.find((t) => t.id === map.defaultTime) ?? map.times[0]!;
+    this.dyn = new DynLight(this.baker, this.time);
+    this.signature = hashString(JSON.stringify([BAKE_VERSION, map.brushes, map.decals, map.props, map.lights])).toString(36);
+    this.build();
+    this.skyMat = makeLookMaterial({ texture: this.time.sky, emissive: 1, fog: false, side: 'back', affine: 0, bake: false });
+    this.sky = new THREE.Mesh(new THREE.SphereGeometry(450, 32, 16), this.skyMat);
+    this.sky.frustumCulled = false;
+    this.sky.renderOrder = -1;
+    this.root.add(this.sky);
+  }
+
+  /** Texture recipe ids this map uses (to develop them first). */
+  textureIds(): string[] {
+    const ids = new Set<string>(Object.values(this.map.materials).map((m) => m.texture));
+    for (const t of this.map.times) ids.add(t.sky);
+    return [...ids];
+  }
+
+  private build() {
+    const map = this.map;
+    const buckets = new Map<string, Bucket>();
+    const bucket = (mat: string) => {
+      let b = buckets.get(mat);
+      if (!b) buckets.set(mat, (b = new Bucket()));
+      return b;
+    };
+    for (const br of map.brushes) if (!br.noRender) this.addBrush(br, bucket);
+    for (const d of map.decals) this.addDecal(d, bucket(d.mat));
+    for (const p of map.props) {
+      if (p.kind === 'cylinder') {
+        const geo = new THREE.CylinderGeometry(p.r, p.r, p.len, p.sides, Math.max(1, Math.round(p.len / 1.2)));
+        if (p.axis === 'z') geo.rotateX(Math.PI / 2);
+        else if (p.axis === 'x') geo.rotateZ(Math.PI / 2);
+        geo.translate(p.x, p.y, p.z);
+        appendGeometry(bucket(p.mat), geo);
+        geo.dispose();
+      } else if (p.kind === 'glow') {
+        const m = new THREE.SpriteMaterial({ map: getTexture('glow'), color: new THREE.Color(p.color[0], p.color[1], p.color[2]), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false });
+        const s = new THREE.Sprite(m);
+        s.scale.setScalar(p.size);
+        s.position.set(p.x, p.y, p.z);
+        this.root.add(s);
+        this.glows.push({ sprite: s, prop: p });
+      } else {
+        const fn = propBuilders.get(p.kind);
+        const obj = fn?.(p, { map, root: this.root, material: (id) => this.makeMat(id) });
+        if (obj) this.root.add(obj);
+        else if (!fn) console.info(`[map] prop kind "${p.kind}" has no builder (registerPropBuilder)`);
+      }
+    }
+    for (const [matId, b] of buckets) {
+      if (!b.count) continue;
+      const mat = this.makeMat(matId);
+      if (!mat) continue;
+      const geo = new THREE.BufferGeometry();
+      const pos = new Float32Array(b.pos);
+      const nor = new Float32Array(b.nor);
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(b.uv), 2));
+      geo.setIndex(b.count > 65535 ? new THREE.Uint32BufferAttribute(b.idx, 1) : new THREE.Uint16BufferAttribute(b.idx, 1));
+      geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.matrixAutoUpdate = false;
+      mesh.name = matId;
+      this.root.add(mesh);
+      if (mat.vertexColors) {
+        const color = new THREE.BufferAttribute(new Float32Array(pos.length), 3);
+        color.array.fill(0.6);
+        geo.setAttribute('color', color);
+        this.baked.push({ mesh, pos, nor, color });
+      }
+    }
+  }
+
+  private makeMat(id: string): LookMaterial | null {
+    const def: MaterialDef | undefined = this.map.materials[id];
+    if (!def) {
+      console.warn(`[map] unknown material ${id}`);
+      return null;
+    }
+    if (def.texture === 'none') return null;
+    const m = makeLookMaterial({ texture: def.texture, uvMul: def.uvMul, tint: def.tint, emissive: def.emissive, side: def.side, bake: def.bake, fog: def.fog, affine: def.affine });
+    this.materials.push(m);
+    return m;
+  }
+
+  private addBrush(br: Brush, bucket: (mat: string) => Bucket) {
+    const { min, max } = br;
+    const c: V = [(min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2];
+    const raw = br.uv === 'raw';
+    let w = max.x - min.x;
+    const h = max.y - min.y;
+    let d = max.z - min.z;
+    if (br.ramp) {
+      const along = br.ramp === '+x' || br.ramp === '-x';
+      const L = along ? w : d;
+      const W = along ? d : w;
+      const { xf, nxf } = xform(RAMP_ANGLE[br.ramp], c);
+      const b = bucket(br.mat);
+      const x = L / 2;
+      const y = h / 2;
+      const z = W / 2;
+      const sl = Math.hypot(L, h);
+      const uvs = (uw: number, vh: number): [number, number] => (raw ? [1, 1] : [uw, vh]);
+      // Slope, high end, bottom, two side triangles.
+      const [su, sv] = uvs(sl, W);
+      quad(b, [-x, -y, z], [L, h, 0], [0, 0, -W], sg(sl), sg(W), su, sv, xf, nxf);
+      const hi = boxFace('px', L, h, W);
+      const hu = uvs(hi.uw, hi.vh);
+      quad(b, hi.o, hi.u, hi.v, sg(hi.uw), sg(hi.vh), hu[0], hu[1], xf, nxf);
+      const lo = boxFace('ny', L, h, W);
+      const lu = uvs(lo.uw, lo.vh);
+      quad(b, lo.o, lo.u, lo.v, sg(lo.uw), sg(lo.vh), lu[0], lu[1], xf, nxf);
+      const k = raw ? 1 / L : 1;
+      const kh = raw ? 1 / h : 1;
+      tri(b, [[-x, -y, z], [x, -y, z], [x, y, z]], [[0, 0], [L * k, 0], [L * k, h * kh]], xf, nxf);
+      tri(b, [[x, -y, -z], [-x, -y, -z], [x, y, -z]], [[0, 0], [L * k, 0], [0, h * kh]], xf, nxf);
+      return;
+    }
+    const ry = br.ry ?? 0;
+    if (Math.abs(Math.sin(ry)) > 0.5) [w, d] = [d, w];
+    const { xf, nxf } = xform(ry, c);
+    const hide = br.hide;
+    for (const f of FACES) {
+      if (hide?.includes(f)) continue;
+      const face = boxFace(f, w, h, d);
+      const mat = br.faceMats?.[f] ?? br.mat;
+      quad(bucket(mat), face.o, face.u, face.v, sg(face.uw), sg(face.vh), raw ? 1 : face.uw, raw ? 1 : face.vh, xf, nxf);
+    }
+  }
+
+  private addDecal(d: Decal, b: Bucket) {
+    const raw = d.uv === 'raw';
+    const { xf, nxf } = xform(d.ry ?? 0, [d.x, d.y, d.z]);
+    const su = d.seg ?? sg(d.w);
+    const sv = d.seg ?? sg(d.h);
+    if (d.kind === 'wall') quad(b, [-d.w / 2, 0, 0], [d.w, 0, 0], [0, d.h, 0], su, sv, raw ? 1 : d.w, raw ? 1 : d.h, xf, nxf);
+    else quad(b, [-d.w / 2, 0, d.h / 2], [d.w, 0, 0], [0, 0, -d.h], su, sv, raw ? 1 : d.w, raw ? 1 : d.h, xf, nxf);
+  }
+
+  /** Switch time of day: global uniforms, sky, glows, and the (cached) bake. */
+  async setTime(id: string, onProgress?: (k: number) => void): Promise<void> {
+    const T = this.map.times.find((t) => t.id === id) ?? this.time;
+    this.time = T;
+    this.dyn = new DynLight(this.baker, T);
+    applyTimeUniforms(T);
+    bindTexture(this.skyMat, T.sky);
+    this.sky.rotation.y = T.skyRot;
+    for (const { sprite, prop } of this.glows) {
+      const on = prop.beacon || !prop.group ? 1 : (T.lights[prop.group] ?? 0) > 0 ? T.glow : 0;
+      sprite.visible = on > 0;
+      (sprite.material as THREE.SpriteMaterial).opacity = on;
+    }
+    const all = await this.bakeFor(T, onProgress);
+    let off = 0;
+    for (const b of this.baked) {
+      b.color.array.set(all.subarray(off, off + b.pos.length));
+      b.color.needsUpdate = true;
+      off += b.pos.length;
+    }
+  }
+
+  private async bakeFor(T: TimePreset, onProgress?: (k: number) => void): Promise<Float32Array> {
+    const key = `${this.map.id}:${T.id}:${this.signature}:${hashString(JSON.stringify(T)).toString(36)}`;
+    const mem = this.bakes.get(key);
+    if (mem) return mem;
+    const total = this.baked.reduce((n, b) => n + b.pos.length, 0);
+    const cached = await cacheGet<ArrayBuffer>('bakes', key);
+    if (cached && cached.byteLength === total * 4) {
+      const arr = new Float32Array(cached);
+      this.bakes.set(key, arr);
+      return arr;
+    }
+    const out = new Float32Array(total);
+    let off = 0;
+    let t0 = performance.now();
+    for (const b of this.baked) {
+      // Bake in slices so the page stays responsive.
+      const n = b.pos.length;
+      for (let i = 0; i < n; i += 3 * 512) {
+        const end = Math.min(n, i + 3 * 512);
+        this.baker.bakeBuffer(b.pos.subarray(i, end), b.nor.subarray(i, end), T, out.subarray(off + i, off + end));
+        if (performance.now() - t0 > 30) {
+          onProgress?.((off + end) / total);
+          await new Promise((r) => setTimeout(r, 0));
+          t0 = performance.now();
+        }
+      }
+      off += n;
+    }
+    this.bakes.set(key, out);
+    void cachePut('bakes', key, out.buffer.slice(0));
+    return out;
+  }
+
+  /** Per-frame: blinking beacons, sky follows the camera. */
+  update(time: number, cam: Vec3): void {
+    const on = Math.floor(time * 1.2) % 2 === 0;
+    for (const { sprite, prop } of this.glows) if (prop.beacon) sprite.visible = on;
+    this.sky.position.set(cam.x, cam.y, cam.z);
+  }
+
+  /** Light for a dynamic object (players, viewmodel) at a point. */
+  lightAt(x: number, y: number, z: number): [number, number, number] {
+    return this.dyn.sample(x, y, z);
+  }
+
+  dispose(): void {
+    this.root.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.geometry.dispose();
+      if (o instanceof THREE.Sprite) o.material.dispose();
+    });
+    for (const m of [...this.materials, this.skyMat]) {
+      unbindTexture(m);
+      m.dispose();
+    }
+    this.root.removeFromParent();
+  }
+}
+
+/** Global uniforms for a time preset (sun, ambient, fog, unlit colour). */
+export function applyTimeUniforms(T: TimePreset): void {
+  G.uSunDir.value.set(T.sunDir.x, T.sunDir.y, T.sunDir.z);
+  G.uSun.value.setRGB(T.sun[0], T.sun[1], T.sun[2]);
+  G.uAmb.value.setRGB(T.amb[0], T.amb[1], T.amb[2]);
+  G.uFogColor.value.setRGB(T.fog[0], T.fog[1], T.fog[2]);
+  G.uFogNear.value = T.fogNear;
+  G.uFogFar.value = T.fogFar;
+  G.uUnlitColor.value.setRGB(T.unlit[0], T.unlit[1], T.unlit[2]);
+}
+
+function appendGeometry(b: Bucket, geo: THREE.BufferGeometry) {
+  const pos = geo.getAttribute('position');
+  const nor = geo.getAttribute('normal');
+  const uv = geo.getAttribute('uv');
+  const base = b.count;
+  for (let i = 0; i < pos.count; i++) {
+    b.pos.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+    b.nor.push(nor.getX(i), nor.getY(i), nor.getZ(i));
+    b.uv.push(uv.getX(i), uv.getY(i));
+  }
+  const index = geo.getIndex();
+  if (index) for (let i = 0; i < index.count; i++) b.idx.push(base + index.getX(i));
+  else for (let i = 0; i < pos.count; i++) b.idx.push(base + i);
+}
