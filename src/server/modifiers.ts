@@ -49,6 +49,11 @@ export interface ModifierMap {
   radarJammed: (viewer: PlayerState) => boolean | undefined;
   /** May this player sprint now? false = no (sprint stamina / Marathon, last stand, driving a streak). */
   canSprint: (p: PlayerState) => boolean | undefined;
+  /**
+   * Does another USE action own this player's USE key right now (a care package in reach, planting
+   * or defusing, reviving, driving a streak)? true = weapon pickups stand aside.
+   */
+  useClaimed: (p: PlayerState) => boolean | undefined;
 }
 
 export type ModifierKey = keyof ModifierMap;

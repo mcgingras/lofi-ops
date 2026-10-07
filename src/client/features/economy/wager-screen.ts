@@ -24,6 +24,7 @@ const SKILL_LABELS: Record<keyof BotSkill, string> = {
   objectivePlay: 'Objective play',
   streakUse: 'Streak use',
   aggression: 'Aggression',
+  weaponPickup: 'Weapon pickups',
 };
 
 interface Prefs {
