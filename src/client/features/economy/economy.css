@@ -1,0 +1,46 @@
+/* Economy screens (store, wager lobby). Builds on menus.css tokens. */
+.ec-page { gap: 14px; }
+.ec-head { gap: 12px; }
+.ec-balance b { font-size: 12px; }
+.ec-dim { color: var(--dim); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
+.ec-section { display: flex; flex-direction: column; gap: 8px; max-width: 900px; }
+
+.ec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; max-width: 1100px; }
+.ec-card { display: flex; gap: 10px; background: var(--chip); border: 1px solid var(--line); padding: 8px; align-items: flex-start; min-width: 0; }
+.ec-card canvas { width: 56px; height: 56px; image-rendering: pixelated; border: 1px solid var(--line); flex: none; }
+.ec-card.owned { border-color: rgba(122, 223, 106, 0.45); }
+.ec-card.locked { opacity: 0.55; }
+.ec-card-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.ec-name { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--paper); overflow-wrap: anywhere; }
+.ec-meta { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dim); }
+.ec-price { font-size: 10px; color: var(--hi); min-height: 12px; }
+.ec-tag { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dim); }
+.ec-tag.owned { color: #7adf6a; }
+.ec-tag.warn { color: var(--warn); }
+.ec-card .lf-btn.small { align-self: flex-start; }
+
+.ec-modes { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.ec-antes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.ec-mode, .ec-ante { all: unset; cursor: pointer; display: flex; flex-direction: column; gap: 5px; background: var(--chip); border: 1px solid var(--line); padding: 10px; font-family: var(--ui); }
+.ec-mode b, .ec-ante b { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--paper); font-weight: 400; }
+.ec-mode span, .ec-ante span { font-size: 10px; color: var(--dim); line-height: 1.5; }
+.ec-ante span { color: var(--hi); font-size: 12px; }
+.ec-mode small, .ec-ante small { font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; }
+.ec-mode:hover, .ec-ante:hover, .ec-mode:focus-visible, .ec-ante:focus-visible { border-color: var(--hi); }
+.ec-mode:focus-visible, .ec-ante:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+.ec-mode[aria-checked='true'], .ec-ante[aria-checked='true'] { border-color: var(--hi); background: rgba(40, 34, 10, 0.85); }
+.ec-mode[aria-checked='true'] b, .ec-ante[aria-checked='true'] b { color: var(--hi); }
+.ec-ante[disabled] { opacity: 0.35; pointer-events: none; }
+
+.ec-bots { max-width: 640px; }
+.ec-bots .ec-span { grid-column: 1 / -1; }
+.ec-bots[data-off] .lf-seg, .ec-bots[data-off] input[type='range'] { opacity: 0.45; }
+.ec-find { min-width: 180px; justify-content: center; }
+
+.ec-lobbies { display: flex; flex-direction: column; gap: 6px; max-width: 640px; }
+.ec-lobby { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--chip); border: 1px solid var(--line); padding: 6px 10px; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; }
+
+@media (max-width: 560px) {
+  .ec-grid { grid-template-columns: 1fr; }
+  .ec-modes, .ec-antes { grid-template-columns: 1fr 1fr; }
+}
