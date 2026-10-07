@@ -129,9 +129,18 @@ export class SdRules extends TdmRules {
 
   override spawnPoints(room: Room, p: PlayerState): SpawnPoint[] {
     if (p.team === null) return room.map.spawns.ffa;
-    const side = p.team === this.attackers ? otherSide(this.defendSide) : this.defendSide;
-    const pts = room.map.spawns.teams[side];
+    const pts = this.roleSpawns(p.team === this.attackers ? 'attackers' : 'defenders');
     return pts.length ? rankSpawns(room, p, pts) : room.map.spawns.ffa;
+  }
+
+  /**
+   * Spawns for a role: the map's `modeSpawns.sd.attackers` / `.defenders` when it has them (they stay
+   * with the role when teams swap at halftime), else the team spawn side for that role.
+   */
+  roleSpawns(role: 'attackers' | 'defenders'): SpawnPoint[] {
+    const own = this.room.map.modeSpawns?.sd?.[role];
+    if (own && own.length) return own;
+    return this.room.map.spawns.teams[role === 'attackers' ? otherSide(this.defendSide) : this.defendSide];
   }
 
   override checkEnd(room: Room): MatchResults['reason'] | null {
@@ -167,7 +176,7 @@ export class SdRules extends TdmRules {
   }
 
   private attackSpawnCentre(): Vec3 {
-    const pts = this.room.map.spawns.teams[otherSide(this.defendSide)];
+    const pts = this.roleSpawns('attackers');
     if (!pts.length) return { x: 0, y: 0, z: 0 };
     const p = pts[0]!;
     return { x: p.x, y: p.y, z: p.z };

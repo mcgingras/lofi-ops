@@ -424,6 +424,31 @@ describe('Search and Destroy', () => {
     expect((room.results?.ext.modes as MatchSummaryExt).rounds).toBe(4);
   });
 
+  it("uses the map's modeSpawns.sd role spawns (Nuketown), which follow the role across halftime", () => {
+    const room = setup('sd', { onEnd: 'close', map: 'nuketown' });
+    const roles = room.map.modeSpawns?.sd;
+    expect(roles?.attackers?.length).toBeGreaterThan(0);
+    expect(roles?.defenders?.length).toBeGreaterThan(0);
+    const a = room.addBot({ name: 'A', team: 0 });
+    const d = room.addBot({ name: 'D', team: 1 });
+    idle(a);
+    idle(d);
+    room.endMatch('aborted');
+    room.startMatch();
+    const rules = controllerOf(room) as SdRules;
+    const isIn = (p: PlayerState, pts: { x: number; z: number }[]) => pts.some((s) => Math.hypot(s.x - p.move.x, s.z - p.move.z) < 0.01);
+    expect(rules.attackers).toBe(0);
+    expect(isIn(a, roles!.attackers!)).toBe(true);
+    expect(isIn(d, roles!.defenders!)).toBe(true);
+    expect(rules.roleSpawns('attackers')).toBe(roles!.attackers);
+    // After the swap team 1 attacks and so spawns on the attacker points.
+    rules.attackers = 1;
+    room.spawn(d);
+    room.spawn(a);
+    expect(isIn(d, roles!.attackers!)).toBe(true);
+    expect(isIn(a, roles!.defenders!)).toBe(true);
+  });
+
   it('a team with nobody on it cannot be eliminated (solo practice)', () => {
     const room = setup('sd', { onEnd: 'close' });
     const solo = room.addBot({ team: 0 });
