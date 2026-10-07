@@ -192,15 +192,18 @@ Each file exports a typed array and a `*_BY_ID` map (`indexById` throws on dupli
 | `perks.ts` | `PerkDef`, `PERKS` (seeded: lightweight, hardline (T1), steady_aim (T2)) | perks-streaks |
 | `killstreaks.ts` | `KillstreakDef`, `KILLSTREAKS` (seeded: `uav` "Spy Plane", 3) | perks-streaks |
 | `modes.ts` | `ModeDef`, `CORE_MODES` (tdm 75 kills / ffa 30 kills, 10 min), `MODES` = core + `WAGER_MODES` | modes |
-| `economy.ts` | `CP_REWARDS`, `STARTING_COD_POINTS`, `DEFAULT_PRICES`, `WAGER_MODES`, `codPointsForMatch` | economy |
+| `economy.ts` | `CP_REWARDS`, `STARTING_COD_POINTS`, `DEFAULT_PRICES`, `codPointsForMatch` / `codPointsBreakdown` (score, win, podium, streak, time share), `ANTE_TIERS` (0/10/1,000/10,000), `wagerPayouts`, `WAGER_MODES` (oitc, gungame, sharpshooter, sticks), wager mode data | economy |
+| `store.ts` | `RETICLES`, `EMBLEM_BACKGROUNDS`, `storeCatalog()`, ownership keys `keyOf.*` (`weapon.<id>`, `att.<weapon>.<att>`, `camo.<id>`, `reticle.<id>`, `emblem.<id>` in `profile.owned`), `lockReason`, `canUse`, `purchase`, `enforceLoadout` | economy |
+| `economy-net.ts` | economy RPC / feature message types (`economy.*`), `EconomyResultsExt` (`results.ext.economy`) | economy |
+| `wager-weapons.ts` | `crossbow`, `ballistic_knife` appended to `WEAPONS` at load unless the weapons area defines those ids; `WAGER_ONLY_WEAPONS` | economy |
 | `maps.ts` | `MapDef {id, name, inspiredBy, build, modes, size}`, `MAPS`, `getMapData(id)` (cached), `mapsForMode` | maps-bo, maps-mw2 |
 | `progression.ts` | `MAX_LEVEL` 50, `MAX_PRESTIGE` 15, `XP_TABLE`, `levelForXp`, `xpForLevel`, `addXp`, `canPrestige`, `applyPrestige`, `XP_SOURCES` | progression |
 | `challenges.ts` | `ChallengeDef`, `CHALLENGES` (seeded: `tdm_kills`) | progression |
-| `camos.ts` | `CamoDef {recipe: CamoRecipe | null}`, `CAMOS` (seeded: `none`) | economy |
+| `camos.ts` | `CamoDef {price, unlock, tier, recipe: CamoRecipe | null}`, `CAMOS` (16: Woodland ... Gold, Ice, Dragon); client texture `camo.<id>`, picker swatch `camoPreview(id)` from `src/client/features/economy` | economy |
 
 Also shared: `loadout.ts` (`Loadout`, `DEFAULT_LOADOUTS`, `sanitizeLoadout` = structural only, no unlock checks), `profile.ts` (`Profile`, `newProfile`, `bumpStat`), `ballistics.ts`, `collision.ts`, `movement.ts`, `math.ts` (`viewDir`: yaw 0 looks down -z).
 
-Wager modes: economy appends to `WAGER_MODES` in `economy.ts` and registers rules from its feature `setup` (`api.registerMode('oitc', factory)`), so `modes.ts` stays the modes owner's.
+Wager modes: economy appends to `WAGER_MODES` in `economy.ts` and registers rules from its feature `setup` (`api.registerMode('oitc', factory)`), so `modes.ts` stays the modes owner's. CoD Points for challenges: emit the room event `economy.grant { player, amount, reason, kind: 'challenge' }` instead of changing `profile.codPoints` (details: `docs/features/economy.md`).
 
 ## 8. Mode rules (src/server/modes)
 

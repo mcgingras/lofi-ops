@@ -1,0 +1,78 @@
+# Economy: CoD Points, store, camos, wager matches
+
+Owner: economy. Branch `feature/economy`.
+
+## What's in it
+
+| Piece | Where |
+|---|---|
+| Earning rules, ante tiers, payouts, the 4 wager ModeDefs, wager mode data | `src/shared/defs/economy.ts` |
+| 16 camos as texture recipes (Woodland, Dusty, Desert, Digital, Tiger, Berlin, Warsaw, Siberia, Yukon, Flora, Blossom, Red Tiger, Gold, Ice, Dragon + None) | `src/shared/defs/camos.ts` |
+| Store catalog, reticles, emblem backgrounds, ownership keys, purchase/gate rules, class enforcement (pure, shared) | `src/shared/defs/store.ts` |
+| Wire types (RPCs, feature pushes, `results.ext.economy`) | `src/shared/defs/economy-net.ts` |
+| Crossbow + ballistic knife defs (wager only) | `src/shared/defs/wager-weapons.ts` |
+| Server feature: RPCs, CP at match end, `economy.grant`, spawn-time ownership check | `src/server/features/economy/{index,earn,shop,ledger,types}.ts` |
+| Wager matchmaking, bot backfill, escrow, payouts, live HUD state | `src/server/features/economy/wager.ts` |
+| Wager mode rules | `src/server/features/economy/modes/{oitc,gungame,sharpshooter,sticks,common}.ts` |
+| Client: camo recipes + `camoPreview`, STORE screen, WAGER screen, HUD widgets, wager viewmodels, bolt/tomahawk views, third-person camo | `src/client/features/economy/*` |
+| Tests | `tests/economy.test.ts` (rules), `tests/economy-wager.test.ts` (modes, escrow, bots; room-level), `tests/economy.integration.test.ts` (real server + sockets) |
+
+## Earning CoD Points (BO1-like)
+
+Every normal match pays each human (`codPointsBreakdown`): 100 for completing (scaled by the share of the match played), 0.1 CP per score point, +100 for winning, FFA podium +75/50/25, best streak 5/10/15 => +50/100/200; floor 25, cap 2,000. Bots never earn. Rooms with `persist: false` pay nothing. The breakdown goes to the player as the `economy.award` push (HUD toast) and into `results.ext.economy.awards[playerId]`. Wager modes pay only through the pot.
+
+Everything that changes CP goes through `ledger.ts`, which keeps `profile.ext.economy` = `{ earned, spent, wagerWon, wagerLost, escrow, history (last 30), equipped { reticle, emblem }, lastMatch }` plus `stats.codPointsEarned/Spent`, `stats.wager.matches/wins/inMoney/forfeits`.
+
+## Store (screen `store`, menu item "Store")
+
+- Weapons: unlock by `WeaponDef.unlockLevel`, then cost `price ?? 1,500`. Attachments: bought per weapon (`att.<weapon>.<att>`), need the weapon usable, plus `unlockKills` (weapon kills stat) if set; `price ?? 1,000`. Camos: level/prestige gate + price (Gold level 44, 50,000; Ice prestige 1; Dragon prestige 3). Reticles and emblem backgrounds: level/prestige + price, then `economy.equip`.
+- Starter items are free: everything in `DEFAULT_LOADOUTS`, camo `none`, reticle `dot`, background `plain`, any def priced 0.
+- Camos are bought once and work on every weapon (simplified from BO1's per-weapon camos); the per-weapon choice is `WeaponLoadout.camo`.
+- Prestige: level gates apply again after a prestige (BO1); prestige-gated items stay open at higher prestige.
+- The server validates every purchase (`economy.buy`), checks the balance at the moment of spending and saves immediately.
+- **Spawn-time check** (`beforeSpawn`, priority -50, humans, non-wager modes): weapons/attachments/camos the profile can't use are replaced (weapon -> starter weapon for that slot, attachment dropped, camo -> none) with a one-time notice. Switch off with `economyConfig.enforceOwnership = false` (`src/server/features/economy/shop.ts`) if a sandbox playlist needs it.
+
+## Wager matches (screen `wager`, menu item "Wager Match")
+
+Modes (FFA, registered from the feature setup, ModeDefs in `WAGER_MODES`):
+
+- **One in the Chamber** `oitc`: M1911 with 1 bullet, no reserve; any bullet hit kills; every kill +1 bullet; knife (melee button); 3 lives, then eliminated (no respawn). Last player standing wins; on time, survivors rank by lives then score, the eliminated by how long they lasted. +50 per kill, +10 to survivors per elimination.
+- **Gun Game** `gungame`: ladder `GUN_GAME_LADDER_INTENT` filtered to weapons that exist (so it grows when the weapons area ships its roster; today: M1911, AK-47, Crossbow, Ballistic Knife). Kill = next gun immediately; knife kill demotes the victim (no promotion); suicide demotes. First kill on the last rung ends the match.
+- **Sharpshooter** `sharpshooter`: everyone gets the same random gun (classes ar/smg/lmg/sniper/shotgun/pistol), swapped for all every 45 s. Kills in a life stack: 2 = faster reload + x2, 3 = tighter spread, 4 = speed + x3, 6 = sprint + x4. +50 x multiplier per kill.
+- **Sticks and Stones** `sticks`: crossbow (bolt projectile; direct hit kills, otherwise it sticks and explodes after 1.2 s, 3.5 m) + ballistic knife + 1 tomahawk per life (lethal button, thrown projectile, one-hit). Tomahawk kill: +150 and the victim is **bankrupted** (score to 0). Other kills +100.
+- All wager modes: one-hit knife on the melee button (`wagerMelee`), wager-forced weapons (custom classes ignored).
+
+Flow (`economy.wagerQueue { mode, ante, bots }` -> join the returned room via the match screen):
+
+1. **Lobby.** Rooms are matched by mode + ante. The match starts when full, when someone sends `economy.wagerStart` (2+ humans, or bot fill on), or after `MATCHMAKING_WAIT_SEC` (20 s). Practice tier starts after 3 s. Rematch after 12 s.
+2. **Bots.** With `fill` on, empty slots up to `targetPlayers` become bots (`room.options.botFill`, core backfill: humans who join replace bots). The lobby's `LobbyBotSettings` (preset or custom skill, variance) are clamped with `sanitizeBots` and each bot gets `player.ext.wager.skill` (jittered by variance). One human + bots is fine: it runs as practice.
+3. **Escrow at match start.** Each human pays the ante into `profile.ext.economy.escrow` (saved immediately). Can't pay => kicked. Fewer than 2 staked, or the Practice tier => practice: no escrow, no payout. Bots never stake or get paid.
+4. **Leaving.** During the countdown, or when the room closes (shutdown): refunded. Mid-match: forfeit (ante stays in the pot). If that leaves fewer than 2 staked, the wager is void and everyone (forfeits too) is refunded.
+5. **Payout at match end.** Places paid = min(3, staked - 1); splits 100% / 65-35 / 50-30-20 of the pot; leavers can't place (their shares are renormalised over who's left); rounding goes to 1st. Ranking = the mode's `rank()` (bots included in placement, skipped for money). `results.ext.economy.wager` lists ante/payout/net per staked player; each gets an `economy.award` push.
+6. **Crash safety.** An escrow whose match no longer exists is refunded by a sweeper (every 5 s for connected sessions, and on wager RPCs).
+
+HUD: `economy.lobby` (lobby card: mode, ante/pot, players, start countdown, bot difficulty, who's in), `economy.wager` (pot + IN THE MONEY #n +CP / OUT OF THE MONEY / PRACTICE WAGER), `economy.mode` (lives, gun rung, swap timer + bonus, tomahawks), `economy.award` (CP toast), `economy.reticle` (equipped reticle while aiming through an optic).
+
+## RPCs and pushes
+
+```
+economy.state {}                                  -> EconomyState
+economy.buy { item: '<ownership key>' }           -> { codPoints, owned, item }   errors: level|prestige|weapon|kills|challenge|funds|owned|unknown
+economy.equip { kind: 'reticle'|'emblem', id }    -> { equipped }
+economy.setCamo { loadout, slot, camo }           -> { loadouts }   (ownership-checked)
+economy.wagerQueue { mode, ante, bots? }          -> { roomId, practice }
+economy.wagerList {}                              -> { rooms: WagerRoomSummary[] }
+economy.wagerStart {}                             -> { ok }
+push economy.wager (WagerHud), economy.mode (WagerModeHud), economy.award { reason, lines, total, codPoints }
+room events: economy.grant { player, amount, reason, kind? }, economy.payout { player, profileId, amount, rank }
+```
+
+## Integration notes for other areas
+
+- **progression**: pay challenge CoD Points with `room.bus.emit('economy.grant', { player, amount: def.codPoints, reason: 'Challenge: ' + def.name, kind: 'challenge' })`; don't touch `profile.codPoints` directly. Prestige can keep `owned` (CP purchases persist; level gates re-apply).
+- **frontend**: camo picker uses `CAMOS` + `camoPreview(id, size)` and `canUse(profile, keyOf.camo(id))` (or call `economy.setCamo`). `itemPreview(storeItem)`, `drawReticle`, `drawEmblemBackground` are exported from `src/client/features/economy/index.ts`. Loadout saving should run `enforceLoadout` or leave it to the spawn check. Wager entry is the `wager` screen; a custom lobby in a wager mode can set stakes via `wagersFor(room)?.setWagerAnte(room, ante, bots)` (otherwise it's practice). If you replace the main menu, keep rendering `menuItems` (Wager Match 30, Store 60).
+- **bots**: wager lobbies use core `botFill`; read the lobby settings with `wagerRoomInfo(room)` (`src/server/features/economy/index.ts`) or `player.ext.wager.skill` on each bot. Wager awareness: `player.ext.wager` has `lives`, `out`, `gunLevel`, `tomahawks`; weapons are forced by the mode (bots just fire what they hold); melee = `Buttons.MELEE` press, tomahawk = `Buttons.LETHAL` press (both edge-triggered `buttons` events — bots that set those bits in `think()` get them for free).
+- **weapons**: crossbow/ballistic_knife are added to `WEAPONS` only if you don't define those ids (if you do, yours win and the economy's bolt behaviour isn't registered). Gun Game and Sharpshooter pick up your roster automatically. The wager knife is a separate one-hit melee bound to the melee button in wager modes only; a global melee of yours composes (a dead victim can't die twice). Store prices come from `WeaponDef.price` / `AttachmentDef.price` (defaults 1,500 / 1,000).
+- **modes / maps**: wager rooms pick maps from `mapsForMode(<wager id>)`, falling back to `mapsForMode('ffa')`; add wager ids to a map's `modes` to dedicate it.
+
+No code was copied from Potrock's Blockyard for this area (its source has no wager modes); the room/RPC patterns follow this repo's core, so NOTICE is unchanged.
