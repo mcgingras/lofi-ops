@@ -29,7 +29,7 @@ export { pickupsOf } from './state';
 /** The gun a human holding USE would swap for right now (also what the client prompt shows). */
 export function useTarget(room: Room, p: PlayerState) {
   const eye = eyeOf(p);
-  return pickDropTarget(p.move, eye.y, p.yaw, p.pitch, dropsOf(room), (d) => d.data.landed && !carriesWeapon(p, d.data.weapon));
+  return pickDropTarget(p.move, eye.y, p.yaw, p.pitch, dropsOf(room), (d) => d.data.landed && !carriesWeapon(p, d.data.weapon) && room.world.lineOfSight(eye, { x: d.x, y: d.y + 0.1, z: d.z }, 'players'));
 }
 
 function updateHumanUse(room: Room, p: PlayerState, dt: number): void {

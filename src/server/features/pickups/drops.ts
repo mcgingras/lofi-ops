@@ -83,7 +83,7 @@ export function spawnDrop(room: Room, w: WeaponState, at: Vec3, vel: Vec3, from:
     expires: room.time + PICKUP.lifeSec,
     from: from?.id ?? null,
   };
-  const s: DropSnapState = { w: id, a: data.attachments.join(','), c: w.camo, l: false, m: w.mag, r: w.reserve };
+  const s: DropSnapState = { w: id, a: data.attachments.join(','), c: w.camo, l: false, m: w.mag, r: w.reserve, o: from?.id ?? '' };
   const e = room.entities.add({ kind: PICKUP_ENTITY, x: at.x, y: at.y + PICKUP.dropHeight, z: at.z, yaw: (from?.yaw ?? 0) + (Math.random() - 0.5) * 0.6, s: { ...s }, data }) as DropEntity;
   room.bus.emit('pickups.dropped', { player: from, weapon: id, entity: e.id, reason });
   return e;

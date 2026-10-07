@@ -46,7 +46,7 @@ export const PICKUP_ENTITY = 'pickups_weapon';
 
 /**
  * Entity `s` of a dropped gun: weapon id, attachments (comma separated), camo, landed, magazine and
- * reserve (shown in the prompt).
+ * reserve (shown in the prompt), and who dropped it (the client hides a corpse's gun).
  */
 export interface DropSnapState {
   w: string;
@@ -55,6 +55,7 @@ export interface DropSnapState {
   l: boolean;
   m: number;
   r: number;
+  o: string;
 }
 
 /** May this weapon id lie on the ground? (primaries and secondaries; no knife, launcher slot or wager-only guns). */

@@ -106,6 +106,8 @@ export class Match {
   private pendingShots: { seq: number; slot: number }[] = [];
   private reload = { seq: -1, end: 0, dur: 1 };
   private swap = { seq: -1, end: 0, dur: 0.5 };
+  /** Slot + gun in hand at the last snapshot (spots the server swapping it). */
+  private heldKey = '';
   private recoil = { pitch: 0, yaw: 0 };
   private wantReload = false;
   private eye = 1.6;
@@ -380,6 +382,7 @@ export class Match {
         this.timeLeft = m.timeLeft;
         this.phase = m.phase;
         this.pendingShots = this.pendingShots.filter((x) => x.seq > m.ack);
+        this.serverWeaponChange(m.me, m.ack);
         for (const shot of m.shots) this.remoteShot(shot.p, shot.o, shot.e, shot.w, !!shot.h);
         this.syncEntities(m.ents);
       }),
@@ -388,6 +391,24 @@ export class Match {
         if (this.notices.length > 4) this.notices.shift();
       }),
     );
+  }
+
+  /**
+   * The server replaced the gun in my hand (a weapon pickup, a wager handing out the next gun):
+   * drop the predictions made for the old one and raise the new one over its own swap time.
+   */
+  private serverWeaponChange(me: MeSnap | null, ack: number) {
+    const w = me?.alive ? me.weapons[this.slot] : undefined;
+    const key = w ? `${this.slot}|${w.id}|${w.attachments.join(',')}` : '';
+    const prev = this.heldKey;
+    this.heldKey = key;
+    if (!w || !prev || prev === key || !prev.startsWith(`${this.slot}|`) || this.swap.seq > ack) return;
+    const dur = (WEAPON_BY_ID.get(w.id)?.swapMs ?? 500) / 1000;
+    this.swap = { seq: -1, end: me!.swapEnd, dur };
+    this.reload = { seq: -1, end: 0, dur: 1 };
+    this.pendingShots = this.pendingShots.filter((x) => x.slot !== this.slot);
+    this.burstLeft = 0;
+    this.burstQueued = false;
   }
 
   private remoteShot(id: string, o: [number, number, number], e: [number, number, number], weapon: string, hit: boolean) {
