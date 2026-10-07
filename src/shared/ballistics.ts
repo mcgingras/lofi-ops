@@ -3,7 +3,7 @@
  * damage falloff, hit-part multipliers, and deterministic spread so both sides agree on where a
  * pellet went given the shot's seed.
  */
-import type { HitPart } from './collision';
+import { playerHitboxes, type HitPart } from './collision';
 import type { WeaponDef } from './defs/weapons';
 import { normalize, rng, type Vec3 } from './math';
 
@@ -15,8 +15,16 @@ export function damageAtRange(w: Pick<WeaponDef, 'damage'>, dist: number): numbe
   return near + ((far - near) * (dist - nearRange)) / Math.max(1e-6, farRange - nearRange);
 }
 
-export function partMultiplier(w: Pick<WeaponDef, 'multipliers'>, part: HitPart): number {
+/** `lower`: a torso hit below the torso's middle (uses `multipliers.lowerTorso` when the weapon has one). */
+export function partMultiplier(w: Pick<WeaponDef, 'multipliers'>, part: HitPart, lower = false): number {
+  if (part === 'torso' && lower && w.multipliers.lowerTorso !== undefined) return w.multipliers.lowerTorso;
   return part === 'head' ? w.multipliers.head : part === 'torso' ? w.multipliers.torso : w.multipliers.limb;
+}
+
+/** Is height `y` in the lower half of the torso box of a player with feet at `p`? */
+export function isLowerTorso(p: Vec3, crouched: boolean, y: number): boolean {
+  const t = playerHitboxes(p, crouched).torso;
+  return y < (t.min.y + t.max.y) / 2;
 }
 
 /** Spread cone half-angle (degrees) for an ads fraction and whether moving. */

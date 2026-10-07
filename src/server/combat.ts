@@ -11,7 +11,7 @@
  *   - modifiers: damageTaken, damageDealt, reloadMultiplier, swapMultiplier, sprintOutMultiplier,
  *     spreadMultiplier, regenDelayMultiplier, maxHealthMultiplier.
  */
-import { damageAtRange, partMultiplier, shotInterval, shotSeed, spreadDegrees, spreadDirection } from '../shared/ballistics';
+import { damageAtRange, isLowerTorso, partMultiplier, shotInterval, shotSeed, spreadDegrees, spreadDirection } from '../shared/ballistics';
 import { playerHitboxes, rayHitboxes, type HitPart } from '../shared/collision';
 import { HEALTH, PLAYER, RESPAWN_DELAY } from '../shared/constants';
 import type { DamageInfo, DamageMeans } from '../shared/events';
@@ -75,12 +75,18 @@ export function fire(room: Room, p: PlayerState, req: ShotRequest): FireResult {
 
   // Rate: a token bucket refilling at the weapon's rate, a little slack for network bunching.
   const interval = shotInterval(def);
+  // Burst weapons: at most `burst` rounds, then `burstDelayMs` before the next burst.
+  if (def.mode === 'burst') {
+    if (now - w.lastShot >= (def.burstDelayMs ?? 0) / 1000 - interval * RATE_SLACK) w.burstCount = 0;
+    else if (w.burstCount >= (def.burst ?? 3)) return { ok: false, reason: 'burst' };
+  }
   w.credit = Math.min(1 + RATE_SLACK, w.credit + (now - w.creditTime) / interval);
   w.creditTime = now;
   if (w.credit < 1 - RATE_SLACK) return { ok: false, reason: 'rate' };
   w.credit -= 1;
 
   w.mag -= 1;
+  w.burstCount += 1;
   w.lastShot = now;
   p.lastFireTime = now;
   p.lastFireSuppressed = def.suppressed;
@@ -112,6 +118,7 @@ export function fire(room: Room, p: PlayerState, req: ShotRequest): FireResult {
     let maxT = wall ? wall.t : range;
     let victim: PlayerState | null = null;
     let part: HitPart = 'torso';
+    let lower = false;
     for (const q of room.players.values()) {
       if (q === p || !q.alive || !room.canDamage(p, q)) continue;
       const pose = poses.get(q.id) ?? { x: q.move.x, y: q.move.y, z: q.move.z, crouched: q.move.crouched, alive: true };
@@ -121,12 +128,13 @@ export function fire(room: Room, p: PlayerState, req: ShotRequest): FireResult {
         maxT = hit.t;
         victim = q;
         part = hit.part;
+        lower = part === 'torso' && isLowerTorso(pose, pose.crouched, origin.y + d.y * hit.t);
       }
     }
     if (i === 0) end = { x: origin.x + d.x * maxT, y: origin.y + d.y * maxT, z: origin.z + d.z * maxT };
     if (victim) {
       hitAny = true;
-      const dmg = damageAtRange(def, maxT) * partMultiplier(def, part);
+      const dmg = damageAtRange(def, maxT) * partMultiplier(def, part, lower);
       const acc = perVictim.get(victim);
       if (acc) {
         acc.damage += dmg;

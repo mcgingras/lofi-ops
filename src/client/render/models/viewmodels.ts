@@ -27,8 +27,31 @@ export interface ViewmodelSpec {
   /** Group offset from the camera at the hip and fully aimed. */
   hip: THREE.Vector3;
   ads: THREE.Vector3;
-  /** Reload animation style (default 'tilt'). */
-  reload?: 'tilt' | 'drop';
+  /** Reload animation style (default 'tilt'; 'none' when `animate` does its own). */
+  reload?: 'tilt' | 'drop' | 'none';
+  /**
+   * Optional per-frame animation of the model's own parts (bolt, pump, hands, knife...), called
+   * after the rig has placed `group` (it may add to the group's transform too).
+   */
+  animate?(s: ViewmodelAnimState): void;
+}
+
+/** What `ViewmodelSpec.animate` gets every frame. */
+export interface ViewmodelAnimState {
+  dt: number;
+  time: number;
+  ads: number;
+  /** 0..1 reload progress or -1. */
+  reload: number;
+  /** 0..1 raise progress or -1. */
+  raise: number;
+  /** Seconds since the last shot (large when none). */
+  sinceShot: number;
+  sprint: boolean;
+  /** A one-off action started with `ViewmodelRig.action` (e.g. 'melee', 'throw'), or null. */
+  action: string | null;
+  /** 0..1 progress of the action. */
+  actionT: number;
 }
 
 export type ViewmodelBuilder = (ctx: ViewmodelCtx) => ViewmodelSpec;

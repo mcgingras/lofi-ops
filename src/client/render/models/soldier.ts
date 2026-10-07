@@ -48,6 +48,8 @@ export class Soldier {
   readonly hips: THREE.Group[] = [];
   readonly knees: THREE.Group[] = [];
   readonly mats: LookMaterial[] = [];
+  /** The default rifle (child of `aim`); features hide it to show their own weapon model. */
+  readonly gun = new THREE.Group();
   /** Muzzle position (child of `aim`) for remote muzzle flashes/tracers. */
   readonly muzzle = new THREE.Object3D();
   private flash: THREE.Mesh;
@@ -145,10 +147,11 @@ export class Soldier {
     const A = [0.13, 1.4, 0.08];
     const Bp = [-0.02, 1.3, 0.78];
     const at = (t: number) => A.map((v, i) => v + (Bp[i]! - v) * t);
-    bar(this.aim, L(A), L(Bp), 0.055, 0.08, steel);
-    bar(this.aim, L(at(0.05)), L(at(-0.25)), 0.05, 0.1, steel);
+    this.aim.add(this.gun);
+    bar(this.gun, L(A), L(Bp), 0.055, 0.08, steel);
+    bar(this.gun, L(at(0.05)), L(at(-0.25)), 0.05, 0.1, steel);
     const mag = at(0.42);
-    bar(this.aim, L(mag), L([mag[0]!, mag[1]! - 0.17, mag[2]! + 0.03]), 0.045, 0.07, steel);
+    bar(this.gun, L(mag), L([mag[0]!, mag[1]! - 0.17, mag[2]! + 0.03]), 0.045, 0.07, steel);
     const grip = at(0.3);
     const fore = at(0.62);
     const rh = [grip[0]! + 0.02, grip[1]! - 0.04, grip[2]!];

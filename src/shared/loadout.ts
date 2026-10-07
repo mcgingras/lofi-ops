@@ -29,9 +29,9 @@ const w = (weapon: string, attachments: string[] = []): WeaponLoadout => ({ weap
 
 /** Default classes every profile starts with. */
 export const DEFAULT_LOADOUTS: Loadout[] = [
-  { name: 'Assault', primary: w('ak47'), secondary: w('m1911'), perks: ['lightweight', 'steady_aim'], killstreaks: ['uav'], lethal: null, tactical: null },
-  { name: 'Rifleman', primary: w('ak47', ['reddot']), secondary: w('m1911'), perks: ['hardline', 'steady_aim'], killstreaks: ['uav'], lethal: null, tactical: null },
-  { name: 'Run and Gun', primary: w('ak47', ['extmag']), secondary: w('m1911'), perks: ['lightweight'], killstreaks: ['uav'], lethal: null, tactical: null },
+  { name: 'Assault', primary: w('ak47'), secondary: w('m1911'), perks: ['lightweight', 'steady_aim'], killstreaks: ['uav'], lethal: 'frag', tactical: 'flashbang' },
+  { name: 'Rifleman', primary: w('ak47', ['reddot']), secondary: w('m1911'), perks: ['hardline', 'steady_aim'], killstreaks: ['uav'], lethal: 'frag', tactical: 'concussion' },
+  { name: 'Run and Gun', primary: w('ak47', ['extmag']), secondary: w('m1911'), perks: ['lightweight'], killstreaks: ['uav'], lethal: 'semtex', tactical: 'flashbang' },
 ];
 
 export const cloneLoadout = (l: Loadout): Loadout => JSON.parse(JSON.stringify(l)) as Loadout;
