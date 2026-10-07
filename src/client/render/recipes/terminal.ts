@@ -294,3 +294,217 @@ registerTexture('term_skyDay', {
   },
   photo: 'sky',
 });
+
+// ---------------------------------------------------------------------------------------------
+// Full-map rebuild (docs/maps/terminal-reference.md): Terminal-owned copies of the cabin/stairs
+// looks it used to borrow from Scrapyard and Rust, plus the food-court checker floor, shop signs,
+// window frames and the evacuation slide. All drawn, or developed from photos already in assets.
+// ---------------------------------------------------------------------------------------------
+
+registerTexture('term_carpet', {
+  w: 32,
+  h: 32,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#3e4660', 0.12);
+    blotch(g, R, w, h, 6, '#22242e', 0.45, 2, 8);
+  },
+  photos: ['cotton_jersey'],
+  photo: (c) => c.fromPhoto('cotton_jersey', { filter: 'hue-rotate(205deg) saturate(.7) brightness(.5)', over: (g, w, h) => dirtBottom(g, w, h, 0.3, 0.35) }),
+});
+
+registerTexture('term_seat', {
+  w: 16,
+  h: 16,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#5e6a8a', 0.1);
+    g.fillStyle = '#2a3042';
+    g.fillRect(0, 0, w, 2);
+    g.fillStyle = '#8a92a8';
+    g.fillRect(3, 3, 10, 2);
+  },
+  photos: ['rough_linen'],
+  photo: (c) =>
+    c.fromPhoto('rough_linen', {
+      w: 256,
+      h: 256,
+      tile: 256,
+      filter: 'saturate(0) brightness(1.1)',
+      over: (g, w, h) => {
+        g.globalCompositeOperation = 'multiply';
+        g.fillStyle = '#7a88aa';
+        g.fillRect(0, 0, w, h);
+        g.globalCompositeOperation = 'source-over';
+        g.fillStyle = 'rgba(20,24,36,.6)';
+        g.fillRect(0, 0, w, h * 0.08);
+      },
+    }),
+});
+
+/** Aircraft skin: white painted aluminium with panel lines and rivets. */
+registerTexture('term_alu', {
+  w: 32,
+  h: 32,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#d8dadc', 0.05);
+    g.fillStyle = 'rgba(70,74,80,.45)';
+    g.fillRect(0, 0, w, 1);
+    g.fillRect(0, 0, 1, h);
+  },
+  photos: ['blue_metal_plate'],
+  photo: (c) =>
+    c.fromPhoto('blue_metal_plate', {
+      filter: 'saturate(0) brightness(1.8) contrast(.7)',
+      over: (g, w, h) => {
+        g.fillStyle = 'rgba(60,64,70,.5)';
+        g.fillRect(0, 0, w, 3);
+        g.fillRect(0, 0, 3, h);
+        g.fillStyle = 'rgba(50,52,58,.4)';
+        for (let x = 12; x < w; x += 24) g.fillRect(x, 6, 2, 2);
+        dirtBottom(g, w, h, 0.8, 0.3);
+      },
+    }),
+});
+
+/** Cabin interior side wall: cream panels with a row of windows at seat height. */
+registerTexture('term_cabin', {
+  w: 32,
+  h: 32,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#d2ccc0', 0.05);
+    g.fillStyle = 'rgba(90,84,74,.35)';
+    g.fillRect(0, 0, 1, h);
+    g.fillStyle = '#1a1c22';
+    g.fillRect(12, 10, 6, 8);
+  },
+  photos: ['painted_plaster_wall'],
+  photo: (c) =>
+    c.fromPhoto('painted_plaster_wall', {
+      filter: 'saturate(.2) brightness(1.2)',
+      over: (g, w, h) => {
+        g.fillStyle = 'rgba(80,76,68,.45)';
+        g.fillRect(0, 0, 4, h);
+        g.fillStyle = 'rgba(20,22,28,.85)';
+        g.beginPath();
+        g.ellipse(w * 0.5, h * 0.45, w * 0.09, h * 0.1, 0, 0, 7);
+        g.fill();
+      },
+    }),
+});
+
+registerTexture('term_cockpit', {
+  w: 32,
+  h: 16,
+  wrap: false,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#d8dadc', 0.05);
+    g.fillStyle = '#14161c';
+    g.fillRect(2, 3, 8, 8);
+    g.fillRect(12, 3, 8, 8);
+    g.fillRect(22, 4, 8, 6);
+    g.fillStyle = 'rgba(150,170,190,.5)';
+    g.fillRect(3, 4, 2, 4);
+    g.fillRect(13, 4, 2, 4);
+  },
+  photo: 'small',
+});
+
+/** Escalator and stair treads: ribbed steel, four treads per tile along the slope. */
+registerTexture('term_stairs', {
+  w: 32,
+  h: 32,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#6a6e74', 0.1);
+    for (let x = 0; x < w; x += 8) {
+      g.fillStyle = '#26282c';
+      g.fillRect(x, 0, 1, h);
+      g.fillStyle = '#a8acb2';
+      g.fillRect(x + 1, 0, 1, h);
+    }
+  },
+  photos: ['box_profile_metal_sheet'],
+  photo: (c) =>
+    c.fromPhoto('box_profile_metal_sheet', {
+      filter: 'saturate(0) brightness(.9) contrast(1.2)',
+      over: (g, w, h) => {
+        for (let i = 0; i < 4; i++) {
+          g.fillStyle = 'rgba(14,14,16,.8)';
+          g.fillRect((i * w) / 4, 0, 10, h);
+        }
+      },
+    }),
+});
+
+/** Glass balustrade frame: transparent except posts and rails (alpha < 0.5 is discarded). */
+registerTexture('term_rail', {
+  w: 32,
+  h: 32,
+  posterize: false,
+  draw(g, w, h) {
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = '#8a9098';
+    g.fillRect(0, 0, 3, h);
+    g.fillRect(0, 0, w, 3);
+    g.fillStyle = '#5a6068';
+    g.fillRect(0, h - 3, w, 3);
+  },
+  photo: 'none',
+});
+
+/** Window frames: mullions and transoms only, so you see (and shoot) through the opening. */
+registerTexture('term_glass', {
+  w: 32,
+  h: 32,
+  posterize: false,
+  draw(g, w, h) {
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = '#3a4048';
+    g.fillRect(0, 0, 2, h);
+    g.fillRect(0, 0, w, 2);
+    g.fillRect(0, h - 2, w, 2);
+    g.fillStyle = '#6a7480';
+    g.fillRect(2, 0, 1, h);
+  },
+  photo: 'none',
+});
+
+/** Food court floor: black and white checker tiles (one tile = a quarter of the texture). */
+registerTexture('term_checker', {
+  w: 32,
+  h: 32,
+  draw(g, w, h, R) {
+    for (let y = 0; y < 2; y++)
+      for (let x = 0; x < 2; x++) grain(g, R, (x * w) / 2, (y * h) / 2, w / 2, h / 2, (x + y) % 2 ? '#24262a' : '#d8d4cc', 0.05);
+  },
+  photos: ['concrete_floor_worn_001'],
+  photo: (c) =>
+    c.fromPhoto('concrete_floor_worn_001', {
+      filter: 'saturate(0) brightness(1.3) contrast(.7)',
+      over: (g, w, h) => {
+        g.fillStyle = 'rgba(16,16,18,.82)';
+        g.fillRect(w / 2, 0, w / 2, h / 2);
+        g.fillRect(0, h / 2, w / 2, h / 2);
+      },
+    }),
+});
+
+registerTexture('term_slide', {
+  w: 16,
+  h: 16,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#e8782a', 0.08);
+    g.fillStyle = '#b8501a';
+    g.fillRect(0, 0, 2, h);
+    g.fillRect(w - 2, 0, 2, h);
+  },
+  photo: 'small',
+});
+
+/** A wider sign for longer names (128 x 16). */
+function wideSign(text: string, bg: string, fg: string) {
+  return { ...sign(text, bg, fg), w: 128 };
+}
+registerTexture('term_signBurger', wideSign('BURGER TOWN', '#b01e18', '#f6d23a'));
+registerTexture('term_signSecurity', wideSign('SECURITY', '#1a2026', '#f2c230'));
+registerTexture('term_signMakeup', wideSign('COSMETICS', '#2a1a2a', '#f0d0e0'));
+registerTexture('term_signBaggage', wideSign('BAGGAGE CLAIM', '#20242a', '#f2c230'));
+registerTexture('term_signLounge', wideSign('GATES 1-2-3', '#20242a', '#f2c230'));
