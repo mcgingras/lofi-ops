@@ -19,7 +19,7 @@ export interface MapDef {
 }
 
 export const MAPS: MapDef[] = [
-  { id: 'yard', name: 'Yard', inspiredBy: 'Original (approved look prototype)', build: buildYard, modes: ['tdm', 'ffa'], size: 'small' },
+  { id: 'yard', name: 'Yard', inspiredBy: 'Original (approved look prototype)', build: buildYard, modes: ['tdm', 'ffa', 'dom', 'sd', 'hq', 'kc'], size: 'small' },
 ];
 
 export const MAP_BY_ID = indexById(MAPS);

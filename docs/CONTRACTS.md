@@ -191,7 +191,8 @@ Each file exports a typed array and a `*_BY_ID` map (`indexById` throws on dupli
 | `attachments.ts` | `AttachmentDef`, `ATTACHMENTS`, `effectiveWeapon(def, ids)` (seeded: `reddot`, `extmag`) | weapons |
 | `perks.ts` | `PerkDef`, `PERKS` (seeded: lightweight, hardline (T1), steady_aim (T2)) | perks-streaks |
 | `killstreaks.ts` | `KillstreakDef`, `KILLSTREAKS` (seeded: `uav` "Spy Plane", 3) | perks-streaks |
-| `modes.ts` | `ModeDef`, `CORE_MODES` (tdm 75 kills / ffa 30 kills, 10 min), `MODES` = core + `WAGER_MODES` | modes |
+| `modes.ts` | `ModeDef`, `CORE_MODES` (tdm 75 kills / ffa 30 kills / dom 200 / sd 4 rounds / hq 250 / kc 65), `MODES` = core + `WAGER_MODES`, `MODE_TUNING`, `MODE_XP` | modes |
+| `modestate.ts` | modes wire types (`modes.state`, `modes.event`, `modes.killcam`), `MatchSummaryExt` (`results.ext.modes`), `MODE_ENTITY` kinds | modes |
 | `economy.ts` | `CP_REWARDS`, `STARTING_COD_POINTS`, `DEFAULT_PRICES`, `WAGER_MODES`, `codPointsForMatch` | economy |
 | `maps.ts` | `MapDef {id, name, inspiredBy, build, modes, size}`, `MAPS`, `getMapData(id)` (cached), `mapsForMode` | maps-bo, maps-mw2 |
 | `progression.ts` | `MAX_LEVEL` 50, `MAX_PRESTIGE` 15, `XP_TABLE`, `levelForXp`, `xpForLevel`, `addXp`, `canPrestige`, `applyPrestige`, `XP_SOURCES` | progression |
@@ -218,7 +219,7 @@ export interface ModeRules {
 registerMode('dom', () => domRules());       // modes/index.ts or a feature setup
 ```
 
-Rules' bus handlers and modifiers are tagged with the rules object, so `room.setMode()` drops them cleanly. Time limits are enforced by core (`mode.timeLimitSec`). Results go out as `matchEnd` with `MatchResults {roomId, mode, map, reason, winnerTeam, winners, teamScores, players: PlayerResult[], durationSec, ext}`.
+The modes feature registers tdm/ffa/dom/sd/hq/kc from its `setup` (`src/server/features/modes/`, see `docs/features/modes.md`); core's own tdm/ffa in `src/server/modes` remain the fallback. Bots read objective goals from `src/server/features/modes/bots.ts` (`bestObjective(room, bot)`). Rules' bus handlers and modifiers are tagged with the rules object, so `room.setMode()` drops them cleanly. Time limits are enforced by core (`mode.timeLimitSec`). Results go out as `matchEnd` with `MatchResults {roomId, mode, map, reason, winnerTeam, winners, teamScores, players: PlayerResult[], durationSec, ext}`.
 
 ## 9. MapData (src/shared/maps/types.ts)
 
@@ -234,7 +235,7 @@ interface MapData {
   props: Prop[];                                 // cylinder (collides by default) | glow sprite | gltf (later)
   lights: MapLight[];                            // { x, y, z, color, radius, group } baked into vertex colours
   spawns: { teams: [SpawnPoint[], SpawnPoint[]]; ffa: SpawnPoint[] };   // { x, y, z, yaw }
-  objectives: Record<string, ObjectivePoint[]>;  // 'dom' A/B/C, 'sd' sites, 'hq'... { id, x, y, z, radius, team? }
+  objectives: Record<string, ObjectivePoint[]>;  // 'dom' A/B/C, 'sd' sites A/B (team = defenders' spawn index), 'hq' rotation points; { id, x, y, z, radius, team? }. Missing kinds are derived from spawns (modes feature)
   times: TimePreset[]; defaultTime;              // sky recipe id, sun/amb/fog, light group intensities
   hotspots?: Vec3[];                             // bot roam targets
 }

@@ -1,0 +1,35 @@
+/* End-of-match summary (modes feature). Uses the menu tokens from menus.css. */
+.lfm-summary { gap: 14px; max-width: 980px; margin: 0 auto; }
+.lfm-head { display: flex; flex-direction: column; gap: 6px; }
+.lfm-title { font-size: clamp(32px, 7vw, 60px); margin: 0; line-height: 1; letter-spacing: 0.05em; color: var(--paper); text-shadow: 4px 4px 0 #000; }
+.lfm-title.lfm-win { color: var(--hi); }
+.lfm-title.lfm-lose { color: var(--warn); }
+.lfm-score { font-size: 16px; letter-spacing: 0.06em; display: flex; gap: 10px; flex-wrap: wrap; }
+.lfm-dash { color: var(--dim); }
+.lfm-friend { color: var(--friend); }
+.lfm-enemy { color: var(--warn); }
+.lfm-grid { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 14px; align-items: start; }
+.lfm-tables { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.lfm-side { display: flex; flex-direction: column; gap: 12px; }
+.lfm-table-wrap { background: var(--chip); border: 1px solid var(--line); overflow-x: auto; }
+.lfm-team { font-size: 12px; letter-spacing: 0.08em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.lfm-table { width: 100%; border-collapse: collapse; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+.lfm-table th { color: var(--dim); font-weight: 400; text-align: right; padding: 4px 8px; white-space: nowrap; }
+.lfm-table td { text-align: right; padding: 4px 8px; border-top: 1px solid rgba(236, 226, 206, 0.07); font-variant-numeric: tabular-nums; }
+.lfm-table .lfm-name { text-align: left; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.lfm-table tr.lfm-me td { background: rgba(90, 80, 30, 0.55); color: var(--hi); }
+.lfm-tag { font-size: 9px; border: 1px solid var(--line); padding: 0 3px; margin-right: 5px; color: var(--dim); }
+.lfm-tag-hi { color: #000; background: var(--hi); border-color: var(--hi); margin: 0 0 0 6px; }
+.lfm-card { background: var(--chip-solid); border: 1px solid var(--line); padding: 10px 12px; display: flex; flex-direction: column; gap: 5px; }
+.lfm-label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+.lfm-mvp { border-color: var(--hi); }
+.lfm-mvp-name { font-size: 18px; color: var(--hi); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lfm-mvp-stats { font-size: 10px; text-transform: uppercase; color: var(--paper); letter-spacing: 0.05em; }
+.lfm-xp-line { display: flex; justify-content: space-between; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.lfm-xp-line b { color: var(--hi); font-weight: 400; }
+.lfm-xp-total { border-top: 1px solid var(--line); padding-top: 5px; margin-top: 3px; font-size: 13px; }
+@media (max-width: 720px) {
+  .lfm-grid { grid-template-columns: 1fr; }
+  .lfm-table { font-size: 10px; }
+  .lfm-table th, .lfm-table td { padding: 3px 5px; }
+}
