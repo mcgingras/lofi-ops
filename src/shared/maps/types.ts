@@ -194,6 +194,12 @@ export interface MapData {
     ffa: SpawnPoint[];
   };
   objectives: Record<string, ObjectivePoint[]>;
+  /**
+   * Extra spawn sets per mode, keyed by mode id then role (optional). Search and Destroy uses
+   * `modeSpawns.sd.attackers` / `.defenders` (by role, since teams swap sides between halves).
+   * Modes fall back to `spawns` when a map has none.
+   */
+  modeSpawns?: Record<string, Record<string, SpawnPoint[]>>;
   times: TimePreset[];
   defaultTime: string;
   /** Places bots like to roam to (optional). */
