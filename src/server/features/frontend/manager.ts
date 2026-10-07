@@ -388,7 +388,7 @@ export class LobbyManager {
     const host = (l.hostId ? r.players.get(l.hostId) : undefined) ?? r.humans()[0] ?? null;
     r.bus.emit('frontend.botSettings', { settings: s, skill: skillFor(s), starting, host });
     const rpc = this.deps.rpc;
-    if (rpc?.has('bots.setSettings') && host?.session) void rpc.dispatch({ session: host.session, room: r, player: host }, 'bots.setSettings', { ...s, custom: s.custom ? { ...s.custom } : undefined });
+    if (rpc?.has('bots.setSettings') && host?.session) void rpc.dispatch({ session: host.session, room: r, player: host }, 'bots.setSettings', { roomId: r.id, settings: { ...s, custom: s.custom ? { ...s.custom } : undefined } });
     if (starting) {
       r.options.botFill = s.fill ? Math.min(s.targetPlayers, r.options.maxPlayers) : 0;
       r.fillBots();

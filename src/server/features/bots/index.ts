@@ -11,6 +11,9 @@
  *   createBotRoom(lobby, { mode, map?, ...settings }, hostSessionId?)    "Play with bots"
  *   registerBotGoal(modeId, fn)                                          modes: objective play
  *   registerBotStreakHandler(fn), registerBotModeStyle(modeId, style)    killstreaks / economy
+ *
+ * Integration: mode objectives (DOM/HQ/S&D/KC) reach bots via objectives.ts; frontend lobbies
+ * hand their settings over on the `frontend.botSettings` room event (core botFill keeps the count).
  */
 import { MODE_BY_ID } from '../../../shared/defs/modes';
 import type { BotsState } from '../../../shared/defs/bots';
@@ -19,6 +22,7 @@ import { LobbyError } from '../../lobby';
 import type { Room } from '../../room';
 import { RpcError, type RpcContext } from '../../rpc';
 import { createBotRoom } from './api';
+import { wireModeObjectives } from './objectives';
 import { createRoomBots, roomBots } from './roster';
 
 let api: ServerApi | null = null;
@@ -41,6 +45,7 @@ const feature: Feature = {
   id: 'bots',
   setup(serverApi) {
     api = serverApi;
+    wireModeObjectives();
     serverApi.rpc.handle('bots.get', (ctx, data) => stateFor(roomFor(ctx, data), ctx));
 
     serverApi.rpc.handle('bots.setSettings', (ctx, data) => {
@@ -69,7 +74,16 @@ const feature: Feature = {
     });
   },
   room(room) {
-    createRoomBots(room);
+    wireModeObjectives();
+    const rb = createRoomBots(room);
+    // Frontend per-game lobbies own the bot count through core `botFill` (CONTRACTS: when
+    // botFill > 0 core owns the count and this feature only adds brains). Take their skill
+    // settings and stop managing the count so the two never fight over it.
+    room.bus.on('frontend.botSettings', ({ settings }) => {
+      rb.managed = false;
+      rb.setWait(0);
+      rb.update(settings);
+    });
   },
 };
 

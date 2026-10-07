@@ -98,6 +98,11 @@ Owner: bots. Covers DESIGN.md section 8a (hard requirement): every lobby runs wi
 
 ## Integration notes for other areas
 
+**Wired at integration (main):**
+- Mode objectives: `objectives.ts` registers a `'*'` goal source that maps the modes area's `bestObjective(room, bot)` (DOM flags, HQ, S&D bomb/plant/defuse, Kill Confirmed tags) to a `BotGoal` (`stay` -> `hold`, `holdUse` -> `Buttons.USE`, priority >= 0.8 sprints).
+- Frontend lobbies: on the room event `frontend.botSettings` the room's controller stops managing the count (`managed = false`; the frontend's core `botFill` owns it) and takes the lobby's settings for skill. The frontend's `bots.setSettings` call now sends `{ roomId, settings }`.
+- Tests: `tests/bots.areas.test.ts`.
+
 - **frontend:**
   - For per-game lobbies, call `configureRoomBots(room, settings, { hostId: session.id })` right after `createRoom({ autoStart: false, ... })`. Then call `bots.setSettings` from your lobby UI: preset picker, custom sliders from `BOT_SKILL_RANGES`, fill toggle, target count. Backfill happens when you `startMatch()`.
   - Don't also pass `RoomOptions.botFill`: when `botFill > 0`, core owns the bot count, and this feature only adds brains.

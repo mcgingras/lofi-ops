@@ -25,12 +25,17 @@ describe('modes over real sockets', () => {
   let server: GameServer;
   const clients: FakeClient[] = [];
 
+  // These tests script exact human-vs-human rounds; keep the bots feature from backfilling them.
+  const botsEnv = process.env.LOFI_BOTS;
   beforeAll(async () => {
+    process.env.LOFI_BOTS = 'off';
     server = await startServer({ port: 0, host: '127.0.0.1', dbPath: ':memory:', staticDir: null, log: () => {} });
   });
   afterAll(async () => {
     for (const c of clients) c.close();
     await server.close();
+    if (botsEnv === undefined) delete process.env.LOFI_BOTS;
+    else process.env.LOFI_BOTS = botsEnv;
   });
 
   it('Domination: state push, capture by standing on B, announcer event', async () => {

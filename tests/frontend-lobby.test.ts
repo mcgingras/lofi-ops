@@ -216,7 +216,7 @@ describe('private lobbies', () => {
     expect(l.room.bots()).toHaveLength(4);
     expect(l.room.options.botFill).toBe(5);
     // Handed over to the bots feature both ways.
-    expect(calls.at(-1)).toMatchObject({ difficulty: 'custom', targetPlayers: 5 });
+    expect(calls.at(-1)).toMatchObject({ roomId: l.room.id, settings: { difficulty: 'custom', targetPlayers: 5 } });
     expect(events.at(-1)).toMatchObject({ starting: true, skill: { reactionMs: 200, aimErrorDeg: 1 } });
     expect(() => m.configure(l.room, host.player, { bots: { fill: false } })).toThrow(/started/);
   });
