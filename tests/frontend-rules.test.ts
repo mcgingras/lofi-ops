@@ -3,7 +3,7 @@ import { BOT_SKILL_RANGES, DEFAULT_LOBBY_BOTS, type LobbyBotSettings } from '../
 import type { WeaponDef } from '../src/shared/defs/weapons';
 import { WEAPON_BY_ID } from '../src/shared/defs/weapons';
 import { botsToFill, clampLimits, CODE_ALPHABET, defaultBotSettings, lobbyStatusText, makeLobbyCode, normalizeCode, RANDOM_MAP, sanitizeBotSettings, scoreLimitOptions, SKILL_KEYS, tallyVote, timeLimitOptions, voteOptions } from '../src/shared/frontend/lobby';
-import { attachmentSlotsFor, CATALOG, classSlotsFor, itemLock, sortKillstreaks, validateLoadout, weaponStats, type Catalog } from '../src/shared/frontend/loadout-rules';
+import { attachmentSlotsFor, canEditClasses, CATALOG, classSlotsFor, itemLock, sortKillstreaks, validateLoadout, weaponStats, type Catalog } from '../src/shared/frontend/loadout-rules';
 import { PLAYLISTS, playlistMode } from '../src/shared/frontend/playlists';
 import { DEFAULT_LOADOUTS } from '../src/shared/loadout';
 import { newProfile } from '../src/shared/profile';
@@ -116,7 +116,8 @@ describe('limits', () => {
     expect(clampLimits(tdm, 'nope', { scoreLimit: 10, timeLimitSec: 60 })).toEqual({ scoreLimit: 10, timeLimitSec: 60 });
   });
   it('offers sensible choices incl. unlimited', () => {
-    expect(scoreLimitOptions(tdm)).toEqual([38, 75, 113, 150, 0]);
+    expect(scoreLimitOptions(tdm)).toEqual([40, 75, 115, 150, 0]);
+    expect(scoreLimitOptions({ scoreLimit: 4 })).toEqual([2, 4, 6, 8, 0]);
     expect(timeLimitOptions(tdm).at(-1)).toBe(0);
     expect(timeLimitOptions(tdm)).toContain(600);
   });
@@ -246,10 +247,14 @@ describe('create-a-class validation', () => {
     expect(loadout.killstreaks).toEqual([]);
   });
 
-  it('class slots grow with prestige; killstreak sort; stat bars in range', () => {
-    expect(classSlotsFor({ prestige: 0 })).toBe(5);
-    expect(classSlotsFor({ prestige: 3 })).toBe(8);
-    expect(classSlotsFor({ prestige: 15 })).toBe(10);
+  it('class slots follow progression (the spawn rule); killstreak sort; stat bars in range', () => {
+    const at = (level: number, prestige = 0) => Object.assign(newProfile('p', 'P'), { level, prestige });
+    expect(classSlotsFor(at(1))).toBe(DEFAULT_LOADOUTS.length);
+    expect(canEditClasses(at(3))).toBe(false);
+    expect(canEditClasses(at(4))).toBe(true);
+    expect(classSlotsFor(at(4))).toBe(DEFAULT_LOADOUTS.length + 1);
+    expect(classSlotsFor(at(10))).toBe(DEFAULT_LOADOUTS.length + 2);
+    expect(classSlotsFor(at(40, 2))).toBe(DEFAULT_LOADOUTS.length + 6);
     expect(sortKillstreaks(['dogs', 'rcxd', 'uav', 'bogus'], testCatalog)).toEqual(['rcxd', 'uav', 'dogs']);
     const s = weaponStats(ak);
     for (const v of Object.values(s)) {
@@ -257,5 +262,42 @@ describe('create-a-class validation', () => {
       expect(v).toBeLessThanOrEqual(100);
     }
     expect(weaponStats(WEAPON_BY_ID.get('m1911')!).mobility).toBeGreaterThan(s.mobility);
+  });
+});
+
+describe('create-a-class respects store ownership (real catalog)', () => {
+  it('level-unlocked weapons and kill-unlocked attachments must still be bought before they can be equipped', () => {
+    const p = newProfile('p', 'Buyer');
+    p.level = 4;
+    p.unlocks.push('ak74u'); // progression lists level unlocks here
+    expect(itemLock(p, 'weapon', 'ak74u')).toEqual({ unlocked: false, requirement: 'Store: 1,500 CP' });
+    expect(itemLock(p, 'weapon', 'commando').requirement).toBe('Level 14, then 2,500 CP in the Store');
+    expect(itemLock(p, 'weapon', 'ak47').unlocked).toBe(true); // starter
+    expect(itemLock(p, 'attachment', 'reddot', 'ak47').unlocked).toBe(true); // starter attachment
+    p.stats['weapon.ak47.kills'] = 5;
+    expect(itemLock(p, 'attachment', 'reflex', 'ak47').requirement).toBe('Store: 1,000 CP');
+    expect(itemLock(p, 'attachment', 'reflex', 'ak74u').requirement).toBe('Buy the AK74u first, then 1,000 CP in the Store');
+
+    const input = { ...DEFAULT_LOADOUTS[0]!, primary: { weapon: 'ak74u', attachments: [], camo: 'none' } };
+    expect(validateLoadout(p, input).loadout.primary.weapon).not.toBe('ak74u');
+    p.owned.push('weapon.ak74u');
+    expect(itemLock(p, 'weapon', 'ak74u').unlocked).toBe(true);
+    expect(validateLoadout(p, input).loadout.primary.weapon).toBe('ak74u');
+    // After a prestige the level gate applies again, but the purchase is kept: no price shown.
+    p.level = 1;
+    p.prestige = 1;
+    expect(itemLock(p, 'weapon', 'ak74u')).toEqual({ unlocked: false, requirement: 'Level 4' });
+  });
+
+  it('camos bought in the store (owned as camo.<id>) are usable; unsold items show no price', () => {
+    const p = newProfile('p', 'Buyer');
+    p.level = 4;
+    expect(itemLock(p, 'camo', 'dusty', 'ak47').requirement).toBe('Store: 500 CP');
+    expect(itemLock(p, 'camo', 'desert', 'ak47').requirement).toBe('Level 6, then 500 CP in the Store');
+    p.owned.push('camo.dusty');
+    expect(itemLock(p, 'camo', 'dusty', 'ak47').unlocked).toBe(true);
+    expect(itemLock(p, 'camo', 'none', 'ak47').unlocked).toBe(true);
+    // Perks are not sold in the store, so no "or N CP".
+    expect(itemLock(p, 'perk', 'ninja').requirement).toBe('Level 15');
   });
 });

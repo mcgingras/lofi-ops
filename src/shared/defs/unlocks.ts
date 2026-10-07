@@ -17,10 +17,12 @@
  */
 import { ATTACHMENT_BY_ID } from './attachments';
 import { challengeComplete } from './challenges';
+import { EQUIPMENT_BY_ID as EQUIPMENT_DEFS } from './equipment';
 import { KILLSTREAK_BY_ID, KILLSTREAKS } from './killstreaks';
 import { PERK_BY_ID, PERKS } from './perks';
 import { attachmentKillsFor, MAX_PRESTIGE, prestigeEmblem } from './progression';
-import { WEAPON_BY_ID, WEAPONS } from './weapons';
+import { LOADOUT_WEAPONS, WEAPON_BY_ID, WEAPONS } from './weapons';
+import { WAGER_ONLY_WEAPONS } from './wager-weapons';
 import { cloneLoadout, DEFAULT_LOADOUTS, type Loadout, type WeaponLoadout } from '../loadout';
 import type { Profile } from '../profile';
 
@@ -59,7 +61,8 @@ export const EQUIPMENT_UNLOCKS: EquipmentUnlock[] = [
   { id: 'semtex', name: 'Semtex', kind: 'lethal', level: 6 },
   { id: 'tomahawk', name: 'Tomahawk', kind: 'lethal', level: 18 },
   { id: 'concussion', name: 'Concussion', kind: 'tactical', level: 1 },
-  { id: 'flash', name: 'Flashbang', kind: 'tactical', level: 3 },
+  // Id must match the equipment def ('flashbang'); level 1 keeps the default classes legal.
+  { id: 'flashbang', name: 'Flashbang', kind: 'tactical', level: 1 },
   { id: 'willy_pete', name: 'Willy Pete', kind: 'tactical', level: 9 },
   { id: 'nova', name: 'Nova Gas', kind: 'tactical', level: 12 },
   { id: 'decoy', name: 'Decoy', kind: 'tactical', level: 15 },
@@ -139,8 +142,13 @@ export function classSlots(p: UnlockProfile): number {
   return CLASS_SLOT_LEVELS.filter((l) => p.level >= l).length + PRESTIGE_CLASS_SLOTS.filter((x) => p.prestige >= x).length;
 }
 
-/** How many entries of `profile.loadouts` may be selected (defaults always count). */
-export const usableClassCount = (p: UnlockProfile) => Math.max(DEFAULT_LOADOUTS.length, classSlots(p));
+/**
+ * How many entries of `profile.loadouts` may be selected and edited: the default classes always
+ * count, and each custom class slot (Create-a-Class at 4, then 10, 20, 30, 40, plus prestige) adds
+ * one more. Create-a-Class (frontend) uses the same number, so the class you build is the class
+ * you spawn with.
+ */
+export const usableClassCount = (p: UnlockProfile) => DEFAULT_LOADOUTS.length + classSlots(p);
 
 /** Is an item unlocked for this profile? `weapon` is required for attachments. */
 export function isUnlocked(p: UnlockProfile, kind: UnlockKind, id: string, weapon?: string): boolean {
@@ -183,10 +191,12 @@ export function unlockTable(): UnlockEntry[] {
   const t: UnlockEntry[] = [];
   for (const f of FEATURE_UNLOCKS) t.push({ level: f.level, kind: 'feature', id: featureUnlockId(f.id), name: f.name, detail: f.detail });
   CLASS_SLOT_LEVELS.forEach((level, i) => t.push({ level, kind: 'class', id: classUnlockId(i + 1), name: `Custom Class ${i + 1}`, detail: 'Create-a-Class slot' }));
-  for (const w of WEAPONS) t.push({ level: unlockLevelOf('weapon', w.id), kind: 'weapon', id: w.id, name: w.name, detail: CLASS_LABEL[w.class] ?? w.class });
+  // Only what Create-a-Class offers: no knife / underbarrel GL, no wager-only crossbow or ballistic knife.
+  for (const w of LOADOUT_WEAPONS) if (!WAGER_ONLY_WEAPONS.has(w.id)) t.push({ level: unlockLevelOf('weapon', w.id), kind: 'weapon', id: w.id, name: w.name, detail: CLASS_LABEL[w.class] ?? w.class });
   for (const k of PERKS) t.push({ level: unlockLevelOf('perk', k.id), kind: 'perk', id: k.id, name: k.name, detail: `Perk ${k.tier}` });
   for (const k of KILLSTREAKS) t.push({ level: unlockLevelOf('killstreak', k.id), kind: 'killstreak', id: k.id, name: k.name, detail: `${k.kills} kills` });
-  for (const e of EQUIPMENT_UNLOCKS) t.push({ level: e.level, kind: e.kind, id: e.id, name: e.name, detail: e.kind === 'lethal' ? 'Lethal' : 'Tactical' });
+  // Only equipment that exists in Create-a-Class (tomahawk, Willy Pete... have no defs yet).
+  for (const e of EQUIPMENT_UNLOCKS) if (EQUIPMENT_DEFS.has(e.id)) t.push({ level: e.level, kind: e.kind, id: e.id, name: e.name, detail: e.kind === 'lethal' ? 'Lethal' : 'Tactical' });
   return t.sort((a, b) => a.level - b.level || KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.name.localeCompare(b.name));
 }
 

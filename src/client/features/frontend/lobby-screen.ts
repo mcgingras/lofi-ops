@@ -12,6 +12,7 @@ import { MAP_BY_ID, mapsForMode } from '../../../shared/defs/maps';
 import { MODE_BY_ID, MODES } from '../../../shared/defs/modes';
 import type { LobbyBotSettings } from '../../../shared/defs/bots';
 import { lobbyStatusText, RANDOM_MAP, scoreLimitOptions, timeLimitOptions, type LobbyState } from '../../../shared/frontend/lobby';
+import { classSlotsFor } from '../../../shared/frontend/loadout-rules';
 import type { LobbyConfigPatch } from '../../../shared/frontend/protocol';
 import { net } from '../../net';
 import { registerScreen } from '../../registry';
@@ -119,7 +120,7 @@ function lobbyOverlay(root: HTMLElement) {
   const renderClasses = () => {
     const p = net.profile;
     if (!p) return;
-    fillSelect(classSel, p.loadouts.map((l, i) => [String(i), l.name]), String(p.selectedLoadout), false);
+    fillSelect(classSel, p.loadouts.slice(0, classSlotsFor(p)).map((l, i) => [String(i), l.name]), String(p.selectedLoadout), false);
   };
 
   const renderPlayers = (s: LobbyState) => {

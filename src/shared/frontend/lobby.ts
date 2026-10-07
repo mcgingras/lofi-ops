@@ -242,7 +242,9 @@ export function clampLimits(mode: Pick<ModeDef, 'scoreLimit' | 'timeLimitSec'>, 
 export function scoreLimitOptions(mode: Pick<ModeDef, 'scoreLimit'>): number[] {
   const d = mode.scoreLimit;
   if (d <= 0) return [0, 10, 25, 50, 100];
-  return [...new Set([Math.max(1, Math.round(d * 0.5)), d, Math.round(d * 1.5), d * 2, 0])];
+  // Halves and one-and-a-halves round to a multiple of 5 for big limits (TDM 75 -> 40/115, not 38/113).
+  const nice = (v: number) => Math.max(1, d >= 20 ? Math.round(v / 5) * 5 : Math.round(v));
+  return [...new Set([nice(d * 0.5), d, nice(d * 1.5), d * 2, 0])];
 }
 
 export function timeLimitOptions(mode: Pick<ModeDef, 'timeLimitSec'>): number[] {

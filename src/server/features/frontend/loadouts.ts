@@ -4,7 +4,7 @@
  * `frontend.selectClass` picks the class for the next spawn. `trimSpawnLoadout` is the
  * beforeSpawn safety net (attachment slots / one perk per tier).
  */
-import { attachmentSlotsFor, classSlotsFor, sortKillstreaks, validateLoadout } from '../../../shared/frontend/loadout-rules';
+import { attachmentSlotsFor, canEditClasses, classSlotsFor, sortKillstreaks, validateLoadout } from '../../../shared/frontend/loadout-rules';
 import { PERK_BY_ID } from '../../../shared/defs/perks';
 import { cloneLoadout, DEFAULT_LOADOUTS, type Loadout } from '../../../shared/loadout';
 import type { ServerApi } from '../../feature';
@@ -15,6 +15,8 @@ export function registerLoadoutRpcs(api: ServerApi): void {
     const d = (data && typeof data === 'object' ? data : {}) as { index?: unknown; loadout?: unknown };
     const prof = ctx.session.profile;
     const index = d.index;
+    // Before Create-a-Class the spawn uses the default classes whatever is saved (progression).
+    if (!canEditClasses(prof)) throw new RpcError('locked', 'Create-a-Class unlocks at level 4');
     if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index > prof.loadouts.length || index >= classSlotsFor(prof)) {
       throw new RpcError('bad_index', `class slot must be 0..${Math.min(prof.loadouts.length, classSlotsFor(prof) - 1)}`);
     }
@@ -29,7 +31,8 @@ export function registerLoadoutRpcs(api: ServerApi): void {
   api.rpc.handle('frontend.selectClass', (ctx, data) => {
     const index = (data && typeof data === 'object' ? (data as { index?: unknown }).index : undefined) as unknown;
     const prof = ctx.session.profile;
-    if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= prof.loadouts.length) throw new RpcError('bad_index', 'no such class');
+    // Only classes the spawn will honour (progression's usable count); others would fall back to class 1.
+    if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= Math.min(prof.loadouts.length, classSlotsFor(prof))) throw new RpcError('bad_index', 'no such class');
     prof.selectedLoadout = index;
     api.store.save(prof);
     return { selectedLoadout: index };

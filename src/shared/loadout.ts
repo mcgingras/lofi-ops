@@ -31,7 +31,9 @@ const w = (weapon: string, attachments: string[] = []): WeaponLoadout => ({ weap
 export const DEFAULT_LOADOUTS: Loadout[] = [
   { name: 'Assault', primary: w('ak47'), secondary: w('m1911'), perks: ['lightweight', 'steady_aim'], killstreaks: ['uav'], lethal: 'frag', tactical: 'flashbang' },
   { name: 'Rifleman', primary: w('ak47', ['reddot']), secondary: w('m1911'), perks: ['hardline', 'steady_aim'], killstreaks: ['uav'], lethal: 'frag', tactical: 'concussion' },
-  { name: 'Run and Gun', primary: w('ak47', ['extmag']), secondary: w('m1911'), perks: ['lightweight'], killstreaks: ['uav'], lethal: 'semtex', tactical: 'flashbang' },
+  // Every default class must be legal at level 1 (progression gates at spawn): no kill-locked
+  // attachments, no level-locked equipment (semtex is level 6).
+  { name: 'Run and Gun', primary: w('mp5k'), secondary: w('m1911'), perks: ['lightweight'], killstreaks: ['uav'], lethal: 'frag', tactical: 'flashbang' },
 ];
 
 export const cloneLoadout = (l: Loadout): Loadout => JSON.parse(JSON.stringify(l)) as Loadout;

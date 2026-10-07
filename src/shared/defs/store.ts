@@ -138,7 +138,8 @@ export function storeCatalog(): StoreItem[] {
   const free = starterKeys();
   const items: StoreItem[] = [];
   for (const w of WEAPONS) {
-    if (WAGER_ONLY_WEAPONS.has(w.id)) continue;
+    // Only classable guns: the knife (melee) and the underbarrel GL are WeaponDefs too, never sold.
+    if (WAGER_ONLY_WEAPONS.has(w.id) || (w.slot !== 'primary' && w.slot !== 'secondary')) continue;
     const key = keyOf.weapon(w.id);
     const price = w.price ?? DEFAULT_PRICES.weapon;
     items.push({ key, kind: 'weapon', id: w.id, name: w.name, price, unlock: { level: w.unlockLevel }, starter: free.has(key), free: free.has(key) || price === 0 });

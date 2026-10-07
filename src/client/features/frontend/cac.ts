@@ -10,8 +10,9 @@ import { CAMOS, CAMO_BY_ID } from '../../../shared/defs/camos';
 import { KILLSTREAKS, KILLSTREAK_BY_ID } from '../../../shared/defs/killstreaks';
 import { PERKS, PERK_BY_ID } from '../../../shared/defs/perks';
 import { WEAPONS, WEAPON_BY_ID, type WeaponClass } from '../../../shared/defs/weapons';
+import { WAGER_ONLY_WEAPONS } from '../../../shared/defs/wager-weapons';
 import { EQUIPMENT, EQUIPMENT_BY_ID } from '../../../shared/frontend/equipment';
-import { attachmentSlotsFor, classSlotsFor, itemLock, STAT_LABELS, validateLoadout, weaponStats, type ItemKind, type WeaponStats } from '../../../shared/frontend/loadout-rules';
+import { attachmentSlotsFor, canEditClasses, classSlotsFor, itemLock, STAT_LABELS, validateLoadout, weaponStats, type ItemKind, type WeaponStats } from '../../../shared/frontend/loadout-rules';
 import { cloneLoadout, DEFAULT_LOADOUTS, type Loadout, type WeaponLoadout } from '../../../shared/loadout';
 import type { Profile } from '../../../shared/profile';
 import { net } from '../../net';
@@ -53,6 +54,11 @@ registerScreen('create-a-class', (root, params) => {
   // ---- saving ------------------------------------------------------------------------------
   const save = debounce(async () => {
     if (!profile) return;
+    if (!canEditClasses(profile)) {
+      status.textContent = 'Create-a-Class unlocks at level 4. Until then you spawn with the default classes.';
+      status.classList.add('warn');
+      return;
+    }
     saving = true;
     status.textContent = 'Saving...';
     try {
@@ -107,6 +113,10 @@ registerScreen('create-a-class', (root, params) => {
       );
     });
     const cap = classSlotsFor(p);
+    if (!canEditClasses(p)) {
+      classList.append(h('div', { class: 'fe-small fe-dim' }, 'Create-a-Class unlocks at level 4. Until then the default classes are used.'));
+      return;
+    }
     if (p.loadouts.length < cap) {
       classList.append(
         h(
@@ -126,7 +136,7 @@ registerScreen('create-a-class', (root, params) => {
           h('small', {}, `${p.loadouts.length}/${cap}`),
         ),
       );
-    } else classList.append(h('div', { class: 'fe-small fe-dim' }, `${cap}/${cap} slots · prestige adds more`));
+    } else classList.append(h('div', { class: 'fe-small fe-dim' }, `${Math.min(p.loadouts.length, cap)}/${cap} classes · more slots at levels 10, 20, 30, 40 and with prestige`));
   };
 
   const equip = h('button', { class: 'lf-btn small', type: 'button' }, 'Equip this class');
@@ -219,7 +229,8 @@ registerScreen('create-a-class', (root, params) => {
 
   const weaponPicker = (slot: 'primary' | 'secondary') => {
     const byClass = new Map<WeaponClass, HTMLElement[]>();
-    for (const d of WEAPONS.filter((w) => w.slot === slot)) {
+    // Wager-only weapons (crossbow, ballistic knife) are appended to WEAPONS but never allowed in classes.
+    for (const d of WEAPONS.filter((w) => w.slot === slot && !WAGER_ONLY_WEAPONS.has(w.id))) {
       const list = byClass.get(d.class) ?? [];
       list.push(
         item({

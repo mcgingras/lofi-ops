@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startServer, type GameServer } from '../src/server/app';
 import { createFrontendFeature, lobbyManagerFor } from '../src/server/features/frontend/index';
+import { XP_TABLE } from '../src/shared/defs/progression';
 import type { LobbyState } from '../src/shared/frontend/lobby';
 import type { LobbyTicket } from '../src/shared/frontend/protocol';
 import type { Loadout } from '../src/shared/loadout';
@@ -112,13 +113,18 @@ describe('frontend lobbies (real server)', () => {
       lethal: 'frag',
       tactical: 'flashbang',
     };
+    // Level 1: no Create-a-Class yet (the spawn would use the default classes anyway).
+    await expect(rpc(d, 'frontend.saveLoadout', { index: 0, loadout: cls })).rejects.toThrow(/locked/);
+    const live = [...server.sessions.values()].find((s) => s.id === welcome.sessionId)!.profile;
+    live.level = 4;
+    live.xp = XP_TABLE[4]!;
     const res = await rpc<{ index: number; loadout: Loadout; loadouts: Loadout[]; problems: string[] }>(d, 'frontend.saveLoadout', { index: prof.loadouts.length, loadout: cls });
     expect(res.index).toBe(3);
     expect(res.loadout.perks).toEqual(['lightweight', 'steady_aim']); // one tier-1 perk
     expect(res.loadout.primary.attachments).toEqual(['reddot']); // no Warlord: one attachment
     expect(res.loadout).toMatchObject({ name: 'My Class', lethal: 'frag', tactical: 'flashbang' });
     expect(res.problems.length).toBe(2);
-    await expect(rpc(d, 'frontend.saveLoadout', { index: 9, loadout: cls })).rejects.toThrow(/bad_index/);
+    await expect(rpc(d, 'frontend.saveLoadout', { index: 4, loadout: cls })).rejects.toThrow(/bad_index/); // level 4 = defaults + 1 slot
     const sel = await rpc<{ selectedLoadout: number }>(d, 'frontend.selectClass', { index: 3 });
     expect(sel.selectedLoadout).toBe(3);
     const p = await rpc<Profile>(d, 'core.profile', {});

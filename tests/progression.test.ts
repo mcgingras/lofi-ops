@@ -157,6 +157,15 @@ describe('unlock gating', () => {
     expect(t.some((u) => u.kind === 'lethal')).toBe(true);
   });
 
+  it('every default class is legal at level 1, and the table lists only classable items', () => {
+    for (const l of DEFAULT_LOADOUTS) expect(gateLoadout(atLevel(1), l).violations, l.name).toEqual([]);
+    const ids = unlockTable().map((u) => u.id);
+    for (const id of ['knife', 'gl', 'crossbow', 'ballistic_knife', 'tomahawk', 'willy_pete']) expect(ids, id).not.toContain(id);
+    // The flashbang entry uses the equipment def's id, so the gate actually applies to it.
+    expect(unlockTable().find((u) => u.id === 'flashbang')).toMatchObject({ level: 1, kind: 'tactical' });
+    expect(gateLoadout(atLevel(5), { ...cloneLoadout(DEFAULT_LOADOUTS[0]!), lethal: 'semtex' }).violations.map((v) => v.id)).toEqual(['semtex']);
+  });
+
   it('gates perks, killstreaks and equipment by level with reasons', () => {
     UNLOCK_LEVEL_OVERRIDES.hardline = 8;
     UNLOCK_LEVEL_OVERRIDES.uav = 3;
@@ -214,7 +223,12 @@ describe('unlock gating', () => {
     expect(classSlots(atLevel(20))).toBe(3);
     expect(classSlots(atLevel(40))).toBe(5);
     expect(classSlots(atLevel(40, 4))).toBe(7);
-    expect(usableClassCount(atLevel(4))).toBe(DEFAULT_LOADOUTS.length);
+    // Each custom slot is a class on top of the defaults (Create-a-Class uses the same count).
+    expect(usableClassCount(atLevel(3))).toBe(DEFAULT_LOADOUTS.length);
+    expect(usableClassCount(atLevel(4))).toBe(DEFAULT_LOADOUTS.length + 1);
+    q.loadouts[3] = { ...cloneLoadout(DEFAULT_LOADOUTS[2]!), name: 'Custom 1' };
+    expect(classForSelection(q, 3).name).toBe('Custom 1');
+    expect(classForSelection(atLevel(3), 3).name).toBe(DEFAULT_LOADOUTS[0]!.name);
   });
 
   it('syncUnlocks keeps foreign ids and drops stale progression ids', () => {
@@ -459,6 +473,9 @@ describe('attachment kill progress shared with frontend and economy', () => {
     p.stats[`weapon.${w.id}.kills`] = need; // combat record only (e.g. a profile from before progression)
     expect(attachmentKillsFor(p, w.id)).toBe(need);
     expect(isUnlocked(p, 'attachment', att, w.id)).toBe(true);
+    // Create-a-Class also needs it bought (economy's spawn check strips unowned items).
+    expect(itemLock(p, 'attachment', att, w.id).unlocked).toBe(false);
+    p.owned.push(keyOf.weapon(w.id), keyOf.attachment(w.id, att));
     expect(itemLock(p, 'attachment', att, w.id).unlocked).toBe(true);
 
     p.prestige = 1; // after prestige only kills since prestige count, everywhere

@@ -70,9 +70,11 @@ describe('perks and killstreaks over the wire', () => {
     a.input(0, 0, 0, 2);
     const called = await a.waitFor('feat', (m) => m.id === 'killstreaks.called');
     expect(called.data).toMatchObject({ id: 'uav', owner: me.id, team: me.team });
-    const snap = await a.waitFor('snap', (s) => s.ents.some((e) => e.kind === KS_ENTITY.uav) && s.radar.length > 0);
-    const alive = bots.filter((b) => b.alive).map((b) => b.id);
-    expect(snap.radar.sort()).toEqual(alive.sort());
+    // Bots killed above respawn on their own timer, so compare against who is alive for that
+    // snapshot rather than the first radar snapshot (flaked under load).
+    const aliveIds = () => bots.filter((b) => b.alive).map((b) => b.id).sort();
+    const snap = await a.waitFor('snap', (s) => s.ents.some((e) => e.kind === KS_ENTITY.uav) && s.radar.length > 0 && [...s.radar].sort().join() === aliveIds().join());
+    expect(snap.radar.sort()).toEqual(aliveIds());
     expect(snap.ents.find((e) => e.kind === KS_ENTITY.uav)!.owner).toBe(me.id);
 
     // RPCs.

@@ -4,6 +4,7 @@
  * spawn (server: `frontend.selectClass`). A HUD hint shows the key while dead.
  */
 import { KILLSTREAK_BY_ID } from '../../../shared/defs/killstreaks';
+import { classSlotsFor } from '../../../shared/frontend/loadout-rules';
 import { PERK_BY_ID } from '../../../shared/defs/perks';
 import { WEAPON_BY_ID } from '../../../shared/defs/weapons';
 import type { Loadout } from '../../../shared/loadout';
@@ -34,7 +35,8 @@ registerScreen('class-picker', (root) => {
     closeOverlay();
     currentMatch()?.controls.requestLock();
   };
-  const items = (p?.loadouts ?? []).map((l, i) =>
+  // Only classes the spawn honours (progression's usable count).
+  const items = (p?.loadouts ?? []).slice(0, p ? classSlotsFor(p) : 0).map((l, i) =>
     h(
       'button',
       {

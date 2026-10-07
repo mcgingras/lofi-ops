@@ -16,6 +16,8 @@ import { CHALLENGES } from '../defs/challenges';
 import { KILLSTREAK_BY_ID, type KillstreakDef } from '../defs/killstreaks';
 import { PERK_BY_ID, type PerkDef } from '../defs/perks';
 import { attachmentKillsFor } from '../defs/progression';
+import { canUse, gateReason, keyOf, LOCK_TEXT, owns, storeItem, type ProfileLike } from '../defs/store';
+import { hasCreateAClass, usableClassCount, type UnlockProfile as ClassProfile } from '../defs/unlocks';
 import { WEAPON_BY_ID, type WeaponDef } from '../defs/weapons';
 import { DEFAULT_LOADOUTS, type Loadout, type WeaponLoadout } from '../loadout';
 import type { Profile } from '../profile';
@@ -50,11 +52,41 @@ export interface ItemLock {
 
 const OPEN: ItemLock = { unlocked: true, requirement: null };
 const locked = (requirement: string): ItemLock => ({ unlocked: false, requirement });
-const orPrice = (price: number | undefined) => (price ? ` or ${price.toLocaleString('en-US')} CP` : '');
+const orPriceText = (price: number | undefined) => (price ? ` or ${price.toLocaleString('en-US')} CP` : '');
 
-/** Is `id` (of `kind`) available to this profile? `weapon` is needed for attachments/camos. */
+/**
+ * Is `id` (of `kind`) available to this profile? `weapon` is needed for attachments/camos.
+ *
+ * With the real catalog, weapons, attachments and camos that the store (economy) sells must also be
+ * owned: the economy's spawn check replaces anything the profile can't use, so offering it here
+ * would hand the player a different class than the one they built. Perks, killstreaks and
+ * equipment are not sold, so their requirement is the level alone.
+ */
 export function itemLock(p: UnlockProfile, kind: ItemKind, id: string, weapon: string | null = null, cat: Catalog = CATALOG): ItemLock {
+  const storeAware = cat === CATALOG;
+  const base = requirementLock(p, kind, id, weapon, cat, storeAware);
+  if (!storeAware || (kind !== 'weapon' && kind !== 'attachment' && kind !== 'camo')) return base;
+  const key = kind === 'weapon' ? keyOf.weapon(id) : kind === 'camo' ? keyOf.camo(id) : weapon ? keyOf.attachment(weapon, id) : '';
+  const item = storeItem(key);
+  if (!item) return base;
+  const sp: ProfileLike = { codPoints: 0, ...p }; // ownership and gates only; the balance is not read
+  if (canUse(sp, item.key)) return OPEN;
+  const price = `${item.price.toLocaleString('en-US')} CP`;
+  if (gateReason(sp, item) === 'weapon') return locked(`Buy the ${cat.weapons.get(weapon ?? '')?.name ?? 'weapon'} first, then ${price} in the Store`);
+  if (owns(sp, item)) {
+    // Bought earlier but gated again (a prestige resets levels): show the gate, not a price.
+    const gate = gateReason(sp, item);
+    if (gate === 'level') return locked(`Level ${item.unlock.level}`);
+    if (gate === 'prestige') return locked(`Prestige ${item.unlock.prestige}`);
+    return base.unlocked ? locked(LOCK_TEXT[gate ?? 'unknown']) : base;
+  }
+  return base.unlocked ? locked(`Store: ${price}`) : locked(`${base.requirement}, then ${price} in the Store`);
+}
+
+/** The level / kills / prestige / challenge requirement alone (prices left to `itemLock` when store-aware). */
+function requirementLock(p: UnlockProfile, kind: ItemKind, id: string, weapon: string | null, cat: Catalog, storeAware: boolean): ItemLock {
   if (kind === 'camo' && id === 'none') return OPEN;
+  const orPrice = (price: number | undefined) => (storeAware ? '' : orPriceText(price));
   const has = (x: string) => p.unlocks.includes(x) || p.owned.includes(x);
   if (has(id) || (weapon && has(`${weapon}:${id}`))) return OPEN;
   switch (kind) {
@@ -100,11 +132,11 @@ export function itemLock(p: UnlockProfile, kind: ItemKind, id: string, weapon: s
           const done = ch ? (p.challengeProgress[ch.id] ?? 0) >= ch.goal : false;
           if (!done) miss.push(`Challenge: ${ch?.name ?? u.challenge}`);
         }
-        if (!miss.length && !d.price) return OPEN;
+        if (!miss.length && (!d.price || storeAware)) return OPEN;
         if (!miss.length && d.price) return locked(`Store: ${d.price.toLocaleString('en-US')} CP`);
         return locked(miss.join(', ') + orPrice(d.price));
       }
-      return d.price ? locked(`Store: ${d.price.toLocaleString('en-US')} CP`) : OPEN;
+      return d.price && !storeAware ? locked(`Store: ${d.price.toLocaleString('en-US')} CP`) : OPEN;
     }
   }
 }
@@ -125,11 +157,13 @@ export function sortKillstreaks(ids: readonly string[], cat: Catalog = CATALOG):
   return [...new Set(ids)].filter((id) => cat.killstreaks.has(id)).sort((a, b) => cat.killstreaks.get(a)!.kills - cat.killstreaks.get(b)!.kills || a.localeCompare(b));
 }
 
-export const BASE_CLASS_SLOTS = 5;
-export const MAX_CLASS_SLOTS = 10;
-
-/** Custom class slots: 5, plus one per prestige (max 10). */
-export const classSlotsFor = (p: Pick<Profile, 'prestige'>) => Math.min(MAX_CLASS_SLOTS, BASE_CLASS_SLOTS + Math.max(0, p.prestige));
+/**
+ * Classes a profile may keep, edit and pick: progression's rule (`usableClassCount`: the default
+ * classes plus a custom slot at levels 4/10/20/30/40 and at prestige 2/4/6/8/10), which is also
+ * what the spawn uses. Editing needs Create-a-Class (level 4); before that the defaults are used.
+ */
+export const classSlotsFor = (p: ClassProfile) => usableClassCount(p);
+export const canEditClasses = (p: ClassProfile) => hasCreateAClass(p);
 
 export interface LoadoutValidation {
   loadout: Loadout;

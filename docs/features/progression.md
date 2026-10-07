@@ -41,10 +41,10 @@ Only humans with a profile, only while `playing` (match-end bonuses excepted), o
 
 - weapons / perks / killstreaks: the def's `unlockLevel` (owners decide), overridable in `UNLOCK_LEVEL_OVERRIDES`;
 - attachments: `AttachmentDef.unlockKills` kills with that weapon since the last prestige;
-- lethal/tactical: `EQUIPMENT_UNLOCKS` (frag 1, concussion 1, flash 3, semtex 6, willy pete 9, nova 12, decoy 15, tomahawk 18); ids not listed are never gated;
+- lethal/tactical: `EQUIPMENT_UNLOCKS` (frag 1, concussion 1, flashbang 1, semtex 6, willy pete 9, nova 12, decoy 15, tomahawk 18; ids must match `defs/equipment.ts`); ids not listed are never gated, and only equipment with a def appears in the Barracks table;
 - Pro perks (`pro:<perk>`): the perk's Pro challenge (`PerkDef.pro.challenge`) completed;
 - Create-a-Class at level 4 (`feature:createAClass`), wager matches at 7 (`feature:wager`), prestige at 50;
-- custom class slots at 4, 10, 20, 30, 40, plus one each at prestige 2, 4, 6, 8, 10 (`classSlots`).
+- custom class slots at 4, 10, 20, 30, 40, plus one each at prestige 2, 4, 6, 8, 10 (`classSlots`); each is a class on top of the 3 defaults (`usableClassCount`), and Create-a-Class uses the same count.
 
 `profile.unlocks` is kept in sync (`syncUnlocks`) and only progression-managed ids are added/removed; anything else other areas put there is left alone.
 

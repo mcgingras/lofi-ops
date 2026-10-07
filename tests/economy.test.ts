@@ -63,6 +63,9 @@ describe('store', () => {
     const items = storeCatalog();
     for (const kind of ['weapon', 'attachment', 'camo', 'reticle', 'emblem']) expect(items.some((i) => i.kind === kind), kind).toBe(true);
     for (const id of WAGER_ONLY_WEAPONS) expect(storeItem(keyOf.weapon(id))).toBeUndefined();
+    // The knife (melee) and the underbarrel GL are WeaponDefs but not classable guns.
+    expect(storeItem(keyOf.weapon('knife'))).toBeUndefined();
+    expect(storeItem(keyOf.weapon('gl'))).toBeUndefined();
     expect(storeItem(keyOf.weapon('ak47'))?.free).toBe(true);
     expect(storeItem(keyOf.attachment('ak47', 'reddot'))?.free).toBe(true);
     expect(CAMOS.length).toBeGreaterThanOrEqual(16);

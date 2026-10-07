@@ -39,10 +39,10 @@ If a screen owned by another area (`barracks`, `store`, `wager`) isn't registere
 - Class select and Leave.
 
 **Create a Class** (`create-a-class` screen):
-- Class slots: 5, plus 1 per prestige, up to 10. You can add new classes and rename them, and **Equip** one for the next spawn.
+- Classes: progression's `usableClassCount` (the 3 default classes plus one slot each at levels 4, 10, 20, 30, 40 and prestige 2, 4, 6, 8, 10), the same count the spawn honours. Editing needs Create-a-Class (level 4); before that the screen is read-only and `frontend.saveLoadout` returns `locked`. You can add new classes and rename them, and **Equip** one for the next spawn (`frontend.selectClass` refuses classes the spawn would not use).
 - Primary and attachments. You get one attachment, or two with Warlord or any perk def with `attachmentSlots`. Only one attachment per attachment slot type.
 - Camo per weapon (economy's `CAMOS`), secondary with one attachment, lethal, tactical, one perk per tier, and three killstreaks sorted by kill count.
-- Locked items are greyed out and show what unlocks them ("Level 12", "30 kills with FAMAS (4/30)", "Store: 500 CP"...).
+- Locked items are greyed out and show what unlocks them ("Level 12", "30 kills with FAMAS (4/30), then 1,000 CP in the Store", "Store: 500 CP"...). Weapons, attachments and camos the store sells must be bought (economy's `canUse`), because the economy's spawn check would otherwise swap them out.
 - Live 3D turntable of the weapon. It uses the real viewmodel builder, attachments and camo, look materials, and a low-res render upscaled with nearest filtering. Drag it to spin.
 - Stat bars: damage, range, fire rate, accuracy, mobility. Hovering a weapon, attachment or camo shows the change in green or red.
 - Every edit is validated locally with the server's rules and then saved.
@@ -117,7 +117,7 @@ The client joins a lobby by getting a ticket and then calling `navigate('match',
 
 **progression**:
 - The lobby emblem slot shows `profile.ext.progression.emblem` (a string) if set, otherwise `prestige_<n>`.
-- The unlock rule is permissive: an item is unlocked if its id (or `<weapon>:<attachment>`) is in `profile.unlocks` or `profile.owned`, or if its def requirement is met (level, kills with the weapon, or the camo's unlock rule). Grant items by pushing ids to `profile.unlocks`.
+- The unlock rule is permissive for perks, killstreaks and equipment: unlocked if the id is in `profile.unlocks` or `profile.owned`, or the def's level is met. Weapons, attachments and camos that the store sells follow the economy (`canUse`: starter, or bought and its gate met), so Create-a-Class never offers something the spawn would replace.
 - A `barracks` screen id is expected.
 
 **economy**:
