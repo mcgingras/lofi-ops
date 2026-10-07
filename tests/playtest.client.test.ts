@@ -7,6 +7,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { startServer, type GameServer } from '../src/server/app';
 import type { Room } from '../src/server/room';
+import { allSpawns, initialSpawnWindow } from '../src/server/features/modes/common';
 import { MatchNet, type Net } from '../src/client/net';
 import { SnapshotBuffer } from '../src/client/netcode/interp';
 import { PLAYER, type Team } from '../src/shared/constants';
@@ -95,7 +96,9 @@ describe('playtest over real sockets', () => {
 
     const firstSpawns = b.client.all('spawned').length;
     const spawned = await b.client.waitFor('spawned', (m) => b.client.all('spawned').indexOf(m) >= firstSpawns, 6000);
-    const spawns = room.map.spawns.teams[b.joined.team as Team];
+    // The modes feature's TDM uses the team's own spawns only in the opening seconds, then dynamic
+    // spawns from every spawn point of the map (away from enemies); either way it is a map spawn.
+    const spawns = initialSpawnWindow(room) ? room.map.spawns.teams[b.joined.team as Team] : allSpawns(room.map);
     expect(spawns.some((s) => Math.hypot(s.x - spawned.x, s.z - spawned.z) < 0.01)).toBe(true);
     const back = await b.client.waitFor('snap', (s) => s.me?.alive === true && s.time >= died.respawnAt! - 0.05);
     expect(back.me!.health).toBe(100);
