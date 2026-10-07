@@ -6,5 +6,6 @@ Portions adapted from Blockyard (https://github.com/Potrock/blockyard), MIT Lice
   src/server/room.ts and combat.ts (room step loop, spawn selection and kill/assist flow patterns from
   src/platform/host/room.ts and src/games/callofblocky/server.ts),
   src/client/netcode/interp.ts (snapshot playback against quickest delivery, from src/platform/client/interp.ts),
-  src/client/netcode/predict.ts (predict/replay/ease-in reconciliation, from src/platform/client/predict.ts).
+  src/client/netcode/predict.ts (predict/replay/ease-in reconciliation, from src/platform/client/predict.ts),
+  src/shared/frontend/lobby.ts (map vote tally rule: most votes, ties to the earliest option, from src/games/callofblocky/nextvote.ts).
 Textures in assets/textures from Poly Haven (https://polyhaven.com), CC0.

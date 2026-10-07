@@ -307,6 +307,7 @@ game/              match.ts (the session + frame loop), controls.ts, viewmodel.t
 hud/               hud.ts, widgets.ts (core widgets), draw.ts (pixel helpers)
 menus/             main-menu.ts, settings.ts, match-screen.ts, dom.ts (`h()`), menus.css
 features/<area>/   your client code; every features/*/index.ts is auto-imported (import.meta.glob), no list to edit
+                   (via features.ts, imported by main.ts after the core screens so features can replace them)
 ```
 
 Dev console: `window.__lofi.client.match` (dev builds only).
