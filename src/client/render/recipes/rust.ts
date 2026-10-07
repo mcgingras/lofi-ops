@@ -2,7 +2,8 @@
  * Texture recipes for Rust (maps-mw2): sand, rusted deck plate and beams, corrugated sheet, stair
  * treads, bar railings, crude tanks, pipeline paint, block walls, the site trailer, sandbags and
  * two desert skies. Lo-fi drawings are the PS1 look / instant fallback; photo looks develop the
- * CC0 Poly Haven photos already in assets/textures. Ids are prefixed `rust_` (other maps reuse some).
+ * CC0 Poly Haven photos in assets/textures (coast_sand_04 was added for the sand). Ids are prefixed `rust_`
+ * (other maps reuse some).
  */
 import { blotch, col, dirtBottom, drips, grain, hex, stencil, stencilText, streaks, type Rand } from '../developer';
 import { registerTexture } from '../textures';
@@ -32,10 +33,10 @@ registerTexture('rust_sand', {
     blotch(g, R, w, h, 10, '#e0c294', 0.3, 3, 10);
     ripples(g, R, w, h, 6, 1, 0.25);
   },
-  photos: ['concrete_floor_worn_001'],
+  photos: ['coast_sand_04'],
   photo: (c) =>
-    c.fromPhoto('concrete_floor_worn_001', {
-      filter: 'sepia(1) saturate(1.5) hue-rotate(-6deg) brightness(1.22) contrast(.8)',
+    c.fromPhoto('coast_sand_04', {
+      filter: 'sepia(.85) saturate(1.35) hue-rotate(-4deg) brightness(1.85) contrast(.72)',
       over: (g, w, h) => {
         g.filter = 'blur(10px)';
         for (let i = 0; i < 10; i++) {
@@ -49,6 +50,19 @@ registerTexture('rust_sand', {
         g.filter = 'none';
       },
     }),
+});
+
+/** Sandstone and rubble at the south edge (scenery). */
+registerTexture('rust_rock', {
+  w: 64,
+  h: 64,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#b08c62', 0.1);
+    blotch(g, R, w, h, 18, '#7a5a3c', 0.45, 3, 10);
+    blotch(g, R, w, h, 12, '#d8b888', 0.35, 2, 8);
+  },
+  photos: ['aerial_rocks_02'],
+  photo: (c) => c.fromPhoto('aerial_rocks_02', { filter: 'sepia(.9) saturate(1.3) hue-rotate(-8deg) brightness(1.3) contrast(.9)' }),
 });
 
 registerTexture('rust_deck', {

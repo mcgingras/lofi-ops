@@ -7,25 +7,40 @@ every mode it supports. Each one can also run a full lobby of bots (see "Bots" b
 
 | id | name | size | play space | default time | other presets |
 |---|---|---|---|---|---|
-| `rust` | Rust | small | ~60 x 60 m | `dusk` (hazy desert dusk) | `day` (dust haze), `night` |
+| `rust` | Rust | small | 48.6 x 49.6 m | `day` (sandstorm) | `dusk`, `night` |
 | `scrapyard` | Scrapyard | medium | ~88 x 76 m | `overcast` | `dusk`, `night` |
 | `terminal` | Terminal | medium | ~72 x 50 m | `day` (clear afternoon) | `overcast`, `dusk` |
 
 Screenshots (headless Chrome, dev server, free camera) are in `docs/features/maps-mw2/*.jpg`:
-an overview plus three close-ups per map.
+an overview plus three close-ups per map. Rust was rebuilt from references; its shots, overhead
+renders and the reference write-up are in `docs/maps/rust/` and `docs/maps/rust-reference.md`.
 
 ## What is in each map
 
-**Rust.** The rusted derrick in the middle has three decks: L1 at 3.2 m (12 x 12, corrugated half
-walls), L2 at 6.4 m (west half, bar railings) and the crow's nest at 9.6 m (4 x 4, railings), with
-the mast above it. Steep stair ramps take the place of MW2's ladders: two from the ground to L1
-(east and west), one from L1 to L2, and one from L2 to the top. To the north-east is the two-storey
-block building with the sniper windows, which has stairs inside along the north wall. There are
-two big crude tanks on pads plus a horizontal tank and manifold to the south-west, and a pumpjack
-and a corrugated shed to the west/north-west. A knee-high pipeline crosses the south (hop it), a
-raised pipe rack runs on the west (walk under it), and a third pipe runs along the east fence. The
-east side also has the site trailer, a chain-link fence and an open-front shed. Sand berms rise to
-the north, south and west edges, with scenery dunes beyond.
+**Rust.** This is a faithful layout recreation, built from the MW2 minimap and the MWIII remaster's
+tac maps. `docs/maps/rust-reference.md` has the sources, the callouts and the measurements.
+
+- **The tower** stands just north-east of the centre and has three levels:
+  - the ground floor is a dark maze (a west passage, a north tunnel, the north-east room and the
+    ladder well);
+  - the middle deck is at 4.4 m;
+  - the small top deck is at 8.4 m.
+- **Ways up the tower:**
+  - a ship ladder from the raised platform on the south face (1.8 m, with its own stair down to the
+    sand) up to the middle deck;
+  - a second ship ladder from the middle deck to the top;
+  - the exhaust chute, which rises from the sand east of the tower straight up to the top deck.
+- **The pipeline** is a 2 m pipe you can walk along, running down the west side. It rises out of the
+  sand at the north-west spawn and branches east at 4.4 m into the middle deck (you can walk under the
+  branch). It then drops to the derrick platform (2.85 m) in the south-west corner and goes back into
+  the sand there.
+- **The fuel-tank skid** stands west of the tower at 3.0 m. A short pipe joins it to the middle deck.
+- **Around the edges:** the blue containers (north-west, climbable from crates), the guard shack at the
+  front gate (north), a horizontal tank, the tank house (north-east), the Barn Oil building with its
+  covered passage (east), the trucks (south-east) and the south container. The derrick has a tunnel
+  under its south wing.
+- **The play space** is the square inside the fences, with sand, rock and the pipeline carrying on
+  beyond it.
 
 **Scrapyard.** The hangar to the north (28 x 20 m, 9 m tall) has a main door to the south, a back
 door, side doors and high windows. Catwalks at 3.6 m run along both side walls, a bridge joins them
@@ -50,19 +65,19 @@ and cones, with a blast fence to the south and chain-link fences to the sides.
 
 ## Data conventions (for modes, bots and frontend)
 
-- **Team spawns.** `spawns.teams[0]` is on one side (Rust north, Scrapyard west, Terminal inside
-  the terminal) and `spawns.teams[1]` is on the other. Every team spawn is more than 20 m from every
+- **Team spawns.** `spawns.teams[0]` is on one side (Rust: the trucks, south-east; Scrapyard west;
+  Terminal inside the terminal) and `spawns.teams[1]` is on the other. Every team spawn is more than 20 m from every
   enemy team spawn. Spawns face into the map. Each team has 8 or more spawns, plus 12 or more FFA
   spawns.
 - **Domination:** `objectives.dom` = `A`, `B`, `C`. A is on team 0's side, B is in the middle (Rust:
-  under the tower; Scrapyard: inside the hangar; Terminal: under the jet bridge), and C is on team
+  just east of the tower; Scrapyard: inside the hangar; Terminal: under the jet bridge), and C is on team
   1's side.
 - **Search and Destroy:** `objectives.sd` = sites `A`, `B`, both with `team: 1`. Team 1's spawn side
   defends and team 0's spawns are the attacker starts. `objectives.sdBomb` = one point (`id: 'bomb'`,
   `team: 0`) at the attackers' start. Swapping sides each round is the mode's job: give the
   defending team `spawns.teams[1]` through `ModeRules.spawnPoints`.
 - **Headquarters:** `objectives.hq` = 5 named points per map (some on upper floors; read `y`).
-- **Bots:** `hotspots` = 10 to 12 roam points per map, including the upper levels (the tower decks,
+- **Bots:** `hotspots` = 10 to 16 roam points per map, including the upper levels (the tower decks,
   the building's upper floor, catwalks, the fuselage cabin, the nose roof, the container roost,
   the gate level and the jet bridge).
 - **Stairs:** the ramp brushes for stairs carry `tag: 'stairs'`. Railings are player-only clips
@@ -93,13 +108,14 @@ skill settings.
 
 ## Textures
 
-All the textures are photo recipes made from the CC0 Poly Haven photos already in
-`assets/textures`, run through the developer. I did not download any new photos. A real sand photo
-and an aircraft-aluminium photo would help Rust and the planes if someone approves the download.
+All the textures are photo recipes made from the CC0 Poly Haven photos in `assets/textures`, run
+through the developer. Rust's sand now uses `coast_sand_04` (CC0, Poly Haven, Diffuse 1k cut down to
+512 px), which was added for the Rust rebuild. An aircraft-aluminium photo would still help the
+planes.
 Recipe files (auto-imported):
-- `src/client/render/recipes/rust.ts`: `rust_sand rust_deck rust_beam rust_corr rust_stairs
-  rust_rail rust_tank rust_pipe rust_bldg rust_concrete rust_trailer rust_sandbag rust_skyDusk
-  rust_skyHaze`
+- `src/client/render/recipes/rust.ts`: `rust_sand rust_rock rust_deck rust_beam rust_corr
+  rust_stairs rust_rail rust_tank rust_pipe rust_bldg rust_concrete rust_trailer rust_sandbag
+  rust_skyDusk rust_skyHaze`
 - `src/client/render/recipes/scrapyard.ts`: `scrap_ground scrap_asphalt scrap_hangar
   scrap_concrete scrap_grate scrap_fuse scrap_alu scrap_cabin scrap_carpet scrap_seat
   scrap_cockpit scrap_junk scrap_wall scrap_trailer`
@@ -132,6 +148,15 @@ can use it for more maps.
     from both team spawns. These assert that the space is closed (no escape past the bounds, no
     falling out), and that every spawn, objective point and hotspot can be reached from both
     sides. This covers the stairs to every deck.
+- `tests/maps-rust.test.ts` checks Rust against its reference:
+  - the play-area size;
+  - floors at the reference heights (top deck, middle deck, raised platform, pipe, derrick, skid,
+    containers);
+  - the places you can walk under or through (pipe branch, chute, the maze, the derrick tunnel, the
+    covered passage);
+  - the sightlines from the top deck;
+  - the bots' `NavGrid` reaching every objective and hotspot, tower top included, from both team
+    spawns.
 - `tests/maps-mw2-walk.ts` is the flood-fill helper (`floodWalk`, `reaches`). Other map areas can
   use it.
 - `tests/maps-mw2.integration.test.ts`: real server and socket, plus simulated bot-filled rooms

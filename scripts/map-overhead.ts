@@ -52,7 +52,7 @@ function render(map: MapData, sliceY: number | null): string {
     out.push(`<rect x="${x}" y="${z}" width="${w}" height="${h}" fill="${shade(r.max.y)}" stroke="#0b0c0e" stroke-width="0.6"/>`);
     if (r.ramp) {
       const cx = x + w / 2, cz = z + h / 2;
-      const d = { px: [1, 0], nx: [-1, 0], pz: [0, 1], nz: [0, -1] }[r.ramp as 'px' | 'nx' | 'pz' | 'nz'] ?? [0, 0];
+      const d = ({ '+x': [1, 0], '-x': [-1, 0], '+z': [0, 1], '-z': [0, -1] } as Record<string, [number, number]>)[r.ramp] ?? [0, 0];
       const len = Math.min(w, h) * 0.35;
       out.push(`<line x1="${cx - d[0]! * len}" y1="${cz - d[1]! * len}" x2="${cx + d[0]! * len}" y2="${cz + d[1]! * len}" stroke="#f2c14e" stroke-width="2" marker-end="url(#a)"/>`);
     }
