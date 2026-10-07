@@ -1,0 +1,50 @@
+# Fly.io config for Lo-Fi Ops (DESIGN.md section 10, docs/DEPLOY.md).
+# `app` is a placeholder: confirm the real name with the owner before `fly apps create`.
+
+app = "lofi-ops"
+primary_region = "dfw"   # Dallas: closest Fly region to Colorado players (~25-30 ms from Denver)
+
+# Fly stops machines with kill_signal and waits kill_timeout; the server drains (refuses joins,
+# saves every profile, closes sockets) and exits well inside it.
+kill_signal = "SIGINT"
+kill_timeout = "10s"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+  DATA_DIR = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Scale to zero when idle; the proxy boots the machine on the next request (the client shows
+  # "Waking server..." and retries the socket meanwhile).
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  # Open WebSockets count as connections, so a machine with players in it is never auto-stopped.
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 150
+    hard_limit = 200
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+# Profiles (SQLite) live on this volume. One volume = one machine: keep the app at a single
+# machine (`fly deploy --ha=false`, `fly scale count 1`).
+[[mounts]]
+  source = "lofi_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

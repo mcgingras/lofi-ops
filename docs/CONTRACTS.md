@@ -3,14 +3,14 @@
 What the core gives every feature area, and exactly how to plug in. Read `docs/DESIGN.md` first (the why); this file is the how. If you must change a contract here, change this file in the same commit and say so in your report.
 
 ```
-npm run dev        server (tsx watch, :8787) + Vite (:5173, proxies /ws and /api); .claude/launch.json 'dev' for the preview tool
+npm run dev        server (tsx watch, :8080) + Vite (:5173, proxies /ws and /api); .claude/launch.json 'dev' for the preview tool
 npm run build      typecheck (server + client tsconfigs) then vite build -> dist/client
 npm run typecheck
 npm test           vitest: unit + headless integration (real server on a random port)
-npm start          serves dist/client and the game server on one port (PORT, default 8787)
+npm start          serves dist/client and the game server on one port (PORT, default 8080, bound to 0.0.0.0); this is also what the Docker image runs (docs/DEPLOY.md)
 ```
 
-Env: `PORT`, `LOFI_DB` (sqlite path, default `data/lofi.db`).
+Env: `PORT` (default 8080), `HOST` (default `0.0.0.0`), `DATA_DIR` (default `./data`; the SQLite file is `DATA_DIR/lofi.db`), `LOFI_DB` (explicit sqlite path, overrides `DATA_DIR`), `GIT_SHA` (optional, appended to the reported version). HTTP: `GET /healthz` (alias `/api/health`) returns `{ok, rooms, players, bots, version, uptimeSec, draining}` (503 while shutting down), `GET /api/rooms`. SIGINT/SIGTERM shut down gracefully: joins refused, profiles saved, sockets closed with code 1012 (clients retry), exit within 8 s. Deployment: `docs/DEPLOY.md` (Fly.io).
 
 ## 0. Rules of the road
 

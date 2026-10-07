@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
-const SERVER_PORT = Number(process.env.PORT ?? 8787);
+const SERVER_PORT = Number(process.env.PORT ?? 8080);
 
 export default defineConfig({
   root: resolve(import.meta.dirname, 'src/client'),

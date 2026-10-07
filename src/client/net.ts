@@ -29,6 +29,10 @@ export type NetStatus = 'idle' | 'connecting' | 'waking' | 'online' | 'offline';
 type Handler<K extends keyof ServerMessages> = (msg: ServerMsgOf<K>) => void;
 
 const TOKEN_KEY = 'lofi.token';
+/** A first connect slower than this shows "Waking server..." (Fly holds the request while a stopped machine boots). */
+const WAKING_AFTER_MS = 1500;
+/** Give up on a handshake that hangs this long and retry. */
+const CONNECT_TIMEOUT_MS = 15000;
 const NAME_KEY = 'lofi.name';
 const nowSec = () => performance.now() / 1000;
 
@@ -85,7 +89,7 @@ export class Net {
 
   private open() {
     this.setStatus(this.attempts > 0 ? 'waking' : 'connecting');
-    const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${WS_PATH}`;
+    const url = socketUrl(location);
     let ws: WebSocket;
     try {
       ws = new WebSocket(url);
@@ -94,6 +98,20 @@ export class Net {
       return;
     }
     this.ws = ws;
+    // Scale-to-zero cold start: the proxy holds the upgrade while the machine boots, so a slow
+    // first handshake means "waking"; a handshake that never completes is dropped and retried.
+    const wakingTimer = setTimeout(() => {
+      if (this.ws === ws && this.status === 'connecting') this.setStatus('waking');
+    }, WAKING_AFTER_MS);
+    const connectTimer = setTimeout(() => {
+      if (this.ws === ws && ws.readyState === WebSocket.CONNECTING) ws.close();
+    }, CONNECT_TIMEOUT_MS);
+    const clearTimers = () => {
+      clearTimeout(wakingTimer);
+      clearTimeout(connectTimer);
+    };
+    ws.addEventListener('open', clearTimers);
+    ws.addEventListener('close', clearTimers);
     ws.onopen = () => ws.send(encodeMsg({ t: 'hello', token: lsGet(TOKEN_KEY), name: lsGet(NAME_KEY), version: PROTOCOL_VERSION }) as string);
     ws.onmessage = (ev) => {
       const msg = decodeServerMsg(typeof ev.data === 'string' ? ev.data : new Uint8Array(ev.data as ArrayBuffer));
@@ -244,6 +262,11 @@ export class Net {
     lsSet(NAME_KEY, name);
     this.profile = await this.rpc('core.setName', { name });
   }
+}
+
+/** The game socket on this page's own origin: `wss://` on https, `ws://` otherwise; never a fixed host. */
+export function socketUrl(loc: { protocol: string; host: string }): string {
+  return `${loc.protocol === 'https:' ? 'wss' : 'ws'}://${loc.host}${WS_PATH}`;
 }
 
 export const net = new Net();
