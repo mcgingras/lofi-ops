@@ -116,6 +116,15 @@ Each file exports a typed array + `byId` map. Core seeds each with one or two en
 8. **bots**: nav graph from brushes, behaviours (roam, engage, objective play), difficulty tiers, use loadouts/perks/streaks, wager-mode aware.
 9. **modes**: Team Deathmatch and FFA polish, Domination, Search and Destroy, Headquarters, Kill Confirmed; end-of-match summary (scoreboard, XP breakdown, challenge progress).
 
+## 8a. Bots in lobbies (hard requirement)
+
+A lobby must always be able to run even when not enough humans can join.
+- **Backfill:** every lobby carries `LobbyBotSettings` (`src/shared/defs/bots.ts`): `fill`, `targetPlayers` (per-mode default in `DEFAULT_TARGET_PLAYERS`), `difficulty` (`recruit | regular | hardened | veteran | custom`), optional `custom: BotSkill`, `variance`. When the countdown ends, empty slots up to `targetPlayers` become bots, teams balanced. A human who joins mid-match replaces a bot (at that bot's next death); a human who leaves is replaced by a bot so teams stay even.
+- **Matchmaking:** quick-play lobbies wait up to `MATCHMAKING_WAIT_SEC` (20 s) for humans, then start with bots. The main menu also offers "Play with bots" (a private lobby that starts immediately).
+- **Tunable skill:** presets map to a full `BotSkill` (reaction time, aim error, turn speed, headshot bias, FOV, hearing, strafe, burst control, objective play, streak use, aggression). "Custom" exposes every knob as a slider (`BOT_SKILL_RANGES`). `variance` jitters each bot a little so they don't feel cloned. Host-controlled in private lobbies; playlist defaults (regular) in matchmade ones.
+- **Ownership:** the bots agent implements the brains, nav, backfill/replace logic and the `bots.*` RPCs (`bots.setSettings`, `bots.get`); the frontend agent builds the lobby UI that edits `LobbyBotSettings` (preset picker, custom sliders, fill toggle, target count) and the "Play with bots" entry; the modes agent makes bots play objectives through hooks the bots agent exposes.
+- Bots never earn or cost CoD Points; wager matches against bots are practice only (no payouts).
+
 ## 9. References
 
 - `REF_BLOCKYARD` = `/Users/michaelgingras/Library/Application Support/Claude/scratch-workspaces/d20cb7e9-1e85-4bd4-90e5-fc4c621b0940/e04bba9d-c970-458b-9bdc-220b4299ec65/scratch-2026-10-06-91bab5/blockyard` (MIT, © Patrick Blais). Useful: `src/platform/host/{room,server,state}.ts`, `src/platform/net/{protocol,codec,delta}.ts`, `src/platform/sim/{movement,hitscan,hitboxes}.ts`, `src/games/callofblocky/{server,match,perks,progression,bots,modes,weapons}.ts`, `src/games/callofblocky/streaks/`. Borrow freely; keep an attribution line in `NOTICE` for copied code.
