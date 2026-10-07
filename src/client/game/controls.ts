@@ -14,7 +14,7 @@ import { clamp } from '../../shared/math';
 import { settings } from '../settings';
 import { sfx } from './audio';
 
-export type Action = 'forward' | 'back' | 'left' | 'right' | 'jump' | 'crouch' | 'sprint' | 'reload' | 'use' | 'melee' | 'lethal' | 'tactical' | 'streak' | 'prone' | 'weapon1' | 'weapon2' | 'scores';
+export type Action = 'forward' | 'back' | 'left' | 'right' | 'jump' | 'crouch' | 'sprint' | 'reload' | 'use' | 'melee' | 'lethal' | 'tactical' | 'streak' | 'prone' | 'weapon1' | 'weapon2' | 'weapon3' | 'scores';
 
 /** event.code -> action. */
 export const KEYMAP: Record<string, Action> = {
@@ -41,6 +41,7 @@ export const KEYMAP: Record<string, Action> = {
   KeyZ: 'prone',
   Digit1: 'weapon1',
   Digit2: 'weapon2',
+  Digit3: 'weapon3',
   Tab: 'scores',
 };
 

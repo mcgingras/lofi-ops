@@ -101,6 +101,7 @@ export class Match {
   private shot = 0;
   private lastShotAt = -9;
   private burstLeft = 0;
+  private burstQueued = false;
   private triggerWas = false;
   private pendingShots: { seq: number; slot: number }[] = [];
   private reload = { seq: -1, end: 0, dur: 1 };
@@ -368,6 +369,7 @@ export class Match {
         this.recoil.pitch = this.recoil.yaw = 0;
         this.slot = 0;
         this.burstLeft = 0;
+        this.burstQueued = false;
         this.pendingShots = [];
         this.reload = { seq: -1, end: 0, dur: 1 };
         this.swap = { seq: this.net.seq + 1, end: this.serverTime + 0.3, dur: 0.3 };
@@ -476,6 +478,7 @@ export class Match {
     let want = this.slot;
     if (c.consume('weapon1')) want = 0;
     if (c.consume('weapon2')) want = 1;
+    if (c.consume('weapon3')) want = 2; // underbarrel attachment slot (grenade launcher), when present
     const wheel = c.consumeWheel();
     if (wheel) want = (((this.slot + wheel) % nWeapons) + nWeapons) % nWeapons;
     if (alive && playing && want !== this.slot && want < nWeapons) {
@@ -485,6 +488,7 @@ export class Match {
       this.swap = { seq: this.net.seq + 1, end: server + dur, dur };
       this.reload = { seq: this.net.seq + 1, end: 0, dur: 1 };
       this.burstLeft = 0;
+      this.burstQueued = false;
     } else if (!alive) this.slot = me?.slot ?? this.slot;
 
     // Reload.
@@ -604,7 +608,11 @@ export class Match {
     const reloading = this.reloadProgress() >= 0;
     const switching = this.raiseProgress() >= 0;
     const sprintBlocked = st.sprinting || st.sinceSprint + 0.05 < def.sprintOutMs / 1000;
-    if (pressed && def.mode === 'burst') this.burstLeft = def.burst ?? 3;
+    if (pressed && def.mode === 'burst') this.burstQueued = true;
+    if (this.burstQueued && this.burstLeft <= 0 && this.time - this.lastShotAt >= (def.burstDelayMs ?? 0) / 1000) {
+      this.burstQueued = false;
+      this.burstLeft = def.burst ?? 3;
+    }
     const wantShot = def.mode === 'auto' ? c.fire : def.mode === 'burst' ? this.burstLeft > 0 : pressed;
     if (!wantShot) return;
     if (reloading || switching || sprintBlocked) {
@@ -617,6 +625,7 @@ export class Match {
         else if (pressed) sfx.play('click', { volume: 0.5 });
       }
       this.burstLeft = 0;
+      this.burstQueued = false;
       return;
     }
     if (this.time - this.lastShotAt < interval * 0.98) return;

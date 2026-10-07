@@ -38,6 +38,8 @@ export class ViewmodelRig {
   private lastShot = -9;
   private aim = new THREE.Vector3();
   private sprintBlend = 0;
+  private lastTime = 0;
+  private act: { kind: string; start: number; dur: number } | null = null;
 
   constructor(scene: THREE.Scene) {
     scene.add(this.root);
@@ -64,7 +66,13 @@ export class ViewmodelRig {
     this.kickRot = Math.min(1.6, this.kickRot + strength);
   }
 
+  /** Play a one-off action for `dur` seconds (the model's `animate` decides how it looks). */
+  action(kind: string, dur: number): void {
+    this.act = { kind, start: this.lastTime, dur: Math.max(0.01, dur) };
+  }
+
   update(p: ViewmodelPose): void {
+    this.lastTime = p.time;
     const vm = this.vm;
     if (!vm) return;
     const { dt } = p;
@@ -82,7 +90,10 @@ export class ViewmodelRig {
     const free = 1 - p.ads * 0.85;
     const mv = p.move;
     const drop = vm.spec.reload === 'drop';
-    const rl = p.reload >= 0 ? Math.sin(p.reload * Math.PI) : 0;
+    if (this.act && p.time - this.act.start > this.act.dur) this.act = null;
+    const act = this.act;
+    const custom = vm.spec.animate?.({ dt, time: p.time, ads: p.ads, reload: p.reload, raise: p.raise, sinceShot: p.time - this.lastShot, sprint: p.sprint, action: act?.kind ?? null, actionT: act ? (p.time - act.start) / act.dur : 0 }) === true;
+    const rl = p.reload >= 0 && !custom ? Math.sin(p.reload * Math.PI) : 0;
     const raise = p.raise >= 0 ? 1 - p.raise : 0;
     this.aim.lerpVectors(vm.spec.hip, vm.spec.ads, p.ads);
     const sb = this.sprintBlend;

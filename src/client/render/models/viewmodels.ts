@@ -29,6 +29,29 @@ export interface ViewmodelSpec {
   ads: THREE.Vector3;
   /** Reload animation style (default 'tilt'). */
   reload?: 'tilt' | 'drop';
+  /**
+   * Optional per-frame animation of the model's own parts (bolt, pump, hands, knife...), after the
+   * rig has placed the group. Return true to skip the rig's generic reload dip.
+   */
+  animate?(s: ViewmodelAnimState): boolean | void;
+}
+
+/** What `ViewmodelSpec.animate` gets every frame. */
+export interface ViewmodelAnimState {
+  dt: number;
+  time: number;
+  ads: number;
+  /** 0..1 reload progress or -1. */
+  reload: number;
+  /** 0..1 raise progress or -1. */
+  raise: number;
+  /** Seconds since the last shot (large when none). */
+  sinceShot: number;
+  sprint: boolean;
+  /** A one-off action started with `ViewmodelRig.action` (e.g. 'melee', 'throw'), or null. */
+  action: string | null;
+  /** 0..1 progress of the action. */
+  actionT: number;
 }
 
 export type ViewmodelBuilder = (ctx: ViewmodelCtx) => ViewmodelSpec;

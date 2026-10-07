@@ -175,8 +175,16 @@ export class Sfx {
     }
   }
 
-  /** A gunshot for a weapon id (tone by class; suppressed = quiet and dull). */
+  /**
+   * A gunshot for a weapon id (tone by class; suppressed = quiet and dull). A feature may register
+   * a per-weapon voice as `shot.<weaponId>` (and `shot.<weaponId>.sup`); it plays instead.
+   */
   gunshot(weaponId: string, at?: PlayOpts['at'], suppressed = false): void {
+    const own = suppressed && this.makers.has(`shot.${weaponId}.sup`) ? `shot.${weaponId}.sup` : this.makers.has(`shot.${weaponId}`) ? `shot.${weaponId}` : null;
+    if (own) {
+      this.play(own, { at, rate: 0.96 + Math.random() * 0.08, lowpass: suppressed && !own.endsWith('.sup') ? 900 : undefined, volume: (suppressed ? 0.45 : 1) * (at ? 2.2 : 1) * 0.5 });
+      return;
+    }
     const cls = WEAPON_BY_ID.get(weaponId)?.class ?? 'ar';
     const t = CLASS_TONE[cls];
     this.play('shot', { at, rate: t.rate * (0.92 + Math.random() * 0.12), lowpass: suppressed ? 700 : t.lowpass, volume: (suppressed ? 0.35 : 1) * t.vol * (at ? 2.2 : 1) });
