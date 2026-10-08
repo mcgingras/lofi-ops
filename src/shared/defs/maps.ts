@@ -8,6 +8,7 @@ import { buildFiringRange } from '../maps/firingrange';
 import { buildHanoi } from '../maps/hanoi';
 import { buildHijacked } from '../maps/hijacked';
 import { buildHighrise } from '../maps/highrise';
+import { buildJungle } from '../maps/jungle';
 import { buildNuketown } from '../maps/nuketown';
 import { buildRust } from '../maps/rust';
 import { buildScrapyard } from '../maps/scrapyard';
@@ -60,6 +61,7 @@ export const MAPS: MapDef[] = [
   { id: 'hanoi', name: 'Hanoi', inspiredBy: 'Call of Duty: Black Ops (2010), Hanoi (night): the NVA prison and the barricaded street outside it', build: buildHanoi, modes: BO_MODES, size: 'medium' },
   { id: 'summit', name: 'Summit', inspiredBy: 'Call of Duty: Black Ops (2010), Summit: the Soviet listening post on a Ural mountaintop (Control room, Gallery, Tower, Cable Car and Gondola, Catwalk)', build: buildSummit, modes: BO_MODES, size: 'medium' },
   { id: 'hijacked', name: 'Hijacked', inspiredBy: 'Call of Duty: Black Ops II (2012), Hijacked: the superyacht at sea (bow, stern pool, cabins, central deck, below-deck passage)', build: buildHijacked, modes: BO_MODES, size: 'small' },
+  { id: 'jungle', name: 'Jungle', inspiredBy: 'Call of Duty: Black Ops (2010), Jungle (mp_havoc): the river valley village, the Bridge, the Lookout and the Ruins', build: buildJungle, modes: BO_MODES, size: 'medium' },
 ];
 
 export const MAP_BY_ID = indexById(MAPS);
