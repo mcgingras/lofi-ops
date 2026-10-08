@@ -342,6 +342,8 @@ describe('summit sightlines', () => {
     // North plaza to the Courtyard: the Control building blocks; plaza to the South Yard likewise.
     expect(world.lineOfSight(v(0, eye, -35), v(0, eye, 20))).toBe(false);
     expect(world.lineOfSight(v(4, eye, -35), v(6, eye, 40))).toBe(false);
+    // B's lane out to the cliff: the control room's west door lines up with the Gallery's.
+    expect(world.lineOfSight(v(0, eye, -0.9), v(-24.6, eye, -0.4))).toBe(true);
     // The Alley runs straight from the plaza to the Control building's north face.
     expect(world.lineOfSight(v(-0.2, eye, -31), v(-0.2, eye, -10))).toBe(true);
   });

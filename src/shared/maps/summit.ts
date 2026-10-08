@@ -97,7 +97,8 @@ const BRIDGE = (() => {
 const MATERIALS: Record<string, MaterialDef> = {
   snow: { texture: 'sm_snow', uvMul: [1 / 4, 1 / 4] },
   snowPath: { texture: 'sm_snowDirty', uvMul: [1 / 4, 1 / 4] },
-  pave: { texture: 'sm_pave', uvMul: [1 / 4, 1 / 4] },
+  tin: { texture: 'fr_tin', tint: 0xa0a4a8, uvMul: [1 / 2.6, 1 / 2.6] },
+  pave: { texture: 'sm_pave', tint: 0xf0f2f6, uvMul: [1 / 4, 1 / 4] },
   rock: { texture: 'sm_rock', uvMul: [1 / 5, 1 / 5] },
   cliff: { texture: 'sm_rock', tint: 0x9aa0a8, uvMul: [1 / 7, 1 / 7] },
   roofSnow: { texture: 'sm_snow', tint: 0xe4e8ee, uvMul: [1 / 4, 1 / 4] },
@@ -625,8 +626,8 @@ function westCliff(k: MapKit): void {
   }
   k.trim(0.5, 2.4, 0.08, 'steel', tw.x0 - 0.1, 2.0, (tw.z0 + tw.z1) / 2);
   // The radar on the Tower: a red mast with a grid antenna (the loading screen's landmark).
-  k.box(0.4, 2.6, 0.4, 'corrRed', tw.x0 + 0.5, L.tower, tw.z0 + 0.5, { collide: false });
-  k.wallDecal(3.0, 1.6, 'chain', tw.x0 + 0.5, L.tower + 2.6, tw.z0 + 0.5, 0.6, { seg: 1 });
+  k.box(0.4, 2.6, 0.4, 'corrRed', tw.x0 + 0.3, L.tower, tw.z1 - 0.3, { collide: false });
+  k.wallDecal(3.0, 1.6, 'chain', tw.x0 + 0.3, L.tower + 2.6, tw.z1 - 0.3, 0.6, { seg: 1 });
   k.light((tw.x0 + tw.x1) / 2, L.tower + 2, (tw.z0 + tw.z1) / 2, [1.1, 1.05, 0.95], 7, 'lamp');
 
   // Rock either side of the Ledge: terraced boxes, an invisible clip above (nobody stands on them).
@@ -891,8 +892,8 @@ function southYard(k: MapKit): void {
 }
 
 function backdrop(k: MapKit): void {
-  k.backdropRing('mountainsFar', 230, 9, 200, 120, -70, 0.3);
-  k.backdropRing('mountains', 160, 12, 120, 70, -55);
+  k.backdropRing('mountainsFar', 240, 9, 260, 75, -50, 0.3);
+  k.backdropRing('mountains', 170, 11, 190, 52, -44);
   // A power line on the slope north-west (the birdseye's pylons) and spruces on the far slopes.
   mast(k, -40, -42, -28, 34, 2.6, 'latticeGrey');
   mast(k, -58, -8, -36, 40, 2.6, 'latticeGrey');

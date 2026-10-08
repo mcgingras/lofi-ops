@@ -343,11 +343,14 @@ registerTexture('sm_mountains', {
   posterize: false,
   draw(g, w, h, R) {
     g.clearRect(0, 0, w, h);
+    // A few broad peaks (triangles with jagged flanks), tapering to the card edges.
+    const peaks = Array.from({ length: 4 }, () => ({ x: R.rr(w * 0.15, w * 0.85), top: R.rr(h * 0.08, h * 0.45), slope: R.rr(0.35, 0.7) }));
     const ridge: number[] = [];
-    let y = h * 0.55;
+    let jag = 0;
     for (let x = 0; x <= w; x += 4) {
-      const edge = Math.min(1, Math.min(x, w - x) / (w * 0.16));
-      y = Math.max(3, Math.min(h - 6, y + R.rr(-7, 7)));
+      const edge = Math.min(1, Math.min(x, w - x) / (w * 0.2));
+      jag = Math.max(-4, Math.min(4, jag + R.rr(-1.6, 1.6)));
+      const y = Math.min(h * 0.8, ...peaks.map((p) => p.top + Math.abs(x - p.x) * p.slope)) + jag;
       ridge.push(h - (h - y) * edge);
     }
     const lg = g.createLinearGradient(0, 0, 0, h);
