@@ -66,6 +66,8 @@ export const JUNGLE_LEVELS = {
 const L = JUNGLE_LEVELS;
 
 export const JUNGLE_BOUNDS = { min: { x: -61, y: -6, z: -51 }, max: { x: 60, y: 30, z: 51 } };
+/** Width of each rice paddy terrace out east (out of bounds). */
+const PADDY_W = 6;
 
 /** The playable outline in overhead pixels, clockwise on the overhead (traced from the white line). */
 export const JUNGLE_OUTLINE_PX: P2[] = [
@@ -145,7 +147,7 @@ const ROCKS: RockDef[] = [
 export const JUNGLE_PLAN = { creek: CREEK, ledge: LEDGE, bridge: BRIDGE, redHut: RED_HUT, pits: PITS, rocks: ROCKS } as const;
 
 const MATERIALS: Record<string, MaterialDef> = {
-  floor: { texture: 'jg_floor', uvMul: [1 / 5, 1 / 5] },
+  floor: { texture: 'jg_floor', tint: 0xa8a890, uvMul: [1 / 5, 1 / 5] },
   path: { texture: 'fr_dirt', tint: 0xa89070, uvMul: [1 / 4, 1 / 4] },
   grass: { texture: 'fr_grass', uvMul: [1 / 4, 1 / 4] },
   jungle: { texture: 'fr_jungle', uvMul: [1 / 4, 1 / 4] },
@@ -164,9 +166,9 @@ const MATERIALS: Record<string, MaterialDef> = {
   planksPale: { texture: 'bo_planks', tint: 0xd8d4c8, uvMul: [1 / 2.4, 1 / 2.4] },
   redPlank: { texture: 'bo_planks', tint: 0xc0584a, uvMul: [1 / 2.4, 1 / 2.4] },
   wood: { texture: 'bo_wood', uvMul: [1 / 1.2, 1 / 1.2] },
-  bamboo: { texture: 'jg_bamboo', uvMul: [1 / 1.6, 1 / 2.0] },
+  bamboo: { texture: 'jg_bamboo', tint: 0xb4a68a, uvMul: [1 / 1.6, 1 / 2.0] },
   bambooFence: { texture: 'jg_bambooFence', side: 'double' },
-  thatch: { texture: 'jg_thatch', uvMul: [1 / 2, 1 / 2] },
+  thatch: { texture: 'jg_thatch', tint: 0xb8a482, uvMul: [1 / 2, 1 / 2] },
   tiles: { texture: 'jg_tiles', uvMul: [1 / 2, 1 / 2] },
   tin: { texture: 'fr_tin', uvMul: [1 / 2.6, 1 / 2.6] },
   tinPale: { texture: 'fr_tin', tint: 0xd0ccc0, uvMul: [1 / 2.6, 1 / 2.6] },
@@ -546,6 +548,13 @@ export function jungleGroundLevel(x: number, z: number): number {
   return lv;
 }
 
+/** Ground height out of bounds: 0, or the rice paddy terraces stepping down east of the map. */
+function outerGround(x: number): number {
+  const x0 = JUNGLE_BOUNDS.max.x + 4;
+  if (x <= x0) return 0;
+  return -0.3 * (Math.min(6, Math.floor((x - x0) / PADDY_W)) + 1);
+}
+
 function ground(k: MapKit): void {
   const b = JUNGLE_BOUNDS;
   const x0 = b.min.x - 4;
@@ -556,7 +565,7 @@ function ground(k: MapKit): void {
   k.aabb(-260, -3, -260, 260, 0, z0, 'floor', { hide: ['ny'] });
   k.aabb(-260, -3, z1, 260, 0, 260, 'floor', { hide: ['ny'] });
   k.aabb(-260, -3, z0, x0, 0, z1, 'floor', { hide: ['ny'] });
-  k.aabb(x1, -3, z0, 260, 0, z1, 'floor', { hide: ['ny'] });
+  k.aabb(x1 + PADDY_W * 6, -3, z0, 260, -0.3 * 7, z1, 'paddy', { hide: ['ny'] });
   const cells = raster(x0, z0, x1, z1, 0.5, () => true, jungleGroundLevel);
   for (const r of cells) k.aabb(r.x0, -3, r.z0, r.x1, r.level, r.z1, r.level === 0 ? 'floor' : r.level > -0.5 ? 'mud' : 'bed', { hide: ['ny'] });
   // Water over the two lower terraces (render only, top face only).
@@ -726,18 +735,26 @@ function sandbagRing(k: MapKit, x: number, z: number, r: number, h: number, gapA
   }
 }
 
-/** Stepped roof tiers over a frame rect (render), the lowest tier solid (stops jumpers and bullets). */
-function roof(f: Frame, u0: number, v0: number, u1: number, v1: number, y: number, mat: string, tiers = 3, over = 0.5): void {
-  const W = u1 - u0;
-  const D = v1 - v0;
-  const inset = Math.min(W, D) / 2 / (tiers + 0.6);
+/**
+ * A stepped gable roof over a frame rect: tiers narrowing across the short side towards a ridge
+ * along the long side (a pitched roof in lo-fi steps). The lowest tier (the eaves) is solid, so
+ * it stops jumpers and bullets; the rest is render only.
+ */
+function roof(f: Frame, u0: number, v0: number, u1: number, v1: number, y: number, mat: string, tiers = 3, over = 0.5, th = 0.32): void {
+  const alongU = u1 - u0 >= v1 - v0;
+  const half = (alongU ? v1 - v0 : u1 - u0) / 2;
+  const step = (half + over) / (tiers + 0.5);
   for (let i = 0; i < tiers; i++) {
-    const e = i === 0 ? -over : inset * i;
-    const yb = y + i * 0.32;
-    if (i === 0) f.box(u0 + e, v0 + e, u1 - e, v1 - e, yb, yb + 0.32, mat);
-    else f.vis(u0 + e, v0 + e, u1 - e, v1 - e, yb, yb + 0.32, mat, { hide: ['ny'] });
+    const a = -over + step * i;
+    const e = -over + Math.min(0.2 * i, over);
+    const yb = y + i * th;
+    const [a0, b0, a1, b1] = alongU ? [u0 + e, v0 + a, u1 - e, v1 - a] : [u0 + a, v0 + e, u1 - a, v1 - e];
+    if (i === 0) f.box(a0, b0, a1, b1, yb, yb + th, mat);
+    else f.vis(a0, b0, a1, b1, yb, yb + th, mat, { hide: ['ny'] });
   }
-  f.vis(u0 + inset * tiers, (v0 + v1) / 2 - 0.12, u1 - inset * tiers, (v0 + v1) / 2 + 0.12, y + tiers * 0.32, y + tiers * 0.32 + 0.18, 'wood', { hide: ['ny'] });
+  const e = -over + Math.min(0.2 * tiers, over);
+  if (alongU) f.vis(u0 + e, (v0 + v1) / 2 - 0.14, u1 - e, (v0 + v1) / 2 + 0.14, y + tiers * th, y + tiers * th + 0.2, 'wood', { hide: ['ny'] });
+  else f.vis((u0 + u1) / 2 - 0.14, v0 + e, (u0 + u1) / 2 + 0.14, v1 - e, y + tiers * th, y + tiers * th + 0.2, 'wood', { hide: ['ny'] });
 }
 
 /**
@@ -824,7 +841,7 @@ function bridge(k: MapKit): void {
   f.wallU(D, 0, W, B, 2.3, 0.24, 'bamboo', [door(1.1, 1.0), win(3.6, 5.2)]);
   f.wallV(0, 0, D, B, 2.3, 0.24, 'bamboo', [win(1.2, 2.8)]);
   f.wallV(W, 0, D, B, 2.3, 0.24, 'bamboo', [door(2.0, 1.4, 0, 2.2)]);
-  roof(f, 0, 0, W, D, B + 2.3, 'thatch', 3, 0.6);
+  roof(f, 0, 0, W, D, B + 2.3, 'thatch', 4, 0.6, 0.42);
   f.box(0.3, 0.3, 1.6, 0.9, B, B + 0.8, 'crate', { uv: 'raw' });
   f.box(5.0, 3.2, 6.6, 3.8, B, B + 0.75, 'wood');
   const lamp = f.p(3.5, B + 2.0, 2);
@@ -878,7 +895,7 @@ function redHut(k: MapKit): void {
   f.wallU(D, 0, W, FY, 2.4, 0.24, 'redPlank', [win(1.6, 3.6)]);
   f.wallV(0, 0, D, FY, 2.4, 0.24, 'redPlank', [win(1.6, 3.0), door(5.4)]);
   f.wallV(W, 0, D, FY, 2.4, 0.24, 'redPlank', [win(2.4, 4.6)]);
-  roof(f, 0, 0, W, D, FY + 2.4, 'tiles', 3, 0.55);
+  roof(f, 0, 0, W, D, FY + 2.4, 'tiles', 3, 0.55, 0.4);
   f.box(3.6, 4.8, 5.4, 6.7, FY, FY + 0.8, 'wood');
   f.box(4.3, 0.4, 5.4, 1.4, FY, FY + 1.0, 'crate', { uv: 'raw' });
   const lamp = f.p(2.9, FY + 2.0, 3.5);
@@ -900,7 +917,7 @@ function spawnHut(k: MapKit): void {
   f.wallU(D, 0, W, FY, 2.1, 0.24, 'bamboo', [door(2.6), win(4.0, 4.9)]);
   f.wallV(0, 0, D, FY, 2.1, 0.24, 'bamboo', [door(2.0)]);
   f.wallV(W, 0, D, FY, 2.1, 0.24, 'bamboo', [win(1.2, 2.8)]);
-  roof(f, 0, 0, W, D, FY + 2.1, 'thatch', 3, 0.7);
+  roof(f, 0, 0, W, D, FY + 2.1, 'thatch', 4, 0.7, 0.42);
   // Porch and steps on the south side, steps at the west door.
   f.box(1.5, D, 3.7, D + 1.2, FY - 0.2, FY, 'planks');
   f.solid(1.6, D, 3.6, D + 1.1, 0, FY - 0.2, 'clip', { bullets: false, sight: false });
@@ -933,8 +950,8 @@ function village(k: MapKit): void {
   f.wallU(9.85, 0, 10, FY, H, t, 'planks', [door(2.4), win(4.4, 6.0), door(8.4)]);
   f.wallV(0, 0, 9.85, FY, H, t, 'planks', [win(1.8, 3.4), door(5.8), win(7.6, 9.0)]);
   f.wallV(5.0, 4.6, 9.85, FY, H, t, 'planksDark', [door(7.4)]);
-  roof(f, 0, 0, 6.5, 9.85, FY + H, 'thatch', 3, 0.6);
-  roof(f, 6.5, 3.5, 10, 9.85, FY + H - 0.16, 'thatch', 2, 0.6);
+  roof(f, 0, 0, 6.5, 9.85, FY + H, 'thatch', 4, 0.6, 0.45);
+  roof(f, 6.5, 3.5, 10, 9.85, FY + H - 0.2, 'thatch', 3, 0.6, 0.4);
   f.box(1.0, 6.6, 3.2, 7.6, FY, FY + 0.75, 'wood');
   f.box(7.6, 8.4, 9.2, 9.3, FY, FY + 1.1, 'crate', { uv: 'raw' });
   f.box(0.6, 0.6, 1.6, 1.6, FY, FY + 0.9, 'crate', { uv: 'raw' });
@@ -1055,7 +1072,6 @@ function ruins(k: MapKit): void {
   crate(k, px(82.5), pz(352), 1.0);
   k.cyl(0.32, 0.9, 8, 'barrel', px(60), 0.45, pz(312));
   k.light(px(124), 3.4, pz(330), [1.3, 1.05, 0.7], 9, 'lamp');
-  k.trim(0.3, 0.3, 0.3, 'lamp', px(124), 3.5, pz(318.5));
   // Stone stairs and walls up to the B2 lane north of the ruin (overgrown).
   for (const [x, z] of [[px(124), pz(296)], [px(138), pz(259)]] as const) fern(k, x, z, 1.3);
 }
@@ -1160,13 +1176,17 @@ function eastSpawn(k: MapKit): void {
 
 /** Out of bounds to the east: rice paddy terraces, a crashed Huey, a track. */
 function paddies(k: MapKit): void {
-  const x0 = px(470);
+  // Terraces stepping down eastwards from the edge of the rasterised ground, each with a mud dike.
+  const b = JUNGLE_BOUNDS;
+  const x0 = b.max.x + 4;
+  const z0 = b.min.z - 4;
+  const z1 = b.max.z + 4;
   for (let i = 0; i < 6; i++) {
-    const zc = pz(150 + i * 32);
-    const xx = x0 + i * 1.4;
-    k.aabb(xx, -0.2 - i * 0.25, zc - 7.5, xx + 40, -0.1 - i * 0.25, zc + 7.5, 'paddy', { collide: false, hide: ['ny'] });
-    k.flatDecal(36, 13, 'paddyWater', xx + 20, -0.08 - i * 0.25, zc, { seg: 2 });
-    k.aabb(xx - 0.5, -0.5 - i * 0.25, zc - 7.5, xx, 0.3 - i * 0.25, zc + 7.5, 'mud', { collide: false, hide: ['ny'] });
+    const xa = x0 + i * PADDY_W;
+    const top = -0.3 * (i + 1);
+    k.aabb(xa, -3, z0, xa + PADDY_W, top, z1, 'paddy', { collide: false, hide: ['ny'] });
+    k.aabb(xa, top, z0, xa + 0.6, top + 0.25, z1, 'mud', { collide: false, hide: ['ny'] });
+    k.flatDecal(PADDY_W - 1.2, z1 - z0, 'paddyWater', xa + 0.6 + (PADDY_W - 1.2) / 2 + 0.3, top + 0.04, (z0 + z1) / 2, { seg: 4 });
   }
   // The crashed UH-1: fuselage on its side, tail boom, a bent rotor blade.
   const f = new Frame(k, px(492), pz(208), -30 * DEG);
@@ -1211,13 +1231,19 @@ function outline(k: MapKit): void {
         const h = 4.5 + hash(ax, bz) * 3.5;
         const [hx, hz] = Math.abs(Math.sin(th)) > 0.5 ? [1.4, half] : [half, 1.4];
         k.aabb(cx - hx, 0, cz - hz, cx + hx, h, cz + hz, 'foliageDark', { collide: false, ry: -th });
+        // Undergrowth cards in front of the wall break up its face.
+        for (let s = -0.6; s <= 0.61 && half > 2; s += 0.6) {
+          const bx2 = (ax + bx) / 2 + ux * half * s + nx * 1.7;
+          const bz2 = (az + bz) / 2 + uz * half * s + nz * 1.7;
+          if (!inside(O, bx2, bz2)) bush(k, bx2, bz2, 1.6 + hash(bx2, bz2) * 1.0);
+        }
       }
     }
     for (let s = 0.25; s < 1; s += 0.5) {
       const ox = ax + (bx - ax) * s + nx * 6.5;
       const oz = az + (bz - az) * s + nz * 6.5;
       if (edgeDist(O, ox, oz) > 3 && !inside(O, ox, oz)) {
-        if (east) palm(k, ox + 6, oz, 8 + hash(ox, oz) * 4);
+        if (east) palm(k, ox + 6, oz, 8 + hash(ox, oz) * 4, outerGround(ox + 6));
         else if (hash(ox, oz) > 0.45) tree(k, ox, oz, 10 + hash(oz, ox) * 6, 3 + hash(ox, oz) * 1.5);
         else palm(k, ox, oz, 9 + hash(ox * s, oz) * 5);
       }
@@ -1238,8 +1264,8 @@ function backdrop(k: MapKit): void {
     const x = Math.cos(t) * rx;
     const z = Math.sin(t) * rz;
     if (x > 62 && Math.abs(z) < 30) continue; // the rice paddies stay open
-    if (a % 3 === 0) tree(k, x, z, 12 + 5 * Math.abs(Math.sin(a * 1.31)), 4 + Math.abs(Math.cos(a * 0.7)));
-    else palm(k, x, z, 11 + 4 * Math.abs(Math.sin(a * 0.9)));
+    if (a % 3 === 0) tree(k, x, z, 12 + 5 * Math.abs(Math.sin(a * 1.31)), 4 + Math.abs(Math.cos(a * 0.7)), false, outerGround(x));
+    else palm(k, x, z, 11 + 4 * Math.abs(Math.sin(a * 0.9)), outerGround(x));
   }
   k.backdropRing('karst', 210, 9, 120, 90, -4, 0.35);
   k.backdropRing('hills', 140, 12, 90, 30, -3);

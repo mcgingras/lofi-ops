@@ -30,12 +30,12 @@ registerTexture('jg_floor', {
   photos: ['dirt', 'forest_leaves_02'],
   photo: (c) =>
     c.fromPhoto('dirt', {
-      filter: 'sepia(.4) saturate(1.1) hue-rotate(10deg) brightness(.82)',
+      filter: 'sepia(.55) saturate(.75) hue-rotate(28deg) brightness(.58) contrast(1.1)',
       over: (g, w, h) => {
         const lv = c.photo('forest_leaves_02');
         if (lv) {
-          g.globalAlpha = 0.45;
-          g.filter = 'hue-rotate(20deg) saturate(.8) brightness(.8)';
+          g.globalAlpha = 0.55;
+          g.filter = 'hue-rotate(15deg) saturate(.7) brightness(.62)';
           g.drawImage(lv, 0, 0, w, h);
           g.filter = 'none';
           g.globalAlpha = 1;
@@ -220,10 +220,16 @@ registerTexture('jg_bambooFence', {
 function straw(g: CanvasRenderingContext2D, R: Rand, w: number, h: number, rows: number, a: number) {
   for (let r = 0; r < rows; r++) {
     const y0 = (r * h) / rows;
-    for (let i = 0; i < w * 1.5; i++) {
+    // Shadow under each course, then the straw strands hanging over it.
+    const sh = g.createLinearGradient(0, y0, 0, y0 + h / rows);
+    sh.addColorStop(0, 'rgba(30,20,8,.55)');
+    sh.addColorStop(0.35, 'rgba(30,20,8,0)');
+    g.fillStyle = sh;
+    g.fillRect(0, y0, w, h / rows);
+    for (let i = 0; i < w * 3; i++) {
       const x = R.rr(0, w);
-      const k = R.rr(0.7, 1.15);
-      g.strokeStyle = `rgba(${(176 * k) | 0},${(146 * k) | 0},${(86 * k) | 0},${a})`;
+      const k = R.rr(0.55, 1.1);
+      g.strokeStyle = `rgba(${(160 * k) | 0},${(126 * k) | 0},${(68 * k) | 0},${a})`;
       g.lineWidth = Math.max(1, w / 128);
       g.beginPath();
       g.moveTo(x, y0);
@@ -246,9 +252,9 @@ registerTexture('jg_thatch', {
   photos: ['rough_linen'],
   photo: (c) =>
     c.fromPhoto('rough_linen', {
-      filter: 'sepia(1) saturate(1.2) brightness(.62) contrast(1.2)',
+      filter: 'sepia(1) saturate(1.1) brightness(.45) contrast(1.2)',
       over: (g, w, h) => {
-        straw(g, c, w, h, 5, 0.7);
+        straw(g, c, w, h, 5, 0.85);
         g.filter = 'blur(6px)';
         for (let i = 0; i < 10; i++) {
           g.fillStyle = `rgba(50,40,20,${c.rr(0.15, 0.3)})`;
