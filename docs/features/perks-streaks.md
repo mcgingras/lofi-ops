@@ -1,22 +1,24 @@
 # Perks and killstreaks (area: perks-streaks)
 
-BO1-faithful perks (three tiers, Pro versions) and killstreaks (pick three, Hardline-aware), server-authoritative, with client visuals, sounds, HUD and a radar minimap. Bots use streaks on their own, scaled by their `streakUse` skill, so a bot-backfilled lobby plays the same as a full one.
+BO1-faithful perks (three tiers, Pro versions) and killstreaks (pick three, Hardline-aware), plus MW2's Tactical Nuke, server-authoritative, with client visuals, sounds, HUD and a radar minimap. Bots use streaks on their own, scaled by their `streakUse` skill, so a bot-backfilled lobby plays the same as a full one.
 
 Code lives in the pre-made feature folders (`perks` and `killstreaks`, already listed in `src/server/features/index.ts` and auto-imported on the client):
 
 ```
 src/shared/defs/perks.ts                  PerkDef x15, PERK_TUNING, PERK_PRO_CHALLENGES (ChallengeDef[])
-src/shared/defs/killstreaks.ts            KillstreakDef x14 (+targeting/mapPick/air/hp), CARE_PACKAGE_WEIGHTS, KS_ENTITY kinds
+src/shared/defs/killstreaks.ts            KillstreakDef x15 (+targeting/mapPick/air/hp/countsStreakKills/noWager), CARE_PACKAGE_WEIGHTS, KS_ENTITY kinds
+src/shared/defs/nuke.ts                   Tactical Nuke timeline (NUKE) and pure maths: phases, countdown number, shockAt, white-out, slow motion, cloud growth
 src/shared/defs/tactical-map.ts           tactical map: STRIKE footprints/timings, validateMapTarget, yawFromDrag, strikeFootprint, rate-limit bucket
 src/shared/defs/perks-streaks-protocol.ts RPC + feature message types (declaration-merged into protocol.ts)
 src/server/features/perks/                index (modifiers, stamina, challenges, public lists), laststand, scavenger, common
 src/server/features/killstreaks/          index (buttons, RPCs, wiring), api (bot API), state (ladder), world (per-room ctx),
-                                          mapmode (radio / tactical map), skill, streaks/{radar,airstrike,mortar,package,turrets,heli,vehicles,dogs}
+                                          mapmode (radio / tactical map), skill, streaks/{radar,airstrike,mortar,package,turrets,heli,vehicles,dogs,nuke}
 src/client/features/perks/                footstep filter, last stand, scavenger packs, perk list, state (my loadout/pro)
 src/client/features/killstreaks/          models, renderers, textures, sounds, fx, hud, radar, control, store,
-                                          tacmap (map mode), tacmap-logic (placement, no DOM), overhead (satellite picture), radio
+                                          tacmap (map mode), tacmap-logic (placement, no DOM), overhead (satellite picture), radio,
+                                          nuke (laptop, countdown HUD, flash, cloud), nuke-logic (no DOM)
 tests/perks.test.ts, tests/killstreaks.test.ts, tests/perks-streaks.integration.test.ts (+ helpers),
-tests/tacmap.test.ts, tests/tacmap.integration.test.ts, tests/tacmap.client.test.ts
+tests/tacmap.test.ts, tests/tacmap.integration.test.ts, tests/tacmap.client.test.ts, tests/nuke.test.ts, tests/nuke.client.test.ts
 ```
 
 Sounds: `killstreaks/sounds.ts` holds the synthesized `ks_*` voices; the recorded versions (radio static and beeps, jet / prop / rotor, sentry and chopper-gunner fire `ks_gunner`, rocket launch, mortar whistle, explosions, dog bark / bite, klaxon) are bindings in `src/shared/defs/sfx-recipes.ts`. `ks_buzz` (RC-XD motor) and `ks_fire` (napalm crackle) stay synthesized (no recording in the manifest).
@@ -63,8 +65,23 @@ Sounds: `killstreaks/sounds.ts` holds the synthesized `ks_*` voices; the recorde
 | rolling_thunder | Rolling Thunder | 8 | tactical map: spot + direction; B-52 carpet-bombs 14 bombs (4 m apart) through the spot, ~7 s out |
 | chopper_gunner | Chopper Gunner | 9 | you work its explosive cannon from the air (camera in the seat, FIRE shoots); your body stays put and dying ends it; 2000 hp |
 | attack_dogs | Attack Dogs | 11 | 8 dogs, 3 at a time, from your spawn side, hunt the nearest enemy and bite (55); 60 s; 80 hp each |
+| nuke | Tactical Nuke (MW2) | 25 | laptop, 10 s countdown for everyone, then everyone dies and the match ends as a win for your side (below); killstreak kills count toward it; not in wagers; unlock level 46 |
 
-Rules: kills toward streaks reset on death; streak kills don't count (`isStreakWeapon`); each picked streak is earned once per life at its cost (Hardline: -1); earned streaks wait in `ready` until called and survive deaths until match end. Calling needs you alive and not already driving one.
+Rules: kills toward streaks reset on death; streak kills don't count (`isStreakWeapon`) except toward streaks with `countsStreakKills` (the nuke reads `countAll`, every kill this life); each picked streak is earned once per life at its cost (Hardline: -1); earned streaks wait in `ready` until called and survive deaths until match end. Calling needs you alive and not already driving one. Streaks with `noWager` (the nuke) are dropped from the ladder in wager modes and `callKillstreak` answers `disabled` there (`streakAllowedIn`).
+
+## Tactical Nuke (MW2)
+
+Reference: the Call of Duty Wiki "Tactical Nuke" page (MW2 section) and MW2 footage. 25 kills in a row (24 with Hardline), unlocked at level 10 in MW2 (46 here, the top of the BO1 streak ladder). Once called, a ten-second countdown shows on every screen with a siren; the bomb lands off the map; the battlefield goes white, time slows, every killstreak explodes and every player dies, nearest to the blast first; the match is a win for the caller's side whatever the score, and scores freeze from the call. It can't be shot down or stopped.
+
+- **Kill counting (option in the defs).** `KillstreakDef.countsStreakKills` (default false = the BO1 rule). The nuke sets it to **true**: MW2 counted every kill toward the nuke, and 25 gun kills in a row against bots is a very long ask; the BO1 streaks still ignore streak kills. Set it to false on the nuke's def for the strict rule. The ladder push carries `countAll` so the HUD fills the nuke's (compact, grouped by five) pips with every kill.
+- **Call-in.** STREAK with the nuke selected (`targeting: 'none'`) calls it at once (`streaks/nuke.ts`): the caller's weapon is down for `NUKE.laptopSec` (1.5 s) while their first-person laptop opens and they press the arming key; then the 10 s countdown. One `ks_nuke` entity sits at the blast point (`blastPoint`: map centre + half extent + 110 m in a random direction) with `s = { a: countdown start, d: detonation, n/f: nearest/farthest distance of the map from the blast, o: owner id }` (no `owner` field, so core doesn't remove it if the caller leaves; it is not in the active's entity list, so it stays through the results until the next match start). A second nuke while one is inbound: `nuke_active`.
+- **Match end lock.** The call sets core's `room.endLock = 'nuke'`: team/player score changes are ignored and only `endMatch('nuke')` can end the match, so no score, time or round limit (S&D) beats the bomb.
+- **Detonation** (`d`): every other killstreak is finished (blast effects, no announcements), nobody respawns (`respawnAt = null`), movement slows (`speedMultiplier` `nukeTimeScale`, down to x0.35 for 4.5 s; no sprint). From `d + 2 s` the shockwave kills each living player when it reaches them (`shockAt(dist)`: nearest at +2 s, farthest at +4 s), `room.kill(p, caller, { weapon: 'nuke', means: 'nuke' })` (kills credited to the caller; the caller and team mates die too, uncredited). At `d + 5.5 s`: `room.endMatch('nuke', nukeResults(...))` = the mode's own results with `winnerTeam` = the caller's team (FFA: winners = the caller, placed first). It still goes off if the caller dies or leaves (`Active.keepOnLeave`).
+- **No killcams.** `means: 'nuke'` is in `NO_DEATHCAM_MEANS` and the modes feature skips the final killcam when `results.reason === 'nuke'`.
+- **XP, challenges.** Calling emits `progression.xp` ("TACTICAL NUKE", 2,500 XP) and every streak call emits `progression.metric` `streak_called {killstreak}`; `ks_nuke_called` ("End Game", 1/5/10 calls) counts it. `ks_nuke_earned` / `ks_nuke_kills` come from the generic per-streak challenges. CoD Points, XP and challenges run through the normal match end.
+- **Bots** earn it like players and call it through the same API (`callKillstreak(room, bot, 'nuke')`, automatic use calls the highest streak first). Bot loadouts can pick it (rarely for weak bots).
+- **Client** (`nuke.ts`, maths in `nuke-logic.ts`): the caller's laptop in first person (rugged olive case, red warning screen, gloved hand on the key, drawn over the world like the radio); a countdown for everyone ("TACTICAL NUKE INCOMING", the number, a line per side: mine / friendly (with the caller's name) / enemy, then "IMPACT IN 3..1") plus the generic "Friendly / Enemy Tactical Nuke inbound" announcement; at detonation the screen washes to white through the post pass (`renderer.white`, before the dither), eases down to a washed-out view of a low-poly mushroom cloud (cap, crown, glowing under-ring, stem, condensation ring, dust base, smoke texture from a greyed photo; white-hot to fire to ash) and an expanding dust wall (the shockwave), slow mouse look and camera shake; white again when the shockwave reaches you (or kills you), held until the results, whose reason reads "TACTICAL NUKE". A nuke death shows no "killed by / respawn" card.
+- **Sound** (reused ids, nothing new while the sound rework is in flight): `ks_alarm` at rate 0.5 with a 1.3 kHz low-pass once per countdown second (a low siren), `ks_bigboom` at rate 0.35 / low-pass 650 Hz at detonation and at rate 0.55 when the shockwave reaches you.
 
 **Controls.** `4` (STREAK button): call the selected streak. The Care Package (`targeting: 'point'`) arms a designator (weapon lowered, HUD reticle): press `4` again where you aim; it cancels on weapon switch, death or after 15 s. Sentry Gun and SAM Turret are placed in front of you. Napalm, Mortar Team, Rolling Thunder and the Attack Helicopter (`targeting: 'map'`) open the **tactical map** (below). `5` cycles the selection (RPC `killstreaks.select`). While designating, holding the radio or driving, core firing is refused (the feature holds `swapEnd`); holding the radio or driving, the body's speed is 0.
 
@@ -117,12 +134,14 @@ isDrivingStreak(bot)                               // RC-XD / gunner / rockets r
 - `src/client/game/controls.ts`: `Controls.enabled = false` now also ignores mouse buttons, devlook drag taps and the wheel (it already zeroed buttons and look), so the tactical map can own the mouse.
 - `src/client/render/mapbuilder.ts`: `MapScene.sky` is public (hidden for the top-down capture).
 - `docs/CONTRACTS.md` (documents both), `NOTICE` (Blockyard attribution for the mortar pattern and rule shapes).
+- Tactical Nuke: `src/server/room.ts` `endLock` (scores freeze, only `endMatch(endLock)` ends the match; cleared at match start); `src/client/render/renderer.ts` `white` (post-pass white-out uniform); `src/shared/defs/deathcam.ts` (`'nuke'` in `NO_DEATHCAM_MEANS`); `src/server/features/modes/index.ts` (no final killcam on reason `nuke`); `src/client/features/modes/summary-data.ts` (reason label); `src/shared/defs/challenges.ts` (`ks_nuke_called`).
 
 ## Not done / simplified
 
 - Tactical map: the picture is the whole `map.bounds` (BO1 cut out just the playable area with a white outline); BO1's translucent panel is a 3-in-4 screen-door over the world here; planes start far outside the map (to match BO1's release times) so they only show on the map once over it; no announcer voice lines (HUD text as before).
 
 - Valkyrie is simplified (no launcher weapon; two auto-launched guided rockets).
+- Tactical Nuke: other players don't see the caller's laptop (no third-person pose); no announcer voice (HUD lines only); in FFA the caller always wins (MW2 withheld the win when an enemy had more kills); Last Stand doesn't save you from it (MW2's Last Stand / Final Stand did).
 - Care Packages hold streaks or ammo only (no Death Machine / Grim Reaper weapons). Crates have no collision.
 - Ghost Pro's hidden red name tag is not applied (core `core.names` widget); `perks.public.ghostPro` lists the ids for whoever replaces it.
 - No mantle in core, so Marathon Pro's faster mantle is a description only; no penetration in core yet (`penetrationMultiplier` is for the weapons area).

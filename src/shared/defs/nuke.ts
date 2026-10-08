@@ -101,7 +101,7 @@ export function nukeWhite(since: number, hitSince: number | null = null): number
 /** Mushroom cloud growth 0..1 over the seconds after detonation (fast fireball, slow climb). */
 export function cloudGrowth(since: number): number {
   if (since <= 0) return 0;
-  return 1 - Math.pow(1 - Math.min(1, since / 7), 2.2);
+  return 1 - Math.pow(1 - Math.min(1, since / 6), 2.6);
 }
 
 const smooth = (k: number) => {

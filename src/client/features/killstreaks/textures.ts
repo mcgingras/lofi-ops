@@ -161,7 +161,7 @@ registerTexture('ks_cloud', {
     }
   },
   photos: ['aerial_rocks_02'],
-  photo: (c) => c.fromPhoto('aerial_rocks_02', { w: 256, h: 256, tile: 256, filter: 'grayscale(1) blur(2px) contrast(1.5) brightness(1.35)' }),
+  photo: (c) => c.fromPhoto('aerial_rocks_02', { w: 256, h: 256, tile: 256, filter: 'grayscale(1) blur(3px) contrast(1.2) brightness(1.65)' }),
 });
 
 registerTexture('ks_laptop', {

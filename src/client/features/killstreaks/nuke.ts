@@ -11,7 +11,7 @@
  */
 import * as THREE from 'three';
 import { KS_ENTITY } from '../../../shared/defs/killstreaks';
-import { NUKE } from '../../../shared/defs/nuke';
+import { NUKE, nukeWhite } from '../../../shared/defs/nuke';
 import { sfx } from '../../game/audio';
 import type { Match } from '../../game/match';
 import { blink, txt, unit, HUD_COLORS as C } from '../../hud/draw';
@@ -29,6 +29,8 @@ export const nukeClient = {
   prevT: -1,
   boomed: false,
   hit: false,
+  /** Room time the blast killed me (the white-out follows my real death, not just my distance). */
+  diedAt: null as number | null,
 };
 
 function reset(): void {
@@ -37,6 +39,7 @@ function reset(): void {
   nukeClient.prevT = -1;
   nukeClient.boomed = false;
   nukeClient.hit = false;
+  nukeClient.diedAt = null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -66,8 +69,8 @@ class FirstPersonLaptop {
     const dark = mk('rubber', { rep: 0.1, tint: 0x4a4c44 });
     const keys = mk('ks_dark', { rep: 0.05 });
     this.screen = mk('ks_laptop', { emissive: 1 });
-    const glove = mk('glove', { rep: 0.25 });
-    const sleeve = mk('camo', { rep: 0.4 });
+    const glove = mk('glove', { rep: 0.25, tint: 0xb8aa90 });
+    const sleeve = mk('ks_olive', { rep: 0.2, tint: 0x9aa080 });
     const g = new THREE.Group();
     const box = (parent: THREE.Object3D, w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number) => {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
@@ -173,6 +176,15 @@ registerMatchHook('killstreaks.nuke', {
     const f = nukeFrame(t, info, Math.hypot(cam.position.x - info.blast.x, cam.position.z - info.blast.z));
     nukeClient.frame = f;
     nukeClient.side = nukeSide(info, m.myId, m.myTeam);
+    // Killed by the blast: no "killed by / respawn in" card (nobody respawns), just the white-out.
+    if (m.death?.weapon === NUKE.id) {
+      nukeClient.diedAt ??= t;
+      m.death = null;
+    }
+    if (nukeClient.diedAt !== null && f.since >= 0 && f.over <= 0) {
+      f.hitSince = Math.max(f.hitSince, t - nukeClient.diedAt);
+      f.white = Math.max(f.white, nukeWhite(f.since, f.hitSince));
+    }
     m.renderer.white = f.white;
     if (f.shake > 0) {
       cam.rotation.x += (Math.random() - 0.5) * 2 * f.shake;
@@ -214,7 +226,7 @@ registerHudWidget(
     const side = nukeClient.side;
     const col = side === 'enemy' ? C.enemy : C.friend;
     const { head, line } = nukeLines(side, f.number, m.nameOf(info.owner));
-    const y = H * 0.24;
+    const y = H * 0.3;
     txt(g, head, cx, y, 16, blink(m.time, 0.5, 0.32) ? C.warn : C.paper, 'center', u);
     txt(g, String(f.number), cx, y + 20 * u, 32, C.paper, 'center', u);
     if (line) txt(g, line, cx, y + 58 * u, 8, col, 'center', u);
@@ -226,18 +238,20 @@ registerHudWidget(
 // The mushroom cloud (entity at the blast point off the map edge)
 // ---------------------------------------------------------------------------------------------
 
-const HOT = new THREE.Color(0xfff4c8);
-const FIRE = new THREE.Color(0xff9440);
-const ASH = new THREE.Color(0xb4a698);
-const SOOT = new THREE.Color(0x7c6e62);
+const HOT = new THREE.Color(0xfff8e0);
+const FIRE = new THREE.Color(0xffa050);
+const ASH = new THREE.Color(0xd8ccc0);
+const SOOT = new THREE.Color(0x8a7c70);
 const tmp = new THREE.Color();
+/** Tints above 1 brighten the (mid-grey) smoke texture: the cloud glows against the sky. */
+const GLOW = 1.45;
 
-/** Tint for a part `since` seconds after the blast: white-hot, then fire, then ash (`hot` keeps more fire). */
-function cloudTint(since: number, hot: number, out: THREE.Color): THREE.Color {
+/** Tint for a part `since` seconds after the blast: white-hot, then fire, then ash (`hot` keeps more fire, `soot` darkens). */
+function cloudTint(target: THREE.Color, since: number, hot: number, soot = 0): void {
   const k1 = Math.min(1, since / 1.4);
-  const k2 = Math.min(1, Math.max(0, (since - 1.2) / (4 + hot * 4)));
-  out.copy(HOT).lerp(FIRE, k1);
-  return out.lerp(tmp.copy(ASH).lerp(SOOT, 0.35 * (1 - hot)).lerp(FIRE, hot * 0.45), k2);
+  const k2 = Math.min(1, Math.max(0, (since - 1.0) / (3 + hot * 4)));
+  target.copy(HOT).lerp(FIRE, k1);
+  target.lerp(tmp.copy(ASH).lerp(SOOT, soot).lerp(FIRE, hot * 0.5), k2).multiplyScalar(GLOW);
 }
 
 registerEntityRenderer(KS_ENTITY.nuke, (_e, m) => {
@@ -258,17 +272,20 @@ registerEntityRenderer(KS_ENTITY.nuke, (_e, m) => {
   };
   // Unit-sized parts, scaled by growth each frame (`rep` < 1: the smoke texture repeats across each part).
   const capMat = mat(0.25);
+  const crownMat = mat(0.3);
   const ringMat = mat(0.2);
   const stemMat = mat(0.34);
   const skirtMat = mat(0.25);
   const baseMat = mat(0.2);
-  const waveMat = mat(0.04);
+  const waveMat = makeLookMaterial({ texture: 'ks_cloud', dyn: true, fog: false, emissive: 1, rep: [0.025, 0.5], snap: false });
+  mats.push(waveMat);
   const cap = mesh(new THREE.IcosahedronGeometry(1, 1), capMat);
+  const crown = mesh(new THREE.IcosahedronGeometry(1, 1), crownMat);
   const ring = mesh(new THREE.TorusGeometry(1, 0.32, 5, 12), ringMat);
   ring.rotation.x = Math.PI / 2;
   const stem = mesh(new THREE.CylinderGeometry(0.62, 1, 1, 8, 3, true), stemMat);
   stemMat.side = THREE.DoubleSide;
-  const skirt = mesh(new THREE.TorusGeometry(1, 0.2, 4, 12), skirtMat);
+  const skirt = mesh(new THREE.TorusGeometry(1, 0.12, 4, 14), skirtMat);
   skirt.rotation.x = Math.PI / 2;
   const base = mesh(new THREE.IcosahedronGeometry(1, 1), baseMat);
   const wave = mesh(new THREE.CylinderGeometry(1, 1, 1, 32, 1, true), waveMat);
@@ -291,23 +308,27 @@ registerEntityRenderer(KS_ENTITY.nuke, (_e, m) => {
       root.visible = true;
       const s = f.since;
       const g = f.cloud;
-      // Proportions (metres) at full growth: cap ~70 m across at ~105 m, stem 95 m, base dust 80 m across.
-      const capY = 14 + 92 * g;
-      const capR = 12 + 24 * g;
+      // Proportions (metres) at full growth: cap ~125 m across at ~190 m up, base dust ~160 m across
+      // (from the map, ~150-250 m away, it fills a good part of the sky as in MW2).
+      const capY = 20 + 170 * g;
+      const capR = 16 + 46 * g;
       cap.position.y = capY;
       cap.scale.set(capR, capR * (0.62 - 0.08 * g), capR);
       cap.rotation.y = s * 0.05;
+      crown.position.y = capY + capR * 0.3;
+      crown.scale.set(capR * 0.72, capR * 0.4, capR * 0.72);
+      crown.rotation.y = -s * 0.04;
       ring.position.y = capY - capR * 0.32;
       ring.scale.setScalar(capR * 0.86);
       ring.rotation.z = s * 0.12;
       const stemH = Math.max(1, capY - capR * 0.35);
       stem.position.y = stemH / 2;
-      stem.scale.set(5 + 4 * g, stemH, 5 + 4 * g);
+      stem.scale.set(8 + 9 * g, stemH, 8 + 9 * g);
       skirt.position.y = stemH * 0.58;
-      skirt.scale.setScalar((9 + 7 * g) * Math.min(1, Math.max(0, (s - 0.8) / 2)) + 0.01);
+      skirt.scale.setScalar((16 + 14 * g) * Math.min(1, Math.max(0, (s - 0.8) / 2)) + 0.01);
       skirt.visible = s > 0.8;
       base.position.y = 0;
-      base.scale.set(18 + 26 * g, 6 + 8 * g, 18 + 26 * g);
+      base.scale.set(30 + 50 * g, 10 + 14 * g, 30 + 50 * g);
       // Shockwave: a dust wall rolling out from the blast, reaching each distance when shockAt says so.
       const t = info.times;
       const k = (s - NUKE.shockDelaySec) / NUKE.shockSpreadSec;
@@ -316,12 +337,13 @@ registerEntityRenderer(KS_ENTITY.nuke, (_e, m) => {
       wave.scale.set(Math.max(1, r), 7 + 3 * Math.min(1, s), Math.max(1, r));
       wave.position.y = 3;
       // Colours: white-hot, fire, then ash; the cap's underside ring and the stem keep their glow longer.
-      capMat.uniforms.uTint.value.copy(cloudTint(s, 0.2, tmp.clone()));
-      ringMat.uniforms.uTint.value.copy(cloudTint(s, 0.85, tmp.clone()));
-      stemMat.uniforms.uTint.value.copy(cloudTint(s, 0.5, tmp.clone()));
-      skirtMat.uniforms.uTint.value.setHex(0xe8e4dc);
-      baseMat.uniforms.uTint.value.copy(cloudTint(s, 0.1, tmp.clone()));
-      waveMat.uniforms.uTint.value.setHex(0xc8b8a0);
+      cloudTint(capMat.uniforms.uTint.value, s, 0.3, 0.15);
+      cloudTint(crownMat.uniforms.uTint.value, s * 1.4, 0.05);
+      cloudTint(ringMat.uniforms.uTint.value, s, 0.9);
+      cloudTint(stemMat.uniforms.uTint.value, s, 0.6, 0.3);
+      skirtMat.uniforms.uTint.value.setRGB(1.2, 1.18, 1.15);
+      cloudTint(baseMat.uniforms.uTint.value, s, 0.15, 0.5);
+      waveMat.uniforms.uTint.value.setRGB(1.0, 0.88, 0.72);
       // The flash: a huge white sprite for the first half second.
       flash.visible = s < 0.6;
       flash.position.y = 30;

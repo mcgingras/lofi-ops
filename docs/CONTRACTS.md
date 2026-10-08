@@ -135,7 +135,7 @@ declare module '../../player' {
 room.bus.on('death', ({ attacker }) => { if (attacker) (attacker.ext.killstreaks ??= { earned: [], kills: 0 }).kills++; });
 ```
 
-Room API features use: `room.players` (Map), `humans()`, `bots()`, `isEnemy(a,b)`, `canDamage(a,b)`, `enemiesOf(p)`, `addBot({name, team, loadout})`, `removePlayer(id)`, `spawn(p, point?)`, `damage(info)`, `kill(victim, attacker, how)`, `radiusDamage(center, radius, max, min, {attacker, weapon, means})`, `fire(p, {dir, time?})` (bots), `addTeamScore(team, n, reason)`, `addPlayerScore(p, n, reason)`, `endMatch(reason)`, `world` (CollisionWorld: `raycast`, `lineOfSight`, `groundBelow`, `free`), `map` (MapData), `mode` (ModeDef), `time`, `phase`, `entities`, `send(p, msg)`, `broadcast(msg)`, `sendFeature(p | null, id, data)`.
+Room API features use: `room.players` (Map), `humans()`, `bots()`, `isEnemy(a,b)`, `canDamage(a,b)`, `enemiesOf(p)`, `addBot({name, team, loadout})`, `removePlayer(id)`, `spawn(p, point?)`, `damage(info)`, `kill(victim, attacker, how)`, `radiusDamage(center, radius, max, min, {attacker, weapon, means})`, `fire(p, {dir, time?})` (bots), `addTeamScore(team, n, reason)`, `addPlayerScore(p, n, reason)`, `endMatch(reason, results?)`, `endLock` (below), `world` (CollisionWorld: `raycast`, `lineOfSight`, `groundBelow`, `free`), `map` (MapData), `mode` (ModeDef), `time`, `phase`, `entities`, `send(p, msg)`, `broadcast(msg)`, `sendFeature(p | null, id, data)`.
 
 **Entities** (killstreak vehicles, dogs, packages, flags): `room.entities.add({ kind, x, y, z, yaw, owner?, team?, s?, data? })` returns the entity (with `id`); move it in a `tick` handler; `remove(id)`. Everything except `data` goes out in each snapshot as `EntitySnap`; the client renders by `kind`.
 
@@ -195,12 +195,13 @@ Each file exports a typed array and a `*_BY_ID` map (`indexById` throws on dupli
 | `attachments.ts` | `AttachmentDef` (`unlockKills`, `price`), `ATTACHMENTS`, `effectiveWeapon(def, ids)`, `validAttachments(def, ids, max)`, `canAttach`, `BASE_ATTACHMENT_SLOTS` (1) | weapons |
 | `equipment.ts` | `EquipmentDef`, `EQUIPMENT` (frag, semtex, flashbang, concussion), `LETHALS`, `TACTICALS`, `MELEE`, `GL_ROUND`, `NADE_ENTITY`, weapons feature messages | weapons |
 | `perks.ts` | `PerkDef`, `PERKS` (seeded: lightweight, hardline (T1), steady_aim (T2)) | perks-streaks |
-| `killstreaks.ts` | `KillstreakDef` (`targeting`, `mapPick`, `marks`...), `KILLSTREAKS` (BO1's 14), `KS_ENTITY` | perks-streaks |
+| `killstreaks.ts` | `KillstreakDef` (`targeting`, `mapPick`, `marks`, `countsStreakKills`, `noWager`...), `KILLSTREAKS` (BO1's 14 + MW2's Tactical Nuke at 25), `KS_ENTITY`, `streakAllowedIn` | perks-streaks |
+| `nuke.ts` | Tactical Nuke timeline `NUKE` (laptop 1.5 s, countdown 10 s, shockwave +2..+4 s, match end +5.5 s) and pure maths (`nukePhase`, `countdownNumber`, `shockAt`, `nukeWhite`, `nukeTimeScale`, `cloudGrowth`, `blastPoint`) | perks-streaks |
 | `tactical-map.ts` | tactical map (BO1 radio targeting): `STRIKE` footprints/timings, `validateMapTarget`, `yawFromDrag`, `strikeFootprint`, `MAP_MODE` | perks-streaks |
 | `perks-streaks-protocol.ts` | killstreak/perk RPCs and pushes, incl. `killstreaks.mapTarget {id, points, yaw?}`, `killstreaks.mapCancel`, `KillstreakStateMsg.map` | perks-streaks |
 | `modes.ts` | `ModeDef`, `CORE_MODES` (tdm 75 kills / ffa 30 kills / dom 200 / sd 4 rounds / hq 250 / kc 65), `MODES` = core + `WAGER_MODES`, `MODE_TUNING`, `MODE_XP` | modes |
 | `modestate.ts` | modes wire types (`modes.state`, `modes.event`, `modes.killcam`, `modes.deathcam`), `MatchSummaryExt` (`results.ext.modes`), `MODE_ENTITY` kinds | modes |
-| `deathcam.ts` | per-death killcam: `DEATHCAM` timing, `deathcamWindow(at, respawnAt)` (clip cut so it ends by the respawn), `DeathcamPayload` / `KillerCard` (`modes.deathcam`, sent only to the victim), `packClip` / `unpackClip` | modes |
+| `deathcam.ts` | per-death killcam: `DEATHCAM` timing, `deathcamWindow(at, respawnAt)` (clip cut so it ends by the respawn), `DeathcamPayload` / `KillerCard` (`modes.deathcam`, sent only to the victim), `packClip` / `unpackClip`, `NO_DEATHCAM_MEANS` (fall, world, suicide, nuke) | modes |
 | `economy.ts` | `CP_REWARDS`, `STARTING_COD_POINTS`, `DEFAULT_PRICES`, `codPointsForMatch` / `codPointsBreakdown` (score, win, podium, streak, time share), `ANTE_TIERS` (0/10/1,000/10,000), `wagerPayouts`, `WAGER_MODES` (oitc, gungame, sharpshooter, sticks), wager mode data | economy |
 | `store.ts` | `RETICLES`, `EMBLEM_BACKGROUNDS`, `storeCatalog()`, ownership keys `keyOf.*` (`weapon.<id>`, `att.<weapon>.<att>`, `camo.<id>`, `reticle.<id>`, `emblem.<id>` in `profile.owned`), `lockReason`, `canUse`, `purchase`, `enforceLoadout` | economy |
 | `economy-net.ts` | economy RPC / feature message types (`economy.*`), `EconomyResultsExt` (`results.ext.economy`) | economy |
@@ -231,7 +232,7 @@ export interface ModeRules {
 registerMode('dom', () => domRules());       // modes/index.ts or a feature setup
 ```
 
-The modes feature registers tdm/ffa/dom/sd/hq/kc from its `setup` (`src/server/features/modes/`, see `docs/features/modes.md`); core's own tdm/ffa in `src/server/modes` remain the fallback. Bots read objective goals from `src/server/features/modes/bots.ts` (`bestObjective(room, bot)`). Rules' bus handlers and modifiers are tagged with the rules object, so `room.setMode()` drops them cleanly. Time limits are enforced by core (`mode.timeLimitSec`). Results go out as `matchEnd` with `MatchResults {roomId, mode, map, reason, winnerTeam, winners, teamScores, players: PlayerResult[], durationSec, ext}`.
+The modes feature registers tdm/ffa/dom/sd/hq/kc from its `setup` (`src/server/features/modes/`, see `docs/features/modes.md`); core's own tdm/ffa in `src/server/modes` remain the fallback. Bots read objective goals from `src/server/features/modes/bots.ts` (`bestObjective(room, bot)`). Rules' bus handlers and modifiers are tagged with the rules object, so `room.setMode()` drops them cleanly. Time limits are enforced by core (`mode.timeLimitSec`). Results go out as `matchEnd` with `MatchResults {roomId, mode, map, reason, winnerTeam, winners, teamScores, players: PlayerResult[], durationSec, ext}`. Reasons: `score`, `time`, `rounds`, `forfeit`, `aborted`, and `nuke` (Tactical Nuke: the caller's team / FFA the caller wins; no final killcam).
 
 ## 9. MapData (src/shared/maps/types.ts)
 
@@ -285,7 +286,9 @@ interface RoomOptions {
 }
 ```
 
-Room flow controls for the frontend's real lobbies: `room.setMap(id)`, `room.setMode(id)` (lobby phase), `room.startMatch()`, `room.returnToLobby()`, `room.endMatch(reason)`, `room.phase`, `room.summary()`. A per-game lobby = `createRoom({ autoStart: false, onEnd: 'lobby', countdownSec: 10, botFill })` + your own RPCs for map vote / ready / start.
+Room flow controls for the frontend's real lobbies: `room.setMap(id)`, `room.setMode(id)` (lobby phase), `room.startMatch()`, `room.returnToLobby()`, `room.endMatch(reason, results?)`, `room.phase`, `room.summary()`.
+
+`room.endLock` (reason | null): a feature that has decided how the match ends sets it (the Tactical Nuke sets `'nuke'` when called). While set, `addTeamScore` / `addPlayerScore` do nothing (scores freeze) and `endMatch` ignores every other reason (score, time, rounds), so only `endMatch(endLock, results)` ends the match. Cleared at each `startMatch()`. A per-game lobby = `createRoom({ autoStart: false, onEnd: 'lobby', countdownSec: 10, botFill })` + your own RPCs for map vote / ready / start.
 
 ## 11. Profile store (src/server/store.ts)
 
@@ -353,7 +356,7 @@ registerFootstepFilter('perks.ninja', (playerId, volume) => volume);   // remote
 
 ### Match (`game/match.ts`, read via `currentMatch()`)
 
-`myId`, `me` (MeSnap), `myTeam`, `isEnemy(id)`, `nameOf(id)`, `roster` (Map<id, RosterEntry>), `scores`, `teamScores`, `phase`, `phaseEndsAt`, `results`, `killfeed`, `notices`, `death`, `alive`, `serverTime` (room time now), `netRtt`, `weapon(slot?)` (EffectiveWeapon), `ammo(slot?)`, `reloadProgress()`, `raiseProgress()`, `yaw`/`pitch` (with recoil), `spread`, `time` (local secs), `map` (MapScene: `map`, `time` preset, `lightAt`, `world`, `root`, `sky`), `renderer` (`scene`, `cam`, `vmScene`, `gl`), `remotes.views` (interpolated soldiers: x, y, z, yaw, alive, team...), `effects` (`puff(kind, at, normal)`, `tracer(a, b)`), `controls` (`isHeld(action)`, `consume(action)`, `locked`, `enabled`; key map `KEYMAP` in controls.ts), `net` (MatchNet: `predictor`, `interp`, `lastSnap`, `world`).
+`myId`, `me` (MeSnap), `myTeam`, `isEnemy(id)`, `nameOf(id)`, `roster` (Map<id, RosterEntry>), `scores`, `teamScores`, `phase`, `phaseEndsAt`, `results`, `killfeed`, `notices`, `death`, `alive`, `serverTime` (room time now), `netRtt`, `weapon(slot?)` (EffectiveWeapon), `ammo(slot?)`, `reloadProgress()`, `raiseProgress()`, `yaw`/`pitch` (with recoil), `spread`, `time` (local secs), `map` (MapScene: `map`, `time` preset, `lightAt`, `world`, `root`, `sky`), `renderer` (`scene`, `cam`, `vmScene`, `gl`, `damage` 0..1 red overlay, `white` 0..1 white-out in the post pass before the dither (Tactical Nuke flash; whoever sets it resets it)), `remotes.views` (interpolated soldiers: x, y, z, yaw, alive, team...), `effects` (`puff(kind, at, normal)`, `tracer(a, b)`), `controls` (`isHeld(action)`, `consume(action)`, `locked`, `enabled`; key map `KEYMAP` in controls.ts), `net` (MatchNet: `predictor`, `interp`, `lastSnap`, `world`).
 
 `controls.enabled = false` hands the input to a feature (the killstreaks tactical map does this): no buttons go out, mouse look, mouse buttons, devlook drag taps and the wheel are ignored, key releases still register. Set it back to `true` when done.
 
