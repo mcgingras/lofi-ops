@@ -6,6 +6,7 @@ import { buildFiringRange } from '../maps/firingrange';
 import { buildNuketown } from '../maps/nuketown';
 import { buildRust } from '../maps/rust';
 import { buildScrapyard } from '../maps/scrapyard';
+import { buildSummit } from '../maps/summit';
 import { buildTerminal } from '../maps/terminal';
 import { buildYard } from '../maps/yard';
 import type { MapData } from '../maps/types';
@@ -48,6 +49,7 @@ export const MAPS: MapDef[] = [
   // maps-bo: Black Ops 1 recreations. Objective data: dom A/B/C, sd A/B (+ modeSpawns.sd), hq points.
   { id: 'nuketown', name: 'Nuketown', inspiredBy: 'Call of Duty: Black Ops (2010), Nuketown', build: buildNuketown, modes: BO_MODES, size: 'small' },
   { id: 'firingrange', name: 'Firing Range', inspiredBy: 'Call of Duty: Black Ops (2010), Firing Range', build: buildFiringRange, modes: BO_MODES, size: 'medium' },
+  { id: 'summit', name: 'Summit', inspiredBy: 'Call of Duty: Black Ops (2010), Summit: the Soviet listening post on a Ural mountaintop (Control room, Gallery, Tower, Cable Car and Gondola, Catwalk)', build: buildSummit, modes: BO_MODES, size: 'medium' },
 ];
 
 export const MAP_BY_ID = indexById(MAPS);
