@@ -57,7 +57,7 @@ src/client/features/modes/
                 modes.announcer 72, modes.spectate 81
   props.ts      entity renderers: modes.flag, modes.bomb, modes.hq, modes.tag (+ texture recipes
                 modes.white, modes.cloth, modes.bomb)
-  sounds.ts     sfx: modes.good / bad / horn / alarm / pickup / beep / boom (synth fallbacks; recordings in shared/defs/sfx-recipes.ts)
+  sounds.ts     sfx: modes.good / bad / horn / alarm / pickup / beep / boom (synth fallbacks; recordings and radio cues in shared/defs/sfx-recipes.ts: good/bad/horn/alarm are short radio pips, no air horn or klaxon; pickup is a dog-tag clink)
   killcam.ts    final killcam playback (+ killcam-math.ts, pure); HUD widget modes.killcam 95
   deathcam.ts   per-death killcam playback (+ deathcam-math.ts, pure): killer's eyes + viewmodel, shots,
                 streak views, skip; HUD widget modes.deathcam 94 (KILLCAM banner, timer, killer card)

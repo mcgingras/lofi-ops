@@ -5,17 +5,22 @@ evidence was checked on each page: Freesound's licence box reads "Creative Commo
 pages say "License: Creative Commons CC0"; OpenGameArt pages show the CC0 box; the Free Firearm Sound
 Library (FFSL, Still North Media) is CC0 on OpenGameArt and on its archive.org item.
 
-Freesound files are the no-login HQ preview MP3s (~128 kbps), which is plenty for the lo-fi pipeline
-(resample to ~22 kHz, light bitcrush). FFSL files are single WAVs fetched from inside the archive.org zip:
+Freesound files are the no-login HQ preview MP3s (~128 kbps). FFSL files are single WAVs fetched from
+inside the archive.org zip:
 
 `FFSL = https://archive.org/download/the-free-firearm-sound-effects-library-by-still-north-media/Prepared%20SFX%20Library.zip/Prepared%20SFX%20Library%2F`
 
 **How it ships.** `npx tsx scripts/sfx-fetch.ts` downloads exactly the URLs in the tables below (nothing
 else; the raw files stay outside the repo, default folder in `scripts/sfx-sources.ts`, override with
 `SFX_RAW`). `npx tsx scripts/sfx-build.ts --manifest` cuts the files in `assets/sfx/` from them with ffmpeg
-following the recipes in `src/shared/defs/sfx-recipes.ts` (trim to the attack, fade, mono, 22050 Hz,
-pitch/EQ, slap-back on the dry FFSL near mics, loudness-normalise through a limiter, light bitcrush,
-MP3 mono 22.05 kHz) and refreshes the **Shipped as** column: which output files came from each source.
+following the recipes in `src/shared/defs/sfx-recipes.ts` and refreshes the **Shipped as** column (which
+output files came from each source) and `src/shared/defs/sfx-credits.ts` (the credits the in-game
+Sound test shows). Processing is deliberately conservative: trim to the attack, keep the natural tail
+(gunshots 0.9-1.9 s) with a smooth fade, mono 44.1 kHz, at most a gentle high/low-pass, normalise
+towards a per-class loudness through a look-ahead limiter that takes off at most 4-6 dB, MP3 mono
+44.1 kHz 112-128 kbps (MPEG-1 layer III). No echo, no bitcrush, no reversing, no pitching beyond 3%.
+`npx tsx scripts/sfx-audit.ts --spectro=/dir` measures every shipped file (loudness, true peak,
+clipping, cut-offs, a tonality scan) and renders spectrograms.
 Downloaded 2026-10-07: all 74 URLs succeeded on the first try, so no variant substitutions were needed.
 
 ## Gunshots
@@ -28,7 +33,7 @@ Downloaded 2026-10-07: all 74 URLs succeeded on the first try, so no variant sub
 | AK variant | AK47 Shot (LeMudCrab) | https://cdn.freesound.org/previews/163/163457_2263027-hq.mp3 | 15 KB | `gun_ak_e` |
 | SMG (MP5K, AK-74u, MPL) | Carl Gustav M45 near, G_31P (FFSL) | `FFSL` + `Carl%20Gustav%20M45%2FG_31P.wav` | 5.3 MB | `gun_smg_a`, `gun_smg_b`, `gun_smg_c` |
 | SMG variant | FN P90 (areniporgen) | https://cdn.freesound.org/previews/740/740896_15072041-hq.mp3 | 94 KB | not shipped |
-| RPK | Clean Machine Gun Burst (qubodup) | https://cdn.freesound.org/previews/482/482122_71257-hq.mp3 | 41 KB | `gun_rpk_a` |
+| RPK | Clean Machine Gun Burst (qubodup) | https://cdn.freesound.org/previews/482/482122_71257-hq.mp3 | 41 KB | not shipped |
 | L96A1 | Tikka T3 bolt near, W_29P (FFSL) | `FFSL` + `Tikka%2FW_29P.wav` | 5.6 MB | `gun_sniper_a`, `gun_sniper_b` |
 | L96A1 variant | Sniper Shot in Field (qubodup) | https://cdn.freesound.org/previews/855/855606_71257-hq.mp3 | 36 KB | `gun_sniper_c` |
 | Dragunov | Sniper Shot (LeMudCrab) | https://cdn.freesound.org/previews/163/163460_2263027-hq.mp3 | 17 KB | `gun_dragunov_a` |
@@ -46,7 +51,7 @@ Downloaded 2026-10-07: all 74 URLs succeeded on the first try, so no variant sub
 | Suppressed pistol | Springfield 1911 suppressed (areniporgen) | https://cdn.freesound.org/previews/827/827945_15072041-hq.mp3 | 18 KB | `sup_pistol_a` |
 | Suppressed pistol/SMG | SIG P226 suppressed (areniporgen) | https://cdn.freesound.org/previews/828/828790_15072041-hq.mp3 | 49 KB | `sup_pistol_b`, `sup_pistol_c`, `sup_pistol_d` |
 | Suppressed rifle/sniper | Tac-50 suppressed (areniporgen) | https://cdn.freesound.org/previews/737/737570_15072041-hq.mp3 | 77 KB | `sup_rifle_a` |
-| Suppressed SMG | Silenced SMG burst (qubodup) | https://cdn.freesound.org/previews/740/740120_71257-hq.mp3 | 12 KB | `sup_smg_a` |
+| Suppressed SMG | Silenced SMG burst (qubodup) | https://cdn.freesound.org/previews/740/740120_71257-hq.mp3 | 12 KB | not shipped |
 | Distant gunfire | AR-15 mid distance, D_24P (FFSL) | `FFSL` + `AR-15%2FD_24P.wav` | 3.7 MB | `gun_distant_a`, `gun_distant_b` |
 | Distant variant | Distant Gunfire 3 (qubodup) | https://cdn.freesound.org/previews/855/855244_71257-hq.mp3 | 54 KB | not shipped |
 
@@ -54,15 +59,15 @@ Downloaded 2026-10-07: all 74 URLs succeeded on the first try, so no variant sub
 
 | Sound | Recording (author) | File | Size | Shipped as |
 |---|---|---|---|---|
-| Bolt | Mosin Nagant bolt (rammbostein) | https://cdn.freesound.org/previews/267/267895_4174990-hq.mp3 | 59 KB | `mech_bolt` |
+| Bolt | Mosin Nagant bolt (rammbostein) | https://cdn.freesound.org/previews/267/267895_4174990-hq.mp3 | 59 KB | `mech_bolt`, `mech_break_open`, `mech_break_close` |
 | Pump | Shotgun rack (Krovi) | https://cdn.freesound.org/previews/613/613801_2338259-hq.mp3 | 22 KB | `mech_pump` |
-| Break open | toy double-barrel uncocked (JumboSizedFish, OGA) | https://opengameart.org/sites/default/files/toy-double-barrel-shotgun-uncocked.wav | 88 KB | `mech_break_open` |
-| Break close | toy double-barrel cocked (JumboSizedFish, OGA) | https://opengameart.org/sites/default/files/toy-double-barrel-shotgun-cocked.wav | 74 KB | `mech_break_close` |
-| Shell casings | empty shells hitting ground (Metrolynn) | https://cdn.freesound.org/previews/620/620929_6493174-hq.mp3 | 46 KB | `mech_brass_a`, `mech_brass_b` |
-| Mag out | pistol magazine removed (serøutōnin--deprivəd) | https://cdn.freesound.org/previews/719/719243_7157894-hq.mp3 | 16 KB | `mech_magout_a` |
-| Mag in | Inserting Magazine (morganpurkis) | https://cdn.freesound.org/previews/379/379977_5937039-hq.mp3 | 21 KB | `mech_magin_a`, `mech_shell` |
-| Reload (full) | M16 empty reload (serøutōnin--deprivəd) | https://cdn.freesound.org/previews/725/725397_7157894-hq.mp3 | 174 KB | `mech_magout_b`, `mech_magin_b`, `mech_charge_a` |
-| Reload (short) | Assault Rifle Reload (qubodup) | https://cdn.freesound.org/previews/815/815879_71257-hq.mp3 | 43 KB | `mech_magout_c`, `mech_magin_c`, `mech_charge_b`, `mech_handle` |
+| Break open | toy double-barrel uncocked (JumboSizedFish, OGA) | https://opengameart.org/sites/default/files/toy-double-barrel-shotgun-uncocked.wav | 88 KB | not shipped |
+| Break close | toy double-barrel cocked (JumboSizedFish, OGA) | https://opengameart.org/sites/default/files/toy-double-barrel-shotgun-cocked.wav | 74 KB | not shipped |
+| Shell casings | empty shells hitting ground (Metrolynn) | https://cdn.freesound.org/previews/620/620929_6493174-hq.mp3 | 46 KB | `ui_tags` |
+| Mag out | pistol magazine removed (serøutōnin--deprivəd) | https://cdn.freesound.org/previews/719/719243_7157894-hq.mp3 | 16 KB | `mech_magout_pistol` |
+| Mag in | Inserting Magazine (morganpurkis) | https://cdn.freesound.org/previews/379/379977_5937039-hq.mp3 | 21 KB | `mech_magin_pistol`, `mech_shell` |
+| Reload (full) | M16 empty reload (serøutōnin--deprivəd) | https://cdn.freesound.org/previews/725/725397_7157894-hq.mp3 | 174 KB | not shipped |
+| Reload (short) | Assault Rifle Reload (qubodup) | https://cdn.freesound.org/previews/815/815879_71257-hq.mp3 | 43 KB | `mech_magout_rifle`, `mech_magin_rifle`, `mech_charge` |
 | Knife swing | Small Knife Whoosh (Shamewap) | https://cdn.freesound.org/previews/389/389690_6861640-hq.mp3 | 33 KB | `foley_knife` |
 | Knife hit | Slicing through flesh (NeoSpica) | https://cdn.freesound.org/previews/504/504615_7704891-hq.mp3 | 24 KB | `foley_stab` |
 | Grenade pin (stand-in ping) | M1 Garand clip ping (serøutōnin--deprivəd) | https://cdn.freesound.org/previews/725/725398_7157894-hq.mp3 | 29 KB | `foley_pin` |
@@ -81,23 +86,23 @@ Downloaded 2026-10-07: all 74 URLs succeeded on the first try, so no variant sub
 | Footsteps (concrete, grass, wood), body impacts | Kenney Impact Sounds pack | https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip | 801 KB | `foley_hurt_b`, `step_concrete_0`-`4`, `step_grass_0`-`4`, `step_wood_0`-`4`, `step_carpet_0`-`4`, `step_metal_1`-`2` |
 | Footsteps (metal) | Boots on hollow metal (BlondPanda) | https://cdn.freesound.org/previews/778/778437_8927049-hq.mp3 | 18 KB | `step_metal_0` |
 | Hit / hurt thud | Bullet Blood 4 (JustInvoke) | https://cdn.freesound.org/previews/138/138481_758593-hq.mp3 | 8 KB | `foley_hurt_a` |
-| Hitmarker tick, UI clicks, objective jingles | Kenney Interface Sounds pack | https://kenney.nl/media/pages/assets/interface-sounds/fa43c1dd4d-1677589452/kenney_interface-sounds.zip | 835 KB | `ui_tick_a`, `ui_tick_b`, `ui_good`, `ui_bad` |
+| Hitmarker tick, UI clicks, objective jingles | Kenney Interface Sounds pack | https://kenney.nl/media/pages/assets/interface-sounds/fa43c1dd4d-1677589452/kenney_interface-sounds.zip | 835 KB | `ui_tick_a`, `ui_tick_b` |
 
 ## Killstreaks
 
 | Sound | Recording (author) | File | Size | Shipped as |
 |---|---|---|---|---|
 | Radio static | Radio Static (JovianSounds) | https://cdn.freesound.org/previews/524/524204_9561949-hq.mp3 | 124 KB | `ks_static` |
-| Radio confirm | Walkie talkie beep (SEF7) | https://cdn.freesound.org/previews/701/701326_15203576-hq.mp3 | 18 KB | `ks_confirm` |
-| Target marked | Roger beep (bruce965) | https://cdn.freesound.org/previews/321/321906_1755779-hq.mp3 | 9 KB | `ks_mark` |
-| Streak ready | Walkie talkie power on (SEF7) | https://cdn.freesound.org/previews/701/701327_15203576-hq.mp3 | 19 KB | `ks_ready` |
+| Radio confirm | Walkie talkie beep (SEF7) | https://cdn.freesound.org/previews/701/701326_15203576-hq.mp3 | 18 KB | not shipped |
+| Target marked | Roger beep (bruce965) | https://cdn.freesound.org/previews/321/321906_1755779-hq.mp3 | 9 KB | `ks_roger`, `ks_mark` |
+| Streak ready | Walkie talkie power on (SEF7) | https://cdn.freesound.org/previews/701/701327_15203576-hq.mp3 | 19 KB | not shipped |
 | Call in (laptop) | Keyboard typing (zrrion) | https://cdn.freesound.org/previews/685/685984_2686637-hq.mp3 | 180 KB | not shipped |
 | Call in (radio) | Radio squelch (JovianSounds) | https://cdn.freesound.org/previews/524/524205_9561949-hq.mp3 | 12 KB | `ks_call` |
 | Jet flyby | Jet Plane Flyby (qubodup) | https://cdn.freesound.org/previews/189/189446_71257-hq.mp3 | 411 KB | `ks_jet` |
 | Prop plane | Small propeller plane (straget) | https://cdn.freesound.org/previews/403/403316_7707368-hq.mp3 | 422 KB | `ks_prop` |
 | Helicopter rotor loop | UH-60 hover loop (qubodup) | https://cdn.freesound.org/previews/854/854493_71257-hq.mp3 | 61 KB | `ks_rotor_a`, `ks_rotor_b` |
 | Sentry / heli gun | 50 Cal MG (qubodup) | https://cdn.freesound.org/previews/239/239138_71257-hq.mp3 | 66 KB | `ks_sentry_a`, `ks_sentry_b`, `ks_sentry_c` |
-| Chopper gunner | Phalanx CIWS burst (qubodup) | https://cdn.freesound.org/previews/163/163119_71257-hq.mp3 | 139 KB | `ks_gunner` |
+| Chopper gunner | Phalanx CIWS burst (qubodup) | https://cdn.freesound.org/previews/163/163119_71257-hq.mp3 | 139 KB | not shipped |
 | Rocket launch | HIMARS launch (qubodup) | https://cdn.freesound.org/previews/854/854476_71257-hq.mp3 | 132 KB | `ks_launch` |
 | Mortar whistle | Incoming mortar (Zagge28) | https://cdn.freesound.org/previews/241/241840_4404989-hq.mp3 | 39 KB | `ks_whistle` |
 | Big explosion | Big Explosion (qubodup) | https://cdn.freesound.org/previews/741/741173_71257-hq.mp3 | 198 KB | `boom_big` |
@@ -105,7 +110,7 @@ Downloaded 2026-10-07: all 74 URLs succeeded on the first try, so no variant sub
 | Dog bark | Single Dog Bark (kwahmah_02) | https://cdn.freesound.org/previews/277/277058_4486188-hq.mp3 | 7 KB | `ks_bark` |
 | Dog bite | Growling Dog 2 (SpaceJoe) | https://cdn.freesound.org/previews/483/483190_6150892-hq.mp3 | 44 KB | `ks_bite` |
 | Dog growl layer | Low dog growl (randbsoundbites) | https://cdn.freesound.org/previews/829/829986_16968183-hq.mp3 | 24 KB | not shipped |
-| Alarm | Klaxon (jameswrowles) | https://cdn.freesound.org/previews/514/514982_3874107-hq.mp3 | 39 KB | `alert_klaxon` |
+| Alarm | Klaxon (jameswrowles) | https://cdn.freesound.org/previews/514/514982_3874107-hq.mp3 | 39 KB | not shipped |
 | Jammer buzz | Sound interference (Breviceps) | https://cdn.freesound.org/previews/445/445105_9159316-hq.mp3 | 50 KB | not shipped |
 | Jammer buzz (long) | Signal jammer (qubodup) | https://cdn.freesound.org/previews/855/855899_71257-hq.mp3 | 283 KB | not shipped |
 
@@ -113,9 +118,9 @@ Downloaded 2026-10-07: all 74 URLs succeeded on the first try, so no variant sub
 
 | Sound | Recording (author) | File | Size | Shipped as |
 |---|---|---|---|---|
-| Match start horn | Industrial Air Horn (mcpable) | https://cdn.freesound.org/previews/131/131930_1542102-hq.mp3 | 59 KB | `alert_horn` |
+| Match start horn | Industrial Air Horn (mcpable) | https://cdn.freesound.org/previews/131/131930_1542102-hq.mp3 | 59 KB | not shipped |
 | Bomb beep | Bomb Countdown Beeps (snakebarney) | https://cdn.freesound.org/previews/138/138108_1572282-hq.mp3 | 49 KB | `alert_beep` |
-| Pickup blip | item-pickup-v1 (DeltaCode) | https://cdn.freesound.org/previews/678/678384_3271378-hq.mp3 | 7 KB | `ui_pickup` |
+| Pickup blip | item-pickup-v1 (DeltaCode) | https://cdn.freesound.org/previews/678/678384_3271378-hq.mp3 | 7 KB | not shipped |
 
 ## Totals
 
@@ -124,15 +129,36 @@ Downloaded 2026-10-07: all 74 URLs succeeded on the first try, so no variant sub
 - 2 Kenney zips: 1.6 MB
 - **Total download: about 43.6 MB.** Without the FFSL WAVs (using each gun's Freesound variant instead): about 6 MB.
 
-Shipped after processing: 115 MP3 files, about 554 KB in `assets/sfx/`. Not shipped (no game hook or no
-clean single shot): the P90 burst, keyboard typing, both jammer buzzes, the dog growl layer and the
-distant-gunfire variant.
+Shipped after processing: 106 MP3 files, about 1.2 MB in `assets/sfx/` (101 cut from the recordings
+above, 5 synthesized radio cues, see below). Not shipped: the P90 burst, keyboard typing, both jammer
+buzzes, the dog growl layer and the distant-gunfire variant (no game hook or no clean single shot); the
+machine-gun burst (no clean last-round tail; the RPK uses the AK recordings); the Phalanx burst (clipped
+at the source; the chopper gunner uses the .50 cal); the toy break-action (replaced by real bolt
+clacks); the shell-casing tinkle after shots (removed; a quiet unclipped slice of the casings recording is
+the dog-tag pickup); the industrial air horn and the klaxon (comical; replaced by restrained radio cues);
+the walkie-talkie power-on and talk-permit chirps and the Kenney UI jingles and pickup blip (jingly).
+
+## Synthesized radio cues
+
+Not downloads: rendered by `scripts/sfx-build.ts` from `src/shared/defs/sfx-cues.ts` (sine pips at one
+pitch with a 4 ms soft attack/release, optional band-limited squelch noise, then 300 Hz-3.4 kHz
+band-limited like a radio). Used where BO1 has an announcer line or a quiet UI cue rather than a recording
+we have.
+
+| Cue | What | Plays for |
+|---|---|---|
+| `cue_good` | two 1 kHz pips | objective taken, round won (`modes.good`) |
+| `cue_bad` | two low 560 Hz pips | objective lost, round lost (`modes.bad`) |
+| `cue_round` | squelch + three 1 kHz pips | S&D round start, halftime, HQ online (`modes.horn`) |
+| `cue_warn` | two quick 880 Hz pip pairs | bomb planted (`modes.alarm`), enemy streak inbound (`ks_alarm`) |
+| `cue_ready` | squelch, one 1.3 kHz pip, squelch | killstreak ready (`ks_ready`) |
 
 ## Gaps
 
-- No CC0 recordings exist for each specific gun (FAMAS, AUG, Galil, MPL, SPAS-12...). Guns share a class
-  recording with pitch/EQ variations so they still sound distinct.
-- The break-action open/close is a toy shotgun, pitched down a fourth (rate 0.75).
-- No real grenade pin pull; the metallic clip ping is the stand-in.
+- No CC0 recordings exist for each specific gun (FAMAS, AUG, Galil, MPL, SPAS-12...). Guns share class
+  recordings and are told apart by which recordings/variants they use, gentle EQ and gain; per-weapon
+  playback rate stays within +-6%.
+- The break-action open/close borrows the first and last clacks of the Mosin bolt recording.
+- No real grenade pin pull; the metallic clip ping (cut short) is the stand-in.
 - No recordings for the RC-XD motor (`ks_buzz`), napalm fire (`ks_fire`), the crossbow or the ballistic knife:
   the first two stay synthesized, the wager specials borrow a snap / spring clack from the handling recordings.

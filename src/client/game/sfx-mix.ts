@@ -23,16 +23,22 @@ const smoothstep = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
+/** Distance (metres) where the distant gunfire layer starts to crossfade in, and where it has fully replaced the near recording. */
+export const DISTANT_FROM = 40;
+export const DISTANT_FULL = 90;
+
 /**
- * Gunfire by distance (metres): the near recording is low-passed as it gets farther (air
- * absorption, exaggerated like CoD) and gives way to the distant recording.
+ * Gunfire by distance (metres): the near recording is gently low-passed as it gets farther (air
+ * absorption) and, only at real range, crossfades into the distant recording (equal power, so the
+ * distant layer replaces the near one instead of doubling it).
  * - `lowpass`: cutoff for the near layer (null = open).
- * - `near` / `far`: gains of the near and distant layers (before the panner's own roll-off).
+ * - `near` / `far`: gains of the near and distant layers (before the panner's own roll-off);
+ *   near^2 + far^2 = 1.
  */
 export function distanceMix(d: number): { lowpass: number | null; near: number; far: number } {
-  const far = smoothstep(15, 70, d);
-  const lowpass = d <= 12 ? null : Math.max(900, 16000 * Math.exp(-(d - 12) / 28));
-  return { lowpass, near: 1 - 0.55 * far, far };
+  const x = smoothstep(DISTANT_FROM, DISTANT_FULL, d);
+  const lowpass = d <= 20 ? null : Math.max(1500, 16000 * Math.exp(-(d - 20) / 40));
+  return { lowpass, near: Math.cos((x * Math.PI) / 2), far: Math.sin((x * Math.PI) / 2) };
 }
 
 /** Air absorption for any other positional sound: open up close, darker far away. */

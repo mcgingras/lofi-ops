@@ -1,8 +1,12 @@
 /**
- * Lo-fi synthesized cues for the modes: objective won/lost stingers, the bomb-planted klaxon,
- * round horn, dog-tag pickup and the planted bomb's beep (positional, faster as the fuse runs).
+ * Synthesized fallbacks for the modes' sounds (they play until the recordings / rendered cues in
+ * assets/sfx have loaded): restrained radio pips for objective won/lost, round start and the
+ * bomb-planted warning (the same cues as the shipped files, from shared/defs/sfx-cues.ts), a small
+ * metallic tick for the dog-tag pickup, and the planted bomb's beep (positional, faster as the
+ * fuse runs).
  */
 import { sfx } from '../../game/audio';
+import { renderCue } from '../../../shared/defs/sfx-cues';
 
 type Fn = (t: number, i: number) => number;
 
@@ -14,32 +18,23 @@ function synth(ctx: AudioContext, dur: number, f: Fn): AudioBuffer {
   return b;
 }
 
-/** Square-ish tone, quantised to 8 levels for the lo-fi grit. */
-const sq = (t: number, hz: number) => (Math.sin(t * 2 * Math.PI * hz) > 0 ? 1 : -1);
-const crush = (v: number) => Math.round(v * 8) / 8;
-const env = (t: number, a: number, d: number, dur: number) => (t < a ? t / a : Math.max(0, 1 - (t - a) / Math.max(1e-3, dur - a))) * (t < dur - d ? 1 : Math.max(0, (dur - t) / d));
-
-/** Notes: [startSec, durSec, hz]. */
-function melody(ctx: AudioContext, notes: [number, number, number][], vol = 0.28): AudioBuffer {
-  const total = Math.max(...notes.map(([s, d]) => s + d)) + 0.05;
-  return synth(ctx, total, (t) => {
-    let v = 0;
-    for (const [s, d, hz] of notes) if (t >= s && t < s + d) v += sq(t, hz) * env(t - s, 0.005, 0.03, d);
-    return crush(v * vol);
-  });
+/** A radio cue as an AudioBuffer (quieter than full scale, like the shipped files). */
+function cueBuffer(ctx: AudioContext, name: string, gain = 0.35): AudioBuffer {
+  const a = renderCue(name, ctx.sampleRate);
+  const b = ctx.createBuffer(1, a.length, ctx.sampleRate);
+  const d = b.getChannelData(0);
+  for (let i = 0; i < a.length; i++) d[i] = a[i]! * gain;
+  return b;
 }
 
-sfx.register('modes.good', (ctx) => melody(ctx, [[0, 0.09, 660], [0.1, 0.09, 880], [0.2, 0.18, 1320]]));
-sfx.register('modes.bad', (ctx) => melody(ctx, [[0, 0.12, 520], [0.13, 0.12, 390], [0.26, 0.22, 260]]));
-sfx.register('modes.horn', (ctx) => melody(ctx, [[0, 0.5, 220], [0, 0.5, 277], [0, 0.5, 330]], 0.16));
-sfx.register('modes.alarm', (ctx) =>
-  synth(ctx, 1.2, (t) => {
-    const hz = 600 + 300 * (Math.floor(t * 6) % 2);
-    return crush(sq(t, hz) * 0.22 * Math.min(1, (1.2 - t) * 4));
-  }),
-);
-sfx.register('modes.pickup', (ctx) => melody(ctx, [[0, 0.05, 1600], [0.05, 0.08, 2400]], 0.2));
-sfx.register('modes.beep', (ctx) => synth(ctx, 0.07, (t) => crush(sq(t, 1850) * 0.3 * (1 - t / 0.07))));
+const sine = (t: number, hz: number) => Math.sin(t * 2 * Math.PI * hz);
+
+sfx.register('modes.good', (ctx) => cueBuffer(ctx, 'cue_good'));
+sfx.register('modes.bad', (ctx) => cueBuffer(ctx, 'cue_bad'));
+sfx.register('modes.horn', (ctx) => cueBuffer(ctx, 'cue_round'));
+sfx.register('modes.alarm', (ctx) => cueBuffer(ctx, 'cue_warn'));
+sfx.register('modes.pickup', (ctx) => synth(ctx, 0.08, (t) => (sine(t, 3900) * 0.5 + sine(t, 6100) * 0.3) * Math.pow(1 - t / 0.08, 4) * 0.25));
+sfx.register('modes.beep', (ctx) => synth(ctx, 0.1, (t) => sine(t, 4000) * 0.2 * Math.min(1, t / 0.004, (0.1 - t) / 0.01)));
 sfx.register('modes.boom', (ctx) => {
   let hold = 0;
   return synth(ctx, 1.4, (t, i) => {

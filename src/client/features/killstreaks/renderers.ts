@@ -196,7 +196,7 @@ registerEntityRenderer(KS_ENTITY.dog, (_e, m) => {
       barkIn -= dt;
       if (barkIn <= 0) {
         barkIn = 2.5 + Math.random() * 5;
-        sfx.play('ks_bark', { at: { x: p.x, y: p.y + 0.6, z: p.z }, volume: 1.1, rate: 0.9 + Math.random() * 0.25 });
+        sfx.play('ks_bark', { at: { x: p.x, y: p.y + 0.6, z: p.z }, volume: 1.1 });
       }
     },
     dispose: () => kit.dispose(),

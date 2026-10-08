@@ -53,7 +53,7 @@ If a screen owned by another area (`barracks`, `store`, `wager`) isn't registere
 - **Graphics** (tab id `video`): Retro strength preset with an Advanced panel (resolution, palette, dither, vertex snap, texture warp, fog distance, texture filter, photo/drawn textures; see `retro.md`), FOV, grade, time of day, FPS.
 - **Controls**: sensitivity, ADS sensitivity, invert, crouch toggle.
 - **Key bindings**: rebind every action and the class key. Backspace resets one, and there is a Reset all.
-- **Audio**: master volume and a test sound (an M16 shot through `sfx.gunshot`).
+- **Audio**: master volume, a test sound (an M16 shot through `sfx.gunshot`) and the **Sound test** (`sound-test.ts`, data in `sound-test-data.ts`): every registered sound id grouped by category (guns, handling, footsteps, player/UI, killstreaks, modes), labelled `id: file, file (author)`, each with Play (through the real engine and mix, as a local sound at its in-game volume; guns as your own gunshot) and a Flag toggle. "Copy flagged list" copies the flagged ids (one per line) to send to us; flags are remembered in this browser.
 
 ## Server (`src/server/features/frontend/`)
 

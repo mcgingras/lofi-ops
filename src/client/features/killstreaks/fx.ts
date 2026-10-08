@@ -52,7 +52,7 @@ onFeature('killstreaks.fx', (f) => {
       break;
     case 'napalm':
       spawnBlast(at, (f.r ?? 7) * 1.1);
-      sfx.play('ks_bigboom', { at: pos, volume: 2.4, rate: 0.8 });
+      sfx.play('ks_bigboom', { at: pos, volume: 2.4, rate: 0.95 });
       break;
     case 'crate_land':
       m.effects.puff('dust', pos, { x: 0, y: 1, z: 0 }, 10);

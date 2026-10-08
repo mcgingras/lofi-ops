@@ -73,7 +73,7 @@ registerEntityRenderer(NADE_ENTITY, (e) => {
         spin += dt * 14;
         obj.children[0]!.rotation.set(spin, spin * 0.7, 0);
       }
-      if (lastVy < -1 && vy > -0.2 && kind !== 'gl') sfx.play('weapons.bounce', { at: { x: s.x, y: s.y, z: s.z }, volume: 0.5, rate: 0.9 + Math.random() * 0.2 });
+      if (lastVy < -1 && vy > -0.2 && kind !== 'gl') sfx.play('weapons.bounce', { at: { x: s.x, y: s.y, z: s.z }, volume: 0.5 });
       lastVy = moved > 0.001 ? vy : 0;
       prev.set(s.x, s.y, s.z);
       if (blink) blink.visible = Math.floor(m.time * 6) % 2 === 0;

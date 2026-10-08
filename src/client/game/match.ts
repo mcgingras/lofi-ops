@@ -346,7 +346,7 @@ export class Match {
         this.hitAt = this.time;
         this.hitKill = m.kill;
         this.hitHead = m.part === 'head';
-        sfx.play('tick', { volume: m.kill ? 0.5 : 0.35, rate: m.kill ? 0.8 : 1 });
+        sfx.play('tick', { volume: m.kill ? 0.5 : 0.35, rate: m.kill ? 0.94 : 1 });
         const v = this.remotes.views.get(m.victim);
         if (v) this.effects.puff('blood', { x: v.x, y: v.y + (m.part === 'head' ? 1.65 : m.part === 'legs' ? 0.6 : 1.2) * (v.crouch > 0.5 ? 0.67 : 1), z: v.z });
       }),
@@ -613,7 +613,8 @@ export class Match {
     const dur = ((ammo.mag === 0 ? def.reloadEmptyMs : def.reloadMs) / 1000) * this.reloadMultiplierGuess();
     this.reload = { seq: this.net.seq + 1, end: this.serverTime + dur, dur };
     this.wantReload = true;
-    sfx.play('reload', { volume: 0.5 });
+    // No sound here: the weapons feature plays each gun's mag out / mag in (or shells, break
+    // action, bolt) as the reload progresses.
   }
 
   private reloadMultiplierGuess(): number {

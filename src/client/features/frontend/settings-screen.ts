@@ -1,7 +1,8 @@
 /**
  * Settings (replaces the core 'settings' screen): tabs for Graphics (Retro strength preset with
  * an Advanced panel for its knobs, grade, time of day, FOV), Controls (sensitivity, ADS sensitivity, invert, crouch
- * toggle), Key bindings (rebind any action, incl. the class menu key) and Audio. Same persisted
+ * toggle), Key bindings (rebind any action, incl. the class menu key) and Audio (volume, plus a Sound
+ * test listing every sound with Play / Flag). Same persisted
  * settings as core (settings.ts); works as a page or as an overlay over a match.
  */
 import { sfx } from '../../game/audio';
@@ -12,6 +13,7 @@ import { back } from '../../router';
 import { knobPatch, presetSettings, RETRO_BLURBS, RETRO_LABELS, RETRO_RANGES, type RetroKnobs, type RetroPreset } from '../../render/retro';
 import { settings, updateSettings, type Settings } from '../../settings';
 import { BINDABLE, conflictFor, keyFor, keyLabel, resetBinds, setBind, type BindAction } from './keybinds';
+import { soundTestPane } from './sound-test';
 import { h, seg, slider } from './ui';
 
 type Tab = 'video' | 'controls' | 'keys' | 'audio' | 'account';
@@ -177,9 +179,14 @@ registerScreen('settings', (root, params) => {
 
   const audio = h(
     'div',
-    { class: 'fe-form' },
-    ...row('Master volume', rangeOf('volume', 0, 1, 0.05, (v) => `${Math.round(v * 100)}%`)),
-    ...row('Test', h('button', { class: 'lf-btn small', type: 'button', onclick: () => (sfx.unlock(), sfx.gunshot('m16')) }, 'Play a shot')),
+    {},
+    h(
+      'div',
+      { class: 'fe-form' },
+      ...row('Master volume', rangeOf('volume', 0, 1, 0.05, (v) => `${Math.round(v * 100)}%`)),
+      ...row('Test', h('button', { class: 'lf-btn small', type: 'button', onclick: () => (sfx.unlock(), sfx.gunshot('m16')) }, 'Play a shot')),
+    ),
+    soundTestPane(),
   );
 
   const panes: Record<Tab, HTMLElement> = { video, controls, keys: h('div', {}, keys, keyNote), audio, account: accountPane() };

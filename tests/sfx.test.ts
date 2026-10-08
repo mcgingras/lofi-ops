@@ -6,10 +6,12 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { distanceMix, jitterGain, jitterRate, leadingSilence, pickVariant, VoicePool } from '../src/client/game/sfx-mix';
+import { DISTANT_FROM, distanceMix, jitterGain, jitterRate, leadingSilence, pickVariant, VoicePool } from '../src/client/game/sfx-mix';
 import { stepSound, surfaceAt, surfaceOfTexture } from '../src/client/game/surfaces';
 import { getMapData, MAPS } from '../src/shared/defs/maps';
-import { gunWeaponIds, RECIPE_BY_FILE, SFX_BINDINGS, SFX_LEVELS, SFX_RECIPES, WEAPON_SHOTS } from '../src/shared/defs/sfx-recipes';
+import { SFX_CREDITS } from '../src/shared/defs/sfx-credits';
+import { SFX_CUES } from '../src/shared/defs/sfx-cues';
+import { DISTANT_RATE, gunWeaponIds, MAX_BUILD_RATE_CHANGE, MAX_SHOT_PITCH_JITTER, MAX_SHOT_VOL_JITTER_DB, MAX_WEAPON_RATE_CHANGE, RECIPE_BY_FILE, SFX_BINDINGS, SFX_LEVELS, SFX_RECIPES, WEAPON_SHOTS } from '../src/shared/defs/sfx-recipes';
 import { WEAPON_BY_ID } from '../src/shared/defs/weapons';
 import { parseManifest } from '../scripts/sfx-sources';
 
@@ -33,25 +35,64 @@ describe('sfx recipes -> shipped files', () => {
     }
   });
 
-  it('every recipe source is an approved manifest download', () => {
+  it('every recipe source is an approved manifest download (or a synthesized radio cue)', () => {
     const files = parseManifest().map((s) => s.file);
-    const ok = (src: string) => files.some((f) => f === src || (f.endsWith('.zip') && src.startsWith(f.replace(/\.zip$/, '/'))));
+    const ok = (src: string) => (src.startsWith('synth/') ? src.slice(6) in SFX_CUES : files.some((f) => f === src || (f.endsWith('.zip') && src.startsWith(f.replace(/\.zip$/, '/')))));
     for (const r of SFX_RECIPES) expect(ok(r.src), `${r.file} <- ${r.src}`).toBe(true);
   });
 
-  it('every recipe has its output in assets/sfx and nothing else ships there', () => {
-    const shipped = readdirSync(OUT).sort();
-    expect(shipped).toEqual(SFX_RECIPES.map((r) => `${r.file}.mp3`).sort());
-    for (const f of shipped) {
-      const head = readFileSync(join(OUT, f)).subarray(0, 3);
-      // MPEG audio frame sync (no ID3 tag is written).
-      expect(head[0] === 0xff && (head[1]! & 0xe0) === 0xe0, f).toBe(true);
+  it('recipes process conservatively: no echo, bitcrush or reversing, pitch within 3%, gentle limiting', () => {
+    const allowed = new Set(['file', 'src', 'start', 'dur', 'level', 'align', 'fadeIn', 'fadeOut', 'rate', 'highpass', 'lowpass', 'lufs']);
+    for (const r of SFX_RECIPES) {
+      for (const k of Object.keys(r)) expect(allowed.has(k), `${r.file}: ${k}`).toBe(true);
+      expect(Math.abs((r.rate ?? 1) - 1), r.file).toBeLessThanOrEqual(MAX_BUILD_RATE_CHANGE);
+      if (r.highpass) expect(r.highpass, r.file).toBeLessThanOrEqual(2500);
+    }
+    for (const [name, lv] of Object.entries(SFX_LEVELS)) {
+      expect(lv.limit, name).toBeLessThanOrEqual(6);
+      expect(Object.keys(lv).sort(), name).toEqual(['kbps', 'limit', 'lufs', 'peak']);
+      expect(lv.kbps, name).toBeGreaterThanOrEqual(112);
+      expect(lv.kbps, name).toBeLessThanOrEqual(128);
+    }
+    // The build script has no echo / crush / reverse stage left.
+    const build = readFileSync(resolve(import.meta.dirname, '../scripts/sfx-build.ts'), 'utf8');
+    for (const f of ['aecho', 'acrusher', 'areverse']) expect(build.includes(f), f).toBe(false);
+  });
+
+  it('gunshots keep their natural tails', () => {
+    for (const r of SFX_RECIPES.filter((x) => x.level === 'gun' && x.file.startsWith('gun_'))) {
+      // Every FFSL near-mic shot is cut to at least 0.9 s; sniper and shotgun shots get the longest.
+      if (r.src.startsWith('ffsl/')) expect(r.dur, r.file).toBeGreaterThanOrEqual(0.9);
+      if (/sniper|shotgun|olympia|spas/.test(r.file) && r.dur > 1) expect(r.dur, r.file).toBeGreaterThanOrEqual(1.3);
+      expect(r.dur, r.file).toBeLessThanOrEqual(2.2);
     }
   });
 
-  it('the shipped total stays small', () => {
+  it('every recipe has its output in assets/sfx and nothing else ships there (MP3, MPEG-1 layer III, 44.1 kHz, mono)', () => {
+    const shipped = readdirSync(OUT).sort();
+    expect(shipped).toEqual(SFX_RECIPES.map((r) => `${r.file}.mp3`).sort());
+    for (const f of shipped) {
+      const head = readFileSync(join(OUT, f)).subarray(0, 4);
+      // MPEG audio frame sync (no ID3 tag is written).
+      expect(head[0] === 0xff && (head[1]! & 0xe0) === 0xe0, f).toBe(true);
+      expect((head[1]! >> 3) & 3, `${f}: MPEG-1`).toBe(3);
+      expect((head[1]! >> 1) & 3, `${f}: layer III`).toBe(1);
+      expect((head[2]! >> 2) & 3, `${f}: 44.1 kHz`).toBe(0);
+      expect((head[3]! >> 6) & 3, `${f}: mono`).toBe(3);
+    }
+  });
+
+  it('the shipped total stays within budget', () => {
     const total = readdirSync(OUT).reduce((s, f) => s + statSync(join(OUT, f)).size, 0);
-    expect(total).toBeLessThan(5 * 1024 * 1024);
+    expect(total).toBeLessThan(6 * 1024 * 1024);
+  });
+
+  it('every shipped file has a credit (recording, author)', () => {
+    for (const r of SFX_RECIPES) {
+      const c = SFX_CREDITS[r.file];
+      expect(c, r.file).toBeDefined();
+      expect(c!.author.length, r.file).toBeGreaterThan(1);
+    }
   });
 
   it('every binding plays files that have recipes, and every recipe is played by something', () => {
@@ -62,7 +103,8 @@ describe('sfx recipes -> shipped files', () => {
         expect(RECIPE_BY_FILE.has(f), `${id} -> ${f}`).toBe(true);
         used.add(f);
       }
-      if (b.rate !== undefined) expect(b.rate, id).toBeGreaterThan(0.5);
+      if (b.rate !== undefined) expect(Math.abs(b.rate - 1), id).toBeLessThanOrEqual(MAX_WEAPON_RATE_CHANGE + 1e-9);
+      expect(b.pitchJitter ?? 0, id).toBeLessThanOrEqual(0.04);
       if (b.maxVoices !== undefined) expect(b.maxVoices, id).toBeGreaterThanOrEqual(1);
     }
     expect(SFX_RECIPES.filter((r) => !used.has(r.file)).map((r) => r.file)).toEqual([]);
@@ -75,6 +117,12 @@ describe('sfx recipes -> shipped files', () => {
       expect(SFX_BINDINGS[`shot.${id}.sup`]!.files.every((f) => f.startsWith('sup_') || WEAPON_BY_ID.get(id)?.class === 'launcher'), id).toBe(true);
     }
     for (const id of Object.keys(WEAPON_SHOTS)) expect(WEAPON_BY_ID.has(id), id).toBe(true);
+    // Per-weapon pitch stays within +-6% (bigger shifts sound honky); guns differ by recordings and EQ.
+    for (const [id, w] of Object.entries(WEAPON_SHOTS)) {
+      expect(Math.abs(w.rate - 1), id).toBeLessThanOrEqual(MAX_WEAPON_RATE_CHANGE + 1e-9);
+      expect(Math.abs((w.supRate ?? 1) - 1), `${id}.sup`).toBeLessThanOrEqual(MAX_WEAPON_RATE_CHANGE + 1e-9);
+    }
+    for (const [cls, r] of Object.entries(DISTANT_RATE)) expect(Math.abs(r - 1), cls).toBeLessThanOrEqual(MAX_WEAPON_RATE_CHANGE + 1e-9);
     // No two guns play the exact same thing: some of pool, pitch, EQ or gain differs.
     const sig = (id: string) => JSON.stringify({ ...WEAPON_SHOTS[id], sup: undefined, supRate: undefined });
     const seen = new Map<string, string>();
@@ -127,27 +175,38 @@ describe('variation', () => {
       const b = SFX_BINDINGS[`shot.${id}`]!;
       expect(b.files.length, id).toBeGreaterThanOrEqual(2);
       expect(b.pitchJitter ?? 0, id).toBeGreaterThan(0);
+      expect(b.pitchJitter ?? 0, id).toBeLessThanOrEqual(MAX_SHOT_PITCH_JITTER);
       expect(b.volJitter ?? 0, id).toBeGreaterThan(0);
-      expect(b.maxVoices ?? 99, id).toBeLessThanOrEqual(8);
+      expect(b.volJitter ?? 0, id).toBeLessThanOrEqual(MAX_SHOT_VOL_JITTER_DB);
+      // Automatic fire never stacks more than a few tails.
+      expect(b.maxVoices ?? 99, id).toBeLessThanOrEqual(4);
     }
   });
 });
 
 describe('distance mix', () => {
-  it('darkens and hands over to the distant layer with distance', () => {
+  it('only brings the distant layer in at real range, replacing the near recording', () => {
     expect(distanceMix(3)).toEqual({ lowpass: null, near: 1, far: 0 });
+    expect(DISTANT_FROM).toBeGreaterThanOrEqual(40);
+    // Nothing of the distant layer until ~40 m.
+    for (let d = 0; d <= DISTANT_FROM; d += 2) {
+      expect(distanceMix(d).far, `${d} m`).toBe(0);
+      expect(distanceMix(d).near, `${d} m`).toBe(1);
+    }
     let lastCut = Infinity;
     let lastFar = -1;
-    for (let d = 13; d <= 150; d += 5) {
+    for (let d = 21; d <= 150; d += 5) {
       const m = distanceMix(d);
       expect(m.lowpass!).toBeLessThanOrEqual(lastCut);
       expect(m.far).toBeGreaterThanOrEqual(lastFar);
-      expect(m.near).toBeGreaterThanOrEqual(0.45 - 1e-9);
+      // A crossfade (equal power), not a doubling.
+      expect(m.near * m.near + m.far * m.far).toBeCloseTo(1, 6);
       lastCut = m.lowpass!;
       lastFar = m.far;
     }
-    expect(distanceMix(100).far).toBe(1);
-    expect(distanceMix(100).lowpass).toBeLessThan(2000);
+    expect(distanceMix(100).far).toBeCloseTo(1, 6);
+    expect(distanceMix(100).near).toBeLessThan(0.02);
+    expect(distanceMix(30).lowpass).toBeGreaterThan(8000);
   });
 });
 

@@ -7,9 +7,10 @@
  *   an id's samples have loaded and whenever they fail to, so nothing goes silent.
  *
  * `sfx.play(id, opts)` plays one; positional when `opts.at` is given (PannerNode, listener follows
- * the camera, darker with distance). Samples rotate variants and vary pitch/volume per play; each
- * id has a voice cap. Mix: positional sounds -> world bus (ducked under your own gunshots),
- * others -> local bus; both -> master volume -> glue compressor -> limiter -> speakers.
+ * the camera, darker with distance). Samples rotate variants and vary pitch/volume per play
+ * (gently: a few percent, a dB or so); each id has a voice cap. Mix: positional sounds -> world
+ * bus, others -> local bus; both -> master volume -> gentle glue compressor -> safety limiter ->
+ * speakers. No ducking: the recordings keep their own dynamics.
  */
 import { DISTANT_RATE, SFX_BINDINGS, type SfxBinding } from '../../shared/defs/sfx-recipes';
 import { WEAPON_BY_ID, type WeaponClass } from '../../shared/defs/weapons';
@@ -40,10 +41,10 @@ const CLASS_TONE: Record<WeaponClass, { rate: number; lowpass: number; vol: numb
 };
 
 /** Recorded gunshot gains: your own gun (head-locked) and remote guns (before the panner's roll-off). */
-const OWN_GUN = 0.55;
-const REMOTE_GUN = 0.8;
-/** World bus level while your own gun fires (CoD-style ducking). */
-const DUCK = 0.6;
+const OWN_GUN = 0.9;
+const REMOTE_GUN = 1.2;
+/** Fixed make-up gain after the master volume (the recordings are normalised conservatively). */
+const MAKEUP = 1.4;
 const GLOBAL_VOICES = 48;
 const DEFAULT_VOICES = 6;
 
@@ -120,21 +121,23 @@ export class Sfx {
       if (!this.ctx) {
         const ctx = new AudioContext();
         this.ctx = ctx;
-        // Glue compressor then a fast limiter, so a pile of explosions can't clip.
+        // A gentle glue compressor (only the loudest moments: a couple of dB at 2:1) then a safety
+        // limiter, so a pile of explosions can't clip. Set high enough that single gunshots pass
+        // nearly untouched: no pumping.
         const glue = ctx.createDynamicsCompressor();
-        glue.threshold.value = -18;
-        glue.knee.value = 12;
-        glue.ratio.value = 3;
-        glue.attack.value = 0.004;
-        glue.release.value = 0.2;
+        glue.threshold.value = -6;
+        glue.knee.value = 6;
+        glue.ratio.value = 2;
+        glue.attack.value = 0.003;
+        glue.release.value = 0.15;
         const limiter = ctx.createDynamicsCompressor();
-        limiter.threshold.value = -3;
+        limiter.threshold.value = -1;
         limiter.knee.value = 0;
         limiter.ratio.value = 20;
         limiter.attack.value = 0.001;
-        limiter.release.value = 0.08;
+        limiter.release.value = 0.1;
         this.master = ctx.createGain();
-        this.master.gain.value = this.volume;
+        this.master.gain.value = this.volume * MAKEUP;
         this.world = ctx.createGain();
         this.local = ctx.createGain();
         this.world.connect(this.master);
@@ -152,7 +155,7 @@ export class Sfx {
 
   setVolume(v: number): void {
     this.volume = v;
-    if (this.master) this.master.gain.value = v;
+    if (this.master) this.master.gain.value = v * MAKEUP;
   }
 
   /** A synthesized voice (also the fallback for a recorded id until its samples load). */
@@ -219,6 +222,15 @@ export class Sfx {
       this.loading.set(file, p);
     }
     return p;
+  }
+
+  /** Load an id's sample files now (e.g. before the sound test plays it); true once one has decoded. */
+  async ensureLoaded(id: string): Promise<boolean> {
+    if (this.ctx?.state === 'suspended') await this.ctx.resume().catch(() => undefined);
+    const s = this.samples.get(id);
+    if (!s) return false;
+    await Promise.all(s.binding.files.map((f) => this.load(f)));
+    return this.sampleReady(id);
   }
 
   /** Load every registered sample in the background, a few at a time. */
@@ -323,9 +335,10 @@ export class Sfx {
       const voice: Voice = { src, gain: g };
       for (const old of this.voices.add(id, voice, s?.binding.maxVoices ?? DEFAULT_VOICES, ctx.currentTime)) {
         const t = ctx.currentTime;
-        old.gain.gain.setTargetAtTime(0, t, 0.012);
+        // A short fade so a stolen tail never clicks.
+        old.gain.gain.setTargetAtTime(0, t, 0.025);
         try {
-          old.src.stop(t + 0.06);
+          old.src.stop(t + 0.15);
         } catch {
           /* already stopped */
         }
@@ -340,34 +353,26 @@ export class Sfx {
     }
   }
 
-  /** Briefly pull the world down under your own gunshot. */
-  private duck(): void {
-    const w = this.world;
-    const ctx = this.ctx;
-    if (!w || !ctx) return;
-    const t = ctx.currentTime;
-    w.gain.cancelScheduledValues(t);
-    w.gain.setTargetAtTime(DUCK, t, 0.006);
-    w.gain.setTargetAtTime(1, t + 0.07, 0.12);
-  }
-
   /**
    * A gunshot for a weapon id. Recorded voices are `shot.<weaponId>` / `shot.<weaponId>.sup`
-   * (shared/defs/sfx-recipes.ts); remote shots blend in the distant recording and darken with
-   * distance; your own shot ducks the world. Until the samples load (or if they fail): the
-   * synthesized per-weapon voice, else the class-toned core `shot`.
+   * (shared/defs/sfx-recipes.ts); remote shots darken with distance and, only at real range
+   * (from ~40 m), crossfade from the near recording to the distant one (equal power: the distant
+   * layer replaces the near one rather than doubling it). Until the samples load (or if they
+   * fail): the synthesized per-weapon voice, else the class-toned core `shot`.
    */
   gunshot(weaponId: string, at?: PlayOpts['at'], suppressed = false): void {
     const sup = `shot.${weaponId}.sup`;
     const base = `shot.${weaponId}`;
     const own = suppressed && this.has(sup) ? sup : this.has(base) ? base : null;
     const cls = WEAPON_BY_ID.get(weaponId)?.class ?? 'ar';
-    if (!at) this.duck();
     const mix = at ? distanceMix(this.distanceTo(at)) : { lowpass: null, near: 1, far: 0 };
     if (own && this.sampleReady(own)) {
       const muffled = suppressed && own !== sup;
-      this.play(own, { at, volume: (at ? REMOTE_GUN : OWN_GUN) * mix.near * (muffled ? 0.45 : 1), lowpass: muffled ? 900 : (mix.lowpass ?? undefined) });
-      if (at && !suppressed && cls !== 'special' && mix.far > 0.02) this.play('shot.distant', { at, volume: REMOTE_GUN * mix.far, rate: DISTANT_RATE[cls], range: 'far' });
+      // Suppressed shots have no distant layer: they just fade with distance.
+      const layered = !!at && !suppressed && cls !== 'special' && this.sampleReady('shot.distant');
+      const near = layered ? mix.near : 1;
+      if (near > 0.02) this.play(own, { at, volume: (at ? REMOTE_GUN : OWN_GUN) * near * (muffled ? 0.45 : 1), lowpass: muffled ? 900 : (mix.lowpass ?? undefined) });
+      if (layered && mix.far > 0.02) this.play('shot.distant', { at, volume: REMOTE_GUN * mix.far, rate: DISTANT_RATE[cls], range: 'far' });
       return;
     }
     if (own) {

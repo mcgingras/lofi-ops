@@ -137,3 +137,15 @@
 .fe-input { font-family: var(--ui); font-size: 12px; letter-spacing: 0.06em; color: var(--paper); background: rgba(0, 0, 0, 0.45); border: 1px solid var(--line); padding: 8px 10px; min-width: 0; flex: 1 1 260px; text-transform: uppercase; }
 .fe-input:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
 .fe-help { margin: 0; color: var(--dim); font-size: 12px; line-height: 1.5; max-width: 62ch; }
+
+/* Settings -> Audio -> Sound test */
+.fe-st { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.fe-st-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; }
+.fe-st-head .lab { color: var(--paper); margin-right: auto; }
+.fe-st-list { max-height: 46vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
+.fe-st-title { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--line); padding-bottom: 3px; margin-bottom: 4px; }
+.fe-st-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 2px 0; }
+.fe-st-label { font-size: 11px; color: var(--paper); overflow-wrap: anywhere; line-height: 1.35; }
+.fe-st-flag { all: unset; cursor: pointer; font-family: var(--ui); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid var(--line); padding: 4px 8px; color: var(--dim); }
+.fe-st-flag[aria-pressed='true'] { background: var(--warn); border-color: var(--warn); color: #000; }
+.fe-st-flag:focus-visible { outline: 2px solid var(--hi); }
