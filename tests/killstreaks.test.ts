@@ -33,9 +33,10 @@ const deathsOf = (room: Room) => {
 };
 
 describe('killstreak defs', () => {
-  it('has the BO1 list with costs', () => {
+  it('has the BO1 list with costs (plus MW2\'s Tactical Nuke)', () => {
     const costs = Object.fromEntries(KILLSTREAKS.map((k) => [k.id, k.kills]));
-    expect(costs).toEqual({ uav: 3, rcxd: 3, counter_uav: 4, sam_turret: 4, care_package: 5, napalm: 5, sentry_gun: 6, mortar: 6, attack_helicopter: 7, valkyrie: 7, blackbird: 8, rolling_thunder: 8, chopper_gunner: 9, attack_dogs: 11 });
+    expect(costs).toEqual({ uav: 3, rcxd: 3, counter_uav: 4, sam_turret: 4, care_package: 5, napalm: 5, sentry_gun: 6, mortar: 6, attack_helicopter: 7, valkyrie: 7, blackbird: 8, rolling_thunder: 8, chopper_gunner: 9, attack_dogs: 11, nuke: 25 });
+    expect(CARE_PACKAGE_WEIGHTS.nuke).toBeUndefined();
     for (const id of Object.keys(CARE_PACKAGE_WEIGHTS)) if (id !== 'ammo') expect(costs[id], id).toBeDefined();
     expect(isStreakWeapon('napalm')).toBe(true);
     expect(isStreakWeapon('ak47')).toBe(false);

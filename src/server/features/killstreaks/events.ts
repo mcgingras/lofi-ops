@@ -25,6 +25,8 @@ export interface KsMapMode {
 export interface KillstreakExt {
   /** Kills toward streaks this life (kills by killstreaks excluded). */
   count: number;
+  /** Every kill this life, killstreak kills included (streaks with `countsStreakKills`: the Tactical Nuke). */
+  countAll?: number;
   /** Streak ids already earned this life (each once per life). */
   earnedLife: string[];
   /** Earned, waiting to be called (oldest first; persists across deaths until match end). */
@@ -58,6 +60,8 @@ declare module '../../../shared/events' {
     'killstreaks.called': { player: P; id: string };
     /** A killstreak finished (`destroyed` when shot down / killed, `by` who did it). */
     'killstreaks.ended': { player: P | null; id: string; destroyed: boolean; by: P | null };
+    /** The Tactical Nuke called by `player` went off (everyone dies over the next seconds, then the match ends). */
+    'killstreaks.nuke': { player: P; phase: 'detonated' };
     /** A piece of killstreak hardware (entity `kind`) was destroyed by `by`. */
     'killstreaks.destroyed': { owner: P | null; id: string; kind: string; by: P | null };
   }

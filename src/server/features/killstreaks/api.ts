@@ -9,10 +9,13 @@
  *   enemyStreakTargets(room, bot)                 // enemy hardware a bot can shoot at (heli, sentry, dogs...)
  *   isDrivingStreak(bot)                          // true while its RC-XD / gunner / rockets run
  *
+ * The Tactical Nuke goes through the same calls (`callKillstreak(room, bot, 'nuke')`, no target);
+ * skilled bots call their highest streak first, so a bot that earns one uses it.
+ *
  * Bots also use their streaks automatically (skill `streakUse`: how soon and how well), unless the
  * bots feature sets `player.ext.killstreaks.manual = true` to drive the calls itself.
  */
-import { KILLSTREAK_BY_ID } from '../../../shared/defs/killstreaks';
+import { KILLSTREAK_BY_ID, streakAllowedIn } from '../../../shared/defs/killstreaks';
 import type { Vec3 } from '../../../shared/math';
 import type { PlayerState } from '../../player';
 import type { Room } from '../../room';
@@ -22,6 +25,7 @@ import { callNapalm, callThunder } from './streaks/airstrike';
 import { callDogs } from './streaks/dogs';
 import { airspaceFull, callGunner, callHeli } from './streaks/heli';
 import { callMortar } from './streaks/mortar';
+import { callNuke } from './streaks/nuke';
 import { callCarePackage } from './streaks/package';
 import { callRadar } from './streaks/radar';
 import { callSam, callSentry } from './streaks/turrets';
@@ -48,6 +52,7 @@ export const STREAK_IMPLS: Record<string, Impl> = {
   rcxd: callRcxd,
   valkyrie: callValkyrie,
   attack_dogs: callDogs,
+  nuke: callNuke,
 };
 
 export interface CallOptions {
@@ -77,6 +82,7 @@ export function callKillstreak(room: Room, p: PlayerState, id: string, opts: Cal
   const def = KILLSTREAK_BY_ID.get(id);
   const impl = STREAK_IMPLS[id];
   if (!def || !impl) return { ok: false, reason: 'unknown' };
+  if (!streakAllowedIn(def, room.mode)) return { ok: false, reason: 'disabled' };
   if (room.phase !== 'playing') return { ok: false, reason: 'phase' };
   if (!p.alive) return { ok: false, reason: 'dead' };
   const ks = ksOf(p);
@@ -102,6 +108,7 @@ export function callKillstreak(room: Room, p: PlayerState, id: string, opts: Cal
   }
   markDirty(room, p);
   room.bus.emit('killstreaks.called', { player: p, id });
+  room.bus.emit('progression.metric', { player: p, metric: 'streak_called', killstreak: id });
   room.sendFeature(null, 'killstreaks.called', { id, owner: p.id, team: p.team });
   return { ok: true };
 }

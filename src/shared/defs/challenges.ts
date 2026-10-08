@@ -374,6 +374,8 @@ function killstreakChallenges(): ChallengeDef[] {
     out.push(make(`ks_${k.id}_earned`, `${k.name} Earned`, `Earn the ${k.name} {n} times.`, 'streak_earned', L([5, 25, 100], [500, 1500, 3000], [50, 150, 300]), { category: 'killstreak', killstreak: k.id }));
     if (!NON_LETHAL_STREAKS.has(k.id)) out.push(make(`ks_${k.id}_kills`, `${k.name} Kills`, `Get {n} kills with the ${k.name}.`, 'kills', L([10, 50, 150], [500, 1500, 3000], [50, 150, 300]), { category: 'killstreak', weapon: k.id }));
   }
+  // Calling a Tactical Nuke (the killstreaks feature reports `streak_called` for every call).
+  if (KILLSTREAKS.some((k) => k.id === 'nuke')) out.push(make('ks_nuke_called', 'End Game', 'Call in a Tactical Nuke {n} times.', 'streak_called', L([1, 5, 10], [5000, 10000, 25000], [500, 1000, 2500]), { category: 'killstreak', killstreak: 'nuke' }));
   return out;
 }
 

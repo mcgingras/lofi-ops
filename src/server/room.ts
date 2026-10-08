@@ -98,6 +98,11 @@ export class Room {
   phaseEndsAt: number | null = null;
   teamScores: [number, number] = [0, 0];
   results: MatchResults | null = null;
+  /**
+   * Set by a feature that has decided how this match ends (the Tactical Nuke): scores freeze and
+   * only `endMatch(endLock)` ends it (score/time/round ends wait). Cleared at each match start.
+   */
+  endLock: MatchResults['reason'] | null = null;
   closed = false;
   private closing = false;
 
@@ -386,7 +391,7 @@ export class Room {
   // -------------------------------------------------------------------------------------------
 
   addTeamScore(team: Team, delta: number, reason: string, player: PlayerState | null = null): void {
-    if (this.phase !== 'playing') return;
+    if (this.phase !== 'playing' || this.endLock) return;
     this.teamScores[team] += delta;
     this.bus.emit('scoreChange', { team, player, delta, reason, teamScores: [this.teamScores[0], this.teamScores[1]] });
     this.broadcastScore();
@@ -394,7 +399,7 @@ export class Room {
   }
 
   addPlayerScore(p: PlayerState, delta: number, reason: string): void {
-    if (this.phase !== 'playing') return;
+    if (this.phase !== 'playing' || this.endLock) return;
     p.stats.score += delta;
     this.bus.emit('scoreChange', { team: p.team, player: p, delta, reason, teamScores: [this.teamScores[0], this.teamScores[1]] });
     this.broadcastScore();
@@ -420,6 +425,7 @@ export class Room {
     if (this.closed) return;
     this.teamScores = [0, 0];
     this.results = null;
+    this.endLock = null;
     this.entities.clear();
     this.history.clear();
     for (const p of this.players.values()) {
@@ -450,6 +456,7 @@ export class Room {
   /** End the match now: results, `matchEnd` event, profile stats + save, results to clients. */
   endMatch(reason: MatchResults['reason'], results?: MatchResults): void {
     if (this.phase !== 'playing' && this.phase !== 'countdown') return;
+    if (this.endLock && reason !== this.endLock) return;
     const res = results ?? this.rules.results?.(this, reason) ?? standardResults(this, reason);
     this.results = res;
     this.setPhase('ended', this.time + this.options.postMatchSec);

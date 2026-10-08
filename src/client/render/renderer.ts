@@ -31,7 +31,7 @@ export interface LookOptions {
 }
 
 const QVS = /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
-const QFS = /* glsl */ `uniform sampler2D tSrc, tHud; uniform vec2 uLow; uniform float uLevels, uDither, uRed, uSat, uGamma; uniform int uGrade, uPattern; uniform vec3 uLift, uGain; varying vec2 vUv;
+const QFS = /* glsl */ `uniform sampler2D tSrc, tHud; uniform vec2 uLow; uniform float uLevels, uDither, uRed, uWhite, uSat, uGamma; uniform int uGrade, uPattern; uniform vec3 uLift, uGain; varying vec2 vUv;
 const float BAYER[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
 const float PATTERN[16] = float[16](0.,5.,10.,15.,7.,8.,13.,2.,10.,15.,0.,5.,13.,2.,7.,8.);
 void main(){
@@ -48,6 +48,8 @@ void main(){
   vec2 q = vUv - 0.5; c *= 1.0 - dot(q, q) * 0.5;
   // Damage: desaturate and redden towards the edges.
   if (uRed > 0.0) { float e = smoothstep(0.15, 0.75, length(q * vec2(1.6, 1.0))); c = mix(c, vec3(l * 0.6 + 0.25, l * 0.25, l * 0.2), uRed * (0.35 + 0.65 * e)); }
+  // White-out (Tactical Nuke flash): towards a warm white before the dither, so the fade is dithered too.
+  if (uWhite > 0.0) c = mix(c, vec3(1.0, 0.98, 0.93), uWhite);
   int di = int(mod(px.x, 4.0)) + int(mod(px.y, 4.0)) * 4;
   float d = uDither > 0.0 ? ((uPattern == 1 ? PATTERN[di] : BAYER[di]) + 0.5) / 16.0 - 0.5 : 0.0;
   d *= uDither;
@@ -89,6 +91,8 @@ export class Renderer {
   zoom = 1;
   /** 0..1 red damage overlay. */
   damage = 0;
+  /** 0..1 white-out of the world (under the HUD): the Tactical Nuke flash. Owners reset it to 0. */
+  white = 0;
 
   constructor(parent: HTMLElement) {
     this.canvas = document.createElement('canvas');
@@ -109,7 +113,7 @@ export class Renderer {
     this.hudTex.generateMipmaps = false;
     this.hudTex.colorSpace = THREE.NoColorSpace;
     this.post = new THREE.ShaderMaterial({
-      uniforms: { tSrc: { value: this.rt.texture }, tHud: { value: this.hudTex }, uLow: { value: new THREE.Vector2(640, 360) }, uLevels: { value: 256 }, uDither: { value: 0 }, uPattern: { value: 0 }, uGrade: { value: 3 }, uRed: { value: 0 }, ...GRADE },
+      uniforms: { tSrc: { value: this.rt.texture }, tHud: { value: this.hudTex }, uLow: { value: new THREE.Vector2(640, 360) }, uLevels: { value: 256 }, uDither: { value: 0 }, uPattern: { value: 0 }, uGrade: { value: 3 }, uRed: { value: 0 }, uWhite: { value: 0 }, ...GRADE },
       vertexShader: QVS,
       fragmentShader: QFS,
       depthTest: false,
@@ -185,6 +189,7 @@ export class Renderer {
     drawHud(this.hudCtx, this.width, this.height);
     this.hudTex.needsUpdate = true;
     this.post.uniforms.uRed!.value = this.damage;
+    this.post.uniforms.uWhite!.value = this.white;
     gl.setRenderTarget(null);
     gl.setClearColor(0x000000, 1);
     gl.clear();

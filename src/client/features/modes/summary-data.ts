@@ -53,7 +53,7 @@ export interface SummaryView {
   rounds?: number;
 }
 
-const REASONS: Record<string, string> = { score: 'Score limit reached', time: 'Time limit reached', rounds: 'Round limit reached', forfeit: 'Forfeit', aborted: 'Match aborted' };
+const REASONS: Record<string, string> = { score: 'Score limit reached', time: 'Time limit reached', rounds: 'Round limit reached', forfeit: 'Forfeit', aborted: 'Match aborted', nuke: 'TACTICAL NUKE' };
 
 function fallbackXp(r: PlayerResult): XpLine[] {
   const lines: XpLine[] = [];

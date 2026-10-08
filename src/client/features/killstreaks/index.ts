@@ -3,7 +3,8 @@
  * low-poly hardware renderers (planes, helicopters, sentry, SAM, dogs, RC-XD, crate, missiles,
  * napalm fire, mortar marks), explosions and sounds, the streak ladder / ready prompt /
  * designator / announcements HUD, the radar minimap, camera control for driven streaks, and the
- * tactical map (radio + overhead map) for Napalm, Mortar Team, Rolling Thunder and the Attack Helicopter.
+ * tactical map (radio + overhead map) for Napalm, Mortar Team, Rolling Thunder and the Attack Helicopter,
+ * and the Tactical Nuke (laptop, countdown, flash, mushroom cloud: nuke.ts).
  */
 import './textures';
 import './sounds';
@@ -15,6 +16,7 @@ import './radar';
 import './control';
 import './radio';
 import './tacmap';
+import './nuke';
 
 export { ksClient, streakName } from './store';
 export { tacmapOpen } from './tacmap';

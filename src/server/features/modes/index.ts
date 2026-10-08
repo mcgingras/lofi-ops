@@ -82,7 +82,8 @@ const feature: Feature = {
       'matchEnd',
       ({ results }) => {
         results.ext.modes = buildSummary(room, results);
-        const clip = cam.clip();
+        // No final killcam after a Tactical Nuke (MW2 cut straight to the scoreboard).
+        const clip = results.reason === 'nuke' ? null : cam.clip();
         if (clip) room.sendFeature(null, 'modes.killcam', clip);
         pushState(room);
       },

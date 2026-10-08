@@ -37,8 +37,8 @@ export function deathcamWindow(at: number, respawnAt: number | null, t: Deathcam
   return { from: at - (room - post), to: at + post };
 }
 
-/** Means of death that never get a killcam (no killer to watch). */
-export const NO_DEATHCAM_MEANS: ReadonlySet<string> = new Set(['fall', 'world', 'suicide']);
+/** Means of death that never get a killcam (no killer to watch; the Tactical Nuke's blast neither, as in MW2). */
+export const NO_DEATHCAM_MEANS: ReadonlySet<string> = new Set(['fall', 'world', 'suicide', 'nuke']);
 
 /** Streak weapons whose kill is shown from above (strikes, falling crates). */
 export const TOP_DOWN_STREAKS: ReadonlySet<string> = new Set(['napalm', 'rolling_thunder', 'mortar', 'care_package', 'valkyrie']);
