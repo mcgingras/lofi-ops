@@ -230,6 +230,10 @@ export const WEAPON_SHOTS: Record<string, { files: string[]; rate: number; gain?
   famas: { files: ['gun_ar_a', 'gun_ar_b'], rate: 1.14, gain: 0.9, highpass: 180, sup: ['sup_rifle_a', 'sup_pistol_c', 'sup_pistol_d'], supRate: 1.05 },
   commando: { files: ['gun_ar_b', 'gun_ar_c'], rate: 0.97, lowpass: 7000, sup: ['sup_rifle_a', 'sup_pistol_b'], supRate: 0.92 },
   aug: { files: ['gun_ar_c', 'gun_ar_a'], rate: 1.0, lowpass: 8000, highpass: 90, sup: ['sup_rifle_a', 'sup_pistol_d'], supRate: 0.98 },
+  // MW2 additions: class pools with their own pitch / EQ (the ACR a touch brighter and lighter, the
+  // M16A4 a little lower and darker than the BO1 M16).
+  acr: { files: ['gun_ar_b', 'gun_ar_c', 'gun_ar_a'], rate: 1.03, gain: 0.92, lowpass: 9000, highpass: 140, sup: ['sup_rifle_a', 'sup_pistol_c'], supRate: 1.0 },
+  m16a4: { files: ['gun_ar_c', 'gun_ar_a', 'gun_ar_b'], rate: 0.98, lowpass: 8500, highpass: 100, sup: ['sup_rifle_a', 'sup_pistol_b'], supRate: 0.93 },
   ak47: { files: ['gun_ak_a', 'gun_ak_b', 'gun_ak_c', 'gun_ak_d'], rate: 1.0, sup: ['sup_rifle_a', 'sup_pistol_b', 'sup_pistol_d'], supRate: 0.88 },
   galil: { files: ['gun_ak_b', 'gun_ak_c', 'gun_ak_e'], rate: 1.07, lowpass: 7500, sup: ['sup_rifle_a', 'sup_pistol_c'], supRate: 0.92 },
   mp5k: { files: ['gun_smg_a', 'gun_smg_b', 'gun_smg_c'], rate: 1.1, gain: 0.85, sup: ['sup_smg_a', 'sup_pistol_b', 'sup_pistol_c'], supRate: 1.1 },
@@ -238,6 +242,7 @@ export const WEAPON_SHOTS: Record<string, { files: string[]; rate: number; gain?
   rpk: { files: ['gun_rpk_a', 'gun_ak_a', 'gun_ak_d'], rate: 0.9, sup: ['sup_rifle_a', 'sup_pistol_b'], supRate: 0.82 },
   l96a1: { files: ['gun_sniper_a', 'gun_sniper_b', 'gun_sniper_c'], rate: 1.0, gain: 1.1, sup: ['sup_rifle_a'], supRate: 0.85 },
   dragunov: { files: ['gun_dragunov_a', 'gun_sniper_c', 'gun_ak_c'], rate: 1.0, highpass: 70, sup: ['sup_rifle_a'], supRate: 0.95 },
+  intervention: { files: ['gun_sniper_b', 'gun_sniper_a', 'gun_sniper_c'], rate: 0.95, gain: 1.12, lowpass: 7500, highpass: 55, sup: ['sup_rifle_a'], supRate: 0.82 },
   olympia: { files: ['gun_olympia_a', 'gun_olympia_b'], rate: 1.0, gain: 1.05, sup: ['sup_rifle_a'], supRate: 0.75 },
   stakeout: { files: ['gun_shotgun_a', 'gun_shotgun_b'], rate: 1.0, gain: 1.05, sup: ['sup_rifle_a'], supRate: 0.78 },
   spas12: { files: ['gun_spas_a', 'gun_shotgun_a', 'gun_shotgun_b'], rate: 0.93, gain: 1.05, lowpass: 6500, sup: ['sup_rifle_a'], supRate: 0.72 },

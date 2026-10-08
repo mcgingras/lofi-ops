@@ -86,6 +86,9 @@ export interface WeaponDef {
 const AR_ATTS = ['extmag', 'dualmag', 'acog', 'reddot', 'reflex', 'suppressor', 'gl'];
 const SMG_ATTS = ['extmag', 'dualmag', 'acog', 'reddot', 'reflex', 'suppressor', 'rapidfire'];
 const SNIPER_ATTS = ['extmag', 'acog', 'varzoom', 'suppressor'];
+// MW2 rifles: Holographic -> reflex, Red Dot, ACOG, Silencer, Extended Mags, M203 (no FMJ, Shotgun,
+// Heartbeat or Thermal equivalents here).
+const MW2_AR_ATTS = ['extmag', 'acog', 'reddot', 'reflex', 'suppressor', 'gl'];
 
 const ar = (o: Omit<WeaponDef, 'class' | 'slot' | 'multipliers' | 'sprintOutMs'> & Partial<Pick<WeaponDef, 'multipliers' | 'sprintOutMs'>>): WeaponDef => ({ class: 'ar', slot: 'primary', multipliers: { head: 1.4, torso: 1, limb: 1 }, sprintOutMs: 250, ...o });
 const smg = (o: Omit<WeaponDef, 'class' | 'slot' | 'multipliers' | 'sprintOutMs'> & Partial<Pick<WeaponDef, 'multipliers' | 'sprintOutMs'>>): WeaponDef => ({ class: 'smg', slot: 'primary', multipliers: { head: 1.4, torso: 1, limb: 1 }, sprintOutMs: 200, ...o });
@@ -213,6 +216,55 @@ export const WEAPONS: WeaponDef[] = [
     unlockLevel: 26,
     attachments: AR_ATTS,
     model: 'aug',
+    price: 3000,
+  }),
+
+  // MW2 additions (multiplayer weapon files and the CoD Wiki; see docs/features/weapons.md). Ranges
+  // are MW2 inches / 39.4 like the BO1 guns; reserve is MW2's starting ammo; no Dual Mag or Grip
+  // (MW2 had neither on these rifles).
+  ar({
+    id: 'acr',
+    name: 'ACR',
+    blurb: 'Full auto with almost no recoil. Lower damage, but it holds it at long range.',
+    damage: { near: 30, far: 20, nearRange: 46, farRange: 58 },
+    rpm: 789,
+    mode: 'auto',
+    magazine: 30,
+    reserve: 60,
+    reloadMs: 2030,
+    reloadEmptyMs: 2360,
+    adsMs: 250,
+    sprintOutMs: 300,
+    moveMult: 0.9,
+    spread: { hip: 3.2, ads: 0.1, move: 1.5 },
+    recoil: { vertical: 0.42, horizontal: 0.14, recovery: 17 },
+    unlockLevel: 48,
+    attachments: MW2_AR_ATTS,
+    model: 'acr',
+    price: 3000,
+  }),
+  ar({
+    id: 'm16a4',
+    name: 'M16A4',
+    blurb: 'Modern Warfare 2 flat-top M16: three-round bursts, one burst kills out to mid range.',
+    damage: { near: 40, far: 30, nearRange: 38, farRange: 51 },
+    rpm: 937,
+    mode: 'burst',
+    burst: 3,
+    // MW2: 64 ms fireTime + 200 ms burst cooldown after the last round (459 rpm overall).
+    burstDelayMs: 264,
+    magazine: 30,
+    reserve: 60,
+    reloadMs: 2030,
+    reloadEmptyMs: 2360,
+    adsMs: 250,
+    sprintOutMs: 300,
+    moveMult: 0.9,
+    spread: { hip: 3.6, ads: 0.12, move: 1.5 },
+    recoil: { vertical: 0.68, horizontal: 0.3, recovery: 14 },
+    unlockLevel: 40,
+    attachments: MW2_AR_ATTS,
+    model: 'm16a4',
     price: 3000,
   }),
 
@@ -364,6 +416,39 @@ export const WEAPONS: WeaponDef[] = [
     breathSec: 4,
     swapMs: 650,
     price: 2500,
+  },
+  {
+    // MW2's CheyTac M200. Same kill profile as the L96A1 (70 x1.5 head / upper chest, x1.1 stomach),
+    // but a quicker bolt and partial reload, quicker out of a sprint; slower to scope from a
+    // standstill, heavier kick, more sway, less ammo.
+    id: 'intervention',
+    name: 'Intervention',
+    class: 'sniper',
+    slot: 'primary',
+    blurb: 'Bolt-action .408. One shot to the head or upper chest, quick bolt, heavy kick.',
+    damage: { near: 70, far: 70, nearRange: 102, farRange: 200 },
+    multipliers: { head: 1.5, torso: 1.5, lowerTorso: 1.1, limb: 1 },
+    rpm: 65,
+    mode: 'bolt',
+    magazine: 5,
+    reserve: 15,
+    reloadMs: 2270,
+    reloadEmptyMs: 3870,
+    adsMs: 400,
+    sprintOutMs: 300,
+    moveMult: 0.9,
+    spread: { hip: 11, ads: 0, move: 3 },
+    recoil: { vertical: 5, horizontal: 1.4, recovery: 6 },
+    unlockLevel: 4,
+    attachments: SNIPER_ATTS,
+    model: 'intervention',
+    range: 300,
+    zoom: 4.5,
+    scope: true,
+    sway: 1.15,
+    breathSec: 4,
+    swapMs: 700,
+    price: 2000,
   },
 
   // ------------------------------------------------------------------ shotguns
