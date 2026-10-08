@@ -29,6 +29,8 @@ export interface Active {
   /** Set when destroyed by an enemy (for `ended`). */
   destroyedBy?: PlayerState | null;
   destroyed?: boolean;
+  /** Keeps running when the owner leaves the room (the Tactical Nuke). */
+  keepOnLeave?: boolean;
 }
 
 export interface Damageable {
@@ -261,9 +263,9 @@ export class KsRoom {
     this.hp.clear();
   }
 
-  /** End every streak owned by a player (they left). */
+  /** End every streak owned by a player (they left), except those that outlive their owner. */
   clearOwner(p: PlayerState): void {
-    for (const a of [...this.actives]) if (a.owner === p) this.finish(a, false);
+    for (const a of [...this.actives]) if (a.owner === p && !a.keepOnLeave) this.finish(a, false);
   }
 
   /** Team (or FFA player id) key. */

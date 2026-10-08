@@ -3,9 +3,10 @@
  *
  *   Spy Plane 3, RC-XD 3, Counter-Spy Plane 4, SAM Turret 4, Care Package 5, Napalm Strike 5,
  *   Sentry Gun 6, Mortar Team 6, Attack Helicopter 7, Valkyrie Rockets 7, Blackbird 8,
- *   Rolling Thunder 8, Chopper Gunner 9, Attack Dogs 11.
+ *   Rolling Thunder 8, Chopper Gunner 9, Attack Dogs 11; plus MW2's Tactical Nuke 25 (streaks/nuke.ts).
  *
- * Kills toward streaks reset on death; kills made by killstreaks don't count; Hardline makes each a
+ * Kills toward streaks reset on death; kills made by killstreaks don't count (except toward streaks
+ * with `countsStreakKills`, the nuke); Hardline makes each a
  * kill cheaper (`streakCostOffset` modifier). Earned streaks wait in a list until called with the
  * STREAK button or the `killstreaks.call` RPC. The Care Package arms a designator (press STREAK
  * again where you aim); Napalm, Mortar Team, Rolling Thunder and the Attack Helicopter raise the
@@ -25,6 +26,7 @@ import { botStreakSkill } from './skill';
 import { closeMap, openMap, submitMapTarget, tickMap } from './mapmode';
 import { flushState, grant, ksOf, markDirty, onKill, resetPlayer, stateMsg } from './state';
 import { crateInReach, onUsePressed } from './streaks/package';
+import { registerNukeModifiers } from './streaks/nuke';
 import { registerRadarModifiers } from './streaks/radar';
 import { ksRoom } from './world';
 
@@ -40,6 +42,8 @@ const REASONS: Record<string, string> = {
   dead: 'Not while dead',
   phase: 'Not now',
   not_ready: 'Not ready',
+  nuke_active: 'A Tactical Nuke is already inbound',
+  disabled: 'Not in wager matches',
 };
 
 function notify(room: Room, p: PlayerState, reason: string) {
@@ -141,6 +145,7 @@ const feature: Feature = {
   room(room) {
     const ctx = ksRoom(room);
     registerRadarModifiers(room, ctx);
+    registerNukeModifiers(room, ctx);
     // Driving a streak or holding the radio (tactical map): the body stands still with its weapon
     // down; designating: no sprint.
     room.modifiers.add('speedMultiplier', (p) => (p.ext.killstreaks?.control || p.ext.killstreaks?.map ? 0 : undefined), 'killstreaks.control');

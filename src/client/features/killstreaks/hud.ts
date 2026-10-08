@@ -27,9 +27,12 @@ const SHORT: Record<string, string> = {
   rolling_thunder: 'THUNDER',
   chopper_gunner: 'GUNNER',
   attack_dogs: 'DOGS',
+  nuke: 'NUKE',
 };
 
-// Ladder: one row per picked streak, pips up to its cost (filled = kills this life).
+// Ladder: one row per picked streak, pips up to its cost (filled = kills this life; for the
+// Tactical Nuke, which counts killstreak kills, every kill). Long ladders (the nuke's 25) use
+// small pips with a gap every five so the row stays short.
 registerHudWidget(
   'killstreaks.ladder',
   (g, W, H) => {
@@ -43,11 +46,16 @@ registerHudWidget(
       const c = st.chosen[i]!;
       const ready = st.ready.includes(c.id);
       const right = W - 8 * u;
-      const pipsW = c.cost * (pip + u);
+      const have = KILLSTREAK_BY_ID.get(c.id)?.countsStreakKills ? (st.countAll ?? st.count) : st.count;
+      const long = c.cost > 12;
+      const pw = long ? 2 * u : pip;
+      const step = pw + u;
+      const gap = (k: number) => (long ? Math.floor(k / 5) * u : 0);
+      const pipsW = c.cost * step + gap(c.cost - 1);
       for (let k = 0; k < c.cost; k++) {
-        const x = right - pipsW + k * (pip + u);
-        rect(g, x - u, y - u, pip + 2 * u, pip + 2 * u, C.ink);
-        rect(g, x, y, pip, pip, ready ? C.hi : k < st.count ? C.ammo : C.empty);
+        const x = right - pipsW + k * step + gap(k);
+        rect(g, x - u, y - u, pw + 2 * u, pip + 2 * u, C.ink);
+        rect(g, x, y, pw, pip, ready ? C.hi : k < have ? C.ammo : C.empty);
       }
       txt(g, SHORT[c.id] ?? c.id.toUpperCase(), right - pipsW - 4 * u, y - 2 * u, 8, ready ? C.hi : C.dim, 'right', u);
       y -= 9 * u;

@@ -142,3 +142,55 @@ registerTexture('ks_pack', {
   },
   photo: 'small',
 });
+
+// Tactical Nuke: billowing smoke for the mushroom cloud (an aerial rock photo, blurred and greyed
+// into lumpy cloud; the parts tint it hot or ashen), and the laptop's screen.
+registerTexture('ks_cloud', {
+  w: 32,
+  h: 32,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#b8b0a4', 0.12);
+    for (let i = 0; i < 14; i++) {
+      const x = R.rnd() * w;
+      const y = R.rnd() * h;
+      const r = 2 + R.rnd() * 5;
+      g.fillStyle = R.rnd() < 0.5 ? '#d8d0c4' : '#8a8278';
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.fill();
+    }
+  },
+  photos: ['aerial_rocks_02'],
+  photo: (c) => c.fromPhoto('aerial_rocks_02', { w: 256, h: 256, tile: 256, filter: 'grayscale(1) blur(2px) contrast(1.5) brightness(1.35)' }),
+});
+
+registerTexture('ks_laptop', {
+  w: 32,
+  h: 24,
+  wrap: false,
+  posterize: false,
+  draw(g, w, h) {
+    g.fillStyle = '#0c1410';
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = '#5cff8a';
+    g.fillRect(2, 2, 12, 1);
+    g.fillRect(2, 4, 8, 1);
+    g.fillRect(2, 19, 28, 1);
+    g.fillRect(2, 21, 18, 1);
+    // A red trefoil-ish warning mark in the middle.
+    g.fillStyle = '#ff3a2a';
+    g.beginPath();
+    g.arc(16, 11, 6, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#0c1410';
+    for (const a of [Math.PI / 2, Math.PI / 2 + (2 * Math.PI) / 3, Math.PI / 2 + (4 * Math.PI) / 3]) {
+      g.beginPath();
+      g.moveTo(16, 11);
+      g.arc(16, 11, 6.5, a - 0.5, a + 0.5);
+      g.fill();
+    }
+    g.fillStyle = '#ff3a2a';
+    g.fillRect(15, 10, 2, 2);
+  },
+  photo: 'none',
+});

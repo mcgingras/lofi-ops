@@ -14,6 +14,8 @@
  *            (Mortar Team), 'area' one patrol point (Attack Helicopter). See defs/tactical-map.ts.
  *   place  - placed on the ground in front of the caller (Sentry Gun, SAM Turret)
  *   control- the caller drives/aims it (RC-XD, Chopper Gunner, Valkyrie Rockets)
+ *
+ * The MW2 Tactical Nuke (25) rides on top of the BO1 set: see `defs/nuke.ts` for its timeline.
  */
 import { indexById } from './registry';
 
@@ -43,6 +45,13 @@ export interface KillstreakDef {
   /** Hit points when it can be shot down/destroyed (absent: invulnerable). */
   hp?: number;
   price?: number;
+  /**
+   * Kills made by killstreaks count toward this one. BO1 rule (the default, false): only gun,
+   * knife and equipment kills count. MW2's Tactical Nuke counted every kill, so it sets this.
+   */
+  countsStreakKills?: boolean;
+  /** Not available in wager matches (it can't be earned or called there). */
+  noWager?: boolean;
 }
 
 export const KILLSTREAKS: KillstreakDef[] = [
@@ -60,11 +69,14 @@ export const KILLSTREAKS: KillstreakDef[] = [
   { id: 'rolling_thunder', name: 'Rolling Thunder', kills: 8, description: 'Pick a spot and a direction on the map: a B-52 carpet-bombs along it.', unlockLevel: 36, kind: 'called', targeting: 'map', mapPick: 'line', icon: 'ks_thunder' },
   { id: 'chopper_gunner', name: 'Chopper Gunner', kills: 9, description: 'Man the explosive gun of a circling helicopter.', unlockLevel: 40, kind: 'controlled', durationSec: 40, targeting: 'control', air: true, hp: 2000, icon: 'ks_gunner' },
   { id: 'attack_dogs', name: 'Attack Dogs', kills: 11, description: 'A pack of dogs hunts down the enemy.', unlockLevel: 44, kind: 'called', durationSec: 60, targeting: 'none', icon: 'ks_dogs' },
+  // MW2's Tactical Nuke. Killstreak kills count toward it as they did in MW2 (25 gun kills in a
+  // row against bots is a very long ask); set `countsStreakKills: false` for the strict BO1 rule.
+  { id: 'nuke', name: 'Tactical Nuke', kills: 25, description: 'Ten seconds after you call it, a nuclear blast kills everyone and ends the match in your favour. Killstreak kills count toward it.', unlockLevel: 46, kind: 'called', targeting: 'none', icon: 'ks_nuke', countsStreakKills: true, noWager: true },
 ];
 
 export const KILLSTREAK_BY_ID = indexById(KILLSTREAKS);
 
-/** What a Care Package can hold (weights). `ammo` refills the capturer's weapons. */
+/** What a Care Package can hold (weights). `ammo` refills the capturer's weapons. Never the Tactical Nuke (MW2 neither). */
 export const CARE_PACKAGE_WEIGHTS: Record<string, number> = {
   ammo: 14,
   uav: 18,
@@ -82,10 +94,10 @@ export const CARE_PACKAGE_WEIGHTS: Record<string, number> = {
   attack_dogs: 1,
 };
 
-/** Entity kinds the killstreaks feature puts in snapshots (client renderers key on these). */
 /** How close you must be to a landed crate to take it: horizontal reach and height difference (m). */
 export const CRATE_REACH = { r: 1.8, dy: 2 };
 
+/** Entity kinds the killstreaks feature puts in snapshots (client renderers key on these). */
 export const KS_ENTITY = {
   uav: 'ks_uav',
   counterUav: 'ks_cuav',
@@ -107,6 +119,8 @@ export const KS_ENTITY = {
   dog: 'ks_dog',
   rcxd: 'ks_rcxd',
   scavenger: 'perks_pack',
+  /** The Tactical Nuke: sits at the blast point off the map edge; `s.a` countdown start, `s.d` detonation (room time). */
+  nuke: 'ks_nuke',
 } as const;
 
 /** Weapon ids streaks deal damage with (killfeed shows the streak); kills with these never count toward streaks. */
@@ -114,3 +128,6 @@ export const isStreakWeapon = (weapon: string) => KILLSTREAK_BY_ID.has(weapon) |
 
 /** Kills needed with a cost offset (Hardline: -1), never below 1. */
 export const streakCost = (def: KillstreakDef, offset: number) => Math.max(1, def.kills + Math.round(offset));
+
+/** Can `def` be earned and called in a mode? (The Tactical Nuke is off in wager matches.) */
+export const streakAllowedIn = (def: KillstreakDef, mode: { playlist?: string; wager?: unknown }) => !(def.noWager && (mode.playlist === 'wager' || !!mode.wager));

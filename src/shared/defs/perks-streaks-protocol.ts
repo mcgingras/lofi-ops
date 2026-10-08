@@ -10,6 +10,8 @@ export interface KillstreakStateMsg {
   chosen: { id: string; cost: number }[];
   /** Kills toward streaks this life (streak kills excluded). */
   count: number;
+  /** Every kill this life, streak kills included (what `countsStreakKills` streaks, the Tactical Nuke, count). */
+  countAll?: number;
   /** Earned and waiting to be called (oldest first). */
   ready: string[];
   /** Index into `ready` the STREAK button calls. */
