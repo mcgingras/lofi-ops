@@ -376,8 +376,11 @@ function launchPad(k: MapKit): void {
     const xw = X(s * (PAD_HW - 0.2));
     // North of the entrance: wall from the ground to the deck rail.
     k.aabb(xw - 0.2, 0, -31.6, xw + 0.2, D + 1.1, -24.75, 'concrete');
-    // South of the towers: the pad's side wall, on down to the main yard.
+    // South of the towers: the pad's side wall, on down to the main yard, red pipes along it.
     k.aabb(xw - 0.2, 0, -15.5, xw + 0.2, 4.0, -10.2, 'concrete');
+    k.cyl(0.2, 5.3, 8, 'red', xw - s * 0.45, 2.9, -12.85, { axis: 'z', collide: false });
+    k.cyl(0.14, 5.3, 8, 'pipe', xw - s * 0.42, 3.4, -12.85, { axis: 'z', collide: false });
+    k.wallDecal(1.2, 0.9, 'sign', xw - s * 0.21, 1.4, -12.0, -s * PI / 2, { uv: 'raw' });
     // Lintel over the entrance (the deck edge).
     k.aabb(xw - 0.2, D - 0.4, -24.75, xw + 0.2, D + 1.1, -21.0, 'concrete');
     k.light(xw - s * 1.2, 1.9, -22.6, [1.3, 1.1, 0.8], 7, 'lamp');
@@ -767,7 +770,7 @@ function control(k: MapKit): void {
   k.box(0.8, 1.0, 2.2, 'steel', 11.0, U, -5.0);
   k.light(15.8, U - 0.6, -5.5, [1.2, 1.1, 0.85], 7, 'lamp');
   k.light(15.8, H - 0.6, -4.5, [1.2, 1.1, 0.85], 7, 'lamp');
-  k.wallDecal(2.4, 2.4, 'star', x1 + 0.02, 4.2, -5.5, -PI / 2, { uv: 'raw' });
+  k.wallDecal(2.4, 2.4, 'star', x1 + 0.02, 4.2, -5.5, PI / 2, { uv: 'raw' });
   // The low blocks south of it; their roofs (at U) join the upper floor's south doors.
   block(k, 10.0, -1.9, 16.5, 7.75, U, 'corr', 'slab');
   block(k, 16.5, -1.9, 23.6, 5.25, U, 'corr', 'slab');
