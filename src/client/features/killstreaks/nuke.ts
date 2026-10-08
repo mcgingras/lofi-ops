@@ -191,14 +191,14 @@ registerMatchHook('killstreaks.nuke', {
       cam.rotation.z += (Math.random() - 0.5) * 2 * f.shake;
     }
     m.controls.lookScale *= f.timeScale;
-    if (sirenTick(nukeClient.prevT, t, info.times) !== null) sfx.play('ks_alarm', { volume: 0.55, rate: 0.5, lowpass: 1300 });
+    if (sirenTick(nukeClient.prevT, t, info.times) !== null) sfx.play('modes.beep', { volume: 0.7 });
     if (f.since >= 0 && !nukeClient.boomed) {
       nukeClient.boomed = true;
-      if (f.since < 1.5) sfx.play('ks_bigboom', { volume: 3, rate: 0.35, lowpass: 650 });
+      if (f.since < 1.5) sfx.play('ks_bigboom', { volume: 2.2, rate: 0.9, lowpass: 900 });
     }
     if (f.since >= 0 && f.hitSince >= 0 && !nukeClient.hit) {
       nukeClient.hit = true;
-      if (f.hitSince < 1) sfx.play('ks_bigboom', { volume: 2.4, rate: 0.55, lowpass: 1400 });
+      if (f.hitSince < 1) sfx.play('ks_bigboom', { volume: 2, rate: 0.94, lowpass: 2200 });
     }
     nukeClient.prevT = t;
     if (laptop.update(m, f.laptop >= 0 && nukeClient.side === 'mine' && m.alive ? laptopPose(f.laptop) : null)) m.viewmodel.visible = false;
