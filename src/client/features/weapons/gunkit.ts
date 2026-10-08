@@ -286,6 +286,7 @@ export const FURNITURE: Record<string, 'wood' | 'poly' | 'olive' | 'tan'> = {
   m1911: 'wood',
   l96a1: 'olive',
   aug: 'olive',
+  acr: 'tan',
 };
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -419,6 +420,106 @@ export const GUNS: Record<string, GunBuilder> = {
     return { muzzle: V(0, 0.01, r.tip), sightY: r.sightY, adsZ: r.adsZ, grip: V(0.005, -0.13, -0.02), fore: V(-0.012, -0.12, -0.23), parts: { mag }, pistol: false };
   },
 
+  // MW2's M16A4: flat-top upper with a full-length rail and a flip-up rear sight (no carry handle),
+  // square quad-rail handguard, A2 front sight tower, long fixed A2 stock.
+  m16a4(k, atts) {
+    const { M } = k;
+    k.box(0.064, 0.05, 0.34, M.body, 0, 0.0175, 0); // upper
+    k.box(0.058, 0.045, 0.28, M.body, 0, -0.03, 0.02); // lower
+    k.box(0.06, 0.035, 0.1, M.body, 0, -0.06, -0.08); // mag well
+    k.cyl(0.01, 0.03, M.metal, 0.034, 0.025, 0.1, 6); // forward assist
+    k.box(0.004, 0.022, 0.07, M.metal, 0.033, 0.012, 0.0); // ejection port cover
+    k.rail(-0.17, 0.16, 0.0425);
+    // Quad rail: square handguard with rails top, bottom and sides.
+    k.box(0.07, 0.07, 0.3, M.furn, 0, 0.0, -0.32);
+    k.rail(-0.47, -0.17, 0.035);
+    for (const s of [-1, 1]) {
+      k.box(0.008, 0.026, 0.29, M.metal, s * 0.038, 0.0, -0.32);
+      for (let z = -0.46; z < -0.18; z += 0.03) k.box(0.01, 0.03, 0.008, M.poly, s * 0.04, 0.0, z);
+    }
+    k.box(0.026, 0.008, 0.29, M.metal, 0, -0.038, -0.32);
+    const tip = k.barrel(-0.47, 0.32, 0.012, 0.0);
+    k.cyl(0.016, 0.05, M.metal, 0, 0, tip + 0.02); // A2 flash hider
+    // A2 front sight tower over the gas block.
+    k.box(0.03, 0.03, 0.03, M.metal, 0, 0.0, -0.56);
+    k.box(0.012, 0.075, 0.02, M.metal, 0, 0.045, -0.56, 0.2);
+    k.box(0.03, 0.01, 0.014, M.metal, 0, 0.078, -0.56);
+    k.box(0.008, 0.02, 0.008, M.metal, 0, 0.083, -0.565);
+    const opt = k.optic(atts, -0.02, 0.058);
+    // Flip-up rear sight on the back of the rail: up for irons, folded under an optic.
+    let sightY = 0.093;
+    let adsZ = -0.46;
+    if (opt) {
+      ({ sightY, adsZ } = opt);
+      k.box(0.03, 0.012, 0.04, M.metal, 0, 0.064, 0.13);
+    } else {
+      k.box(0.03, 0.012, 0.04, M.metal, 0, 0.064, 0.13);
+      k.box(0.006, 0.03, 0.012, M.metal, -0.013, 0.08, 0.12);
+      k.box(0.006, 0.03, 0.012, M.metal, 0.013, 0.08, 0.12);
+      k.box(0.026, 0.006, 0.012, M.metal, 0, sightY + 0.009, 0.12);
+      k.box(0.026, 0.006, 0.012, M.metal, 0, sightY - 0.009, 0.12);
+    }
+    const mag = k.magazine(-0.08, -0.075, atts, (g, l) => k.straightMag(g, 0.17 * l, 0.042, 0.07, M.metal, 0.12));
+    k.pistolGrip(0.12, -0.05, M.poly);
+    k.stock(0.17, 0.34, -0.005, 0.1, M.furn, 0.035);
+    k.box(0.05, 0.03, 0.04, M.metal, 0, -0.06, 0.5); // sling swivel / trapdoor plate
+    let t = tip;
+    if (atts.includes('suppressor')) t = k.suppressor(tip, 0);
+    if (atts.includes('gl')) k.launcher(-0.22, -0.04);
+    return { muzzle: V(0, 0, t), sightY, adsZ, grip: V(0.005, -0.11, 0.13), fore: V(-0.012, -0.05, -0.3), parts: { mag }, pistol: false };
+  },
+
+  // MW2's ACR (Masada): angular two-piece receiver, full-length top rail, faceted polymer handguard
+  // with a forward charging handle, flip-up sights, angular folding stock, polymer magazine.
+  acr(k, atts) {
+    const { M } = k;
+    k.box(0.066, 0.06, 0.36, M.body, 0, 0.015, -0.02); // upper
+    // Upper's chamfered top edges.
+    for (const s of [-1, 1]) k.box(0.02, 0.02, 0.36, M.body, s * 0.03, 0.04, -0.02, 0, 0, s * 0.785);
+    k.box(0.06, 0.045, 0.24, M.furn, 0, -0.035, 0.03); // polymer lower
+    k.box(0.068, 0.06, 0.1, M.furn, 0, -0.065, -0.08, -0.12); // flared mag well
+    k.rail(-0.47, 0.16, 0.045);
+    // Faceted handguard: a box with its lower corners cut by two angled slabs, vent slots on the side.
+    k.box(0.074, 0.06, 0.28, M.furn, 0, 0.015, -0.34);
+    for (const s of [-1, 1]) {
+      k.box(0.035, 0.035, 0.28, M.furn, s * 0.022, -0.014, -0.34, 0, 0, s * 0.785);
+      for (let i = 0; i < 3; i++) k.box(0.004, 0.012, 0.04, M.poly, s * 0.038, 0.012, -0.26 - i * 0.07);
+    }
+    k.box(0.03, 0.012, 0.03, M.metal, -0.048, 0.03, -0.17); // forward charging handle
+    const tip0 = k.barrel(-0.48, 0.2, 0.012, 0.01);
+    k.cyl(0.017, 0.055, M.metal, 0, 0.01, tip0 - 0.0275, 6); // birdcage
+    const tip = tip0 - 0.055;
+    const opt = k.optic(atts, -0.03, 0.061);
+    let sightY = 0.093;
+    let adsZ = -0.45;
+    // Flip-up front sight on the end of the rail and a rear aperture (folded under an optic).
+    k.box(0.03, 0.012, 0.03, M.metal, 0, 0.067, -0.45);
+    if (opt) ({ sightY, adsZ } = opt);
+    else {
+      k.box(0.008, 0.03, 0.03, M.metal, -0.012, 0.075, -0.45, 0.25);
+      k.box(0.008, 0.03, 0.03, M.metal, 0.012, 0.075, -0.45, 0.25);
+      k.box(0.007, 0.022, 0.008, M.metal, 0, 0.082, -0.455);
+      k.box(0.03, 0.012, 0.03, M.metal, 0, 0.067, 0.13);
+      k.box(0.03, 0.006, 0.01, M.metal, 0, sightY + 0.01, 0.125);
+      k.box(0.03, 0.006, 0.01, M.metal, 0, sightY - 0.01, 0.125);
+      k.box(0.006, 0.026, 0.01, M.metal, -0.012, sightY, 0.125);
+      k.box(0.006, 0.026, 0.01, M.metal, 0.012, sightY, 0.125);
+    }
+    const mag = k.magazine(-0.08, -0.09, atts, (g, l) => k.straightMag(g, 0.16 * l, 0.044, 0.072, M.poly, 0.13));
+    k.box(0.044, 0.12, 0.055, M.poly, 0, -0.105, 0.11, -0.3); // grip
+    k.box(0.012, 0.02, 0.07, M.metal, 0, -0.06, 0.04); // trigger guard
+    // Angular folding stock: hinge block, slanted comb and a tall butt.
+    k.box(0.05, 0.06, 0.06, M.furn, 0, 0.0, 0.19);
+    k.box(0.05, 0.035, 0.2, M.furn, 0, 0.015, 0.3, -0.06);
+    k.box(0.05, 0.03, 0.22, M.furn, 0, -0.06, 0.3, 0.22);
+    k.box(0.058, 0.14, 0.05, M.furn, 0, -0.03, 0.42);
+    k.box(0.062, 0.145, 0.016, M.poly, 0, -0.03, 0.452);
+    let t = tip;
+    if (atts.includes('suppressor')) t = k.suppressor(tip, 0.01);
+    if (atts.includes('gl')) k.launcher(-0.24, -0.02);
+    return { muzzle: V(0, 0.01, t), sightY, adsZ, grip: V(0.005, -0.12, 0.12), fore: V(-0.012, -0.05, -0.33), parts: { mag }, pistol: false };
+  },
+
   mp5k(k, atts) {
     const { M } = k;
     k.box(0.06, 0.08, 0.3, M.body, 0, 0, 0);
@@ -536,6 +637,56 @@ export const GUNS: Record<string, GunBuilder> = {
     let t = tip;
     if (atts.includes('suppressor')) t = k.suppressor(tip, 0.012, 0.026, 0.22);
     return { muzzle: V(0, 0.012, t), sightY, adsZ, grip: V(0.005, -0.12, 0.17), fore: V(-0.012, -0.05, -0.31), parts: { mag }, pistol: false };
+  },
+
+  // MW2's Intervention (CheyTac M200): long fluted barrel with a big muzzle brake, round free-float
+  // handguard with a folded bipod, oversized scope on a long rail, adjustable skeleton stock with a
+  // cheek riser and monopod, bolt on the right.
+  intervention(k, atts) {
+    const { M } = k;
+    k.box(0.07, 0.075, 0.32, M.body, 0, 0.0, 0.02);
+    k.rail(-0.6, 0.16, 0.0375);
+    k.cyl(0.042, 0.46, M.furn, 0, 0.0, -0.37, 8); // free-float handguard
+    for (const s of [-1, 1]) for (let i = 0; i < 4; i++) k.box(0.006, 0.014, 0.05, M.poly, s * 0.04, 0.0, -0.22 - i * 0.1);
+    // Fluted barrel: a dark rib in each flute so it reads at low resolution.
+    const len = 0.42;
+    const tip0 = k.barrel(-0.6, len, 0.018, 0);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      k.box(0.005, 0.005, len * 0.85, M.poly, Math.sin(a) * 0.017, Math.cos(a) * 0.017, -0.6 - len * 0.45, 0, 0, -a);
+    }
+    let t = tip0;
+    if (atts.includes('suppressor')) t = k.suppressor(tip0, 0, 0.032, 0.26);
+    else {
+      k.cyl(0.03, 0.09, M.metal, 0, 0, tip0 - 0.035, 8); // muzzle brake
+      for (const s of [-1, 1]) for (let i = 0; i < 2; i++) k.box(0.006, 0.026, 0.016, M.poly, s * 0.03, 0, tip0 - 0.015 - i * 0.032);
+      t = tip0 - 0.08;
+    }
+    // Bipod folded under the handguard (hinge at the front, legs pointing back).
+    k.box(0.05, 0.024, 0.04, M.metal, 0, -0.05, -0.57);
+    for (const s of [-1, 1]) {
+      k.box(0.012, 0.012, 0.28, M.metal, s * 0.022, -0.058, -0.43, -0.06);
+      k.box(0.02, 0.012, 0.02, M.poly, s * 0.022, -0.068, -0.29);
+    }
+    const mag = k.magazine(-0.06, -0.037, atts, (g, l) => k.straightMag(g, 0.08 * l, 0.046, 0.085, M.metal, 0));
+    const bolt = k.group(0.04, 0.02, 0.1);
+    k.box(0.07, 0.012, 0.012, M.metal, 0.035, 0, 0, 0, 0, 0, bolt);
+    k.cyl(0.016, 0.03, M.metal, 0.07, 0, 0, 6, bolt, 'x');
+    k.pistolGrip(0.15, -0.035, M.poly, -0.2);
+    // Skeleton stock: tube, cheek riser on posts, tall butt and a monopod.
+    k.box(0.04, 0.04, 0.3, M.furn, 0, -0.01, 0.33);
+    k.box(0.05, 0.03, 0.17, M.furn, 0, 0.05, 0.35);
+    k.box(0.012, 0.03, 0.012, M.metal, 0, 0.025, 0.29);
+    k.box(0.012, 0.03, 0.012, M.metal, 0, 0.025, 0.41);
+    k.box(0.06, 0.17, 0.035, M.furn, 0, -0.035, 0.49);
+    k.box(0.064, 0.175, 0.012, M.poly, 0, -0.035, 0.512);
+    k.box(0.016, 0.09, 0.016, M.metal, 0, -0.07, 0.4);
+    let sightY = 0.13;
+    let adsZ = -0.4;
+    const opt = k.optic(atts, -0.04, 0.05);
+    if (opt) ({ sightY, adsZ } = opt);
+    else sightY = k.scope(-0.1, 0.05, 0.4, 0.036, atts.includes('varzoom'));
+    return { muzzle: V(0, 0, t), sightY, adsZ, grip: V(0.005, -0.1, 0.16), fore: V(-0.012, -0.07, -0.34), parts: { mag, bolt }, pistol: false };
   },
 
   olympia(k) {
