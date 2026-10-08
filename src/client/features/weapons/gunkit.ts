@@ -685,7 +685,7 @@ export const GUNS: Record<string, GunBuilder> = {
     let adsZ = -0.4;
     const opt = k.optic(atts, -0.04, 0.05);
     if (opt) ({ sightY, adsZ } = opt);
-    else sightY = k.scope(-0.03, 0.05, 0.44, 0.038, atts.includes('varzoom'));
+    else sightY = k.scope(-0.1, 0.05, 0.4, 0.036, atts.includes('varzoom'));
     return { muzzle: V(0, 0, t), sightY, adsZ, grip: V(0.005, -0.1, 0.16), fore: V(-0.012, -0.07, -0.34), parts: { mag, bolt }, pistol: false };
   },
 
