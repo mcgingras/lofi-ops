@@ -71,7 +71,7 @@ export const KILLSTREAKS: KillstreakDef[] = [
   { id: 'attack_dogs', name: 'Attack Dogs', kills: 11, description: 'A pack of dogs hunts down the enemy.', unlockLevel: 44, kind: 'called', durationSec: 60, targeting: 'none', icon: 'ks_dogs' },
   // MW2's Tactical Nuke. Killstreak kills count toward it as they did in MW2 (25 gun kills in a
   // row against bots is a very long ask); set `countsStreakKills: false` for the strict BO1 rule.
-  { id: 'nuke', name: 'Tactical Nuke', kills: 25, description: 'Ten seconds after you call it, a nuclear blast kills everyone and ends the match in your favour. Killstreak kills count toward it.', unlockLevel: 46, kind: 'called', targeting: 'none', icon: 'ks_nuke', countsStreakKills: true, noWager: true },
+  { id: 'nuke', name: 'Tactical Nuke', kills: 25, description: 'Ten seconds after you call it, a nuclear blast kills everyone and ends the match in your favour. Killstreak kills count toward it.', unlockLevel: 25, kind: 'called', targeting: 'none', icon: 'ks_nuke', countsStreakKills: true, noWager: true },
 ];
 
 export const KILLSTREAK_BY_ID = indexById(KILLSTREAKS);
