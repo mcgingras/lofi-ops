@@ -3,6 +3,7 @@
  * builds once and caches. `inspiredBy` keeps the original for any future rename.
  */
 import { buildFiringRange } from '../maps/firingrange';
+import { buildLaunch } from '../maps/launch';
 import { buildNuketown } from '../maps/nuketown';
 import { buildRust } from '../maps/rust';
 import { buildScrapyard } from '../maps/scrapyard';
@@ -48,6 +49,7 @@ export const MAPS: MapDef[] = [
   // maps-bo: Black Ops 1 recreations. Objective data: dom A/B/C, sd A/B (+ modeSpawns.sd), hq points.
   { id: 'nuketown', name: 'Nuketown', inspiredBy: 'Call of Duty: Black Ops (2010), Nuketown', build: buildNuketown, modes: BO_MODES, size: 'small' },
   { id: 'firingrange', name: 'Firing Range', inspiredBy: 'Call of Duty: Black Ops (2010), Firing Range', build: buildFiringRange, modes: BO_MODES, size: 'medium' },
+  { id: 'launch', name: 'Launch', inspiredBy: 'Call of Duty: Black Ops (2010), Launch: the Baikonur cosmodrome pad (rocket, flame trench, stair towers, the track, the Centrifuge, the Fuel Yard)', build: buildLaunch, modes: BO_MODES, size: 'large' },
 ];
 
 export const MAP_BY_ID = indexById(MAPS);
