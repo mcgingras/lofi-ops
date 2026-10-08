@@ -66,7 +66,7 @@ const MATERIALS: Record<string, MaterialDef> = {
   bark: { texture: 'fr_bark', uvMul: [1 / 1.5, 1 / 1.5], tint: 0x9a8a78 },
   leaves: { texture: 'fr_bush', side: 'double', tint: 0x9aa070 },
   pipe: { texture: 'rust_pipe', uvMul: [1, 2], tint: 0x9a7a60 },
-  humvee: { texture: 'yellow', tint: 0xc4ae7c, uvMul: [1 / 0.8, 1 / 0.8] },
+  humvee: { texture: 'steel', tint: 0xd2bf94 },
   stryker: { texture: 'afg_hull', uvMul: [1 / 3, 1 / 3], tint: 0xa8a070 },
   gun: { texture: 'steel', tint: 0x5a6048 },
   crate: { texture: 'crate', uvMul: [1 / 1.2, 1 / 1.2] },
@@ -438,8 +438,15 @@ export function buildAfghan(): MapData {
   }))
     k.slab(r.x0, 0, r.z0, r.x1, r.level, r.z1, 'rock', { hide: ['ny'], faceMats: { py: 'rockTop' } });
   // The Cave roof (its underside is the cave ceiling; it overhangs the three mouths).
-  for (const r of raster(-12, 10, 10, 39, 1.5, (x, z) => (inside(CAVE, x, z) && !inRect(LEDGE, x, z) ? Math.ceil((6.6 + 2.2 + hash(x, z) * 1.6) / STRATUM) * STRATUM : null)))
-    k.slab(r.x0, 6.6, r.z0, r.x1, r.level, r.z1, 'rock', { faceMats: { ny: 'caveRock', py: 'rockTop' } });
+  // Cells near the cave's edge hang lower, so the mouths and walls read as a rough arch.
+  const ROOF_BOTTOM = [5.4, 6.0, 6.6];
+  const roofBottom = (x: number, z: number) => {
+    const d = edgeDist(CAVE, x, z);
+    return d < 1.3 ? 0 : d < 2.8 ? 1 : 2;
+  };
+  const roofTop = (x: number, z: number) => Math.ceil((6.6 + 2.2 + hash(x, z) * 1.6) / STRATUM) * STRATUM;
+  for (const r of raster(-12, 10, 10, 39, 0.75, (x, z) => (inside(CAVE, x, z) && !inRect(LEDGE, x, z) ? roofBottom(x, z) * 100 + roofTop(x, z) : null)))
+    k.slab(r.x0, ROOF_BOTTOM[Math.floor(r.level / 100)]!, r.z0, r.x1, Math.round((r.level % 100) * 100) / 100, r.z1, 'rock', { faceMats: { ny: 'caveRock', py: 'rockTop' } });
   // The ledge above the north mouth (walkable, reached up the wing).
   k.slab(LEDGE.x0, L.ledge - 0.9, LEDGE.z0, LEDGE.x1, L.ledge, LEDGE.z1, 'rock', { faceMats: { py: 'rockTop', ny: 'caveRock' } });
   k.slab(LEDGE.x0 - 0.1, L.ledge, LEDGE.z0 - 0.1, LEDGE.x0 + 1.2, L.ledge + 0.5, LEDGE.z0 + 1.6, 'rock', { faceMats: { py: 'rockTop' } });
@@ -490,20 +497,29 @@ export function buildAfghan(): MapData {
   // =============================================================================================
   const W = L.walkway;
   // West leg: down from the plateau (6) to the corner (4).
-  k.ramp(-43.4, 0, 16, -40, L.plateau, 32, '-z', 'concrete', { tag: 'stairs' });
+  k.slab(-43.4, 0, 16, -40, W, 32, 'concrete', { hide: ['py'] });
+  k.ramp(-43.4, W, 16, -40, L.plateau, 32, '-z', 'concrete', { tag: 'stairs' });
   k.slab(-43.4, 0, 32, -35, W, 45.2, 'concrete');
   k.slab(-35, 0, 41.6, -14, W, 45.2, 'concrete');
   // East end: down to the cave's south mouth level, then stairs into the pocket.
-  k.ramp(-14, 0, 41.6, -6, W, 45.2, '-x', 'concrete', { tag: 'stairs' });
+  k.slab(-14, 0, 41.6, -6, 1.0, 45.2, 'concrete', { hide: ['py'] });
+  k.ramp(-14, 1.0, 41.6, -6, W, 45.2, '-x', 'concrete', { tag: 'stairs' });
   k.slab(-6, 0, 41.6, -4.8, 1.0, 45.2, 'concrete');
   k.ramp(-4.8, 0, 41.6, -2.6, 1.0, 45.2, '-x', 'concrete', { tag: 'stairs' });
   // Parapets on the inner side, railing and clip on the outer side.
-  k.slab(-40, 4.4, 17, -39.6, 6.9, 22, 'concrete');
-  k.rail('z', 22.5, 31.5, -39.8, 5.0, 'rail', 'steel', 1.0);
+  /** Railing down a ramp along z (deck height from y0 at z0 to y1 at z1), in short level pieces. */
+  const rampRail = (z0: number, z1: number, at: number, y0: number, y1: number, n: number) => {
+    for (let i = 0; i < n; i++) {
+      const za = z0 + ((z1 - z0) * i) / n;
+      const zb = z0 + ((z1 - z0) * (i + 1)) / n;
+      k.rail('z', za, zb, at, y0 + ((y1 - y0) * (i + 0.5)) / n - 0.05, 'rail', 'steel', 1.0);
+    }
+  };
+  rampRail(17, 27.4, -39.8, 6 - (2 * 1) / 16, 6 - (2 * 11.4) / 16, 5);
   k.slab(-35, W, 41.6, -28.2, W + 0.9, 42.0, 'concrete');
   k.slab(-23.6, W, 41.6, -21.4, W + 0.9, 42.0, 'concrete');
   k.slab(-17.8, W, 41.6, -14, W + 0.9, 42.0, 'concrete');
-  k.rail('z', 16.4, 32.0, -43.25, 6.0, 'rail', 'steel', 1.0);
+  rampRail(16.4, 32, -43.25, 6, 4, 8);
   k.rail('z', 32.0, 45.0, -43.25, W, 'rail', 'steel', 1.0);
   k.rail('x', -43.4, -14, 45.05, W, 'rail', 'steel', 1.0);
   k.playerClip(-43.9, -1, 14, -43.4, 40, 45.8);
@@ -631,7 +647,7 @@ export function buildAfghan(): MapData {
   k.slab(-19.4, 4.1, tz - 0.25, -14.6, 7.6, tz + 0.25, 'hull');
   k.slab(-19.0, 7.6, tz - 0.22, -16.2, 10.4, tz + 0.22, 'hull');
   k.trim(-19.2, 10.4, tz - 0.2, -17.0, 10.7, tz + 0.2, 'hull');
-  k.slab(-19.2, 4.1, tz - 7.2, -16.2, 4.4, tz + 7.2, 'hull', { hide: ['ny'] });
+  k.slab(-19.2, 4.1, tz - 6.2, -16.2, 4.4, tz + 6.2, 'hull', { hide: ['ny'] });
   // Jagged break (render only) and debris round it.
   for (const [z, y0, y1] of [[tz - 1.6, 0.4, 2.6], [tz + 1.2, 0.4, 3.4], [tz - 0.4, 3.0, 4.1]] as const) k.trim(-7.4, y0, z - 0.4, -6.9, y1, z + 0.4, 'hullDark');
 
@@ -664,8 +680,9 @@ export function buildAfghan(): MapData {
   for (const z of [wz0 + 6.2, wz0 + 12.4]) {
     const y = 0.15 + ((L.ledge - 0.15) * (z - wz0)) / (wz1 - wz0);
     k.cyl(0.62, 4.2, 10, 'hull', wx1 - 1.6, y - 0.75, z, 'x');
-    k.trim(wx1 + 0.5, y - 0.85, z - 2.0, wx1 + 0.6, y - 0.65, z + 2.0, 'prop');
-    k.trim(wx1 + 0.5, y - 2.6, z - 0.1, wx1 + 0.6, y + 1.1, z + 0.1, 'prop');
+    k.trim(wx1 + 0.5, y - 0.8, z - 1.9, wx1 + 0.56, y - 0.7, z + 1.9, 'prop');
+    k.trim(wx1 + 0.5, y - 2.4, z - 0.05, wx1 + 0.56, y + 0.9, z + 0.05, 'prop');
+    k.cyl(0.25, 0.5, 8, 'hullDark', wx1 + 0.55, y - 0.75, z, 'x', false);
   }
   // The other wing: a short broken stub on the north side.
   k.slab(wx0, 3.4, mz - 6.4, wx1, 3.7, mz - 2.2, 'hull');
@@ -717,9 +734,9 @@ export function buildAfghan(): MapData {
     const z1 = -29.4;
     const h = 2.7;
     const t = 0.45;
-    k.wall('x', x0, x1, z1 - t / 2, y, y + h, t, 'bunker', [[7.6, 8.8, y, y + 2.1], [9.6, 15.8, y + 1.0, y + 1.6]], { faceMats: { nz: 'bunkerIn' } });
-    k.wall('x', x0, x1, z0 + t / 2, y, y + h, t, 'bunker', [[13.0, 14.2, y, y + 2.1], [9.0, 10.6, y + 1.0, y + 1.6]], { faceMats: { pz: 'bunkerIn' } });
-    k.wall('z', z0 + t, z1 - t, x0 + t / 2, y, y + h, t, 'bunker', [[-32.8, -31.2, y + 1.0, y + 1.6]], { faceMats: { px: 'bunkerIn' } });
+    k.wall('x', x0, x1, z1 - t / 2, y, y + h, t, 'bunker', [[7.6, 8.8, y, y + 2.1], [9.6, 15.8, y + 1.2, y + 1.85]], { faceMats: { nz: 'bunkerIn' } });
+    k.wall('x', x0, x1, z0 + t / 2, y, y + h, t, 'bunker', [[13.0, 14.2, y, y + 2.1], [9.0, 10.6, y + 1.2, y + 1.85]], { faceMats: { pz: 'bunkerIn' } });
+    k.wall('z', z0 + t, z1 - t, x0 + t / 2, y, y + h, t, 'bunker', [[-32.8, -31.2, y + 1.2, y + 1.85]], { faceMats: { px: 'bunkerIn' } });
     k.wall('z', z0 + t, z1 - t, x1 - t / 2, y, y + h, t, 'bunker', [], { faceMats: { nx: 'bunkerIn' } });
     k.slab(x0 - 0.3, y + h, z0 - 0.3, x1 + 0.3, y + h + 0.5, z1 + 0.3, 'bunker', { faceMats: { ny: 'bunkerIn' } });
     k.decals.push({ kind: 'flat', w: x1 - x0 - 0.9, h: z1 - z0 - 0.9, x: (x0 + x1) / 2, y: y + 0.02, z: (z0 + z1) / 2, mat: 'concrete' });
@@ -803,7 +820,7 @@ export function buildAfghan(): MapData {
     const z1 = -4.0;
     const h = 2.7;
     const t = 0.45;
-    const wi = (a: number, b: number): Hole => [a, b, y + 1.0, y + 1.65];
+    const wi = (a: number, b: number): Hole => [a, b, y + 1.2, y + 1.85];
     k.wall('x', x0, x1, z0 + t / 2, y, y + h, t, 'bunker', [[33.2, 34.6, y, y + 2.1]], { faceMats: { pz: 'bunkerIn' } });
     k.wall('x', x0, x1, z1 - t / 2, y, y + h, t, 'bunker', [wi(32.8, 35.8), [36.9, 38.3, y, y + 2.1], wi(39.0, 41.2)], { faceMats: { nz: 'bunkerIn' } });
     k.wall('z', z0 + t, z1 - t, x0 + t / 2, y, y + h, t, 'bunker', [wi(-19.6, -16.4), [-13.6, -12.2, y, y + 2.1], wi(-9.6, -6.2)], { faceMats: { px: 'bunkerIn' } });

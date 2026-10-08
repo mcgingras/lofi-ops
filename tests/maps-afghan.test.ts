@@ -66,6 +66,8 @@ describe('afghan layout (reference: MW2 minimap + MWIII tac map)', () => {
       ['Cave', 0, 29, L.cave],
       ['Cliffs', -30, 28, L.cliffs],
       ['Walkway south leg', -30, 43.4, L.walkway],
+      ['Walkway west leg (halfway down)', -41.6, 24, 5.0],
+      ['Walkway east ramp', -10, 43.4, 2.6],
       ['ledge above the Cave mouth', 3, 9.4, L.ledge],
       ['tail section floor', -11.6, -14.5, L.plane],
       ['middle section floor', 0.6, -16, L.plane],
