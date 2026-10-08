@@ -74,12 +74,12 @@ const matchEnd = (room: Room) => {
 };
 
 describe('Tactical Nuke def and cost', () => {
-  it('costs 25, 24 with Hardline, counts streak kills, is off in wagers and unlocks late', () => {
+  it('costs 25, 24 with Hardline, counts streak kills, is off in wagers and unlocks at level 25', () => {
     const def = KILLSTREAK_BY_ID.get('nuke')!;
     expect(def).toMatchObject({ name: 'Tactical Nuke', kills: 25, countsStreakKills: true, noWager: true, targeting: 'none' });
     expect(streakCost(def, 0)).toBe(25);
     expect(streakCost(def, -1)).toBe(24);
-    expect(def.unlockLevel).toBeGreaterThan(KILLSTREAK_BY_ID.get('attack_dogs')!.unlockLevel);
+    expect(def.unlockLevel).toBe(25);
     const room = makeRoom();
     const plain = bot(room, 0, [], ['uav', 'attack_dogs', 'nuke']);
     const hard = bot(room, 0, ['hardline'], ['uav', 'attack_dogs', 'nuke']);
