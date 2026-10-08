@@ -16,7 +16,6 @@ import { HIGHRISE_AREAS, HIGHRISE_LEVELS as LV, HIGHRISE_MINIMAP, HIGHRISE_ROOF,
 import { buildCollisionWorld } from '../src/shared/maps/types';
 import type { Vec3 } from '../src/shared/math';
 import { createMoveState, stepMove, type MoveState } from '../src/shared/movement';
-import { reaches } from './maps-mw2-walk';
 
 const map = getMapData('highrise');
 const world = buildCollisionWorld(map);
@@ -131,6 +130,9 @@ function walkFlood(start: Vec3, cell = 0.8, maxNodes = 40000): Walk {
   }
   return out;
 }
+
+/** Is there a walk node within `r` (xz) and `dy` (height) of the point? (as maps-mw2-walk `reaches`) */
+const reaches = (res: Walk, p: Vec3, r = 1.2, dy = 0.7) => res.nodes.some((n) => Math.abs(n.y - p.y) <= dy && Math.hypot(n.x - p.x, n.z - p.z) <= r);
 
 let floods: [Walk, Walk] | null = null;
 const flood = () => (floods ??= [walkFlood(map.spawns.teams[0][0]!), walkFlood(map.spawns.teams[1][0]!)]);

@@ -77,39 +77,52 @@ registerTexture('hr_plywood', {
     }),
 });
 
-/** Curtain-wall office tower, 12 x 8 m per tile (four bays, two floors): dark glass and mullions. */
+/**
+ * Office tower facade, 12 x 8 m per tile: two floors of ribbon windows (dark glass with a sky
+ * reflection and mullions every 1.5 m) between concrete spandrels; a few windows lit.
+ */
 registerTexture('hr_tower', {
   w: 32,
   h: 32,
   draw(g, w, h, R) {
-    grain(g, R, 0, 0, w, h, '#8a8c90', 0.05);
-    for (let fy = 0; fy < 2; fy++)
-      for (let bx = 0; bx < 4; bx++) {
-        const lit = R.rnd() > 0.7;
-        grain(g, R, bx * 8 + 1, fy * 16 + 3, 6, 11, lit ? '#b8b49a' : '#3e4a5a', 0.08);
+    grain(g, R, 0, 0, w, h, '#a8a49c', 0.05);
+    for (let f = 0; f < 2; f++) {
+      grain(g, R, 0, f * 16 + 5, w, 11, '#48566a', 0.06);
+      g.fillStyle = 'rgba(150,170,190,.35)';
+      g.fillRect(0, f * 16 + 5, w, 3);
+      g.fillStyle = 'rgba(30,34,40,.8)';
+      for (let x = 0; x < w; x += 4) g.fillRect(x, f * 16 + 5, 1, 11);
+      if (R.rnd() > 0.6) {
+        g.fillStyle = 'rgba(220,200,150,.85)';
+        g.fillRect((R.rr(0, 7) | 0) * 4 + 1, f * 16 + 8, 3, 7);
       }
+    }
   },
   photos: ['concrete'],
   photo: (c) =>
     c.fromPhoto('concrete', {
-      filter: 'saturate(.2) brightness(1.05)',
+      filter: 'saturate(.15) brightness(1.15)',
       over: (g, w, h) => {
-        for (let fy = 0; fy < 2; fy++)
-          for (let bx = 0; bx < 4; bx++) {
-            const x = (bx * w) / 4 + 10;
-            const y = (fy * h) / 2 + 36;
-            const ww = w / 4 - 20;
-            const hh = h / 2 - 60;
-            const lit = c.rnd() > 0.72;
-            const lg = g.createLinearGradient(x, y, x + ww, y + hh);
-            lg.addColorStop(0, lit ? 'rgba(206,196,160,.95)' : 'rgba(70,86,104,.95)');
-            lg.addColorStop(1, lit ? 'rgba(170,160,126,.95)' : 'rgba(40,50,64,.95)');
-            g.fillStyle = lg;
-            g.fillRect(x, y, ww, hh);
-            g.fillStyle = 'rgba(30,32,36,.8)';
-            g.fillRect(x + ww / 2 - 2, y, 4, hh);
-          }
-        streaks(g, c, w, 0, 10, h, 0.18, '60,56,50');
+        for (let f = 0; f < 2; f++) {
+          const y = (f * h) / 2 + h * 0.15;
+          const hh = h * 0.33;
+          const lg = g.createLinearGradient(0, y, 0, y + hh);
+          lg.addColorStop(0, 'rgba(150,168,186,.95)');
+          lg.addColorStop(0.35, 'rgba(76,90,108,.96)');
+          lg.addColorStop(1, 'rgba(44,52,64,.97)');
+          g.fillStyle = lg;
+          g.fillRect(0, y, w, hh);
+          g.fillStyle = 'rgba(24,26,30,.85)';
+          for (let x = 0; x < w; x += w / 8) g.fillRect(x, y, 4, hh);
+          for (let i = 0; i < 2; i++)
+            if (c.rnd() > 0.5) {
+              g.fillStyle = 'rgba(226,206,160,.85)';
+              g.fillRect(((c.rr(0, 8) | 0) * w) / 8 + 6, y + hh * 0.2, w / 8 - 10, hh * 0.75);
+            }
+          g.fillStyle = 'rgba(40,38,34,.5)';
+          g.fillRect(0, y + hh, w, 3);
+        }
+        streaks(g, c, w, 0, 12, h, 0.14, '60,56,50');
       },
     }),
 });

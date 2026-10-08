@@ -370,6 +370,9 @@ export function buildHighrise(): MapData {
   k.light(-11.5, -1.0, -5.0, [1.0, 1.0, 0.9], 6, 'tunnel');
   k.light(-11.0, 0.2, -15.5, [1.2, 0.95, 0.7], 9, 'work');
   k.light(-11.0, 0.2, 9.0, [1.2, 0.85, 0.7], 10, 'work');
+  // Two concrete blocks on the B lane against the Orange Pit's south wall (the bays on the minimap).
+  slab(-16.6, 0, -8.2, -15.4, 1.0, -6.6, 'concrete');
+  slab(-10.4, 0, -8.2, -9.2, 1.0, -6.6, 'concrete');
   // Hood over the north tunnel's portal (on the roof) and a vent block.
   slab(-14.0, 0, -25.0, -11.9, 2.4, -22.7, 'concrete', { faceMats: { py: 'roofDark' } });
   slab(-4.6, 0, -17.6, -4.2, 1.6, -13.3, 'concrete');
@@ -573,29 +576,32 @@ export function buildHighrise(): MapData {
     const at = (s: number) => ({ x: tip.x + dir.x * s, z: tip.z + dir.z * s });
     const end = at(towerAt + 12);
     const w = at(walkLen);
-    // Walkway (grating on the bottom chord), collision only along the walkable stretch.
-    beamLine(tip.x, tip.z, w.x, w.z, 1.4, deck - 0.3, deck, 'grate', true);
-    beamLine(w.x, w.z, end.x, end.z, 1.4, deck - 0.3, deck, 'grate');
-    // Lattice sides and the top chord (render only).
-    const nx = -dir.z * 0.75;
-    const nz = dir.x * 0.75;
-    for (const sgn of [1, -1]) beamLine(tip.x + nx * sgn, tip.z + nz * sgn, end.x + nx * sgn, end.z + nz * sgn, 0.06, deck, deck + 1.6, 'lattice');
-    beamLine(tip.x, tip.z, end.x, end.z, 0.25, deck + 1.6, deck + 1.8, 'yellow');
+    // You walk on top of the jib (a grating on its top chords); collision only along the walkable
+    // stretch. The lattice sides and the bottom chord hang below it (render only).
+    beamLine(tip.x, tip.z, w.x, w.z, 1.4, deck - 0.2, deck, 'grate', true);
+    beamLine(w.x, w.z, end.x, end.z, 1.4, deck - 0.2, deck, 'grate');
+    const nx = -dir.z * 0.7;
+    const nz = dir.x * 0.7;
+    for (const sgn of [1, -1]) {
+      beamLine(tip.x + nx * sgn, tip.z + nz * sgn, end.x + nx * sgn, end.z + nz * sgn, 0.06, deck - 1.7, deck - 0.2, 'lattice');
+      beamLine(tip.x + nx * sgn, tip.z + nz * sgn, end.x + nx * sgn, end.z + nz * sgn, 0.14, deck - 0.2, deck + 0.05, 'yellow');
+    }
+    beamLine(tip.x, tip.z, end.x, end.z, 0.3, deck - 1.9, deck - 1.7, 'yellow');
     // Tower (mast) from far below up to the jib, the cab, the counterweights.
     const t = at(towerAt);
-    for (const [ox, oz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) trim(t.x + ox - 0.12, -120, t.z + oz - 0.12, t.x + ox + 0.12, deck - 0.3, t.z + oz + 0.12, 'yellow');
-    wallDecal(2.0, 120, 'lattice', t.x, -120, t.z + 1.0, 0, 2);
-    wallDecal(2.0, 120, 'lattice', t.x, -120, t.z - 1.0, PI, 2);
-    wallDecal(2.0, 120, 'lattice', t.x + 1.0, -120, t.z, PI / 2, 2);
-    wallDecal(2.0, 120, 'lattice', t.x - 1.0, -120, t.z, -PI / 2, 2);
-    trim(t.x - 1.3, deck - 2.4, t.z - 1.3, t.x + 1.3, deck - 0.3, t.z + 1.3, 'yellow');
+    for (const [ox, oz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) trim(t.x + ox - 0.12, -120, t.z + oz - 0.12, t.x + ox + 0.12, deck - 1.9, t.z + oz + 0.12, 'yellow');
+    wallDecal(2.0, 118 + deck, 'lattice', t.x, -120, t.z + 1.0, 0, 2);
+    wallDecal(2.0, 118 + deck, 'lattice', t.x, -120, t.z - 1.0, PI, 2);
+    wallDecal(2.0, 118 + deck, 'lattice', t.x + 1.0, -120, t.z, PI / 2, 2);
+    wallDecal(2.0, 118 + deck, 'lattice', t.x - 1.0, -120, t.z, -PI / 2, 2);
+    trim(t.x - 1.3, deck - 3.2, t.z - 1.3, t.x + 1.3, deck - 1.9, t.z + 1.3, 'yellow');
     const cab = at(towerAt - 2.2);
-    trim(cab.x - 0.8, deck - 2.2, cab.z - 0.8, cab.x + 0.8, deck - 0.4, cab.z + 0.8, 'steel');
+    trim(cab.x - 0.8, deck - 3.6, cab.z - 0.8, cab.x + 0.8, deck - 1.95, cab.z + 0.8, 'steel');
     const cw = at(towerAt + 10);
     trim(cw.x - 1.3, deck - 2.4, cw.z - 1.3, cw.x + 1.3, deck + 0.4, cw.z + 1.3, 'concrete', { ry: Math.atan2(dir.x, dir.z) });
     // Trolley and hook over the roof side.
     const hk = at(Math.min(6, walkLen - 2));
-    trim(hk.x - 0.6, deck + 0.2, hk.z - 0.6, hk.x + 0.6, deck + 0.6, hk.z + 0.6, 'dark');
+    trim(hk.x - 0.6, deck - 2.3, hk.z - 0.6, hk.x + 0.6, deck - 1.9, hk.z + 0.6, 'dark');
     k.glow(end.x, deck + 2.2, end.z, [1, 0.25, 0.15], 2.5, undefined, true);
   };
   crane(jibA0, dirA, 17.5, 30, L.jibA);
@@ -878,12 +884,13 @@ export function buildHighrise(): MapData {
     const mats = ['tower', 'towerB', 'towerC'];
     for (let i = 0; i < 46; i++) {
       const ang = (i / 46) * 2 * PI + rnd() * 0.12;
-      const dist = 85 + rnd() * 260 + (i % 3) * 30;
+      // Near ones stand well below the roof (you look down on them); the far ring rises into the haze.
+      const dist = 110 + rnd() * 300 + (i % 3) * 25;
       const cx = Math.sin(ang) * dist;
       const cz = Math.cos(ang) * dist;
       const hx = 9 + rnd() * 16;
       const hz = 9 + rnd() * 16;
-      const top = -60 + rnd() * 130 + (dist > 200 ? 30 : 0);
+      const top = dist < 230 ? -115 + rnd() * 95 : -70 + rnd() * 150;
       const base = -170;
       const m = mats[i % 3]!;
       const h = top - base;
