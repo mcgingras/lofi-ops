@@ -3,6 +3,7 @@
  * builds once and caches. `inspiredBy` keeps the original for any future rename.
  */
 import { buildFiringRange } from '../maps/firingrange';
+import { buildHighrise } from '../maps/highrise';
 import { buildNuketown } from '../maps/nuketown';
 import { buildRust } from '../maps/rust';
 import { buildScrapyard } from '../maps/scrapyard';
@@ -44,6 +45,7 @@ export const MAPS: MapDef[] = [
   // maps-mw2
   { id: 'rust', name: 'Rust', inspiredBy: 'Rust (Call of Duty: Modern Warfare 2, 2009)', build: buildRust, modes: mw2Modes(), size: 'small' },
   { id: 'scrapyard', name: 'Scrapyard', inspiredBy: 'Scrapyard (Call of Duty: Modern Warfare 2, 2009)', build: buildScrapyard, modes: mw2Modes(), size: 'medium' },
+  { id: 'highrise', name: 'Highrise', inspiredBy: 'Highrise (Call of Duty: Modern Warfare 2, 2009): the skyscraper rooftop with the two office buildings, the Pit and its tunnels, the Helipad and the cranes', build: buildHighrise, modes: mw2Modes(), size: 'medium' },
   { id: 'terminal', name: 'Terminal', inspiredBy: 'Terminal (Call of Duty: Modern Warfare 2, 2009), full map: Security, Shopping, Bookstore, Burger Town, the Lounges, Maintenance, the apron and the walk-through plane', build: buildTerminal, modes: mw2Modes(), size: 'large' },
   // maps-bo: Black Ops 1 recreations. Objective data: dom A/B/C, sd A/B (+ modeSpawns.sd), hq points.
   { id: 'nuketown', name: 'Nuketown', inspiredBy: 'Call of Duty: Black Ops (2010), Nuketown', build: buildNuketown, modes: BO_MODES, size: 'small' },
