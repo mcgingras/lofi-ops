@@ -1,5 +1,6 @@
 /**
- * Lethal and tactical equipment on the server: pin/cook/throw on the LETHAL/TACTICAL buttons,
+ * Lethal and tactical equipment on the server: raise (pin) on the LETHAL/TACTICAL press, hold as
+ * long as the button stays down (a frag's fuse burns while held), throw on release (BO1),
  * projectiles simulated in the room entity store (`weapons.nade`), explosions through
  * `room.radiusDamage`, flashbang/concussion effects, and the underbarrel grenade launcher round.
  */
@@ -13,6 +14,7 @@ import type { Entity } from '../../entities';
 import type { PlayerState } from '../../player';
 import type { Room } from '../../room';
 import { stepBody, tacticalAmount, throwVelocity, type Body } from './projectile';
+import { dropTomahawk, spawnTomahawk } from './tomahawk';
 import { wext, type ThrowState } from './state';
 
 /** Server-only state carried in `entity.data`. */
@@ -75,18 +77,23 @@ export function startThrow(room: Room, p: PlayerState, kind: 'lethal' | 'tactica
   return true;
 }
 
-/** Per tick: advance a player's throw (release, cook, the grenade leaving the hand). */
+/**
+ * Per tick: advance a player's throw. While the button is held the equipment stays raised (the
+ * gun stays down): a tomahawk, semtex or flashbang can be held as long as you like, a frag cooks
+ * and goes off in your hand past its fuse. Releasing throws it, no sooner than THROW_WINDUP after
+ * the press.
+ */
 export function updateThrow(room: Room, p: PlayerState): void {
   const x = wext(p);
   const t = x.throwing;
   if (!t) return;
   const held = (p.buttons & (t.kind === 'lethal' ? Buttons.LETHAL : Buttons.TACTICAL)) !== 0;
-  if (t.releasedAt === null && (!held || !t.equip.cookable)) t.releasedAt = room.time;
+  if (t.releasedAt === null && !held) t.releasedAt = room.time;
   const now = room.time;
   if (t.releasedAt === null) {
-    // Cooking: keep the gun down; a frag held past its fuse goes off in hand.
+    // Held up: keep the gun down; a frag held past its fuse goes off in hand.
     p.swapEnd = Math.max(p.swapEnd, now + THROW_RECOVERY);
-    if (now - t.pinAt >= t.equip.fuse) {
+    if (t.equip.cookable && now - t.pinAt >= t.equip.fuse) {
       x.throwing = null;
       const at = eyeOf(p);
       explode(room, at, t.equip, p.id);
@@ -110,6 +117,7 @@ function releaseGrenade(room: Room, p: PlayerState, t: ThrowState): Entity {
   p.swapEnd = Math.max(p.swapEnd, room.time + THROW_RECOVERY);
   room.bus.emit('weapons.thrown', { player: p, equipment: t.equip.id });
   room.sendFeature(null, 'weapons.throw', { p: p.id, e: t.equip.id });
+  if (t.equip.effect === 'tomahawk') return spawnTomahawk(room, p, start, vel);
   return spawnNade(room, p, t.equip.id, start, vel, room.time + fuseLeft, false);
 }
 
@@ -234,29 +242,36 @@ export function explode(room: Room, at: Vec3, equip: EquipmentDef, ownerId: stri
 }
 
 /** First living player (not the owner) whose hitboxes the segment a->b passes within `pad` of. */
-function playerOnPath(room: Room, a: Vec3, b: Vec3, ownerId: string | null, pad: number): { p: PlayerState; at: Vec3 } | null {
+export function playerOnPath(room: Room, a: Vec3, b: Vec3, ownerId: string | null, pad: number, skip?: ReadonlySet<string>): { p: PlayerState; at: Vec3; part: 'head' | 'torso' | 'legs' } | null {
   const len = dist(a, b);
   if (len < 1e-6) return null;
   const d = { x: (b.x - a.x) / len, y: (b.y - a.y) / len, z: (b.z - a.z) / len };
-  let best: { p: PlayerState; at: Vec3; t: number } | null = null;
+  let best: { p: PlayerState; at: Vec3; t: number; part: 'head' | 'torso' | 'legs' } | null = null;
   for (const q of room.players.values()) {
-    if (!q.alive || q.id === ownerId) continue;
+    if (!q.alive || q.id === ownerId || skip?.has(q.id)) continue;
     const hb = playerHitboxes(q.move, q.move.crouched);
     if (pad > 0) for (const k of ['head', 'torso', 'legs'] as const) {
       hb[k] = { min: { x: hb[k].min.x - pad, y: hb[k].min.y - pad, z: hb[k].min.z - pad }, max: { x: hb[k].max.x + pad, y: hb[k].max.y + pad, z: hb[k].max.z + pad } };
     }
     const hit = rayHitboxes(a, d, hb, len);
-    if (hit && (!best || hit.t < best.t)) best = { p: q, at: { x: a.x + d.x * hit.t, y: a.y + d.y * hit.t, z: a.z + d.z * hit.t }, t: hit.t };
+    if (hit && (!best || hit.t < best.t)) best = { p: q, at: { x: a.x + d.x * hit.t, y: a.y + d.y * hit.t, z: a.z + d.z * hit.t }, t: hit.t, part: hit.part };
   }
-  return best ? { p: best.p, at: best.at } : null;
+  return best ? { p: best.p, at: best.at, part: best.part } : null;
 }
 
-/** A player died while cooking: the grenade drops at their feet with what's left of the fuse. */
+/**
+ * A player died holding a lethal up: a grenade drops at their feet with what's left of the fuse,
+ * a tomahawk drops as a pickup.
+ */
 export function dropCooked(room: Room, p: PlayerState): void {
   const x = wext(p);
   const t = x.throwing;
   x.throwing = null;
   if (!t || t.kind !== 'lethal') return;
+  if (t.equip.effect === 'tomahawk') {
+    dropTomahawk(room, p, { x: p.move.x, y: p.move.y + 0.1, z: p.move.z });
+    return;
+  }
   const left = t.equip.cookable ? t.equip.fuse - (room.time - t.pinAt) : t.equip.fuse;
   spawnNade(room, p, t.equip.id, { x: p.move.x, y: p.move.y + 0.6, z: p.move.z }, { x: 0, y: 1, z: 0 }, room.time + Math.max(0.1, left), false);
 }

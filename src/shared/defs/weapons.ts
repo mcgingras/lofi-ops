@@ -68,6 +68,10 @@ export interface WeaponDef {
   range?: number;
   /** Weapon raise/lower time when switching (default 500 ms). */
   swapMs?: number;
+  /** Fires a server-simulated projectile (crossbow bolt, ballistic knife blade): no local hitscan tracer or impact puff. */
+  projectile?: boolean;
+  /** HUD noun for single-load weapons that count their ammo out loud ('BOLTS', 'BLADES'). */
+  ammoNoun?: string;
   /** ADS field-of-view zoom factor (default 1.15; snipers ~4). */
   zoom?: number;
   /** Shows a full-screen scope overlay when aimed (snipers, variable zoom). */

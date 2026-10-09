@@ -8,7 +8,7 @@
 import { indexById } from './registry';
 
 export type EquipmentKind = 'lethal' | 'tactical';
-export type EquipmentEffect = 'frag' | 'semtex' | 'flash' | 'concussion';
+export type EquipmentEffect = 'frag' | 'semtex' | 'flash' | 'concussion' | 'tomahawk';
 
 export interface EquipmentDef {
   id: string;
@@ -19,7 +19,11 @@ export interface EquipmentDef {
   count: number;
   /** Fuse from pulling the pin (frag: cookable) or from the throw. */
   fuse: number;
-  /** Can be cooked by holding the button (the fuse runs while held). */
+  /**
+   * Can be cooked by holding the button (the fuse runs while held). Every piece of equipment is
+   * held up while the button is down and thrown on release (BO1); only cookable ones burn their
+   * fuse in your hand.
+   */
   cookable: boolean;
   /** Sticks to the first surface or player it touches. */
   sticky: boolean;
@@ -40,6 +44,11 @@ export interface EquipmentDef {
 export const EQUIPMENT: EquipmentDef[] = [
   { id: 'frag', name: 'Frag', kind: 'lethal', effect: 'frag', count: 1, fuse: 3, cookable: true, sticky: false, speed: 17, loft: 0.25, radius: 6.5, max: 150, min: 25, unlockLevel: 1, blurb: 'Cook it by holding G. Bounces.' },
   { id: 'semtex', name: 'Semtex', kind: 'lethal', effect: 'semtex', count: 1, fuse: 2, cookable: false, sticky: true, speed: 16, loft: 0.2, radius: 6, max: 150, min: 25, unlockLevel: 1, price: 1000, blurb: 'Sticks to whatever it hits.' },
+  // BO1: a retrievable hatchet, instant death on impact, bounces off walls and floors (bank shots).
+  // Hold the button to raise it, release to throw. Lands as a pickup anyone carrying tomahawks can
+  // walk over to get back (BO2 `_weaponobjects.gsc` `watchhatchettrigger`). Level 18 matches the
+  // progression unlock table.
+  { id: 'tomahawk', name: 'Tomahawk', kind: 'lethal', effect: 'tomahawk', count: 1, fuse: 0, cookable: false, sticky: false, speed: 22, loft: 0.12, radius: 0, max: 0, min: 0, unlockLevel: 18, blurb: 'Retrievable hatchet. Instant kill on impact.' },
   { id: 'flashbang', name: 'Flashbang', kind: 'tactical', effect: 'flash', count: 2, fuse: 1.5, cookable: false, sticky: false, speed: 16, loft: 0.25, radius: 16, max: 0, min: 0, duration: 4, unlockLevel: 1, blurb: 'Blinds and deafens enemies who see it.' },
   { id: 'concussion', name: 'Concussion', kind: 'tactical', effect: 'concussion', count: 2, fuse: 1.5, cookable: false, sticky: false, speed: 16, loft: 0.25, radius: 12, max: 0, min: 0, duration: 4.5, unlockLevel: 1, blurb: 'Slows movement and aim of enemies in the blast.' },
 ];
@@ -72,6 +81,15 @@ export const MELEE = {
 export const THROW_WINDUP = 0.35;
 /** Gun lowered after a throw. */
 export const THROW_RECOVERY = 0.65;
+/**
+ * Tomahawk flight: it kills anyone it touches while still moving faster than `killSpeed` (so a
+ * bank shot off a wall still counts), bounces, comes to rest and waits `pickupSec` to be picked up
+ * by walking within `pickupRadius` (or pressing USE within `useRadius`).
+ */
+export const TOMAHAWK = { gravity: 15, restitution: 0.45, friction: 0.5, killSpeed: 5, damage: 1000, pickupSec: 60, pickupRadius: 1.0, useRadius: 2.0, lifeSec: 8 } as const;
+/** Entity kind for a thrown tomahawk; `s.k` = 1 once it lies still (retrievable). */
+export const TOMAHAWK_ENTITY = 'weapons.tomahawk';
+
 /** Grenade bounce restitution and ground friction. */
 export const NADE_PHYSICS = { gravity: 18, restitution: 0.35, friction: 0.55, radius: 0.08 } as const;
 
@@ -96,5 +114,7 @@ declare module '../protocol' {
     'weapons.melee': { p: string; hit: boolean };
     /** A player threw something (everyone): `e` equipment id. */
     'weapons.throw': { p: string; e: string };
+    /** You picked equipment back up (tomahawk): `n` is how many you carry now. */
+    'weapons.retrieve': { e: string; n: number };
   }
 }

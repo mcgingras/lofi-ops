@@ -222,7 +222,33 @@ export const SHARPSHOOTER = {
   ] as readonly { streak: number; name: string; multiplier: number }[],
 };
 
-export const STICKS = { primary: 'crossbow', secondary: 'ballistic_knife', killScore: 100, tomahawkScore: 150, tomahawksPerLife: 1, boltFuseSec: 1.2, boltRadius: 3.5 };
+/**
+ * Sticks and Stones (BO1 wager). Points from BO1: crossbow / ballistic knife shot / any other
+ * kill 100, knife (melee) 25, tomahawk 10 plus the victim is bankrupted (score to 0). Any suicide
+ * (your own bolt, falling off the map) bankrupts yourself. Everyone gets the crossbow (6 bolts),
+ * the ballistic knife (2 blades) and one tomahawk; no scavenging and no ammo for kills, so you
+ * pick your blades and tomahawk back up.
+ */
+export const STICKS = { primary: 'crossbow', secondary: 'ballistic_knife', lethal: 'tomahawk', killScore: 100, meleeScore: 25, tomahawkScore: 10 };
+
+/**
+ * Crossbow explosive bolt (BO1: 50 direct impact, sticks, beeps, then 200-75 in a 4 m radius, and
+ * whoever it is stuck to always dies). The fuse length isn't documented on the wiki; 1.5 s matches
+ * the "brief moment of beeping" in BO1 footage.
+ */
+export const BOLT = { speed: 60, gravity: 4, impact: 50, fuseSec: 1.5, radius: 4, max: 200, min: 75, lifeSec: 4 };
+
+/**
+ * Ballistic knife blade (BO1: a slow parabolic arc, flat 250 damage = one hit anywhere). Fired
+ * blades stay where they land (stuck in a wall, on the floor, or at the victim's body) and anyone
+ * holding a ballistic knife picks them up by walking over them or pressing USE (BO2's
+ * `_ballistic_knife.gsc` has no owner check), up to the gun's full load.
+ */
+export const BLADE = { speed: 32, gravity: 9, damage: 250, lifeSec: 4, pickupSec: 60, walkRadius: 1.0, useRadius: 2.0 };
+
+/** Entity kinds for the wager projectiles (economy server simulates, economy client renders). */
+export const BOLT_ENTITY = 'economy.bolt';
+export const BLADE_ENTITY = 'economy.blade';
 
 /** Melee in every wager mode: one-hit knife. */
 export const WAGER_MELEE = { range: 2.2, cooldownSec: 0.7, minDot: 0.55 };

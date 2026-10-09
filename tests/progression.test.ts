@@ -168,7 +168,7 @@ describe('unlock gating', () => {
   it('every default class is legal at level 1, and the table lists only classable items', () => {
     for (const l of DEFAULT_LOADOUTS) expect(gateLoadout(atLevel(1), l).violations, l.name).toEqual([]);
     const ids = unlockTable().map((u) => u.id);
-    for (const id of ['knife', 'gl', 'crossbow', 'ballistic_knife', 'tomahawk', 'willy_pete']) expect(ids, id).not.toContain(id);
+    for (const id of ['knife', 'gl', 'crossbow', 'ballistic_knife', 'willy_pete']) expect(ids, id).not.toContain(id);
     // The flashbang entry uses the equipment def's id, so the gate actually applies to it.
     expect(unlockTable().find((u) => u.id === 'flashbang')).toMatchObject({ level: 1, kind: 'tactical' });
     expect(gateLoadout(atLevel(5), { ...cloneLoadout(DEFAULT_LOADOUTS[0]!), lethal: 'semtex' }).violations.map((v) => v.id)).toEqual(['semtex']);
