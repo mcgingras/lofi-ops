@@ -155,3 +155,4 @@
 .fe-padmap th { text-align: left; color: var(--dim); font-weight: 400; border-bottom: 1px solid var(--line); padding: 3px 10px 3px 0; }
 .fe-padmap td { padding: 3px 10px 3px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 .fe-padmap td:first-child { color: var(--hi); white-space: nowrap; width: 9em; }
+.fe-padmap-h { margin-top: 18px; }

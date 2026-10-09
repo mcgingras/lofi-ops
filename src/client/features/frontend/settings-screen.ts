@@ -229,7 +229,7 @@ registerScreen('settings', (root, params) => {
       ...row('Stick deadzone', rangeOf('padDeadzone', 0.05, 0.3, 0.01, (v) => `${Math.round(v * 100)}%`)),
       ...row('Vibration', checkOf('padVibration')),
     ),
-    h('h3', { class: 'fe-h' }, 'Layout'),
+    h('h3', { class: 'fe-h fe-padmap-h' }, 'Layout'),
     layout,
     h('p', { class: 'fe-help' }, 'Menus: D-pad or left stick moves, A selects, B goes back, LB / RB switch tabs.'),
   );

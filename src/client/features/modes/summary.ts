@@ -74,7 +74,7 @@ function render(root: HTMLElement, m: Match, params: Record<string, string>): ()
 
   const countdown = h('div', { class: 'lf-hint' });
   const leaveTarget = screens.has('lobby') ? 'lobby' : 'menu';
-  const cont = h('button', { class: 'lf-btn primary', type: 'button', onclick: () => (params.overlay === '1' ? closeOverlay() : navigate('menu')) }, 'Continue');
+  const cont = h('button', { class: 'lf-btn primary', type: 'button', 'data-pad-back': '', onclick: () => (params.overlay === '1' ? closeOverlay() : navigate('menu')) }, 'Continue');
   const leave = h('button', { class: 'lf-btn', type: 'button', onclick: () => navigate(leaveTarget) }, leaveTarget === 'lobby' ? 'Back to lobby' : 'Leave match');
 
   root.append(

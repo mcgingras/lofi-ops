@@ -5,7 +5,8 @@
  * has, by spatial navigation.
  *
  * - D-pad / left stick: move focus to the nearest element in that direction (held: repeats).
- *   On a slider, left/right change the value; on a <select>, left/right pick the option.
+ *   On a slider, left/right change the value; on a <select>, left/right pick the option when
+ *   there is nothing to move to on that side (so a select next to a button can still be left).
  * - A: activate (click; checkbox toggles; <select> steps to the next option).
  * - B: back. Clicks a visible `[data-pad-back]` element if the screen has one, otherwise sends the
  *   Escape key the screens already listen for. Paused in a match: resume.
@@ -141,16 +142,15 @@ function move(root: HTMLElement, dir: Dir): void {
     focusDefault(root);
     return;
   }
-  if (dir === 'left' || dir === 'right') {
-    const sign = dir === 'right' ? 1 : -1;
-    if (cur instanceof HTMLInputElement && cur.type === 'range') return stepRange(cur, sign);
-    if (cur instanceof HTMLSelectElement) return stepSelect(cur, sign);
-  }
+  const sideways = dir === 'left' || dir === 'right';
+  const sign = dir === 'right' ? 1 : -1;
+  if (sideways && cur instanceof HTMLInputElement && cur.type === 'range') return stepRange(cur, sign);
   const cands = focusables(root)
     .filter((e) => e !== cur)
     .map((el) => ({ el, r: el.getBoundingClientRect() }));
   const next = nearest(cur.getBoundingClientRect(), dir, cands);
   if (next) focus(next);
+  else if (sideways && cur instanceof HTMLSelectElement) stepSelect(cur, sign);
 }
 
 function activate(root: HTMLElement): void {

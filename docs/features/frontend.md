@@ -28,7 +28,7 @@ If a screen owned by another area (`barracks`, `store`, `wager`) isn't registere
   - Ready button. When every human is ready, the wait shortens to a 5 s countdown.
   - A full lobby (humans reach the target) starts a 10 s countdown.
 - **Private lobbies:**
-  - The host controls mode, map, score limit, time limit and bot settings, then presses **Start**.
+  - The host controls mode, map, score limit, time limit, **Aim assist allowed** (controller aim assist, on by default; `LobbyState.aimAssist`, client-side, see `controller.md`) and bot settings, then presses **Start**. Matchmade lobbies always allow aim assist.
   - Everyone else sees the same controls read-only.
   - The creator becomes host. When the host leaves, host passes to the next human by join order.
 - **Bot settings editor** for `LobbyBotSettings`:
@@ -47,12 +47,13 @@ If a screen owned by another area (`barracks`, `store`, `wager`) isn't registere
 - Stat bars: damage, range, fire rate, accuracy, mobility. Hovering a weapon, attachment or camo shows the change in green or red.
 - Every edit is validated locally with the server's rules and then saved.
 
-**In-match class picker** (`class-picker` overlay): press **B** (rebindable) at any time in a match. On the death screen a HUD hint (`frontend.classHint`) shows the key and the class picked for the next spawn.
+**In-match class picker** (`class-picker` overlay): press **B** (rebindable) at any time in a match, or **Y** on a controller while dead. On the death screen a HUD hint (`frontend.classHint`) shows the key and the class picked for the next spawn.
 
-**Settings** (`settings` screen, replaces the core one), in four tabs:
+**Settings** (`settings` screen, replaces the core one), in these tabs:
 - **Graphics** (tab id `video`): Retro strength preset with an Advanced panel (resolution, palette, dither, vertex snap, texture warp, fog distance, texture filter, photo/drawn textures; see `retro.md`), FOV, grade, time of day, FPS.
 - **Controls**: sensitivity, ADS sensitivity, invert, crouch toggle.
 - **Key bindings**: rebind every action and the class key. Backspace resets one, and there is a Reset all.
+- **Controller** (tab id `pad`): connected pad, aim assist (Off / Light / Standard), look sensitivity, invert look, stick deadzone, vibration, and the button layout table (`PAD_LAYOUT`). See `controller.md`.
 - **Audio**: master volume, a test sound (an M16 shot through `sfx.gunshot`) and the **Sound test** (`sound-test.ts`, data in `sound-test-data.ts`): every registered sound id grouped by category (guns, handling, footsteps, player/UI, killstreaks, modes), labelled `id: file, file (author)`, each with Play (through the real engine and mix, as a local sound at its in-game volume; guns as your own gunshot) and a Flag toggle. "Copy flagged list" copies the flagged ids (one per line) to send to us; flags are remembered in this browser.
 
 ## Server (`src/server/features/frontend/`)
@@ -94,7 +95,7 @@ RPCs (types in `shared/frontend/protocol.ts`):
 | `frontend.state` | The caller's current lobby state |
 | `frontend.vote {option}` | Map vote |
 | `frontend.ready {ready}` | Ready flag |
-| `frontend.configure {mode?, map?, limits?, bots?}` | Host only |
+| `frontend.configure {mode?, map?, limits?, bots?, aimAssist?}` | Host only |
 | `frontend.start` | Host only |
 | `frontend.ping {rtt}` | The client reports its own round trip (the server has no RTT of its own) |
 | `frontend.saveLoadout {index, loadout}` | Validates and saves a class |

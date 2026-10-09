@@ -324,7 +324,9 @@ export class Controls {
     const s = gamepad.snapshot();
     this.padLook = null;
     this.padLookMag = this.padMove = 0;
-    if (!s || !this.locked || !this.enabled) {
+    // Not the last-used device: ignore the pad (a drifting stick on a plugged-in pad must not turn
+    // a mouse player). Real pad input switches the device in the snapshot read above.
+    if (!s || !this.locked || !this.enabled || inputDevice() !== 'pad') {
       this.mapper.suppress(s);
       this.padHeld = new Set();
       this.padBits = 0;

@@ -73,6 +73,9 @@ kbd { font-family: var(--ui); font-size: 9px; border: 1px solid var(--line); pad
 }
 
 /* Controller focus ring (menus/padnav.ts): shown while the pad is the last-used device. */
+body[data-input='pad'] #app :is(button, select, input, a, textarea, [tabindex]) {
+  scroll-margin: 40px;
+}
 body[data-input='pad'] #app :is(button, select, input, a, textarea, [tabindex]):focus {
   outline: 2px solid var(--hi);
   outline-offset: 2px;

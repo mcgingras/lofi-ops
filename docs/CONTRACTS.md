@@ -324,15 +324,17 @@ render/            renderer.ts (low-res target + post + HUD composite), shader.t
                    mapbuilder.ts (MapData -> meshes, bake per time preset), recipes/*.ts, models/
 game/              match.ts (the session + frame loop), controls.ts, viewmodel.ts, remotes.ts, effects.ts, audio.ts
                    (+ sfx-mix.ts: variation/voice-cap/distance helpers, surfaces.ts: footstep surfaces)
+                   controller: gamepad.ts (shared pad module), pad.ts (pure mapping/maths), prompts.ts (HUD key
+                   labels), aim-assist.ts (pure); see "Controller" below and docs/features/controller.md
 hud/               hud.ts, widgets.ts (core widgets), draw.ts (pixel helpers)
-menus/             main-menu.ts, settings.ts, match-screen.ts, dom.ts (`h()`), menus.css
+menus/             main-menu.ts, settings.ts, match-screen.ts, dom.ts (`h()`), menus.css, padnav.ts (pad focus nav)
 features/<area>/   your client code; every features/*/index.ts is auto-imported (import.meta.glob), no list to edit
                    (via features.ts, imported by main.ts after the core screens so features can replace them)
 ```
 
 Dev console: `window.__lofi.client.match` (dev builds only).
 
-Driving the game from an automated browser (dev builds only): open `http://localhost:5173/?devlook=1`. Pointer lock is replaced by drag-to-look: click the canvas to "lock", drag to look, click without dragging to fire a short tap, Esc to "unlock" (pause menu). Key and click taps are held for at least 120 ms so synthetic presses reach a frame. Scripted helpers live at `window.__lofi.input`: `lock()`, `unlock()`, `hold(action | 'fire' | 'ads', ms)` (actions are `KEYMAP` names: `forward`, `sprint`, `scores`...), `look(dYaw, dPitch)`, `state()`. A hidden tab or browser pane throttles `requestAnimationFrame`, so only the visible tab moves smoothly; drive the other client headlessly (FakeClient) if you need two active players.
+Driving the game from an automated browser (dev builds only): open `http://localhost:5173/?devlook=1`. To drive it as a controller instead, override `navigator.getGamepads` in the page (no devlook needed: any pad press deploys). Pointer lock is replaced by drag-to-look: click the canvas to "lock", drag to look, click without dragging to fire a short tap, Esc to "unlock" (pause menu). Key and click taps are held for at least 120 ms so synthetic presses reach a frame. Scripted helpers live at `window.__lofi.input`: `lock()`, `unlock()`, `hold(action | 'fire' | 'ads', ms)` (actions are `KEYMAP` names: `forward`, `sprint`, `scores`...), `look(dYaw, dPitch)`, `state()`. A hidden tab or browser pane throttles `requestAnimationFrame`, so only the visible tab moves smoothly; drive the other client headlessly (FakeClient) if you need two active players.
 
 ### Registries (`registry.ts`)
 
@@ -346,21 +348,48 @@ onFeature('killstreaks.earned', (data) => { ... });        // typed by FeatureMe
 registerEntityRenderer('rcxd', (e, match) => ({ object: mesh, update(e, dt) {}, dispose() {} }));
 registerMatchHook('perks.ui', { start(match) { return cleanup; }, frame(match, dt) {} });
 registerFootstepFilter('perks.ninja', (playerId, volume) => volume);   // remote footstep volume (0 = silent)
+registerAimAssistGate('frontend.lobby', (match) => true);  // false = no controller aim assist in this match
+registerSightBlocker('weapons.smoke', (a, b) => false);    // true = something (smoke) blocks sight a -> b for aim assist
 ```
 
 - Screens: `mount(root, params)` returns an optional unmount. Replacing a core id (`menu`) replaces the core screen; feature folders load after core, so the last registration wins. `params.overlay === '1'` when shown with `openOverlay` over a match; use `back(params)` for a Back button.
 - Menu items: the core menu renders every `registerMenuItem` sorted by `order` (core: TDM 10, FFA 20, Settings 90). A frontend menu should render `menuItems` too so other features' entries keep showing.
-- HUD widgets draw at render resolution (`w x h`, 240..720 lines) onto a transparent canvas that the post pass composites wherever alpha > 0.5, so draw opaque pixels only. Use `hud/draw.ts`: `unit(h)`, `txt(g, s, x, y, size, color, align)`, `rect`, `box`, `HUD_COLORS`, `clock`, `blink`. Core widgets are `core.<name>` with orders listed at the top of `hud/widgets.ts` (names 5, damage 10, scope 15, crosshair 20, hitmarker 25, compass 30, health 40, ammo 41, score 50, killfeed 55, status 60, title 70, death 80, phase 85, scoreboard 90, fps 99); re-register an id to replace it.
+- HUD widgets draw at render resolution (`w x h`, 240..720 lines) onto a transparent canvas that the post pass composites wherever alpha > 0.5, so draw opaque pixels only. Use `hud/draw.ts`: `unit(h)`, `txt(g, s, x, y, size, color, align)`, `rect`, `box`, `HUD_COLORS`, `clock`, `blink`. Core widgets are `core.<name>` with orders listed at the top of `hud/widgets.ts` (names 5, damage 10, scope 15, crosshair 20, hitmarker 25, compass 30, health 40, ammo 41, score 50, killfeed 55, status 60, title 70, death 80, phase 85, scoreboard 90, aimDebug 98, fps 99); re-register an id to replace it. `txt` draws `↑ ↓ ← →` as pixel arrows (Silkscreen has none), for controller prompts.
 - Entities: one view per `EntitySnap.id`; core adds `object` to the scene and moves it to the smoothed position/yaw unless `update` returns `false`. Light it with `makeLookMaterial({ texture, dyn: true })` + `setDynLight(mats, match.map!.lightAt(x, y, z))`.
 - Match hooks: `start` runs when a match's map is ready (again after a map change), `frame` every frame before rendering.
 
 ### Match (`game/match.ts`, read via `currentMatch()`)
 
-`myId`, `me` (MeSnap), `myTeam`, `isEnemy(id)`, `nameOf(id)`, `roster` (Map<id, RosterEntry>), `scores`, `teamScores`, `phase`, `phaseEndsAt`, `results`, `killfeed`, `notices`, `death`, `alive`, `serverTime` (room time now), `netRtt`, `weapon(slot?)` (EffectiveWeapon), `ammo(slot?)`, `reloadProgress()`, `raiseProgress()`, `yaw`/`pitch` (with recoil), `spread`, `time` (local secs), `map` (MapScene: `map`, `time` preset, `lightAt`, `world`, `root`, `sky`), `renderer` (`scene`, `cam`, `vmScene`, `gl`, `damage` 0..1 red overlay, `white` 0..1 white-out in the post pass before the dither (Tactical Nuke flash; whoever sets it resets it)), `remotes.views` (interpolated soldiers: x, y, z, yaw, alive, team...), `effects` (`puff(kind, at, normal)`, `tracer(a, b)`), `controls` (`isHeld(action)`, `consume(action)`, `locked`, `enabled`; key map `KEYMAP` in controls.ts), `net` (MatchNet: `predictor`, `interp`, `lastSnap`, `world`).
+`myId`, `me` (MeSnap), `myTeam`, `isEnemy(id)`, `nameOf(id)`, `roster` (Map<id, RosterEntry>), `scores`, `teamScores`, `phase`, `phaseEndsAt`, `results`, `killfeed`, `notices`, `death`, `alive`, `serverTime` (room time now), `netRtt`, `weapon(slot?)` (EffectiveWeapon), `ammo(slot?)`, `reloadProgress()`, `raiseProgress()`, `yaw`/`pitch` (with recoil), `spread`, `time` (local secs), `map` (MapScene: `map`, `time` preset, `lightAt`, `world`, `root`, `sky`), `renderer` (`scene`, `cam`, `vmScene`, `gl`, `damage` 0..1 red overlay, `white` 0..1 white-out in the post pass before the dither (Tactical Nuke flash; whoever sets it resets it)), `remotes.views` (interpolated soldiers: x, y, z, yaw, alive, team...), `effects` (`puff(kind, at, normal)`, `tracer(a, b)`), `controls` (`isHeld(action)`, `consume(action)`, `locked`, `virtualLock`, `enabled`, `triggerHeld`, `adsHeld`; key map `KEYMAP` in controls.ts; keyboard, mouse and controller merged), `aimDebug` (last aim assist result), `net` (MatchNet: `predictor`, `interp`, `lastSnap`, `world`).
 
 `controls.enabled = false` hands the input to a feature (the killstreaks tactical map does this): no buttons go out, mouse look, mouse buttons, devlook drag taps and the wheel are ignored, key releases still register. Set it back to `true` when done.
 
-Feature buttons: held keys go out as `Buttons` bits (G lethal, Q tactical, 4 streak, V/E melee, F use, Z prone); the server sees edges in the `buttons` room event. Rebind by assigning `KEYMAP[code] = action` (frontend owns key settings); keys that are not game buttons (menus, streak selection) can use plain `keydown` listeners while `controls.locked`.
+Feature buttons: held keys go out as `Buttons` bits (G lethal, Q tactical, 4 streak, V/E melee, F use, Z prone; on a controller LB tactical, RB lethal, D-pad up streak, R3 melee, hold X use, hold B prone); the server sees edges in the `buttons` room event. Rebind by assigning `KEYMAP[code] = action` (frontend owns key settings); keys that are not game buttons (menus, streak selection) can use plain `keydown` listeners while `controls.locked`, but also consume the matching controller press: `controls.consume('streakNext' | 'streakPrev' | 'weaponNext' | 'equipment')` (D-pad right/left, Y, D-pad down; these are `Action`s too, so keys can be bound to them).
+
+### Controller (Gamepad API)
+
+The whole controller path is client-side: it produces the same `Buttons` bits and view angles as the keyboard and mouse, so prediction, netcode and every feature work unchanged. Details and the layout: `docs/features/controller.md`.
+
+```ts
+import { gamepad, PadEdges, PAD, padDown, inputDevice, onDeviceChange, rumble, noteUsePrompt } from '../../game/gamepad';
+gamepad.snapshot();                  // active pad: { id, buttons: number[] (0..1), axes: number[] } | null (standard mapping)
+gamepad.onFrame((s, prev) => {});    // once per animation frame, for menus/overlays
+const edges = new PadEdges(); edges.prime(); edges.update().has(PAD.X);   // presses since last call
+inputDevice();                       // 'kbm' | 'pad' (last used); <body data-input> follows it
+rumble('explosion', 0.7);            // 'fire' | 'hit' | 'explosion'; no-op unless the pad is in use and Vibration is on
+
+import { promptKey, actionGlyph, registerPromptKey } from '../../game/prompts';
+txt(g, `HOLD ${promptKey('use')} TO DEFUSE`, ...);               // "HOLD F" / "HOLD [X]"
+txt(g, `${promptKey('streak', { brackets: true })} NAPALM`, ...); // "[4] NAPALM" / "[↑] NAPALM"
+registerPromptKey('classMenu', () => keyFor('classMenu'));        // keyboard code for a feature-owned prompt action
+```
+
+- **One label function.** Every HUD prompt that names a key goes through `promptKey(action)` (keyboard label from `KEYMAP`, so rebinding updates it; Xbox glyphs on the pad). `useKey()` in `hud/waypoints.ts` is `promptKey('use')` plus `noteUsePrompt()`: call it only while a USE prompt is actually drawn, because that tells the pad that X is tap-to-reload / hold-to-use here.
+- **Who reads the pad.** The match controls (`Controls.update(dt)`, every frame from the match loop) while the game is engaged and `controls.enabled`; menu navigation (`menus/padnav.ts`) whenever a DOM screen or overlay has the input; a feature that sets `controls.enabled = false` (the tactical map) reads the pad itself through `gamepad` and nobody else acts on it. Buttons held when the game takes the pad back count only after they are released.
+- **Engaging without the mouse.** A pad can't take pointer lock, so `controls.requestLock()` with the pad as the last-used device engages a "virtual" lock (`controls.virtualLock`); Start (or Esc) releases it; a click on the canvas upgrades to real pointer lock. Any pad press on the match screen's deploy banner engages.
+- **Menus.** padnav focuses the visible screen's buttons/selects/inputs by spatial navigation; A clicks, B clicks a visible `[data-pad-back]` element or sends the Escape key the screens already handle, LB/RB click the neighbouring `[role=tab]`. Give a screen's cancel/continue button `data-pad-back` if it has no Escape handler.
+- **Aim assist** (`game/aim-assist.ts`, pure): applied by the match to the controller's look only, never to the mouse. Targets are `remotes.views` that are alive enemies with world line of sight (`world.lineOfSight(.., 'sight')`) and no registered sight blocker. Gates: Settings (`settings.aimAssist`), `registerAimAssistGate` (the frontend's lobby rule). Debug overlay: `?aimdebug=1`.
+- **Settings keys** (core `settings.ts`): `padSensitivity` (1..10), `padInvertY`, `padDeadzone` (0.05..0.3), `padVibration`, `aimAssist` ('off' | 'light' | 'standard').
 
 ### Net (`net.ts`)
 
@@ -421,4 +450,4 @@ Weapons-area extensions (see `docs/features/weapons.md`):
 
 `tests/fake-client.ts` (`FakeClient.connect(url, name)`, `.send`, `.input(buttons, yaw, pitch)`, `.waitFor(type, pred)`) and `startServer({ port: 0, dbPath: ':memory:', staticDir: null, log: () => {} })` give you headless integration tests through the real server; `tests/integration.test.ts` is the example (two clients, a kill, killfeed and score). For rules-level tests drive a room directly: `new Lobby({ store: new Store(':memory:'), features: [yourFeature], log: () => {}, autoTick: false }).createRoom({...})` and call `room.step()` (see `tests/room.test.ts`).
 
-`tests/playtest.client.test.ts` covers respawn, health regen, prediction holding under steady input (the browser's `MatchNet` reconciling every snapshot), lag compensation against a sprinting target (with a no-rewind control shot) and match end on the score limit, all over real sockets. Tests that import browser modules (`src/client/net.ts` and friends) must be named `tests/**/*.client.test.ts`: the root tsconfig skips them and `tsconfig.tests-client.json` typechecks them with the DOM lib (part of `npm run typecheck`). Note that `FakeClient.waitFor` also matches messages already received: filter by `time` or message index when waiting for a second `spawned`, a later `snap`, etc.
+`tests/playtest.client.test.ts` covers respawn, health regen, prediction holding under steady input (the browser's `MatchNet` reconciling every snapshot), lag compensation against a sprinting target (with a no-rewind control shot) and match end on the score limit, all over real sockets. `tests/controller.client.test.ts` drives a fake `Gamepad` (`setPadSource` in `game/gamepad.ts`) through the real `Controls` into a real `MatchNet` against the server; the pure controller maths and aim assist are in `tests/pad.test.ts` and `tests/aim-assist.test.ts`. Tests that import browser modules (`src/client/net.ts` and friends) must be named `tests/**/*.client.test.ts`: the root tsconfig skips them and `tsconfig.tests-client.json` typechecks them with the DOM lib (part of `npm run typecheck`). Note that `FakeClient.waitFor` also matches messages already received: filter by `time` or message index when waiting for a second `spawned`, a later `snap`, etc.

@@ -147,8 +147,9 @@ export function setInputDevice(d: InputDevice): void {
 if (browser) {
   let travel = 0;
   let travelAt = 0;
-  addEventListener('keydown', () => setDevice({ kind: 'key' }), true);
-  addEventListener('mousedown', () => setDevice({ kind: 'mouseButton' }), true);
+  // Synthetic events (menus/padnav.ts sends Escape for B) don't count as using the keyboard.
+  addEventListener('keydown', (e) => e.isTrusted && setDevice({ kind: 'key' }), true);
+  addEventListener('mousedown', (e) => e.isTrusted && setDevice({ kind: 'mouseButton' }), true);
   addEventListener('wheel', () => setDevice({ kind: 'wheel' }), { capture: true, passive: true });
   addEventListener(
     'mousemove',

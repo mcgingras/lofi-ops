@@ -244,3 +244,37 @@ it('a fake gamepad through the controls loop produces the right input commands o
     client.close();
   }
 }, 20000);
+
+/** Busy-wait past the gamepad module's ~2 ms snapshot cache. */
+function waitCache() {
+  const until = performance.now() + 5;
+  while (performance.now() < until) {
+    /* spin */
+  }
+}
+
+it('a drifting stick on a plugged-in pad does nothing while the mouse is the last-used device', () => {
+  const fp = fakePad();
+  restorePad = setPadSource(() => [fp.pad]);
+  const controls = new Controls(canvasStub);
+  try {
+    setInputDevice('pad');
+    controls.requestLock();
+    expect(controls.virtualLock).toBe(true);
+    setInputDevice('kbm');
+    fp.set({ axes: [0.05, -0.2, 0.22, 0.1] }); // drift: below the "pad in use" threshold
+    waitCache();
+    controls.update(1 / 60);
+    expect(inputDevice()).toBe('kbm');
+    expect(controls.padLook).toBeNull();
+    expect(controls.buttons()).toBe(0);
+    // A real push switches to the pad and is used straight away.
+    fp.set({ axes: [0, 0, 0.8, 0] });
+    waitCache();
+    controls.update(1 / 60);
+    expect(inputDevice()).toBe('pad');
+    expect(controls.padLook!.yaw).toBeLessThan(0);
+  } finally {
+    controls.dispose();
+  }
+});
