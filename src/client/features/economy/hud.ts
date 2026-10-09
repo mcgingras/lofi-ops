@@ -57,9 +57,11 @@ registerMatchHook('economy.hud', {
         } else if (d.attacker === m.myId) {
           state.splash = { at: m.time, title: 'HUMILIATION', sub: `${victim.toUpperCase()} BANKRUPTED`, color: GREEN };
         }
-        const line = d.attacker ? `${victim} was BANKRUPTED by ${m.nameOf(d.attacker)}` : `${victim} BANKRUPTED themselves`;
-        m.notices.push({ t: m.time, text: line });
-        if (m.notices.length > 4) m.notices.shift();
+        else {
+          // Everyone else: a feed line (the two involved get the splash instead).
+          m.notices.push({ t: m.time, text: d.attacker ? `${victim} was BANKRUPTED by ${m.nameOf(d.attacker)}` : `${victim} BANKRUPTED themselves` });
+          if (m.notices.length > 4) m.notices.shift();
+        }
       }),
       onFeature('economy.stuck', (d) => {
         state.stuck = { until: m.time + d.fuse };
@@ -239,7 +241,8 @@ registerHudWidget(
       const age = m.time - sp.at;
       if (age > 3 || age < 0) state.splash = null;
       else {
-        const y = H * 0.24;
+        // Above the death card (core.death sits at 30 % of the height).
+        const y = H * 0.14;
         rect(g, 0, y - 6 * u, W, 34 * u, 'rgba(10,10,10,.55)');
         txt(g, sp.title, W / 2, y, 16, age < 0.6 && blink(m.time, 0.15, 0.075) ? C.paper : sp.color, 'center', u);
         txt(g, sp.sub, W / 2, y + 18 * u, 8, C.paper, 'center', u);

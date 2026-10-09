@@ -202,7 +202,7 @@ registerHudWidget(
     if (def.ammoNoun) {
       // Single-load wager weapons: count every bolt / blade left (loaded one bright, spares dim).
       const total = mag + reserve;
-      txt(g, `${total} ${def.ammoNoun}`, W - 8 * u, H - 20 * u, 8, total === 0 ? C.warn : C.hi, 'right', u);
+      txt(g, `${total} ${total === 1 ? def.ammoNoun.replace(/S$/, '') : def.ammoNoun}`, W - 8 * u, H - 20 * u, 8, total === 0 ? C.warn : C.hi, 'right', u);
       txt(g, def.name.toUpperCase(), W - 8 * u, H - 9 * u, 8, C.dim, 'right', u);
       for (let i = 0; i < Math.min(total, 12); i++) {
         const x = W - 10 * u - i * 5 * u;

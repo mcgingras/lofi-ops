@@ -72,6 +72,13 @@ export function actionHands(c: ViewmodelCtx, gunRoot: THREE.Object3D, hip: THREE
   const base = { pos: gunRoot.position.clone(), rot: gunRoot.rotation.clone() };
 
   return (s: ViewmodelAnimState) => {
+    // Undo the rig's raise dip while an action runs (the server keeps the gun "switching" during a
+    // knife or throw): the action poses the gun and the hands itself.
+    if (s.action && s.raise >= 0) {
+      const raise = 1 - s.raise;
+      c.group.position.y += raise * 0.25;
+      c.group.rotation.x += raise * 0.6;
+    }
     const act = s.action ?? '';
     const [kind, item] = act.split(':') as [string, string | undefined];
     const throwing = kind === 'throw' || kind === 'ready' || kind === 'release';
@@ -102,14 +109,12 @@ export function actionHands(c: ViewmodelCtx, gunRoot: THREE.Object3D, hip: THREE
       const toss = ramp(t, 0.42, 0.62);
       // Held up: a slow breathing sway so it reads as "waiting to throw".
       const idle = kind === 'ready' && s.actionT >= 1 ? Math.sin(s.time * 2.2) * 0.008 : 0;
-      if (isHawk) {
-        // Hatchet raised beside the head, blade forward, then a whip forward.
-        nadeRig.position.set(0.02 - hip.x * (1 - s.ads) * 0.5, -0.32 + 0.38 * cock - 0.12 * toss - 0.4 * ramp(t, 0.7, 1) + idle, -0.22 + 0.2 * cock - 0.4 * toss);
-        nadeRig.rotation.set(-1.1 * cock + 2.2 * toss, -0.15, 0.25 - 0.2 * cock);
-      } else {
-        nadeRig.position.set(-0.12 - hip.x * (1 - s.ads) * 0.5, -0.32 + 0.3 * cock - 0.1 * toss - 0.4 * ramp(t, 0.7, 1) + idle, -0.25 + 0.15 * cock - 0.35 * toss);
-        nadeRig.rotation.set(-0.6 * cock + 1.4 * toss, 0.2, 0.2);
-      }
+      // The hand comes up from below left and cocks back; the arm keeps its grenade angles (the
+      // sleeve runs back to the shoulder, so tipping the whole rig further swings it into view).
+      nadeRig.position.set(-0.12 - hip.x * (1 - s.ads) * 0.5 + (isHawk ? 0.11 * cock : 0), -0.32 + (isHawk ? 0.34 : 0.3) * cock - 0.1 * toss - 0.4 * ramp(t, 0.7, 1) + idle, -0.25 + 0.15 * cock - 0.35 * toss);
+      nadeRig.rotation.set(-0.6 * cock + 1.4 * toss, 0.2, 0.2);
+      // The hatchet itself tips back over the hand (blade up and behind) and whips forward.
+      hawk.rotation.set(0.9 * cock - 2.2 * toss, 0, -0.25 * cock);
     }
   };
 }
@@ -150,12 +155,6 @@ export function buildWeaponViewmodel(c: ViewmodelCtx, model: string): ViewmodelS
   let cylTurn = 0;
 
   const animate = (s: ViewmodelAnimState) => {
-    // Undo the rig's raise dip while an action runs: the action poses the gun itself.
-    if (s.action && s.raise >= 0) {
-      const raise = 1 - s.raise;
-      c.group.position.y += raise * 0.25;
-      c.group.rotation.x += raise * 0.6;
-    }
     if (s.reload >= 0 && reloadStart < 0) reloadStart = s.time;
     if (s.reload < 0) reloadStart = -1;
     const r = s.reload;

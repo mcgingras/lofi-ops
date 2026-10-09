@@ -110,12 +110,13 @@ registerEntityRenderer(BOLT_ENTITY, () => {
   let litMat: LookMaterial | null = null;
   let darkMat: LookMaterial | null = null;
   const b = build((body, mk) => {
-    // Shaft trailing behind the point it flies (and sticks) along: the tip is at the origin.
-    box(body, 0.018, 0.018, 0.36, mk('gunmetal'), 0.2);
-    box(body, 0.05, 0.004, 0.06, mk('paint', { tint: 0x303030 }), 0.36); // fletching
+    // Shaft trailing behind the point it flies (and sticks) along: the tip is just ahead of the
+    // origin, so a stuck bolt's point sinks into the surface (the server stops 4 cm short).
+    box(body, 0.02, 0.02, 0.36, mk('gunmetal'), 0.15);
+    box(body, 0.06, 0.004, 0.07, mk('paint', { tint: 0x303030 }), 0.3); // fletching
     litMat = mk('lamp', { emissive: 1, tint: 0xff3020 });
     darkMat = mk('lamp', { emissive: 0.2, tint: 0x802018 });
-    tip = box(body, 0.03, 0.03, 0.06, litMat, 0.02);
+    tip = box(body, 0.04, 0.04, 0.07, litMat, -0.02);
   });
   let nextBeep = 0;
   return {
@@ -140,8 +141,10 @@ registerEntityRenderer(BOLT_ENTITY, () => {
 
 registerEntityRenderer(BLADE_ENTITY, () => {
   const b = build((body, mk) => {
-    box(body, 0.006, 0.026, 0.15, mk('weapons.steel', { tint: 0xe0e0e0 }), 0.075);
-    box(body, 0.02, 0.03, 0.012, mk('gunmetal'), 0.155);
+    // Blade (point a little ahead of the origin, sunk into whatever it hit) and its dark tang.
+    box(body, 0.008, 0.035, 0.2, mk('weapons.steel', { tint: 0xe8e8e8 }), 0.05);
+    box(body, 0.026, 0.04, 0.016, mk('gunmetal'), 0.15);
+    box(body, 0.016, 0.022, 0.06, mk('rubber'), 0.19);
   });
   return {
     object: b.object,
