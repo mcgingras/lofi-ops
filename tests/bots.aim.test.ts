@@ -25,7 +25,7 @@ function trace(skill: BotSkill, targetDeg: number, seconds: number, seed = 3) {
 }
 
 describe('bots: aim controller', () => {
-  it('waits out a reaction drawn per engagement (regular ~230-430 ms)', () => {
+  it('waits out a reaction drawn per engagement (regular ~385-715 ms)', () => {
     const skill = preset('regular');
     const reacts: number[] = [];
     const r = rng(5);
@@ -34,8 +34,8 @@ describe('bots: aim controller', () => {
       engage(s, skill, r, { yaw: 0.5 });
       reacts.push(s.react);
     }
-    expect(Math.min(...reacts)).toBeGreaterThanOrEqual(0.22);
-    expect(Math.max(...reacts)).toBeLessThanOrEqual(0.45);
+    expect(Math.min(...reacts)).toBeGreaterThanOrEqual(0.38);
+    expect(Math.max(...reacts)).toBeLessThanOrEqual(0.72);
     expect(new Set(reacts.map((x) => x.toFixed(3))).size).toBeGreaterThan(50);
     // The view doesn't move during the reaction.
     const { ys, react } = trace(skill, 40, 1);

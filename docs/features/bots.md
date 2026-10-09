@@ -50,7 +50,7 @@ Owner: bots. Covers DESIGN.md section 8a (hard requirement): every lobby runs wi
   - `streakUse`: how likely and how soon it uses an earned streak.
   - `aggression`: chasing, flanking, how far forward it roams, sprinting, how long it holds an angle, retreating when hurt, and the role mix.
   - `weaponPickup`: how far a dry bot looks for a gun on the floor (`4 + 22 × weaponPickup` m; 0 = never). Read by the pickups feature (`src/server/features/pickups/bots.ts`, docs/features/pickups.md), which walks it there through a `registerBotGoal('*')` goal.
-- No new knobs were needed, so the lobby sliders are unchanged. Preset reactions changed: recruit 600 ms (was 900), regular 330 (550), hardened 250 (320), veteran 180; the reaction now is only one part of the time to first shot.
+- No new knobs were needed, so the lobby sliders are unchanged. Preset reactions stay at recruit 900 ms, regular 550, hardened 320, veteran 180 (the agent's shorter values made regular bots kill a still target faster than before, against playtest feedback that bots were too deadly); the reaction now is only one part of the time to first shot.
 
 ### Aim controller (aim.ts)
 
