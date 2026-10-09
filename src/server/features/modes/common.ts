@@ -20,6 +20,7 @@ import type { PlayerState } from '../../player';
 import type { Room } from '../../room';
 import type { ModePlayerExt } from './ext';
 import type { BotObjective } from './bots';
+import { scoreSpawns, spawnCandidates } from './spawns';
 
 // ---------------------------------------------------------------------------------------------
 // Controller registry
@@ -142,37 +143,14 @@ export function initialSpawnWindow(room: Room): boolean {
 }
 
 /**
- * Rank a spawn pool for `p`: away from living enemies (hard penalty when close or in their line
- * of sight), near living teammates in team modes, plus a mode preference (`prefer`, higher is
- * better). Returns the best few; core's pickSpawn then picks among them.
+ * Rank a spawn pool for `p` (spawns.ts: enemy sight and distance, enemies facing it, recent
+ * deaths, teammates) plus a mode preference (`prefer`, higher is better). Returns the few best
+ * (never one in enemy view or next to an enemy when a clean one exists); core's pickSpawn then
+ * picks among them.
  */
 export function rankSpawns(room: Room, p: PlayerState, pool: readonly SpawnPoint[], prefer: (pt: SpawnPoint) => number = () => 0): SpawnPoint[] {
   if (pool.length <= 1) return [...pool];
-  const T = MODE_TUNING.spawn;
-  const others = [...room.players.values()].filter((q) => q !== p && q.alive);
-  const enemies = others.filter((q) => room.isEnemy(p, q));
-  const mates = room.mode.teams ? others.filter((q) => !room.isEnemy(p, q)) : [];
-  const scored = pool.map((pt) => {
-    let s = prefer(pt);
-    let nearest = 60;
-    const eye = { x: pt.x, y: pt.y + PLAYER.eye, z: pt.z };
-    for (const e of enemies) {
-      const d = Math.hypot(e.move.x - pt.x, e.move.z - pt.z);
-      nearest = Math.min(nearest, d);
-      if (d < T.enemyNear) s -= 120;
-      else if (d < T.sightRange && room.world.lineOfSight(eyeOf(e), eye)) s -= 45;
-    }
-    s += Math.min(nearest, 40) * 0.6;
-    if (mates.length) {
-      let m = 60;
-      for (const q of mates) m = Math.min(m, Math.hypot(q.move.x - pt.x, q.move.z - pt.z));
-      s += Math.max(0, 25 - m) * 0.4;
-    }
-    for (const q of others) if (Math.hypot(q.move.x - pt.x, q.move.z - pt.z) < 1.2) s -= 1000;
-    return { pt, s };
-  });
-  scored.sort((a, b) => b.s - a.s);
-  return scored.slice(0, T.candidates).map((x) => x.pt);
+  return spawnCandidates(scoreSpawns(room, p, pool, prefer));
 }
 
 /** Every spawn point of a map (team + FFA), for dynamic spawning. */

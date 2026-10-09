@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { engage, newAimState, offDeg, stepAim, toleranceDeg } from '../src/server/features/bots/aim';
 import { BOT_NAMES, chooseBotLoadout, pickBotName } from '../src/server/features/bots/loadout';
 import { freeAt, NavGrid } from '../src/server/features/bots/nav';
 import { applyVariance, defaultSettings, rollBot, sanitizeSettings, SKILL_KEYS, skillRating } from '../src/server/features/bots/skill';
@@ -65,46 +64,7 @@ describe('bots: settings and skill', () => {
   });
 });
 
-describe('bots: aim model', () => {
-  it('waits out the reaction time before moving the aim, then turns no faster than turnSpeedDeg', () => {
-    const skill = { ...preset('regular'), reactionMs: 500, turnSpeedDeg: 180 };
-    const s = newAimState(0, 0);
-    engage(s, skill, () => 0.5);
-    const react = s.react;
-    expect(react).toBeGreaterThanOrEqual(0.45);
-    const target = Math.PI / 2; // 90 degrees to the left
-    let t = 0;
-    while (t < react - 0.02) {
-      stepAim(s, skill, target, 0, 1 / 60);
-      t += 1 / 60;
-    }
-    expect(s.yaw).toBe(0);
-    for (let i = 0; i < 30; i++) stepAim(s, skill, target, 0, 1 / 60);
-    // At most 180 deg/s for ~0.5 s (+ a tick of slack).
-    expect((s.yaw * 180) / Math.PI).toBeLessThanOrEqual(180 * (31 / 60) + 0.01);
-    expect(s.yaw).toBeGreaterThan(0);
-  });
-
-  it('engagement error settles while tracking down to a residual wobble that scales with aimErrorDeg', () => {
-    const run = (aimErrorDeg: number) => {
-      const skill = { ...preset('regular'), aimErrorDeg, reactionMs: 100, turnSpeedDeg: 720 };
-      const s = newAimState(0, 0);
-      engage(s, skill, rng(11));
-      const first = Math.hypot(s.errYaw, s.errPitch);
-      let late = 0;
-      for (let i = 0; i < 60 * 4; i++) {
-        stepAim(s, skill, 0, 0, 1 / 60, 10, 1);
-        if (i >= 60 * 3) late = Math.max(late, offDeg(s, 0, 0));
-      }
-      return { first, residual: Math.hypot(s.errYaw, s.errPitch), late };
-    };
-    const bad = run(9);
-    const good = run(1.2);
-    expect(bad.residual).toBeLessThan(bad.first * 0.2);
-    expect(good.late).toBeLessThan(bad.late);
-    expect(bad.late).toBeGreaterThan(toleranceDeg(20) * 0.5);
-  });
-});
+// The aim controller is covered in tests/bots.aim.test.ts.
 
 describe('bots: navigation grid', () => {
   it('builds the Yard: ground everywhere players can walk, links, reachable core', () => {

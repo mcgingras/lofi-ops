@@ -20,6 +20,8 @@ import type { Room } from '../../room';
 import { Brain, streaksEarnedAt, type BrainWorld } from './brain';
 import { chooseBotLoadout, pickBotName } from './loadout';
 import { navFor } from './nav';
+import { PathUsage } from './roles';
+import type { MapData } from '../../../shared/maps/types';
 import { applyVariance, defaultSettings, rollBot, sanitizeSettings, skillRating, type BotRolls } from './skill';
 
 declare module '../../player' {
@@ -40,6 +42,8 @@ export interface RoomBotsOptions {
 
 /** Room time between a marked bot's death and its removal (killfeed still shows its name). */
 const RETIRE_DELAY = 1.2;
+/** View knock when a bot is hit, degrees (before the flinchMultiplier modifier). */
+const FLINCH_DEG = 2.5;
 
 export class RoomBots {
   settings: LobbyBotSettings;
@@ -53,10 +57,11 @@ export class RoomBots {
   /** Bots to remove at their next death / to move to the other team at their next death. */
   readonly retiring = new Set<string>();
   readonly switching = new Set<string>();
-  readonly world: BrainWorld = { fights: [] };
+  readonly world: BrainWorld = { fights: [], claims: new Map(), usage: null, nav: { tick: -1, used: 0 } };
   private cancelWait: (() => void) | null = null;
   private offs: (() => void)[] = [];
   private lastMode: string;
+  private usageMap: MapData | null = null;
 
   constructor(
     readonly room: Room,
@@ -181,6 +186,8 @@ export class RoomBots {
       }),
       bus.on('playerLeave', ({ player, reason }) => {
         if (player.isBot) {
+          this.world.claims?.delete(player.id);
+          this.world.usage?.clear(player.id);
           this.brains.delete(player.id);
           this.retiring.delete(player.id);
           this.switching.delete(player.id);
@@ -210,7 +217,7 @@ export class RoomBots {
         this.broadcast();
       }, { priority: 50 }),
       bus.on('spawn', ({ player }) => {
-        this.brains.get(player.id)?.onSpawn(player, this.room.time);
+        this.brains.get(player.id)?.onSpawn(player, this.room.time, this.room);
       }),
       bus.on('death', (e) => {
         const v = e.victim;
@@ -234,7 +241,7 @@ export class RoomBots {
       bus.on('fire', ({ player, origin }) => {
         const now = this.room.time;
         const f = this.world.fights;
-        f.push({ x: origin.x, y: origin.y, z: origin.z, t: now });
+        f.push({ x: origin.x, y: origin.y, z: origin.z, t: now, by: player.id, team: player.team });
         if (f.length > 48) f.splice(0, f.length - 48);
         if (player.lastFireSuppressed) return;
         for (const [id, brain] of this.brains) {
@@ -245,7 +252,8 @@ export class RoomBots {
         }
       }),
       bus.on('damage', ({ victim, attacker }) => {
-        if (victim.isBot) this.brains.get(victim.id)?.onHurt(attacker, this.room.time);
+        // Flinch like a player: ~2.5 degrees, scaled by the flinchMultiplier modifier (Hardened Pro).
+        if (victim.isBot) this.brains.get(victim.id)?.onHurt(attacker, this.room.time, FLINCH_DEG * this.room.modifiers.mul('flinchMultiplier', victim));
       }),
       bus.on('matchEnd', ({ results }) => {
         const bots = results.players.filter((p) => p.bot).length;
@@ -279,8 +287,12 @@ export class RoomBots {
     this.brains.set(p.id, brain);
     if (!p.brain) p.brain = brain;
     if (!p.nextLoadout) p.nextLoadout = chooseBotLoadout(skillRating(skill));
-    // Warm the nav grid for this map (built once, shared).
+    // Warm the nav grid for this map (built once, shared), and the team path usage for it.
     navFor(this.room.map);
+    if (!this.world.usage || this.usageMap !== this.room.map) {
+      this.world.usage = new PathUsage(this.room.map);
+      this.usageMap = this.room.map;
+    }
     return brain;
   }
 

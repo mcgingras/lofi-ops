@@ -34,17 +34,30 @@ import { clamp, dist, viewDir, yawTo, type Vec3 } from '../../../shared/math';
 import { eyeHeight } from '../../../shared/movement';
 import { currentWeapon, type BotBrain, type PlayerState } from '../../player';
 import type { Room } from '../../room';
-import { addRecoil, angleDiff, engage, newAimState, offDeg, stepAim, toleranceDeg, turnToward, type AimState } from './aim';
+import { addRecoil, angleDiff, engage, feltOffDeg, flinch, lookToward, newAimState, noticeTime, stepAim, toleranceDeg, type AimState } from './aim';
 import { botGoalFor, botModeStyle, botStreakHandler, type BotGoal } from './hooks';
 import { navFor, type NavCell, type NavGrid } from './nav';
+import { recentSpawns } from '../modes/spawns';
+import { hasObjectives } from '../modes/bots';
+import { chasersNear, crowdPenalty, depthOf, laneOf, mapAxis, pickLane, rollRole, type BotRole, type GoalClaim, type PathUsage } from './roles';
 
 const DEG = Math.PI / 180;
 
 /** Room-wide knowledge the brains share (kept by the room controller). */
 export interface BrainWorld {
   /** Recent gunfire positions (room time), for roaming toward the action. */
-  fights: { x: number; y: number; z: number; t: number }[];
+  fights: { x: number; y: number; z: number; t: number; by?: string; team?: Team | null }[];
+  /** Where each bot is heading (by player id), so teammates spread out. */
+  claims?: Map<string, GoalClaim>;
+  /** Teammates' paths (A* adds cost on them). */
+  usage?: PathUsage | null;
+  /** Path searches and cells expanded this tick, across the room's bots (`tick` is room.tick). */
+  nav?: { tick: number; used: number; expanded?: number };
 }
+
+/** Path searches per room tick, and cells they may expand in total; more wait for a later tick. */
+export const NAV_SEARCHES_PER_TICK = 3;
+export const NAV_EXPAND_PER_TICK = 24000;
 
 /** How each weapon class is fought: preferred range (m), ADS beyond (m; Infinity = never). */
 const CLASS_STYLE: Record<WeaponClass, { range: number; ads: number; rush?: boolean }> = {
@@ -75,6 +88,11 @@ export class Brain implements BotBrain {
   target: PlayerState | null = null;
   /** What it can see of the target. */
   seen: 'body' | 'head' = 'body';
+  /** Where on the body it aims this engagement (metres off the chest: across, up). */
+  private aimOff = { side: 0, up: 0 };
+  /** Noticing progress per enemy id (0..1; 1 = noticed, it can engage). */
+  private notice = new Map<string, number>();
+  private noticeAt = -1;
   lastSeen: { at: Vec3; t: number; id: string } | null = null;
   heard: { at: Vec3; t: number } | null = null;
   hurt: { at: Vec3; t: number; by: string | null } | null = null;
@@ -114,6 +132,13 @@ export class Brain implements BotBrain {
   private stagger: number;
   /** Shots fired / hits (for tests and tuning). */
   readonly stats = { shots: 0, engagements: 0 };
+  /** This life's role and lane (roles.ts). */
+  role: BotRole = 'lane';
+  lane: 0 | 1 | 2 = 1;
+  private id = '';
+  private team: Team | null = null;
+  /** A goal waiting for a path search (the room's search budget for this tick was spent). */
+  private pathPending = false;
 
   constructor(
     skill: BotSkill,
@@ -124,8 +149,12 @@ export class Brain implements BotBrain {
     this.stagger = Math.floor(rnd() * 3);
   }
 
-  /** A fresh life: forget the fight, face where it spawned. */
-  onSpawn(self: PlayerState, now: number): void {
+  /** A fresh life: forget the fight, face where it spawned, roll a role and a lane. */
+  onSpawn(self: PlayerState, now: number, room?: Room): void {
+    this.id = self.id;
+    this.team = self.team;
+    if (room) this.assignRole(room, self);
+    this.pathPending = false;
     this.target = null;
     this.path = null;
     this.goal = null;
@@ -136,7 +165,11 @@ export class Brain implements BotBrain {
     this.replanAt = 0;
     this.aim.yaw = self.yaw;
     this.aim.pitch = 0;
+    this.aim.vYaw = 0;
+    this.aim.vPitch = 0;
     this.aim.recoil = 0;
+    this.aim.recoilYaw = 0;
+    this.notice.clear();
     this.burstLeft = 0;
     this.pauseUntil = 0;
     this.slotWanted = 0;
@@ -149,15 +182,34 @@ export class Brain implements BotBrain {
     this.grenadeAt = now + 4;
   }
 
+  /** Roll this life's role; take the lane fewest teammates hold (or pair up with one). */
+  assignRole(room: Room, self: PlayerState): void {
+    this.role = rollRole(this.skill, hasObjectives(room), this.rnd);
+    const counts: [number, number, number] = [0, 0, 0];
+    const claims = this.world.claims;
+    if (claims) {
+      for (const [id, c] of claims) if (id !== self.id && c.team === self.team && self.team !== null && room.players.get(id)?.alive) counts[c.lane]++;
+      claims.set(self.id, { team: self.team, at: { ...self.move }, kind: 'spawn', role: this.role, lane: 1, t: room.time });
+    }
+    this.lane = pickLane(this.role, counts, this.rnd);
+    const c = claims?.get(self.id);
+    if (c) c.lane = this.lane;
+  }
+
   onHeard(at: Vec3, now: number): void {
     if (!this.heard || now - this.heard.t > 2) this.lingerUntil = 0;
     this.heard = { at: { ...at }, t: now };
   }
 
-  onHurt(by: PlayerState | null, now: number): void {
+  /**
+   * Took damage: flinch (`flinchDeg`, from the flinchMultiplier modifier), and know roughly where
+   * it came from (the damage indicator): it turns that way, but still has to see the shooter.
+   */
+  onHurt(by: PlayerState | null, now: number, flinchDeg = 0): void {
     this.lingerUntil = 0;
     this.hurt = { at: by ? { ...by.move } : { x: 0, y: 0, z: 0 }, t: now, by: by?.id ?? null };
     if (by && !this.target) this.heard = { at: { ...by.move }, t: now };
+    flinch(this.aim, flinchDeg, this.rnd);
   }
 
   /** Earned a streak (kills in a row reached `id`'s cost): plan to use it. */
@@ -190,7 +242,7 @@ export class Brain implements BotBrain {
 
     if (room.phase !== 'playing') {
       // Countdown: look around a little, frozen.
-      this.aim.yaw += Math.sin(now * 0.7 + this.stagger) * 0.3 * dt;
+      lookToward(this.aim, this.skill, self.yaw + Math.sin(now * 0.7 + this.stagger) * 0.4, 0, dt, 0.4);
       return this.out(self, 0);
     }
 
@@ -211,11 +263,17 @@ export class Brain implements BotBrain {
     if (this.target) {
       // ================================ FIGHT ================================
       const t = this.target;
-      const aimPt = this.aim.head || this.seen === 'head' ? headOf(t) : chestOf(t);
+      const aimPt = this.aimPoint(eye, t);
       const d = dist(eye, aimPt);
       const trueYaw = yawTo(eye, aimPt);
       const truePitch = Math.atan2(aimPt.y - eye.y, Math.hypot(aimPt.x - eye.x, aimPt.z - eye.z));
-      const intended = stepAim(this.aim, sk, trueYaw, truePitch, dt, def?.recoil.recovery ?? 10);
+      // Situation: distance, the target's speed across the line of sight, own movement, ADS.
+      const lx = eye.x - aimPt.x;
+      const lz = eye.z - aimPt.z;
+      const ll = Math.hypot(lx, lz) || 1;
+      const latSpeed = Math.abs((t.move.vx * -lz + t.move.vz * lx) / ll);
+      const ctx = { dist: d, latSpeed, moving: Math.hypot(self.move.vx, self.move.vz) > 0.5, ads: self.move.ads };
+      const intended = stepAim(this.aim, sk, trueYaw, truePitch, dt, ctx, def?.recoil.recovery ?? 10);
       this.lastSeen = { at: { ...t.move }, t: now, id: t.id };
 
       // Weapon: dry up close -> sidearm (quicker than a reload); empty everything -> sidearm.
@@ -226,7 +284,7 @@ export class Brain implements BotBrain {
       if (wantAds) buttons |= Buttons.ADS;
       const ready = !!w && w.mag > 0 && self.reloadEnd === 0 && now >= self.swapEnd && !self.move.sprinting && self.slot === this.slotWanted;
       const tight = style.conserveAmmo ? 0.55 : 1;
-      const onTarget = this.aim.react <= 0 && offDeg(this.aim, intended.yaw, intended.pitch) < toleranceDeg(d, tight);
+      const onTarget = this.aim.react <= 0 && feltOffDeg(this.aim, sk, intended.yaw, intended.pitch) < toleranceDeg(d, tight);
       const steadyOk = !style.conserveAmmo || (this.aim.track > 0.25 && (!wantAds || self.move.ads > 0.85));
       const visibleNow = this.lastPerceive === now ? true : room.world.lineOfSight(eye, aimPt);
 
@@ -242,7 +300,7 @@ export class Brain implements BotBrain {
             if (res.ok) {
               this.stats.shots++;
               this.burstLeft--;
-              addRecoil(this.aim, def.recoil.vertical, sk.burstControl);
+              addRecoil(this.aim, def.recoil, self.move.ads, this.rnd);
               if (this.burstLeft <= 0) this.pauseUntil = now + (def.mode === 'burst' ? 0.25 : 0.08 + 0.3 * sk.burstControl * (d > 10 ? 1 : 0.3)) + this.rnd() * 0.1;
             }
             buttons |= Buttons.FIRE;
@@ -251,7 +309,7 @@ export class Brain implements BotBrain {
           const res = room.fire(self, { dir: viewDir(this.aim.yaw, this.aim.pitch) });
           if (res.ok) {
             this.stats.shots++;
-            addRecoil(this.aim, def.recoil.vertical, sk.burstControl);
+            addRecoil(this.aim, def.recoil, self.move.ads, this.rnd);
             const interval = 60 / Math.max(30, def.rpm);
             const pace = def.mode === 'semi' ? 1.25 + (1 - sk.burstControl) * 0.6 : 1.05;
             this.nextShotAt = now + interval * pace + this.rnd() * 0.08;
@@ -282,7 +340,7 @@ export class Brain implements BotBrain {
       const uz = tz / td;
       const lowHealth = self.health < self.maxHealth * 0.35;
       const dry = !!w && w.mag === 0 && (this.slotWanted === self.slot || !secondary || secondary.mag === 0);
-      if (((lowHealth && sk.aggression < 0.75) || (dry && td > 6)) && now >= this.retreatUntil && this.goal?.kind !== 'cover') {
+      if (((lowHealth && (sk.aggression < 0.75 || td > 10)) || (dry && td > 6)) && now >= this.retreatUntil && this.goal?.kind !== 'cover') {
         // Back off to cover (reload / heal behind it); not more often than every few seconds.
         const cover = findCover(room, nav, self, eyeOf(t), this.rnd);
         if (cover) this.setGoal(nav, self, { at: { x: cover.x, y: cover.y, z: cover.z }, radius: 0.6, hold: false, holdButtons: 0, sprint: true, kind: 'cover', until: now + 3.5 });
@@ -337,8 +395,7 @@ export class Brain implements BotBrain {
       if (this.throwing) {
         const th = this.throwing;
         const flat = Math.hypot(th.at.x - eye.x, th.at.z - eye.z);
-        this.aim.yaw = turnToward(this.aim.yaw, yawTo(eye, th.at), sk.turnSpeedDeg * DEG * dt);
-        this.aim.pitch += (clamp(0.22 + flat * 0.011, 0.2, 0.62) - this.aim.pitch) * Math.min(1, dt * 10);
+        lookToward(this.aim, sk, yawTo(eye, th.at), clamp(0.22 + flat * 0.011, 0.2, 0.62), dt);
         if (now >= th.t) {
           pulse(Buttons.LETHAL);
           this.throwing = null;
@@ -364,13 +421,19 @@ export class Brain implements BotBrain {
           jump = step.jump;
           const remaining = this.remaining(self);
           const recentlyHot = (this.lastSeen && now - this.lastSeen.t < 3) || (this.hurt && now - this.hurt.t < 2);
-          sprint = (goal.sprint || (remaining > 10 && this.sprintPlan)) && !recentlyHot && remaining > 3.5;
+          // Near where enemies were just fighting or heard: slow down (ADS walk), check that way.
+          const danger = goal.kind === 'objective' && goal.sprint ? null : this.dangerNear(self, now);
+          sprint = (goal.sprint || (remaining > 10 && this.sprintPlan)) && !recentlyHot && remaining > 3.5 && !danger;
           // Look where it's going (a little ahead), glancing about; toward a noise if recent.
           const look = step.look;
           let wantYaw = yawTo(eye, look) + Math.sin(now * 0.9 + this.stagger * 2) * 0.28;
+          if (danger) {
+            wantYaw = yawTo(eye, danger);
+            if (Math.abs(angleDiff(wantYaw, yawTo(eye, look))) < 1.6) buttons |= Buttons.ADS;
+            else wantYaw = yawTo(eye, look) + clamp(angleDiff(wantYaw, yawTo(eye, look)), -0.9, 0.9);
+          }
           if (this.heard && now - this.heard.t < 1.5 && !sprint) wantYaw = yawTo(eye, this.heard.at);
-          this.aim.yaw = turnToward(this.aim.yaw, wantYaw, Math.max(200, sk.turnSpeedDeg * 0.7) * DEG * dt);
-          this.aim.pitch += (-0.05 - this.aim.pitch) * Math.min(1, dt * 4);
+          lookToward(this.aim, sk, wantYaw, -0.05, dt, 0.7);
           looked = true;
         } else if (goal.hold) {
           // Holding an objective: shuffle inside the radius, crouch now and then, watch.
@@ -400,8 +463,7 @@ export class Brain implements BotBrain {
         let wantYaw = this.aim.yaw + Math.sin(now * 0.6 + this.stagger) * 0.6 * dt * 3;
         if (this.heard && now - this.heard.t < 3) wantYaw = yawTo(eye, this.heard.at);
         else if (this.lastSeen && now - this.lastSeen.t < 4) wantYaw = yawTo(eye, this.lastSeen.at);
-        this.aim.yaw = turnToward(this.aim.yaw, wantYaw, Math.max(150, sk.turnSpeedDeg * 0.5) * DEG * dt);
-        this.aim.pitch += (0 - this.aim.pitch) * Math.min(1, dt * 3);
+        lookToward(this.aim, sk, wantYaw, 0, dt, 0.5);
         if (this.lastSeen && now - this.lastSeen.t < 4) buttons |= Buttons.ADS;
       }
     }
@@ -460,30 +522,72 @@ export class Brain implements BotBrain {
   // Senses
   // -------------------------------------------------------------------------------------------
 
+  /**
+   * Where it aims on the target: the head when it rolled a headshot this engagement or only the
+   * head shows over cover, else centre mass with a per-engagement offset across the torso.
+   */
+  private aimPoint(eye: Vec3, t: PlayerState): Vec3 {
+    if (this.aim.head || this.seen === 'head') return headOf(t);
+    const c = chestOf(t);
+    const dx = c.x - eye.x;
+    const dz = c.z - eye.z;
+    const l = Math.hypot(dx, dz) || 1;
+    return { x: c.x + (-dz / l) * this.aimOff.side, y: c.y + this.aimOff.up, z: c.z + (dx / l) * this.aimOff.side };
+  }
+
+  /**
+   * Sight: enemies inside the FOV with line of sight (chest, or head over cover) are *noticed*
+   * after `noticeTime` of continuous sight (longer far away and in the corner of the eye, shorter
+   * when they're firing or just hurt it); someone right next to it is noticed in ~0.35 s from any
+   * side. Nothing outside the FOV is seen: being shot or hearing someone (gunfire, footsteps)
+   * makes it turn that way first. The current target is kept while it stays in view.
+   */
   private perceive(room: Room, self: PlayerState, now: number) {
     const sk = this.skill;
     const eye = eyeOf(self);
     const halfFov = (sk.fovDeg / 2) * DEG;
+    const dtp = this.noticeAt < 0 ? 0.05 : clamp(now - this.noticeAt, 0, 0.25);
+    this.noticeAt = now;
     let best: PlayerState | null = null;
     let bestScore = Infinity;
     let bestSeen: 'body' | 'head' = 'body';
+    const hearR = sk.hearingRange * room.modifiers.mul('hearingMultiplier', self);
     for (const q of room.players.values()) {
       if (q === self || !q.alive || !room.isEnemy(self, q)) continue;
       const c = chestOf(q);
       const d = dist(eye, c);
-      if (d > 90) continue;
+      const prev = this.notice.get(q.id) ?? 0;
+      if (d > 90) {
+        if (prev) this.notice.delete(q.id);
+        continue;
+      }
       const off = Math.abs(angleDiff(yawTo(eye, c), this.aim.yaw));
       const tracking = q === this.target && off < halfFov * 1.6;
-      const hurtBy = this.hurt && this.hurt.by === q.id && now - this.hurt.t < 1.2;
-      if (off > halfFov && d > 2.5 && !tracking && !hurtBy) continue;
-      let seen: 'body' | 'head' = 'body';
-      if (!room.world.lineOfSight(eye, c)) {
-        if (!room.world.lineOfSight(eye, headOf(q))) continue;
-        seen = 'head';
+      const near = d < 2.5;
+      let seen: 'body' | 'head' | null = null;
+      if (off <= halfFov || tracking || near) {
+        if (room.world.lineOfSight(eye, c)) seen = 'body';
+        else if (room.world.lineOfSight(eye, headOf(q))) seen = 'head';
       }
-      // Far, small targets in the corner of the eye are noticed less readily by worse bots.
-      if (q !== this.target && !hurtBy && off > halfFov * 0.6 && d > 30 && this.rnd() > 0.35 + 0.65 * (1 - sk.aimErrorDeg / 15)) continue;
-      const score = d * (q === this.target ? 0.6 : 1) * (off < 0.25 ? 0.8 : 1) * (hurtBy ? 0.5 : 1);
+      if (!seen) {
+        if (prev > 0) this.notice.set(q.id, Math.max(0, prev - dtp * 1.5));
+        // Footsteps: someone moving fast nearby, out of sight (Ninja is silent).
+        const speed = Math.hypot(q.move.vx, q.move.vz);
+        if (!this.target && speed > 3 && !q.move.crouched && d < hearR * (q.move.sprinting ? 0.4 : 0.25) && room.modifiers.any('silentFootsteps', q) !== true) {
+          if (!this.heard || now - this.heard.t > 1) this.onHeard(q.move, now);
+        }
+        continue;
+      }
+      let progress = prev;
+      if (!tracking) {
+        const hurtBy = !!this.hurt && this.hurt.by === q.id && now - this.hurt.t < 1.5;
+        const firing = now - q.lastFireTime < 0.3 && !q.lastFireSuppressed;
+        const nt = near && off > halfFov ? 0.35 : noticeTime(sk, d, off / DEG, firing) * (hurtBy ? 0.35 : 1);
+        progress = Math.min(1, prev + dtp / nt);
+        this.notice.set(q.id, progress);
+        if (progress < 1) continue;
+      }
+      const score = d * (q === this.target ? 0.6 : 1) * (off < 0.25 ? 0.8 : 1);
       if (score < bestScore) {
         bestScore = score;
         best = q;
@@ -496,9 +600,13 @@ export class Brain implements BotBrain {
       this.target = best;
       if (best) {
         this.stats.engagements++;
+        const at = this.seen === 'head' ? headOf(best) : chestOf(best);
         // Switching between targets close together (re-acquire) is quicker than a cold spot.
-        engage(this.aim, sk, this.rnd);
-        if (prev && dist(prev.move, best.move) < 4) this.aim.react *= 0.5;
+        const quick = !!prev && dist(prev.move, best.move) < 4;
+        engage(this.aim, sk, this.rnd, { yaw: yawTo(eye, at), pitch: Math.atan2(at.y - eye.y, Math.hypot(at.x - eye.x, at.z - eye.z)), quick });
+        // Mostly centre mass; the head now and then (rarely for weak bots), never locked on.
+        this.aim.head = this.rnd() < sk.headshotBias * 0.6;
+        this.aimOff = { side: (this.rnd() - 0.5) * 0.24, up: -0.18 + this.rnd() * 0.3 };
         this.burstLeft = 0;
         this.pauseUntil = 0;
         if (this.goal && this.goal.kind !== 'objective' && this.goal.kind !== 'forced') {
@@ -530,23 +638,29 @@ export class Brain implements BotBrain {
 
   private chooseGoal(room: Room, nav: NavGrid, self: PlayerState, now: number): Goal | null {
     const sk = this.skill;
+    if (this.pathPending && this.goal) {
+      this.setGoal(nav, self, this.goal, room);
+      return this.pathPending ? null : this.goal;
+    }
     const g = this.goal;
     const pathDone = !this.path || this.pathIdx >= this.path.length;
     const expired = g && (now > g.until || (!!this.forced && g.kind !== 'forced') || (!this.forced && g.kind === 'forced'));
     // Standing a moment (holding an angle after a fight, or at a roam point).
     if (!this.forced && now < this.lingerUntil) return null;
-    // Arrived at a roam point: hold there a while (less aggressive bots longer).
+    // Arrived at a roam point: hold there a while (less aggressive bots longer, campers long),
+    // but not long anywhere overlooking the enemy's spawn.
     if (g && g.kind === 'roam' && pathDone && !expired && !this.forced) {
       this.goal = null;
       this.path = null;
-      this.lingerUntil = now + 0.5 + this.rnd() * (1 - sk.aggression) * 6;
+      const camp = this.role === 'camper' ? 8 + this.rnd() * 14 : 0;
+      this.lingerUntil = now + Math.min(this.overlooksEnemySpawn(room, self) ? 2 : 99, 0.5 + this.rnd() * (1 - sk.aggression) * 6 + camp);
       return null;
     }
     // Keep going where we were going unless it's time to re-plan.
     if (g && !expired && !pathDone && now < this.replanAt) return g;
     if (g && g.hold && !expired && pathDone && dist(self.move, g.at) < g.radius + 0.5 && now < this.replanAt) return g;
     if (g && pathDone && g.then && !expired) {
-      this.setGoal(nav, self, g.then);
+      this.setGoal(nav, self, g.then, room);
       return this.goal;
     }
     this.replanAt = now + 2 + this.rnd() * 1.5;
@@ -562,20 +676,32 @@ export class Brain implements BotBrain {
       if (og) {
         // Mid plant/defuse: keep at it instead of re-rolling the intent and walking off.
         const busy = this.objectiveIntent && !!g && g.kind === 'objective' && g.holdButtons !== 0 && Math.hypot(self.move.x - g.at.x, self.move.z - g.at.z) <= g.radius;
+        const pri = og.priority ?? 0.5;
         if (now > this.intentAt && !busy) {
-          const pri = og.priority ?? 0.5;
-          this.objectiveIntent = this.rnd() < clamp(sk.objectivePlay * (0.55 + pri * 0.9), 0, 1);
+          const roleBoost = this.role === 'objective' ? 0.35 : this.role === 'hunter' ? -0.15 : 0;
+          this.objectiveIntent = this.rnd() < clamp(sk.objectivePlay * (0.55 + pri * 0.9) + roleBoost, 0, 1);
           this.intentAt = now + 6 + this.rnd() * 6;
         }
+        // Urgent goals anyone would go for: a plant with the bomb, a defuse, a dropped bomb, an
+        // enemy's dog tag right there, a flag being taken.
+        if (pri >= 0.85) this.objectiveIntent = true;
         if (this.objectiveIntent) next = { at: og.at, radius: og.radius ?? 1.5, hold: !!og.hold, holdButtons: og.holdButtons ?? 0, sprint: !!og.sprint || (og.priority ?? 0) > 0.8, kind: 'objective', until: now + 20 };
       }
     }
     // Chase / flank where the last target was seen.
     if (!next && this.lastSeen && now - this.lastSeen.t < 2.5 + sk.aggression * 5 && (!g || g.kind !== 'chase')) {
-      if (this.rnd() < 0.25 + sk.aggression * 0.75) {
+      // Two teammates already on it: the rest don't pile in (flank or hold instead).
+      const crowded = this.world.claims ? chasersNear(this.world.claims, self.team, this.lastSeen.at, self.id, now) >= 2 : false;
+      if (crowded && this.rnd() < 0.6) {
+        this.goal = null;
+        this.path = null;
+        this.lingerUntil = now + 1 + this.rnd() * 2;
+        return null;
+      }
+      if (this.rnd() < 0.25 + sk.aggression * 0.75 + (this.role === 'hunter' ? 0.2 : 0) - (this.role === 'camper' ? 0.4 : 0)) {
         const ls = this.lastSeen.at;
         const chase: Goal = { at: ls, radius: 1.5, hold: false, holdButtons: 0, sprint: false, kind: 'chase', until: now + 8 };
-        if (this.rnd() < sk.aggression * 0.45) {
+        if (this.rnd() < sk.aggression * 0.45 + (this.role === 'flanker' ? 0.35 : 0) + (crowded ? 0.4 : 0)) {
           const dx = ls.x - self.move.x;
           const dz = ls.z - self.move.z;
           const dd = Math.hypot(dx, dz) || 1;
@@ -593,7 +719,8 @@ export class Brain implements BotBrain {
         return null;
       }
     }
-    if (!next && this.heard && now - this.heard.t < 5 && this.rnd() < 0.45 + sk.aggression * 0.5) next = { at: this.heard.at, radius: 2, hold: false, holdButtons: 0, sprint: false, kind: 'heard', until: now + 8 };
+    const heardBusy = !!this.heard && !!this.world.claims && chasersNear(this.world.claims, self.team, this.heard.at, self.id, now) >= 2;
+    if (!next && this.heard && now - this.heard.t < 5 && !heardBusy && this.rnd() < 0.45 + sk.aggression * 0.5 + (this.role === 'hunter' ? 0.3 : 0)) next = { at: this.heard.at, radius: 2, hold: false, holdButtons: 0, sprint: false, kind: 'heard', until: now + 8 };
     if (!next && this.radar && now - this.radar.t < 4 && this.rnd() < 0.3 + sk.aggression * 0.6) next = { at: this.radar.at, radius: 2, hold: false, holdButtons: 0, sprint: false, kind: 'radar', until: now + 8 };
     if (!next) {
       // Keep wandering to the current roam point if it's still on.
@@ -603,23 +730,80 @@ export class Brain implements BotBrain {
     }
     if (next) {
       this.sprintPlan = next.sprint || this.rnd() < 0.25 + 0.65 * sk.aggression;
-      this.setGoal(nav, self, next);
+      this.setGoal(nav, self, next, room);
     }
     return this.goal;
   }
 
-  private setGoal(nav: NavGrid, self: PlayerState, goal: Goal) {
+  /**
+   * Plan a path to `goal`. At most NAV_SEARCHES_PER_TICK searches run per room tick; past that
+   * the goal waits (`pathPending`) and is planned on a later tick. Teammates' routes cost more.
+   */
+  private setGoal(nav: NavGrid, self: PlayerState, goal: Goal, room?: Room) {
     this.goal = goal;
-    this.path = nav.path(self.move, goal.at);
     this.pathIdx = 0;
+    const budget = this.world.nav;
+    let limit: number | undefined;
+    if (room && budget) {
+      if (budget.tick !== room.tick) {
+        budget.tick = room.tick;
+        budget.used = 0;
+        budget.expanded = 0;
+      }
+      const left = NAV_EXPAND_PER_TICK - (budget.expanded ?? 0);
+      if (budget.used >= NAV_SEARCHES_PER_TICK || left < 4000) {
+        this.path = null;
+        this.pathPending = true;
+        return;
+      }
+      budget.used++;
+      limit = left;
+    }
+    this.pathPending = false;
+    const usage = this.world.usage;
+    const team = self.team;
+    const id = self.id;
+    const cost = usage && team !== null && goal.kind !== 'objective' && goal.kind !== 'cover' && goal.kind !== 'forced' ? (c: NavCell) => 1 + Math.min(3, usage.usage(team, c.x, c.z, id)) * 0.35 : undefined;
+    const before = nav.expanded;
+    this.path = nav.path(self.move, goal.at, limit, { cost });
+    if (budget) budget.expanded = (budget.expanded ?? 0) + (nav.expanded - before);
     if (!this.path) this.goal = goal.kind === 'forced' ? goal : null;
+    usage?.set(id, team, this.path);
+    const claims = this.world.claims;
+    if (claims && this.goal) claims.set(id, { team, at: { ...goal.at }, kind: goal.kind, role: this.role, lane: this.lane, t: room?.time ?? 0 });
+  }
+
+  /** A spot near the path ahead where enemies just were (recent fight, a noise), if any. */
+  private dangerNear(self: PlayerState, now: number): Vec3 | null {
+    if (this.heard && now - this.heard.t < 4 && dist(self.move, this.heard.at) < 18) return this.heard.at;
+    for (let i = this.world.fights.length - 1; i >= 0; i--) {
+      const f = this.world.fights[i]!;
+      if (now - f.t > 6) break;
+      if (f.by === self.id || (f.team !== undefined && f.team !== null && f.team === self.team)) continue;
+      const d = Math.hypot(f.x - self.move.x, f.z - self.move.z);
+      if (d > 4 && d < 16) return f;
+    }
+    return null;
+  }
+
+  /** Is the bot standing where it can see the enemy's recent spawns (within 35 m)? */
+  private overlooksEnemySpawn(room: Room, self: PlayerState): boolean {
+    if (!room.mode.teams || self.team === null) return false;
+    const eye = eyeOf(self);
+    let n = 0;
+    for (const sp of recentSpawns(room, (1 - self.team) as Team)) {
+      if (n++ > 3) break;
+      if (Math.hypot(sp.x - eye.x, sp.z - eye.z) > 35) continue;
+      if (room.world.lineOfSight(eye, { x: sp.x, y: sp.y + 1.5, z: sp.z })) return true;
+    }
+    return false;
   }
 
   /** Spawn-aware roaming: toward recent fights and the enemy half, not our spawn, not theirs. */
   private roamPoint(room: Room, nav: NavGrid, self: PlayerState, now: number): Vec3 | null {
     const sk = this.skill;
     const cands: Vec3[] = [...(room.map.hotspots ?? [])];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 10; i++) {
       const c = nav.random(this.rnd);
       if (c) cands.push({ x: c.x, y: c.y, z: c.z });
     }
@@ -629,12 +813,26 @@ export class Brain implements BotBrain {
     const own = room.mode.teams && team !== null ? centroid(sp.teams[team]) : null;
     const enemy = room.mode.teams && team !== null ? centroid(sp.teams[(1 - team) as Team]) : null;
     const fights = this.world.fights.filter((f) => now - f.t < 12);
+    const axis = mapAxis(room.map);
+    const enemySpawns = room.mode.teams && team !== null ? recentSpawns(room, (1 - team) as Team).slice(-4) : [];
+    const claims = this.world.claims;
+    const role = this.role;
     let best: Vec3 | null = null;
     let bs = -Infinity;
     for (const c of cands) {
       const d = dist(self.move, c);
       let s = this.rnd() * 4 - d * 0.04;
       if (d < 5) s -= 6;
+      // Lanes: lane holders and flankers stay in theirs.
+      if (role === 'lane' || role === 'flanker') s += laneOf(axis, c) === this.lane ? 3 : -2.5;
+      // Flankers push deep toward the enemy's side.
+      if (role === 'flanker' && team !== null) s += 2.5 * depthOf(axis, c) * (team === 0 ? 1 : -1);
+      // Campers want a hotspot and stay put there.
+      if (role === 'camper' && !(room.map.hotspots ?? []).includes(c)) s -= 3;
+      // Don't head where teammates already are heading.
+      if (claims) s -= crowdPenalty(claims, team, c, self.id, now);
+      // Never camp the enemy's current spawn.
+      for (const sp of enemySpawns) if (Math.hypot(sp.x - c.x, sp.z - c.z) < 18) s -= 8;
       if (own && enemy) {
         const dO = Math.hypot(c.x - own.x, c.z - own.z);
         const dE = Math.hypot(c.x - enemy.x, c.z - enemy.z);
@@ -646,7 +844,7 @@ export class Brain implements BotBrain {
       }
       let near = 0;
       for (const f of fights) if (Math.hypot(f.x - c.x, f.z - c.z) < 12) near++;
-      s += Math.min(2, near) * (0.3 + 1.0 * sk.aggression);
+      s += Math.min(2, near) * (0.3 + 1.0 * sk.aggression) * (role === 'hunter' ? 2 : 1);
       if (s > bs) {
         bs = s;
         best = c;

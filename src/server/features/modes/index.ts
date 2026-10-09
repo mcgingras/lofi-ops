@@ -8,6 +8,7 @@
  *          `results.ext.modes` (MVP, objective stats, XP breakdown).
  * Bot hooks: ./bots.ts (`objectivesFor`, `bestObjective`).
  */
+import { trackSpawns } from './spawns';
 import type { Feature } from '../../feature';
 import { registerMode } from '../../modes/index';
 import type { ModeFactory } from '../../modes/types';
@@ -57,6 +58,7 @@ const feature: Feature = {
     registerModeRules(api.registerMode);
   },
   room(room) {
+    trackSpawns(room);
     room.every(STATE_EVERY, () => pushState(room));
     const cam = new KillcamRecorder(room);
     const deathcams = new Deathcams(room, cam);
