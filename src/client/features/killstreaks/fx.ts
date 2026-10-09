@@ -1,6 +1,7 @@
 /** Explosions and other one-shot killstreak effects (`killstreaks.fx` pushes): chunky sprite fireballs, dust and sound. */
 import * as THREE from 'three';
 import { sfx } from '../../game/audio';
+import { rumble } from '../../game/gamepad';
 import { onFeature, registerMatchHook } from '../../registry';
 import { currentMatch } from '../../state';
 import { getTexture } from '../../render/textures';
@@ -39,6 +40,12 @@ onFeature('killstreaks.fx', (f) => {
   if (!m) return;
   const at = new THREE.Vector3(f.x, f.y, f.z);
   const pos = { x: f.x, y: f.y, z: f.z };
+  if (f.kind === 'boom' || f.kind === 'destroyed' || f.kind === 'bigboom' || f.kind === 'shell' || f.kind === 'napalm') {
+    // Controller rumble, fading out by ~30 m.
+    const me = m.net.predictor.shown();
+    const d = Math.hypot(me.x - f.x, me.y - f.y, me.z - f.z);
+    if (d < 30) rumble('explosion', (30 - d) / 24);
+  }
   switch (f.kind) {
     case 'boom':
     case 'destroyed':

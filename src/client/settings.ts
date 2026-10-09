@@ -32,6 +32,14 @@ export interface Settings extends RetroKnobs {
   time: string;
   crouchToggle: boolean;
   showFps: boolean;
+  /** Controller look sensitivity 1..10 (5 = 180 deg/s at full deflection). */
+  padSensitivity: number;
+  padInvertY: boolean;
+  /** Right stick radial deadzone (0.05..0.3). */
+  padDeadzone: number;
+  padVibration: boolean;
+  /** Controller aim assist (never applies to mouse/keyboard). */
+  aimAssist: 'off' | 'light' | 'standard';
   ext: SettingsExt;
 }
 
@@ -47,6 +55,11 @@ export const DEFAULT_SETTINGS: Settings = {
   time: 'map',
   crouchToggle: false,
   showFps: false,
+  padSensitivity: 5,
+  padInvertY: false,
+  padDeadzone: 0.13,
+  padVibration: true,
+  aimAssist: 'light',
   ext: {},
 };
 

@@ -16,6 +16,7 @@ import { sfx } from './game/audio';
 import './menus/main-menu';
 import './menus/settings';
 import './menus/match-screen';
+import './menus/padnav';
 
 // Texture recipes (one file per map/area) and feature folders register themselves on import.
 import.meta.glob('./render/recipes/*.ts', { eager: true });

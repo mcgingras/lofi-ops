@@ -17,6 +17,8 @@ import { KILLSTREAK_BY_ID, KS_ENTITY } from '../../../shared/defs/killstreaks';
 import { STRIKE, dirOfYaw, mapPointsNeeded, strikeLength } from '../../../shared/defs/tactical-map';
 import type { Match } from '../../game/match';
 import { sfx } from '../../game/audio';
+import { gamepad, PAD, padDown } from '../../game/gamepad';
+import { radialDeadzone } from '../../game/pad';
 import { HUD_COLORS as C, clock, rect, txt, unit } from '../../hud/draw';
 import { net } from '../../net';
 import { registerHudWidget, registerMatchHook } from '../../registry';
@@ -54,6 +56,7 @@ const S = {
   view: null as MapView | null,
   image: null as HTMLCanvasElement | null,
   keys: new Set<string>(),
+  /** Pad buttons last frame (A drags like a mouse button: press, then release). */
   pad: { a: false, b: false, x: false },
   /** Why the map last closed (dev helper / debugging). */
   lastClose: '',
@@ -85,6 +88,9 @@ function begin(m: Match, id: string, until: number): void {
   S.open = { id, picker: new TacMapPicker(id, def.mapPick, mapPointsNeeded(def), rect, { x: me.x, z: me.z }, m.yaw), t0: m.time, until, staticPlayed: false };
   S.error = null;
   S.keys.clear();
+  // Buttons already held when the map opens (D-pad up that called it) don't count as presses.
+  const held = gamepad.snapshot();
+  S.pad = { a: padDown(held, PAD.A), b: padDown(held, PAD.B), x: padDown(held, PAD.X) };
   m.controls.enabled = false;
   m.controls.ads = false;
   m.controls.fire = false;
@@ -308,25 +314,28 @@ function steer(m: Match, p: TacMapPicker, dt: number): void {
   if (k.has('KeyD') || k.has('ArrowRight')) dx += 1;
   if (k.has('KeyQ')) rot += 1;
   if (k.has('KeyE')) rot -= 1;
-  const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [];
-  const gp = [...pads].find((x) => x && x.connected) ?? null;
+  // Controller (shared gamepad module; the match controls are disabled while the map is open, so
+  // nothing else acts on these buttons): left stick / D-pad move, right stick X rotates, A marks,
+  // X undoes, B cancels.
+  const gp = gamepad.snapshot();
   if (gp) {
-    const dead = (v: number | undefined) => (v === undefined || Math.abs(v) < 0.18 ? 0 : v);
-    dx += dead(gp.axes[0]);
-    dz += dead(gp.axes[1]);
-    rot -= dead(gp.axes[2]);
-    if (gp.buttons[12]?.pressed) dz -= 1;
-    if (gp.buttons[13]?.pressed) dz += 1;
-    if (gp.buttons[14]?.pressed) dx -= 1;
-    if (gp.buttons[15]?.pressed) dx += 1;
-    const a = !!gp.buttons[0]?.pressed;
-    const b = !!gp.buttons[1]?.pressed;
-    const x = !!gp.buttons[2]?.pressed;
+    const ls = radialDeadzone(gp.axes[0] ?? 0, gp.axes[1] ?? 0, 0.18, 1);
+    dx += ls.x;
+    dz += ls.y;
+    rot -= radialDeadzone(gp.axes[2] ?? 0, 0, 0.18, 1).x;
+    if (padDown(gp, PAD.LEFT)) dx -= 1;
+    if (padDown(gp, PAD.RIGHT)) dx += 1;
+    const a = padDown(gp, PAD.A);
+    const b = padDown(gp, PAD.B);
+    const x = padDown(gp, PAD.X);
+    if (padDown(gp, PAD.UP)) dz -= 1;
+    if (padDown(gp, PAD.DOWN)) dz += 1;
     if (a && !S.pad.a) act(m, (q) => q.press());
     if (!a && S.pad.a) act(m, (q) => q.release());
     if (x && !S.pad.x) act(m, undo);
+    const cancelPress = b && !S.pad.b;
     S.pad = { a, b, x };
-    if (b) return cancel(m, 'pad');
+    if (cancelPress) return cancel(m, 'pad');
   }
   const l = Math.hypot(dx, dz);
   if (l > 0) p.moveBy((dx / Math.max(1, l)) * speed * dt, (dz / Math.max(1, l)) * speed * dt);

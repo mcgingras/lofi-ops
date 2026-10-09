@@ -149,3 +149,9 @@
 .fe-st-flag { all: unset; cursor: pointer; font-family: var(--ui); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid var(--line); padding: 4px 8px; color: var(--dim); }
 .fe-st-flag[aria-pressed='true'] { background: var(--warn); border-color: var(--warn); color: #000; }
 .fe-st-flag:focus-visible { outline: 2px solid var(--hi); }
+
+/* Settings → Controller: button layout table. */
+.fe-padmap { border-collapse: collapse; margin: 0 0 10px; font-size: 12px; width: 100%; max-width: 640px; }
+.fe-padmap th { text-align: left; color: var(--dim); font-weight: 400; border-bottom: 1px solid var(--line); padding: 3px 10px 3px 0; }
+.fe-padmap td { padding: 3px 10px 3px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.fe-padmap td:first-child { color: var(--hi); white-space: nowrap; width: 9em; }

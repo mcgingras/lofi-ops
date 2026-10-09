@@ -57,6 +57,8 @@ export interface LobbyState {
   players: LobbyPlayerInfo[];
   maxPlayers: number;
   limits: LobbyLimits;
+  /** Controller aim assist allowed in this lobby (host rule in private lobbies; always on in matchmade). */
+  aimAssist: boolean;
   bots: LobbyBotSettings;
   /** Bots that will join when the match starts (or are in it). */
   botsToFill: number;

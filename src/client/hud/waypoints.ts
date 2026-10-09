@@ -3,14 +3,22 @@
  * the screen edge when off screen. Used by objective markers (modes) and care packages (killstreaks).
  */
 import * as THREE from 'three';
-import { KEYMAP } from '../game/controls';
+import { noteUsePrompt } from '../game/gamepad';
 import type { Match } from '../game/match';
+import { promptKey } from '../game/prompts';
 import { blink, box, HUD_COLORS as C, rect, textWidth, txt, unit } from './draw';
 
 const v = new THREE.Vector3();
 
-/** The key bound to USE, for "HOLD F" prompts. */
-export const useKey = () => (Object.entries(KEYMAP).find(([, a]) => a === 'use')?.[0] ?? 'KeyF').replace(/^Key|^Digit/, '');
+/**
+ * The USE key for "HOLD F" / "HOLD [X]" prompts (game/prompts.ts). Call it only while drawing a
+ * USE prompt: it also tells the controller a USE action is on offer, so X becomes tap-to-reload /
+ * hold-to-use there.
+ */
+export const useKey = () => {
+  noteUsePrompt();
+  return promptKey('use');
+};
 
 export interface Waypoint {
   x: number;

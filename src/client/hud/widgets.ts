@@ -3,7 +3,8 @@
  *
  *   core.names 5, core.damage 10, core.scope 15, core.crosshair 20, core.hitmarker 25,
  *   core.compass 30, core.health 40, core.ammo 41, core.score 50, core.killfeed 55,
- *   core.status 60, core.title 70, core.death 80, core.phase 85, core.scoreboard 90, core.fps 99
+ *   core.status 60, core.title 70, core.death 80, core.phase 85, core.scoreboard 90, core.fps 99,
+ *   core.aimDebug 98 (`?aimdebug=1`: controller aim assist state)
  *
  * Replace one with `registerHudWidget('core.ammo', myDraw, 41)` or drop it with
  * `unregisterHudWidget`. All read `currentMatch()`.
@@ -13,6 +14,8 @@ import { EQUIPMENT_BY_ID } from '../../shared/defs/equipment';
 import { KILLSTREAK_BY_ID } from '../../shared/defs/killstreaks';
 import { WEAPON_BY_ID } from '../../shared/defs/weapons';
 import { TEAM_NAMES } from '../../shared/constants';
+import { inputDevice } from '../game/gamepad';
+import { promptKey } from '../game/prompts';
 import { registerHudWidget } from '../registry';
 import { settings } from '../settings';
 import { currentMatch } from '../state';
@@ -290,7 +293,7 @@ registerHudWidget(
         const def = m.weapon();
         const a = m.ammo();
         if (def && a.mag === 0 && a.reserve === 0) txt(g, 'NO AMMO', W / 2, H / 2 + 14 * u, 8, C.warn, 'center', u);
-        else if (def && a.mag <= Math.ceil(def.magazine * 0.25)) txt(g, 'PRESS R TO RELOAD', W / 2, H / 2 + 14 * u, 8, blink(m.time, 0.8, 0.5) ? C.warn : C.paper, 'center', u);
+        else if (def && a.mag <= Math.ceil(def.magazine * 0.25)) txt(g, `PRESS ${promptKey('reload')} TO RELOAD`, W / 2, H / 2 + 14 * u, 8, blink(m.time, 0.8, 0.5) ? C.warn : C.paper, 'center', u);
       }
     }
     m.notices = m.notices.filter((n) => m.time - n.t < 4);
@@ -431,4 +434,47 @@ registerHudWidget(
     txt(g, `${Math.round(m.fps)} FPS  ${Math.round(m.netRtt * 1000)} MS  ${W}x${H}`, 8 * u, H - 36 * u, 8, C.dim, 'left', u);
   },
   99,
+);
+
+// Debug: controller aim assist (`?aimdebug=1`): device, strength, slowdown, rotation and target.
+const aimDebugOn = (() => {
+  try {
+    const v = new URLSearchParams(location.search).get('aimdebug');
+    return v !== null && v !== '0';
+  } catch {
+    return false;
+  }
+})();
+registerHudWidget(
+  'core.aimDebug',
+  (g, W, H) => {
+    const m = currentMatch();
+    if (!m || !aimDebugOn) return;
+    const u = unit(H);
+    const a = m.aimDebug;
+    const x = 8 * u;
+    let y = 40 * u;
+    const line = (s: string, c: string = C.paper) => {
+      txt(g, s, x, y, 8, c, 'left', u);
+      y += 10 * u;
+    };
+    rect(g, x - 3 * u, y - 3 * u, 132 * u, 66 * u, C.ink);
+    line(`AIM ASSIST ${settings.aimAssist.toUpperCase()}  ${inputDevice().toUpperCase()}`, C.hi);
+    if (!a) return line('NO STICK INPUT', C.dim);
+    const on = a.slow < 0.999;
+    line(`SLOW ${Math.round((1 - a.slow) * 100)}%`, on ? C.hi : C.dim);
+    line(`ROT ${((a.rotRate * 180) / Math.PI).toFixed(1)} DEG/S`, a.rotRate > 1e-4 ? C.hi : C.dim);
+    line(`TARGET ${a.target ? m.nameOf(a.target).toUpperCase() : '-'}`, a.target ? C.enemy : C.dim);
+    box(g, x, y, 100 * u, 4 * u, C.empty, u);
+    rect(g, x, y, Math.round(100 * u * a.weight), 4 * u, C.hi);
+    // Crosshair ring while slowed.
+    if (on) {
+      const r = 9 * u;
+      for (let i = 0; i < 24; i++) {
+        const t = (i / 24) * Math.PI * 2;
+        rect(g, W / 2 + Math.cos(t) * r - u / 2, H / 2 + Math.sin(t) * r - u / 2, u, u, C.hi);
+      }
+    }
+  },
+  98,
 );

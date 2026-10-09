@@ -88,6 +88,8 @@ export interface ManagedLobby {
   voteOptions: string[] | null;
   limits: LobbyLimits;
   bots: LobbyBotSettings;
+  /** Lobby rule: controller aim assist allowed (client-side assist honours it). */
+  aimAssist: boolean;
   waitEndsAt: number | null;
   countdownEndsAt: number | null;
   /** session id -> wall ms the reserved slot expires. */
@@ -191,6 +193,7 @@ export class LobbyManager {
       voteOptions: opts.kind === 'matchmade' ? voteOptions(this.mapsFor(mode.id), null, this.rand) : null,
       limits: { scoreLimit: mode.scoreLimit, timeLimitSec: mode.timeLimitSec },
       bots: defaultBotSettings(mode),
+      aimAssist: true,
       waitEndsAt: null,
       countdownEndsAt: null,
       reservations: new Map(),
@@ -450,6 +453,10 @@ export class LobbyManager {
       if (src.map !== r.mapId) r.setMap(src.map);
     }
     if (src.limits !== undefined) l.limits = clampLimits(MODE_BY_ID.get(r.mode.id) ?? r.mode, src.limits, l.limits);
+    if (src.aimAssist !== undefined) {
+      if (typeof src.aimAssist !== 'boolean') throw new RpcError('bad_request', 'aimAssist must be a boolean');
+      l.aimAssist = src.aimAssist;
+    }
     if (src.bots !== undefined || src.mode !== undefined) {
       l.bots = sanitizeBotSettings(src.bots ?? {}, l.bots, r.options.maxPlayers);
       this.handBots(l, false);
@@ -505,6 +512,7 @@ export class LobbyManager {
       })),
       maxPlayers: r.options.maxPlayers,
       limits: { ...l.limits },
+      aimAssist: l.aimAssist,
       bots: { ...l.bots, custom: l.bots.custom ? { ...l.bots.custom } : undefined },
       botsToFill: r.phase === 'lobby' ? botsToFill(l.bots, humans, r.options.maxPlayers) : r.bots().length,
       vote: l.voteOptions ? { options: [...l.voteOptions], counts: voteCounts(l.voteOptions, l.votes.values()), votes } : null,

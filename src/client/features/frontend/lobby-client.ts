@@ -7,7 +7,7 @@
 import type { LobbyState } from '../../../shared/frontend/lobby';
 import type { LobbyTicket } from '../../../shared/frontend/protocol';
 import { net } from '../../net';
-import { onFeature } from '../../registry';
+import { onFeature, registerAimAssistGate } from '../../registry';
 import { closeOverlay, currentScreen, navigate, onScreenChange, openOverlay, overlayOpen } from '../../router';
 import { currentMatch } from '../../state';
 
@@ -16,6 +16,12 @@ const fns = new Set<(s: LobbyState | null) => void>();
 const nowSec = () => performance.now() / 1000;
 
 export const lobbyState = (): LobbyState | null => store.state;
+
+// "Aim assist allowed" (private lobby rule): off in this lobby's room when the host turned it off.
+registerAimAssistGate('frontend.lobby', (m) => {
+  const s = store.state;
+  return !s || s.roomId !== m.joined.roomId || s.aimAssist !== false;
+});
 
 /** The lobby's room time now (from the last push plus local elapsed time). */
 export function lobbyNow(): number {

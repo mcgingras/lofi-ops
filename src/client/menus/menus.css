@@ -71,3 +71,13 @@ kbd { font-family: var(--ui); font-size: 9px; border: 1px solid var(--line); pad
   .lf-form { grid-template-columns: 1fr; gap: 4px; }
   .lf-form label { margin-top: 8px; }
 }
+
+/* Controller focus ring (menus/padnav.ts): shown while the pad is the last-used device. */
+body[data-input='pad'] #app :is(button, select, input, a, textarea, [tabindex]):focus {
+  outline: 2px solid var(--hi);
+  outline-offset: 2px;
+}
+body[data-input='pad'] #app :is(.lf-btn, .fe-li, .fe-item, .fe-key, .fe-tab, .fe-nav-item, .fe-vote-opt, .fe-row):focus {
+  border-color: var(--hi);
+  color: var(--hi);
+}

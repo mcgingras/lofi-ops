@@ -1,8 +1,10 @@
 /**
  * Core match screen (`match`, params: mode, map?, room?): joins (quick play or a room id), then
  * runs a `Match` on the shared renderer. DOM only for the states around play: finding a match,
- * "click to deploy" (pointer lock needs a click), the Esc pause menu, errors.
+ * "click to deploy" (pointer lock needs a click; on a controller "press A", which engages without
+ * the pointer, see menus/padnav.ts), the Esc / Start pause menu, errors.
  */
+import { inputDevice, onDeviceChange } from '../game/gamepad';
 import { Match } from '../game/match';
 import { net } from '../net';
 import { registerScreen } from '../registry';
@@ -31,13 +33,14 @@ registerScreen('match', (root, params) => {
     if (!match) return;
     center.classList.remove('lf-pause');
     if (match.controls.locked || overlayOpen()) return show();
-    if (!everLocked) return show(banner(match.loading ? `${match.loading}...` : 'Click to deploy'));
+    if (!everLocked) return show(banner(match.loading ? `${match.loading}...` : inputDevice() === 'pad' ? 'Press A to deploy' : 'Click to deploy'));
     center.classList.add('lf-pause');
     show(
       h('h2', { class: 'lf-h2' }, 'Paused'),
       h('div', { class: 'lf-col interactive' }, btn('Resume', () => match?.controls.requestLock(), true), btn('Settings', () => openOverlay('settings')), btn('Leave match', () => navigate('menu'))),
-      h('div', { class: 'lf-hint' }, 'The match keeps going while paused.'),
+      h('div', { class: 'lf-hint' }, inputDevice() === 'pad' ? 'The match keeps going while paused. B or Start resumes.' : 'The match keeps going while paused.'),
     );
+    if (inputDevice() === 'pad') center.querySelector<HTMLElement>('.primary')?.focus();
   };
 
   const start = () => {
@@ -49,6 +52,7 @@ registerScreen('match', (root, params) => {
   };
 
   const offs = [
+    onDeviceChange(() => update()),
     net.onStatus((s) => {
       if (s === 'online') start();
       else if (!match) show(banner(s === 'waking' ? 'Waking server...' : 'Connecting...'));

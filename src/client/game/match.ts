@@ -23,12 +23,14 @@ import { MatchNet, net, type Net } from '../net';
 import { MapScene } from '../render/mapbuilder';
 import type { Renderer } from '../render/renderer';
 import { develop, prioritize } from '../render/textures';
-import { entityRenderers, matchHooks, onFeature, type EntityView } from '../registry';
+import { aimAssistGates, entityRenderers, matchHooks, onFeature, sightBlockers, type EntityView } from '../registry';
 import { settings } from '../settings';
 import { client } from '../state';
 import { drawHud } from '../hud/hud';
+import { aimAssist, newAimState, type AimResult, type AimTarget } from './aim-assist';
 import { sfx } from './audio';
 import { Controls } from './controls';
+import { inputDevice, rumble } from './gamepad';
 import { Effects } from './effects';
 import { Remotes } from './remotes';
 import { ViewmodelRig } from './viewmodel';
@@ -95,6 +97,8 @@ export class Match {
   readonly effects: Effects;
   /** Fps, smoothed. */
   fps = 60;
+  /** Last frame's aim assist result (debug overlay, `?aimdebug=1`), or null when not on the pad. */
+  aimDebug: AimResult | null = null;
 
   // Local weapon prediction.
   slot = 0;
@@ -119,6 +123,11 @@ export class Match {
   private weaponCache = new Map<string, EffectiveWeapon>();
   private disposed = false;
   private loadToken = 0;
+  private aimState = newAimState();
+  /** Smoothed remote velocities for aim assist (from interpolated positions). */
+  private remoteVel = new Map<string, { x: number; y: number; z: number; vx: number; vy: number; vz: number }>();
+  /** Last frame: scoped (the scope sets its own look scale) and the mouse look scale before hooks. */
+  private scopedLast = false;
 
   constructor(
     readonly renderer: Renderer,
@@ -351,6 +360,7 @@ export class Match {
         if (v) this.effects.puff('blood', { x: v.x, y: v.y + (m.part === 'head' ? 1.65 : m.part === 'legs' ? 0.6 : 1.2) * (v.crouch > 0.5 ? 0.67 : 1), z: v.z });
       }),
       s.on('hurt', (m) => {
+        rumble('hit', 1);
         if (m.from) {
           const st = this.net.predictor.state;
           this.damageMarks.push({ t: this.time, yaw: Math.atan2(-(m.from[0] - st.x), -(m.from[2] - st.z)) });
@@ -494,12 +504,23 @@ export class Match {
     const playing = this.phase === 'playing';
     const server = this.serverTime;
 
-    // Weapon switching (1/2, wheel).
+    // Controller: buttons and presses for this frame, then look (zoom-scaled, through aim assist).
+    // c.lookScale is last frame's mouse scale after hooks (ADS, scope zoom, stun); the pad divides
+    // by the zoom for iron sights too, and undoes the mouse's scoped zoom/2.
+    c.padLookScale = (c.lookScale * (this.scopedLast ? Math.max(1, r.zoom * 0.5) : 1)) / Math.max(1, r.zoom);
+    c.update(dt);
+    this.applyPadLook(dt);
+
+    // Weapon switching (1/2, wheel, Y, D-pad down).
     const nWeapons = me?.weapons.length ?? 2;
     let want = this.slot;
     if (c.consume('weapon1')) want = 0;
     if (c.consume('weapon2')) want = 1;
     if (c.consume('weapon3')) want = 2; // underbarrel attachment slot (grenade launcher), when present
+    if (c.consume('weaponNext')) want = this.slot === 0 ? 1 : 0;
+    // D-pad down: the underbarrel (again: back to the primary). Scoped with a variable zoom it
+    // belongs to the scope (weapons feature) instead.
+    if (!(this.scopedLast && this.weapon()?.zoomLevels.length) && c.consume('equipment')) want = this.slot === 2 ? 0 : 2;
     const wheel = c.consumeWheel();
     if (wheel) want = (((this.slot + wheel) % nWeapons) + nWeapons) % nWeapons;
     if (alive && playing && want !== this.slot && want < nWeapons) {
@@ -533,7 +554,7 @@ export class Match {
     // Firing.
     const st = this.net.predictor.state;
     if (def && alive && playing && c.locked) this.tryFire(def, dt, st);
-    this.triggerWas = c.fire;
+    this.triggerWas = c.triggerHeld;
     this.net.flush();
 
     // Recoil recovery: full speed once the trigger rests, partly while spraying (BO-style).
@@ -563,6 +584,7 @@ export class Match {
     r.zoom = zoom;
     r.updateFov();
     const scoped = !!def?.scope && ads > 0.85;
+    this.scopedLast = scoped;
     c.lookScale = (1 + (settings.adsSensitivity - 1) * ads) / (scoped ? Math.max(1, zoom * 0.5) : 1);
     const moving = Math.hypot(st.vx, st.vz);
     this.spread = def ? spreadDegrees(def, ads, moving > 0.5) : 0;
@@ -604,6 +626,86 @@ export class Match {
     r.render((g, W, H) => drawHud(g, W, H, dt), this.viewmodel.visible);
   }
 
+  /**
+   * Apply this frame's controller look (Controls.update left it in `padLook`) through aim assist:
+   * visible, alive enemies from the interpolated soldiers, line of sight from the world's sight
+   * raycast plus any registered sight blockers (smoke). Mouse look never comes through here.
+   */
+  private applyPadLook(dt: number): void {
+    const c = this.controls;
+    this.trackRemoteVelocities(dt);
+    const look = c.padLook;
+    if (!look) {
+      this.aimDebug = null;
+      if (inputDevice() !== 'pad') this.aimState = newAimState();
+      return;
+    }
+    const st = this.net.predictor.state;
+    const alive = this.alive && this.phase === 'playing';
+    let allowed = alive;
+    for (const gate of aimAssistGates.values()) {
+      try {
+        if (!gate(this)) allowed = false;
+      } catch (err) {
+        console.error('[aim assist gate]', err);
+      }
+    }
+    const targets: AimTarget[] = [];
+    if (allowed) {
+      for (const v of this.remotes.views.values()) {
+        const vel = this.remoteVel.get(v.id);
+        targets.push({ id: v.id, x: v.x, y: v.y, z: v.z, vx: vel?.vx ?? 0, vy: vel?.vy ?? 0, vz: vel?.vz ?? 0, crouched: v.crouch > 0.5, alive: v.alive, enemy: this.isEnemy(v.id) });
+      }
+    }
+    const world = this.net.world;
+    const los = (a: Vec3, b: Vec3) => {
+      if (!world.lineOfSight(a, b, 'sight')) return false;
+      for (const fn of sightBlockers.values()) if (fn(a, b)) return false;
+      return true;
+    };
+    const res = aimAssist(
+      {
+        device: inputDevice(),
+        strength: settings.aimAssist,
+        allowed,
+        yaw: this.yaw,
+        pitch: this.pitch,
+        look,
+        move: c.padMove,
+        eye: { x: st.x, y: st.y + eyeHeight(st), z: st.z },
+        vel: { x: st.vx, y: st.vy, z: st.vz },
+        targets,
+        los,
+        dt,
+      },
+      this.aimState,
+    );
+    this.aimDebug = res;
+    c.yaw += res.yaw - this.yaw;
+    c.pitch = Math.max(-1.5, Math.min(1.5, c.pitch + (res.pitch - this.pitch)));
+  }
+
+  private trackRemoteVelocities(dt: number): void {
+    if (!(dt > 0)) return;
+    const k = 1 - Math.exp(-dt * 8);
+    const seen = new Set<string>();
+    for (const v of this.remotes.views.values()) {
+      seen.add(v.id);
+      const prev = this.remoteVel.get(v.id);
+      if (!prev || !v.alive || Math.hypot(v.x - prev.x, v.z - prev.z) > 3) {
+        this.remoteVel.set(v.id, { x: v.x, y: v.y, z: v.z, vx: 0, vy: 0, vz: 0 });
+        continue;
+      }
+      prev.vx += ((v.x - prev.x) / dt - prev.vx) * k;
+      prev.vy += ((v.y - prev.y) / dt - prev.vy) * k;
+      prev.vz += ((v.z - prev.z) / dt - prev.vz) * k;
+      prev.x = v.x;
+      prev.y = v.y;
+      prev.z = v.z;
+    }
+    for (const id of [...this.remoteVel.keys()]) if (!seen.has(id)) this.remoteVel.delete(id);
+  }
+
   /** Predict a reload now and send RELOAD with this frame's command. */
   private startLocalReload(def: EffectiveWeapon, ammo: { mag: number; reserve: number }) {
     if (ammo.mag >= def.magazine || ammo.reserve <= 0) {
@@ -624,7 +726,8 @@ export class Match {
 
   private tryFire(def: EffectiveWeapon, dt: number, st: { sprinting: boolean; sinceSprint: number; ads: number; vx: number; vz: number; x: number; y: number; z: number; crouched: boolean }) {
     const c = this.controls;
-    const pressed = c.fire && !this.triggerWas;
+    const trigger = c.triggerHeld;
+    const pressed = trigger && !this.triggerWas;
     const interval = 60 / Math.max(1, def.rpm);
     const ammo = this.ammo();
     const reloading = this.reloadProgress() >= 0;
@@ -635,7 +738,7 @@ export class Match {
       this.burstQueued = false;
       this.burstLeft = def.burst ?? 3;
     }
-    const wantShot = def.mode === 'auto' ? c.fire : def.mode === 'burst' ? this.burstLeft > 0 : pressed;
+    const wantShot = def.mode === 'auto' ? trigger : def.mode === 'burst' ? this.burstLeft > 0 : pressed;
     if (!wantShot) return;
     if (reloading || switching || sprintBlocked) {
       if (def.mode !== 'burst') return;
@@ -666,6 +769,7 @@ export class Match {
     this.recoil.pitch += def.recoil.vertical * DEG * adsK;
     this.recoil.yaw += (Math.random() - 0.5) * 2 * def.recoil.horizontal * DEG * adsK;
     this.viewmodel.shoot(this.time, Math.min(1.2, 0.5 + def.recoil.vertical * 0.4));
+    rumble('fire', Math.min(1, 0.5 + def.recoil.vertical * 0.3));
     sfx.gunshot(def.base.id, undefined, def.suppressed);
     const moving = Math.hypot(st.vx, st.vz) > 0.5;
     const spread = spreadDegrees(def, st.ads, moving);

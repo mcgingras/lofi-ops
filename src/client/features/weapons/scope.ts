@@ -5,6 +5,7 @@
  */
 import { sfx } from '../../game/audio';
 import type { Match } from '../../game/match';
+import { promptKey } from '../../game/prompts';
 import { HUD_COLORS as C, rect, txt, unit } from '../../hud/draw';
 import { registerHudWidget, registerMatchHook, unregisterHudWidget } from '../../registry';
 import { settings } from '../../settings';
@@ -106,6 +107,8 @@ registerMatchHook('weapons.scope', {
     const def = m.weapon();
     const ads = m.alive ? m.net.predictor.state.ads : 0;
     const scoped = !!def?.scope && ads > 0.85 && m.alive;
+    // Controller: D-pad down cycles the zoom while scoped (the match leaves the press to us then).
+    if (scoped && def?.zoomLevels.length && m.controls.consume('equipment')) cycleZoom();
     scopeState.scoped = scoped;
     const max = def?.breathSec ?? 4;
     scopeState.breathMax = max;
@@ -209,7 +212,7 @@ registerHudWidget(
     const hint = m.time < scopeState.exhausted ? 'OUT OF BREATH' : scopeState.holding ? 'HOLDING BREATH' : 'HOLD SHIFT TO STEADY';
     txt(g, hint, cx, by - 11 * u, 8, m.time < scopeState.exhausted ? C.warn : C.dim, 'center', u);
     const def = m.weapon();
-    if (def && def.zoomLevels.length) txt(g, `${scopeState.zoom.toFixed(1)}X  [X]`, cx + r * 0.7, cy + r * 0.62, 8, C.dim, 'center', u);
+    if (def && def.zoomLevels.length) txt(g, `${scopeState.zoom.toFixed(1)}X  ${promptKey('zoom', { brackets: true })}`, cx + r * 0.7, cy + r * 0.62, 8, C.dim, 'center', u);
   },
   15,
 );

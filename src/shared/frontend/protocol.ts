@@ -28,6 +28,8 @@ export interface LobbyConfigPatch {
   map?: string;
   limits?: Partial<LobbyLimits>;
   bots?: Partial<LobbyBotSettings>;
+  /** Allow controller aim assist (default true). */
+  aimAssist?: boolean;
 }
 
 declare module '../protocol' {

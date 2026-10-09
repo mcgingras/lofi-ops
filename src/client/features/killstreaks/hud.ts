@@ -6,6 +6,8 @@
 import { CRATE_REACH, KILLSTREAK_BY_ID, KS_ENTITY } from '../../../shared/defs/killstreaks';
 import { blink, box, clock, rect, txt, textWidth, unit, HUD_COLORS as C } from '../../hud/draw';
 import { drawWaypoint, useKey, type Waypoint, type WaypointSlot } from '../../hud/waypoints';
+import { inputDevice } from '../../game/gamepad';
+import { promptKey } from '../../game/prompts';
 import { registerHudWidget } from '../../registry';
 import { currentMatch } from '../../state';
 import { STRIKE } from '../../../shared/defs/tactical-map';
@@ -64,9 +66,9 @@ registerHudWidget(
     if (st.ready.length && m.alive) {
       const sel = st.ready[st.selected] ?? st.ready[0]!;
       const flash = m.time - ksClient.earnedAt < 2 && blink(m.time, 0.3, 0.2);
-      const label = st.map ? 'RADIO' : st.armed ? 'DESIGNATING' : `[4] ${streakName(sel).toUpperCase()}`;
+      const label = st.map ? 'RADIO' : st.armed ? 'DESIGNATING' : `${promptKey('streak', { brackets: true })} ${streakName(sel).toUpperCase()}`;
       txt(g, label, W - 8 * u, y - 4 * u, 8, flash ? C.paper : C.hi, 'right', u);
-      if (st.ready.length > 1) txt(g, `+${st.ready.length - 1}  [5] NEXT`, W - 8 * u, y - 13 * u, 8, C.dim, 'right', u);
+      if (st.ready.length > 1) txt(g, `+${st.ready.length - 1}  ${promptKey('streakNext', { brackets: true })} NEXT`, W - 8 * u, y - 13 * u, 8, C.dim, 'right', u);
     }
   },
   42,
@@ -110,12 +112,13 @@ registerHudWidget(
       const need = st.armed.need;
       const label = need > 1 ? `MARK TARGET ${st.armed.marks.length + 1}/${need}` : def?.targeting === 'line' ? 'MARK TARGET (RUNS ALONG YOUR FACING)' : def?.id === 'care_package' ? 'MARK DROP ZONE' : 'MARK TARGET';
       txt(g, label, cx, cy + 16 * u, 8, C.hi, 'center', u);
-      txt(g, `[4] CONFIRM  ${streakName(st.armed.id).toUpperCase()}`, cx, cy + 26 * u, 8, C.paper, 'center', u);
+      txt(g, `${promptKey('streak', { brackets: true })} CONFIRM  ${streakName(st.armed.id).toUpperCase()}`, cx, cy + 26 * u, 8, C.paper, 'center', u);
     }
     if (st?.control) {
       const left = Math.max(0, st.control.until - m.serverTime);
       const name = streakName(st.control.id).toUpperCase();
-      const hint = st.control.id === 'chopper_gunner' ? 'FIRE: CANNON' : 'FIRE: DETONATE';
+      const fire = inputDevice() === 'pad' ? promptKey('fire') : 'FIRE:';
+      const hint = st.control.id === 'chopper_gunner' ? `${fire} CANNON` : `${fire} DETONATE`;
       txt(g, name, cx, 52 * u, 16, C.hi, 'center', u);
       txt(g, `${hint}   ${clock(left)}`, cx, 70 * u, 8, C.paper, 'center', u);
       // Reticle.

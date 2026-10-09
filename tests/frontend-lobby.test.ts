@@ -221,6 +221,20 @@ describe('private lobbies', () => {
     expect(() => m.configure(l.room, host.player, { bots: { fill: false } })).toThrow(/started/);
   });
 
+  it('host rule: aim assist allowed (on by default, host toggles it, validated)', () => {
+    const { lobby, m } = setup({});
+    const host = session('Host');
+    const l = m.createPrivate(host, {});
+    lobby.join(host, l.room.id);
+    expect(m.state(l).aimAssist).toBe(true);
+    expect(m.configure(l.room, host.player, { aimAssist: false }).aimAssist).toBe(false);
+    expect(() => m.configure(l.room, host.player, { aimAssist: 'no' as unknown as boolean })).toThrow(/boolean/);
+    expect(m.configure(l.room, host.player, { aimAssist: true }).aimAssist).toBe(true);
+    const guest = session('Guest');
+    lobby.join(guest, l.room.id);
+    expect(() => m.configure(l.room, guest.player, { aimAssist: false })).toThrow(/host/);
+  });
+
   it('fill off: the match starts with humans only', () => {
     const { lobby, m } = setup({ soloCountdownSec: 0.5 });
     const host = session();

@@ -12,6 +12,7 @@ import { WAGER_MODES } from '../../../shared/defs/economy';
 import type { WagerHud, WagerModeHud } from '../../../shared/defs/economy-net';
 import type { CpLine } from '../../../shared/defs/economy';
 import { DEFAULT_RETICLE, RETICLE_BY_ID } from '../../../shared/defs/store';
+import { promptKey } from '../../game/prompts';
 import { blink, box, clock, HUD_COLORS as C, rect, textWidth, txt, unit } from '../../hud/draw';
 import { net } from '../../net';
 import { onFeature, registerHudWidget, registerMatchHook } from '../../registry';
@@ -149,7 +150,7 @@ registerHudWidget(
         break;
       }
       case 'sticks':
-        txt(g, `TOMAHAWK x${d.tomahawks ?? 0}  [G]`, x, y, 8, (d.tomahawks ?? 0) > 0 ? C.hi : C.dim, 'left', u);
+        txt(g, `TOMAHAWK x${d.tomahawks ?? 0}  ${promptKey('lethal', { brackets: true })}`, x, y, 8, (d.tomahawks ?? 0) > 0 ? C.hi : C.dim, 'left', u);
         break;
     }
   },

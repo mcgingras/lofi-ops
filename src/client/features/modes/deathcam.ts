@@ -23,7 +23,8 @@ import { sfx } from '../../game/audio';
 import type { Match } from '../../game/match';
 import { ViewmodelRig } from '../../game/viewmodel';
 import { HUD_COLORS as C, rect, textWidth, txt, unit } from '../../hud/draw';
-import { useKey } from '../../hud/waypoints';
+import { PAD, PadEdges } from '../../game/gamepad';
+import { promptKey } from '../../game/prompts';
 import { net } from '../../net';
 import { onFeature, registerHudWidget, registerMatchHook } from '../../registry';
 import { currentMatch } from '../../state';
@@ -49,10 +50,11 @@ const S = {
   /** Streak views: where the victim was last seen alive. */
   target: null as { x: number; y: number; z: number } | null,
   melee: false,
-  /** Skip buttons must be released after the clip arrives before a press counts. */
+  /** Skip key must be released after the clip arrives before a press counts. */
   useWas: true,
-  padWas: true,
 };
+/** The controller's X (shared gamepad module), primed when a clip arrives. */
+const padEdges = new PadEdges();
 
 const actors = new ReplayActors();
 let rig: ViewmodelRig | null = null;
@@ -80,7 +82,8 @@ onFeature('modes.deathcam', (d) => {
     S.from = c.frames[0]?.t ?? d.at;
     S.to = c.frames.at(-1)?.t ?? d.at;
   }
-  S.useWas = S.padWas = true;
+  S.useWas = true;
+  padEdges.prime();
 });
 net.on('spawned', () => clear());
 net.on('joined', () => clear());
@@ -88,23 +91,15 @@ net.on('phase', (p) => {
   if (p.phase !== 'playing') clear();
 });
 
-const padSkip = (): boolean => {
-  const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [];
-  for (const p of pads) if (p?.buttons[2]?.pressed) return true;
-  return false;
-};
-const padConnected = (): boolean => {
-  const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [];
-  return [...pads].some((p) => !!p?.connected);
-};
-
-/** Edge-triggered skip: USE (F) or the gamepad's X / Square, as in BO1. */
+/**
+ * Edge-triggered skip: USE (F) or the controller's X, as in BO1. The pad is read here directly
+ * (not through `controls.isHeld('use')`, which also carries the pad's X) so one press is one skip.
+ */
 function skipPressed(m: Match): boolean {
   const use = m.controls.isHeld('use');
-  const pad = padSkip();
-  const hit = (use && !S.useWas) || (pad && !S.padWas);
+  const pad = padEdges.update().has(PAD.X);
+  const hit = (use && !S.useWas) || pad;
   S.useWas = use;
-  S.padWas = pad;
   return hit;
 }
 
@@ -311,8 +306,7 @@ registerHudWidget(
     const bottom = 66 * u;
     band(g, H - bottom, W, bottom);
     drawCard(g, m, d, W, H - bottom + 18 * u, u);
-    const key = padConnected() ? '[X]' : `[${useKey()}]`;
-    txt(g, `PRESS ${key} TO SKIP`, W / 2, H - bottom - 14 * u, 8, C.paper, 'center', u);
+    txt(g, `PRESS ${promptKey('skip', { brackets: true })} TO SKIP`, W / 2, H - bottom - 14 * u, 8, C.paper, 'center', u);
   },
   94,
 );

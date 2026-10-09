@@ -6,6 +6,7 @@
  */
 import type * as THREE from 'three';
 import type { FeatureId, FeatureMessages, EntitySnap } from '../shared/protocol';
+import type { Vec3 } from '../shared/math';
 import type { Match } from './game/match';
 
 // ---------------------------------------------------------------------------------------------
@@ -161,4 +162,22 @@ export function footstepVolume(playerId: string, volume: number): number {
     }
   }
   return volume;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Aim assist (controller only; game/aim-assist.ts)
+// ---------------------------------------------------------------------------------------------
+
+/** Return false to switch aim assist off for this match (a private lobby's "Aim assist allowed" rule). */
+export type AimAssistGate = (match: Match) => boolean;
+export const aimAssistGates = new Map<string, AimAssistGate>();
+export function registerAimAssistGate(id: string, fn: AimAssistGate): void {
+  aimAssistGates.set(id, fn);
+}
+
+/** Return true when something other than world geometry (smoke...) blocks sight from a to b. */
+export type SightBlocker = (a: Vec3, b: Vec3) => boolean;
+export const sightBlockers = new Map<string, SightBlocker>();
+export function registerSightBlocker(id: string, fn: SightBlocker): void {
+  sightBlockers.set(id, fn);
 }

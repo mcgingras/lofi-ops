@@ -84,7 +84,10 @@ function lobbyOverlay(root: HTMLElement) {
   mapSel.addEventListener('change', () => void configure({ map: mapSel.value }));
   scoreSel.addEventListener('change', () => void configure({ limits: { scoreLimit: Number(scoreSel.value) } }));
   timeSel.addEventListener('change', () => void configure({ limits: { timeLimitSec: Number(timeSel.value) } }));
-  settingsBox.append(h('label', {}, 'Mode'), modeSel, h('label', {}, 'Map'), mapSel, h('label', {}, 'Score limit'), scoreSel, h('label', {}, 'Time limit'), timeSel);
+  // Lobby rule: controller aim assist (client-side; matchmade lobbies always allow it).
+  const aimBox = h('input', { type: 'checkbox', 'aria-label': 'Aim assist allowed' });
+  aimBox.addEventListener('change', () => void configure({ aimAssist: aimBox.checked }));
+  settingsBox.append(h('label', {}, 'Mode'), modeSel, h('label', {}, 'Map'), mapSel, h('label', {}, 'Score limit'), scoreSel, h('label', {}, 'Time limit'), timeSel, h('label', { title: 'Light slowdown and follow for controller players; never applies to mouse and keyboard' }, 'Aim assist allowed'), aimBox);
 
   const fillSelect = (sel: HTMLSelectElement, opts: [string, string][], value: string, disabled: boolean) => {
     const key = opts.map((o) => o.join('=')).join('|');
@@ -192,6 +195,8 @@ function lobbyOverlay(root: HTMLElement) {
       fillSelect(scoreSel, scores.map((v) => [String(v), v === 0 ? 'Unlimited' : String(v)]), String(s.limits.scoreLimit), !canEdit);
       const times = mode ? [...new Set([...timeLimitOptions(mode), s.limits.timeLimitSec])] : [s.limits.timeLimitSec];
       fillSelect(timeSel, times.map((v) => [String(v), fmtTime(v)]), String(s.limits.timeLimitSec), !canEdit);
+      aimBox.checked = s.aimAssist !== false;
+      aimBox.disabled = !canEdit;
     }
     botsHead.textContent = s.kind === 'private' ? (canEdit ? 'Bots · host controls' : 'Bots · set by host') : 'Bots · playlist default';
     bots.update(s.bots, canEdit, s.maxPlayers);

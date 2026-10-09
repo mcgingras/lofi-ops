@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { EQUIPMENT_BY_ID, MELEE, NADE_ENTITY, THROW_RECOVERY, THROW_WINDUP } from '../../../shared/defs/equipment';
 import { sfx } from '../../game/audio';
+import { rumble } from '../../game/gamepad';
 import type { Match } from '../../game/match';
 import { HUD_COLORS as C, rect, txt, unit } from '../../hud/draw';
 import { onFeature, registerEntityRenderer, registerHudWidget, registerMatchHook } from '../../registry';
@@ -120,7 +121,10 @@ function boom(m: Match, x: number, y: number, z: number, e: string) {
   blasts.push({ sprite, life: 0.25, max: 0.25 });
   const cam = m.renderer.cam.position;
   const d = Math.hypot(cam.x - x, cam.y - y, cam.z - z);
-  if (d < 16 && !tactical) equipState.shake = { at: m.time, amount: Math.min(1, (16 - d) / 12) };
+  if (d < 16 && !tactical) {
+    equipState.shake = { at: m.time, amount: Math.min(1, (16 - d) / 12) };
+    rumble('explosion', equipState.shake.amount);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -5,6 +5,7 @@
  * picker), not a core button.
  */
 import { KEYMAP, type Action } from '../../game/controls';
+import { keyCodeLabel } from '../../game/prompts';
 import { onSettings, settings, updateSettings } from '../../settings';
 
 declare module '../../settings' {
@@ -51,13 +52,8 @@ export function keyFor(action: BindAction): string | null {
   return Object.keys(KEYMAP).find((c) => KEYMAP[c] === action && !c.startsWith('Arrow')) ?? Object.keys(KEYMAP).find((c) => KEYMAP[c] === action) ?? null;
 }
 
-export function keyLabel(code: string | null): string {
-  if (!code) return '-';
-  if (code.startsWith('Key')) return code.slice(3);
-  if (code.startsWith('Digit')) return code.slice(5);
-  const names: Record<string, string> = { Space: 'Space', ShiftLeft: 'L Shift', ShiftRight: 'R Shift', ControlLeft: 'L Ctrl', ControlRight: 'R Ctrl', AltLeft: 'L Alt', AltRight: 'R Alt', Tab: 'Tab', CapsLock: 'Caps', Backquote: '`', Enter: 'Enter' };
-  return names[code] ?? code.replace(/^Arrow/, '↑').replace(/^Numpad/, 'Num ');
-}
+/** Key label for the bindings page (the same labels HUD prompts use, game/prompts.ts). */
+export const keyLabel = (code: string | null): string => keyCodeLabel(code);
 
 /** Rebuild KEYMAP from the defaults plus the saved binds. */
 export function applyBinds(): void {

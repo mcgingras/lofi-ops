@@ -1,11 +1,14 @@
 /**
  * Settings (replaces the core 'settings' screen): tabs for Graphics (Retro strength preset with
  * an Advanced panel for its knobs, grade, time of day, FOV), Controls (sensitivity, ADS sensitivity, invert, crouch
- * toggle), Key bindings (rebind any action, incl. the class menu key) and Audio (volume, plus a Sound
+ * toggle), Key bindings (rebind any action, incl. the class menu key), Controller (aim assist,
+ * look sensitivity, invert, deadzone, vibration, and the button layout) and Audio (volume, plus a Sound
  * test listing every sound with Play / Flag). Same persisted
  * settings as core (settings.ts); works as a page or as an overlay over a match.
  */
 import { sfx } from '../../game/audio';
+import { gamepad, onDeviceChange } from '../../game/gamepad';
+import { PAD_LAYOUT } from '../../game/pad';
 import { cacheClear } from '../../render/idb';
 import { adoptToken, currentToken, formatRecoveryCode, net, normalizeRecoveryCode } from '../../net';
 import { registerScreen } from '../../registry';
@@ -16,7 +19,7 @@ import { BINDABLE, conflictFor, keyFor, keyLabel, resetBinds, setBind, type Bind
 import { soundTestPane } from './sound-test';
 import { h, seg, slider } from './ui';
 
-type Tab = 'video' | 'controls' | 'keys' | 'audio' | 'account';
+type Tab = 'video' | 'controls' | 'keys' | 'pad' | 'audio' | 'account';
 let lastTab: Tab = 'video';
 let advancedOpen = false;
 
@@ -189,8 +192,50 @@ registerScreen('settings', (root, params) => {
     soundTestPane(),
   );
 
-  const panes: Record<Tab, HTMLElement> = { video, controls, keys: h('div', {}, keys, keyNote), audio, account: accountPane() };
-  const labels: [Tab, string][] = [['video', 'Graphics'], ['controls', 'Controls'], ['keys', 'Key bindings'], ['audio', 'Audio'], ['account', 'Account']];
+  // Controller: aim assist, look, vibration, and the layout table.
+  const AA_BLURB: Record<Settings['aimAssist'], string> = {
+    off: 'Off: no help at all.',
+    light: 'Light: look slows about 25% over an enemy and gently follows a strafing target while you move. No snapping.',
+    standard: 'Standard: a little stronger slowdown (35%) and follow. Still no snapping.',
+  };
+  const aaBlurb = h('p', { class: 'fe-help', 'aria-live': 'polite' });
+  updates.push(() => (aaBlurb.textContent = `${AA_BLURB[settings.aimAssist]} Controller only: it never applies to mouse and keyboard, and private lobbies can turn it off.`));
+  const padStatus = h('div', { class: 'lf-status', role: 'status' });
+  const showPad = () => {
+    const s = gamepad.snapshot();
+    padStatus.textContent = s ? `Connected: ${s.id.replace(/\s*\(.*$/, '') || 'controller'}` : 'No controller seen yet. Press any button on it.';
+  };
+  const padTimer = setInterval(showPad, 1000);
+  const offDevice = onDeviceChange(showPad);
+  showPad();
+  const layout = h(
+    'table',
+    { class: 'fe-padmap' },
+    h('thead', {}, h('tr', {}, h('th', {}, 'Button'), h('th', {}, 'Action'))),
+    h('tbody', {}, ...PAD_LAYOUT.map(([b, a]) => h('tr', {}, h('td', {}, b), h('td', {}, a)))),
+  );
+  const pad = h(
+    'div',
+    {},
+    h(
+      'div',
+      { class: 'fe-form' },
+      ...row('Controller', padStatus),
+      ...row('Aim assist', segOf('aimAssist', [['off', 'Off'], ['light', 'Light'], ['standard', 'Standard']])),
+      h('span', {}),
+      aaBlurb,
+      ...row('Look sensitivity', rangeOf('padSensitivity', 1, 10, 0.5, (v) => v.toFixed(1))),
+      ...row('Invert look', checkOf('padInvertY')),
+      ...row('Stick deadzone', rangeOf('padDeadzone', 0.05, 0.3, 0.01, (v) => `${Math.round(v * 100)}%`)),
+      ...row('Vibration', checkOf('padVibration')),
+    ),
+    h('h3', { class: 'fe-h' }, 'Layout'),
+    layout,
+    h('p', { class: 'fe-help' }, 'Menus: D-pad or left stick moves, A selects, B goes back, LB / RB switch tabs.'),
+  );
+
+  const panes: Record<Tab, HTMLElement> = { video, controls, keys: h('div', {}, keys, keyNote), pad, audio, account: accountPane() };
+  const labels: [Tab, string][] = [['video', 'Graphics'], ['controls', 'Controls'], ['keys', 'Key bindings'], ['pad', 'Controller'], ['audio', 'Audio'], ['account', 'Account']];
   const tabBtns = labels.map(([t, l]) => h('button', { class: 'fe-tab', type: 'button', role: 'tab', onclick: () => select(t) }, l));
   const panel = h('div', { class: 'lf-panel', role: 'tabpanel' });
   const select = (t: Tab) => {
@@ -200,10 +245,14 @@ registerScreen('settings', (root, params) => {
   };
   const done = h('button', { class: 'lf-btn primary', type: 'button', onclick: () => back(params) }, params.overlay === '1' ? 'Back to match' : 'Back');
   root.append(h('div', { class: `fe-page${params.overlay === '1' ? '' : ' lf-bg'}` }, h('h2', { class: 'lf-h2' }, 'Settings'), h('div', {}, h('div', { class: 'fe-tabs', role: 'tablist' }, ...tabBtns), panel), h('div', { class: 'fe-actions' }, done)));
-  select(params.tab === 'keys' || params.tab === 'audio' || params.tab === 'controls' || params.tab === 'video' || params.tab === 'account' ? params.tab : lastTab);
+  select(params.tab === 'keys' || params.tab === 'audio' || params.tab === 'controls' || params.tab === 'video' || params.tab === 'account' || params.tab === 'pad' ? params.tab : lastTab);
   refresh();
   done.focus();
-  return () => removeEventListener('keydown', onKey, true);
+  return () => {
+    removeEventListener('keydown', onKey, true);
+    clearInterval(padTimer);
+    offDevice();
+  };
 });
 
 

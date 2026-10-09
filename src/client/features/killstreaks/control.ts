@@ -1,5 +1,6 @@
 /**
- * Local control of streaks: key 5 cycles the selected ready streak; while designating the weapon
+ * Local control of streaks: key 5 (or D-pad right / left on a controller) cycles the selected
+ * ready streak; while designating the weapon
  * is lowered; while driving an RC-XD (chase cam), working a Chopper Gunner (camera in the gunner
  * seat) or steering a Valkyrie rocket (rocket cam) the camera follows the entity and mouse look
  * aims it. Input still goes out through the normal command stream (movement keys, FIRE, STREAK).
@@ -9,7 +10,18 @@ import { viewDir } from '../../../shared/math';
 import { net } from '../../net';
 import { registerMatchHook } from '../../registry';
 import type { Match } from '../../game/match';
+import { registerPromptKey } from '../../game/prompts';
 import { ksClient, refreshState, resetClient } from './store';
+
+registerPromptKey('streakNext', () => 'Digit5');
+
+/** Select the next (+1) or previous (-1) ready streak. */
+function cycle(dir: 1 | -1): void {
+  const st = ksClient.state;
+  if (!st || st.ready.length < 2) return;
+  const n = st.ready.length;
+  void net.rpc('killstreaks.select', { index: (((st.selected + dir) % n) + n) % n }).catch(() => {});
+}
 
 const pos = new THREE.Vector3();
 let followId = -1;
@@ -27,14 +39,14 @@ registerMatchHook('killstreaks.control', {
     void refreshState();
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== 'Digit5' || !m.controls.locked || e.repeat) return;
-      const st = ksClient.state;
-      if (!st || st.ready.length < 2) return;
-      void net.rpc('killstreaks.select', { index: st.selected + 1 }).catch(() => {});
+      cycle(1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   },
   frame(m, dt) {
+    if (m.controls.consume('streakNext')) cycle(1);
+    if (m.controls.consume('streakPrev')) cycle(-1);
     const st = ksClient.state;
     if (st?.armed && m.alive) m.viewmodel.visible = false;
     const ctl = st?.control;

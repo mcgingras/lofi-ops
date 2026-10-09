@@ -206,12 +206,11 @@ registerHudWidget(
     const sd = st.sd;
     if (!sd) return;
     const pos = m.net.predictor.shown();
-    const key = useKey();
     if (sd.phase === 'live' && sd.bomb.carrier === m.myId) {
       const site = sd.sites.find((s) => Math.hypot(pos.x - s.x, pos.z - s.z) <= s.r);
-      if (site) txt(g, `HOLD ${key} TO PLANT THE BOMB`, W / 2, y, 8, blink(m.time, 1, 0.7) ? C.hi : C.paper, 'center', u);
+      if (site) txt(g, `HOLD ${useKey()} TO PLANT THE BOMB`, W / 2, y, 8, blink(m.time, 1, 0.7) ? C.hi : C.paper, 'center', u);
     } else if (sd.phase === 'planted' && m.myTeam !== sd.attackers) {
-      if (Math.hypot(pos.x - sd.bomb.x, pos.z - sd.bomb.z) <= MODE_TUNING.sd.defuseReach) txt(g, `HOLD ${key} TO DEFUSE`, W / 2, y, 8, blink(m.time, 1, 0.7) ? C.hi : C.paper, 'center', u);
+      if (Math.hypot(pos.x - sd.bomb.x, pos.z - sd.bomb.z) <= MODE_TUNING.sd.defuseReach) txt(g, `HOLD ${useKey()} TO DEFUSE`, W / 2, y, 8, blink(m.time, 1, 0.7) ? C.hi : C.paper, 'center', u);
     }
   },
   62,
