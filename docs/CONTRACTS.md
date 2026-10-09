@@ -139,7 +139,7 @@ Room API features use: `room.players` (Map), `humans()`, `bots()`, `isEnemy(a,b)
 
 **Entities** (killstreak vehicles, dogs, packages, flags): `room.entities.add({ kind, x, y, z, yaw, owner?, team?, s?, data? })` returns the entity (with `id`); move it in a `tick` handler; `remove(id)`. Everything except `data` goes out in each snapshot as `EntitySnap`; the client renders by `kind`.
 
-**Bots**: set `player.brain = { think(room, self, dt) { return { buttons, yaw, pitch, weaponSlot } } }` (runs every tick through the same movement as humans; return `null` to idle), and call `room.fire(self, { dir })` to shoot (rate/ammo/sprint rules apply). Navigation: build from `room.map.brushes` / `room.world`. `RoomOptions.botFill` keeps humans + bots at N.
+**Bots**: set `player.brain = { think(room, self, dt) { return { buttons, yaw, pitch, weaponSlot } } }` (runs every tick through the same movement as humans; return `null` to idle), and call `room.fire(self, { dir })` to shoot (rate/ammo/sprint rules apply). Navigation: build from `room.map.brushes` / `room.world`. `RoomOptions.botFill` keeps humans + bots at N. Bots obey player rules end to end: they aim through the bots feature's aim controller (`src/server/features/bots/aim.ts`: reaction, bounded turn rate, sway, player-equivalent recoil, flinch via the `flinchMultiplier` modifier) and perceive only by FOV + line of sight with a noticing time, hearing (gunfire, footsteps; `silentFootsteps` / `hearingMultiplier` respected) and `radarVisible`. Bot brains are in `docs/features/bots.md`.
 
 ## 5. RPC and feature messages
 
@@ -224,7 +224,7 @@ export interface ModeRules {
   setup(room): void;                         // subscribe to room.bus (death -> score)
   reset?(room): void;                        // each match start
   assignTeam?(room, p): Team | null;         // default: smaller team / null
-  spawnPoints?(room, p): SpawnPoint[];       // default: map.spawns.teams[team] or .ffa
+  spawnPoints?(room, p): SpawnPoint[];       // default: map.spawns.teams[team] or .ffa; return a short ranked list (core pickSpawn picks among them)
   respawnDelay?(room, p): number | null;     // default: 3 s if mode.respawn, null = wait for round
   checkEnd?(room): reason | null;            // on score change + every second
   results?(room, reason): MatchResults;      // default: standardResults
@@ -232,7 +232,7 @@ export interface ModeRules {
 registerMode('dom', () => domRules());       // modes/index.ts or a feature setup
 ```
 
-The modes feature registers tdm/ffa/dom/sd/hq/kc from its `setup` (`src/server/features/modes/`, see `docs/features/modes.md`); core's own tdm/ffa in `src/server/modes` remain the fallback. Bots read objective goals from `src/server/features/modes/bots.ts` (`bestObjective(room, bot)`). Rules' bus handlers and modifiers are tagged with the rules object, so `room.setMode()` drops them cleanly. Time limits are enforced by core (`mode.timeLimitSec`). Results go out as `matchEnd` with `MatchResults {roomId, mode, map, reason, winnerTeam, winners, teamScores, players: PlayerResult[], durationSec, ext}`. Reasons: `score`, `time`, `rounds`, `forfeit`, `aborted`, and `nuke` (Tactical Nuke: the caller's team / FFA the caller wins; no final killcam).
+The modes feature registers tdm/ffa/dom/sd/hq/kc from its `setup` (`src/server/features/modes/`, see `docs/features/modes.md`); core's own tdm/ffa in `src/server/modes` remain the fallback. Bots read objective goals from `src/server/features/modes/bots.ts` (`bestObjective(room, bot)`). Dynamic spawns score candidates with `scoreSpawns` / `spawnCandidates` (`src/server/features/modes/spawns.ts`): never next to an enemy (12 m, with 1.5 s of their movement projected) or in an enemy's sight when a clean point exists; enemies facing a point, enemies who would see its first steps, recent deaths and a nearby teammate also count; TDM prefers the team's current side, which flips when the enemy pushes in; DOM/HQ add their own preference; S&D keeps its fixed role spawns. No spawn protection (BO1 had none). `recentSpawns(room, team)` exposes where a team has been spawning (bots stay away from the enemy's). Core `pickSpawn` applies the same hard filters for modes without rules. Rules' bus handlers and modifiers are tagged with the rules object, so `room.setMode()` drops them cleanly. Time limits are enforced by core (`mode.timeLimitSec`). Results go out as `matchEnd` with `MatchResults {roomId, mode, map, reason, winnerTeam, winners, teamScores, players: PlayerResult[], durationSec, ext}`. Reasons: `score`, `time`, `rounds`, `forfeit`, `aborted`, and `nuke` (Tactical Nuke: the caller's team / FFA the caller wins; no final killcam).
 
 ## 9. MapData (src/shared/maps/types.ts)
 

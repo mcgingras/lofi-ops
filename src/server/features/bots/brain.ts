@@ -4,10 +4,11 @@
  * movement code and fire through `room.fire` with all the human rules (rate, ammo, sprint-out,
  * spread). Everything it does is scaled by its BotSkill.
  *
- *   perceive (20 Hz)  enemies inside its FOV with line of sight (chest or head over cover), anyone
- *                     touching it or who just hurt it; gunfire it hears (unsuppressed, within
- *                     hearingRange); enemies a UAV puts on its radar (the radarVisible modifier).
- *   fight             reaction delay, aim error that settles while tracking, turn-speed limit,
+ *   perceive (20 Hz)  enemies inside its FOV with line of sight (chest or head over cover), noticed
+ *                     after a time that grows with distance and peripheral angle; someone right
+ *                     next to it; gunfire and footsteps it hears; the direction it was shot from;
+ *                     enemies a UAV puts on its radar (the radarVisible modifier).
+ *   fight             the aim controller (aim.ts: reaction, spring acquisition, sway, flinch),
  *                     head/chest, bursts and recoil by burstControl, ADS by range, strafing and
  *                     crouch spam by `strafe`, holding its weapon's range, switching to the pistol
  *                     when dry up close, knifing when touching, backing off to cover to reload or
