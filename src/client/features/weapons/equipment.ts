@@ -1,11 +1,13 @@
 /**
  * Client side of equipment and melee: thrown grenades / launcher rounds (entity kind
- * `weapons.nade`), explosions, the flashbang whiteout (ordered-dither fade, ringing ears), the
+ * `weapons.nade`), tomahawks (`weapons.tomahawk`, spinning in flight, lying still once
+ * retrievable), explosions, the flashbang whiteout (ordered-dither fade, ringing ears), the
  * concussion wobble and slowed aim, the equipment counter and grenade danger indicator on the
- * HUD, and the local knife / throw viewmodel actions and sounds.
+ * HUD, and the local knife / throw viewmodel actions and sounds (lethals and tacticals are raised
+ * on the press, held up while the button is down and thrown on release, as on the server).
  */
 import * as THREE from 'three';
-import { EQUIPMENT_BY_ID, MELEE, NADE_ENTITY, THROW_RECOVERY, THROW_WINDUP } from '../../../shared/defs/equipment';
+import { EQUIPMENT_BY_ID, MELEE, NADE_ENTITY, THROW_RECOVERY, THROW_WINDUP, TOMAHAWK_ENTITY } from '../../../shared/defs/equipment';
 import { sfx } from '../../game/audio';
 import { rumble } from '../../game/gamepad';
 import type { Match } from '../../game/match';
@@ -90,6 +92,53 @@ registerEntityRenderer(NADE_ENTITY, (e) => {
   };
 });
 
+registerEntityRenderer(TOMAHAWK_ENTITY, (e) => {
+  const mats: LookMaterial[] = [];
+  const mk = (texture: string, tint = 0xffffff) => {
+    const m = makeLookMaterial({ texture, tint, dyn: true, rep: 0.1 });
+    mats.push(m);
+    return m;
+  };
+  const obj = new THREE.Group();
+  const spinner = new THREE.Group();
+  obj.add(spinner);
+  const wood = mk('gunwood');
+  const metal = mk('gunmetal');
+  const steel = mk('weapons.steel');
+  const box = (w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    b.position.set(x, y, z);
+    spinner.add(b);
+  };
+  // Centred on its balance point so the spin looks right.
+  box(0.026, 0.34, 0.03, wood, 0, -0.04, 0);
+  box(0.014, 0.08, 0.13, metal, 0, 0.1, -0.045);
+  box(0.01, 0.1, 0.035, steel, 0, 0.1, -0.12);
+  let spin = e.s?.k ? 0 : Math.random() * 6;
+  return {
+    object: obj,
+    update(s, dt, m) {
+      if (s.s?.k) {
+        // Lying on the ground, blade up a little.
+        spinner.rotation.set(0, 0, Math.PI / 2 - 0.15);
+        spinner.position.y = 0.03;
+      } else {
+        spin += dt * 20;
+        spinner.rotation.set(-spin, 0, 0);
+        spinner.position.y = 0;
+      }
+      if (m.map) setDynLight(mats, m.map.lightAt(s.x, s.y + 0.2, s.z));
+    },
+    dispose() {
+      obj.traverse((o) => o instanceof THREE.Mesh && o.geometry.dispose());
+      for (const mt of mats) {
+        unbindTexture(mt);
+        mt.dispose();
+      }
+    },
+  };
+});
+
 // ---------------------------------------------------------------------------------------------
 // Explosions
 // ---------------------------------------------------------------------------------------------
@@ -134,6 +183,8 @@ function boom(m: Match, x: number, y: number, z: number, e: string) {
 let prevHeld = { melee: false, lethal: false, tactical: false };
 let meleeReadyAt = 0;
 let throwBusyUntil = 0;
+/** Equipment raised in the hand while the button is held (thrown on release). */
+let holding: { kind: 'lethal' | 'tactical'; id: string; since: number } | null = null;
 
 registerMatchHook('weapons.equipment', {
   start(m) {
@@ -143,6 +194,7 @@ registerMatchHook('weapons.equipment', {
     // along) would read as "in the future" here and shake the camera for minutes.
     equipState.shake = { at: -99, amount: 0 };
     prevHeld = { melee: false, lethal: false, tactical: false };
+    holding = null;
     const offs = [
       onFeature('weapons.flash', (d) => {
         equipState.flash = { at: m.time, dur: d.dur, amount: d.amount };
@@ -159,6 +211,10 @@ registerMatchHook('weapons.equipment', {
         }
         const v = m.remotes.views.get(d.p);
         if (v) sfx.play(d.hit ? 'weapons.stab' : 'weapons.knife', { at: { x: v.x, y: v.y + 1.2, z: v.z }, volume: 0.8 });
+      }),
+      onFeature('weapons.retrieve', (d) => {
+        sfx.play('weapons.shell', { volume: 0.8 });
+        m.notices.push({ t: m.time, text: `+1 ${(EQUIPMENT_BY_ID.get(d.e)?.name ?? d.e).toUpperCase()}` });
       }),
       onFeature('weapons.throw', (d) => {
         if (d.p === m.myId) return;
@@ -196,16 +252,32 @@ registerMatchHook('weapons.equipment', {
       m.viewmodel.action('melee', MELEE.recoverySec);
       sfx.play('weapons.knife', { volume: 0.7 });
     }
-    for (const kind of ['lethal', 'tactical'] as const) {
-      if (!ok || !held[kind] || prevHeld[kind] || m.time < throwBusyUntil) continue;
-      const n = kind === 'lethal' ? equipState.lethalN : equipState.tacticalN;
-      if (n <= 0) continue;
-      const id = kind === 'lethal' ? equipState.lethal : equipState.tactical;
-      const cook = !!(id && EQUIPMENT_BY_ID.get(id)?.cookable);
-      throwBusyUntil = m.time + THROW_WINDUP + THROW_RECOVERY;
-      m.viewmodel.action('throw', THROW_WINDUP + THROW_RECOVERY + (cook ? 0.2 : 0));
-      sfx.play('weapons.pin', { volume: 0.5 });
-      break;
+    // Lethal / tactical: raise on the press and hold it up (a held viewmodel action) until release.
+    if (holding) {
+      const def = EQUIPMENT_BY_ID.get(holding.id);
+      const cookedOff = !!def?.cookable && m.time - holding.since >= def.fuse;
+      if (!ok || cookedOff) {
+        m.viewmodel.endAction();
+        holding = null;
+      } else if (!held[holding.kind]) {
+        // The server throws no sooner than the wind-up after the press.
+        const wait = Math.max(0, holding.since + THROW_WINDUP - m.time);
+        m.viewmodel.action(`release:${holding.id}`, wait + 0.4);
+        if (holding.id === 'tomahawk') sfx.play('weapons.knife', { volume: 0.6 });
+        throwBusyUntil = m.time + wait + THROW_RECOVERY;
+        holding = null;
+      }
+    } else {
+      for (const kind of ['lethal', 'tactical'] as const) {
+        if (!ok || !held[kind] || prevHeld[kind] || m.time < throwBusyUntil) continue;
+        const n = kind === 'lethal' ? equipState.lethalN : equipState.tacticalN;
+        const id = kind === 'lethal' ? equipState.lethal : equipState.tactical;
+        if (n <= 0 || !id) continue;
+        holding = { kind, id, since: m.time };
+        m.viewmodel.action(`ready:${id}`, THROW_WINDUP, true);
+        if (id !== 'tomahawk') sfx.play('weapons.pin', { volume: 0.5 });
+        break;
+      }
     }
     prevHeld = held;
 
@@ -257,6 +329,14 @@ registerHudWidget(
 
 function icon(g: CanvasRenderingContext2D, id: string, x: number, y: number, u: number, dim: boolean) {
   const col = dim ? C.empty : id === 'frag' ? '#8a9a60' : id === 'semtex' ? '#c8b890' : id === 'flashbang' ? '#e8e8e8' : '#9ab0c8';
+  if (id === 'tomahawk') {
+    // Handle and hatchet head.
+    rect(g, x + u, y - 2 * u, 2 * u, 9 * u, C.ink);
+    rect(g, x + 1.5 * u, y - u, u, 7 * u, dim ? C.empty : '#a07848');
+    rect(g, x - 2 * u, y - 2 * u, 4 * u, 4 * u, C.ink);
+    rect(g, x - 1.5 * u, y - 1.5 * u, 3 * u, 3 * u, dim ? C.empty : '#c8c8c8');
+    return;
+  }
   if (id === 'frag') {
     rect(g, x + u, y - u, 3 * u, u, C.ink);
     rect(g, x, y, 5 * u, 6 * u, C.ink);

@@ -39,7 +39,7 @@ export class ViewmodelRig {
   private aim = new THREE.Vector3();
   private sprintBlend = 0;
   private lastTime = 0;
-  private act: { kind: string; start: number; dur: number } | null = null;
+  private act: { kind: string; start: number; dur: number; hold: boolean } | null = null;
 
   constructor(scene: THREE.Scene) {
     scene.add(this.root);
@@ -66,9 +66,23 @@ export class ViewmodelRig {
     this.kickRot = Math.min(1.6, this.kickRot + strength);
   }
 
-  /** Play a one-off action for `dur` seconds (the model's `animate` decides how it looks). */
-  action(kind: string, dur: number): void {
-    this.act = { kind, start: this.lastTime, dur: Math.max(0.01, dur) };
+  /**
+   * Play a one-off action for `dur` seconds (the model's `animate` decides how it looks). With
+   * `hold`, it stays at its last pose (actionT 1) until another action replaces it or `endAction`
+   * (a grenade or tomahawk held up while the button is down).
+   */
+  action(kind: string, dur: number, hold = false): void {
+    this.act = { kind, start: this.lastTime, dur: Math.max(0.01, dur), hold };
+  }
+
+  /** The action currently playing (null when none). */
+  get currentAction(): string | null {
+    return this.act?.kind ?? null;
+  }
+
+  /** Stop a held action. */
+  endAction(): void {
+    this.act = null;
   }
 
   update(p: ViewmodelPose): void {
@@ -101,9 +115,9 @@ export class ViewmodelRig {
       this.aim.z + this.kick * 0.06 * (1 - p.ads * 0.5),
     );
     g.rotation.set(this.kickRot * 0.12 * (1 - p.ads * 0.6) - rl * (drop ? 0.3 : 0.7) - raise * 0.6 - sb * 0.35, this.swayX * 1.6 + sb * 0.7, rl * (drop ? 0.1 : 0.45) + Math.cos(this.bob) * 0.02 * mv * free + sb * 0.25);
-    if (this.act && p.time - this.act.start > this.act.dur) this.act = null;
+    if (this.act && !this.act.hold && p.time - this.act.start > this.act.dur) this.act = null;
     const act = this.act;
-    vm.spec.animate?.({ dt, time: p.time, ads: p.ads, reload: p.reload, raise: p.raise, sinceShot: p.time - this.lastShot, sprint: p.sprint, action: act?.kind ?? null, actionT: act ? (p.time - act.start) / act.dur : 0 });
+    vm.spec.animate?.({ dt, time: p.time, ads: p.ads, reload: p.reload, raise: p.raise, sinceShot: p.time - this.lastShot, sprint: p.sprint, action: act?.kind ?? null, actionT: act ? Math.min(1, (p.time - act.start) / act.dur) : 0 });
     const flashing = p.time - this.lastShot < 0.05;
     this.flash.visible = flashing;
     if (flashing) {

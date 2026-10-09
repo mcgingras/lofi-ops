@@ -834,6 +834,15 @@ export function knifeMesh(k: Kit, parent: THREE.Object3D): void {
   k.box(0.026, 0.032, 0.1, M.poly, 0, -0.002, 0.05, 0, 0, 0, parent);
 }
 
+/** A tomahawk (handle along +y, blade forward along -z at the top) into `parent`. */
+export function tomahawkMesh(k: Kit, parent: THREE.Object3D): void {
+  const { M } = k;
+  k.box(0.022, 0.3, 0.026, M.wood, 0, 0.08, 0, 0, 0, 0, parent);
+  k.box(0.012, 0.07, 0.11, M.metal, 0, 0.2, -0.04, 0, 0, 0, parent);
+  k.box(0.008, 0.09, 0.03, M.steel, 0, 0.2, -0.105, 0, 0, 0, parent);
+  k.box(0.016, 0.03, 0.04, M.metal, 0, 0.205, 0.035, 0, 0, 0, parent);
+}
+
 /** A grenade in the hand (frag body). */
 export function grenadeMesh(k: Kit, parent: THREE.Object3D, mat: THREE.Material): void {
   const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.04, 0), mat);

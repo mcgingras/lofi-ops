@@ -1,13 +1,14 @@
 /**
  * First-person viewmodels for every weapon (replacing core's two prototype builders): the gun from
- * the kit, gloved hands and sleeves, a knife hand and a grenade hand for the melee / throw actions,
+ * the kit, gloved hands and sleeves, a knife hand and a throwing hand for the melee / throw / hold
+ * actions (`actionHands`, also used by the wager weapons),
  * and per-family animation: magazine swaps, bolt cycling (L96A1), pump racks (Stakeout, SPAS-12),
  * shell-by-shell loading, break-action (Olympia), revolver cylinder, pistol slides.
  */
 import * as THREE from 'three';
 import { WEAPONS, type WeaponDef } from '../../../shared/defs/weapons';
 import { registerViewmodel, type ViewmodelAnimState, type ViewmodelCtx, type ViewmodelSpec } from '../../render/models/viewmodels';
-import { FURNITURE, GUNS, grenadeMesh, Kit, knifeMesh, type GunBuild } from './gunkit';
+import { FURNITURE, GUNS, grenadeMesh, Kit, knifeMesh, tomahawkMesh, type GunBuild } from './gunkit';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const bump = (t: number, a: number, b: number) => (t <= a || t >= b ? 0 : Math.sin(((t - a) / (b - a)) * Math.PI));
@@ -36,6 +37,83 @@ function hand(parent: THREE.Object3D, at: THREE.Vector3, shoulder: THREE.Vector3
   return g;
 }
 
+/**
+ * Knife hand and throwing hand for the viewmodel actions, shared by every weapon viewmodel (the
+ * wager crossbow / ballistic knife use it too). Returns the per-frame animator; `gunRoot` is the
+ * group that holds the gun (lowered while an action plays).
+ *
+ * Actions: 'melee'; 'throw' (a quick grenade toss); 'ready:<equipment>' (raise and hold it up:
+ * played with `hold`, so it stays cocked while the button is down); 'release:<equipment>' (the
+ * throw itself, from the cocked pose). A tomahawk shows a hatchet in the hand, anything else a
+ * grenade.
+ */
+export function actionHands(c: ViewmodelCtx, gunRoot: THREE.Object3D, hip: THREE.Vector3, glove = c.mat('glove'), sleeve = c.mat('camo', { rep: 0.4 })): (s: ViewmodelAnimState) => void {
+  const knifeRig = new THREE.Group();
+  c.group.add(knifeRig);
+  const kk = new Kit(knifeRig, (t, o) => c.mat(t, o), null);
+  const knife = new THREE.Group();
+  knife.position.set(0, 0.03, -0.02);
+  knifeRig.add(knife);
+  knifeMesh(kk, knife);
+  hand(knifeRig, new THREE.Vector3(0, 0, 0.04), new THREE.Vector3(0.1, -0.25, 0.6), glove, sleeve);
+  knifeRig.visible = false;
+  const nadeRig = new THREE.Group();
+  c.group.add(nadeRig);
+  const nade = new THREE.Group();
+  nade.position.set(0, 0.06, -0.02);
+  nadeRig.add(nade);
+  grenadeMesh(kk, nade, c.mat('weapons.nadegreen', { rep: 0.1 }));
+  const hawk = new THREE.Group();
+  hawk.position.set(0, 0.02, -0.01);
+  nadeRig.add(hawk);
+  tomahawkMesh(kk, hawk);
+  hand(nadeRig, new THREE.Vector3(0, 0, 0), new THREE.Vector3(-0.2, -0.3, 0.6), glove, sleeve);
+  nadeRig.visible = false;
+  const base = { pos: gunRoot.position.clone(), rot: gunRoot.rotation.clone() };
+
+  return (s: ViewmodelAnimState) => {
+    const act = s.action ?? '';
+    const [kind, item] = act.split(':') as [string, string | undefined];
+    const throwing = kind === 'throw' || kind === 'ready' || kind === 'release';
+    knifeRig.visible = kind === 'melee';
+    nadeRig.visible = throwing;
+    gunRoot.position.copy(base.pos);
+    gunRoot.rotation.copy(base.rot);
+    if (kind === 'melee') {
+      const t = s.actionT;
+      const out = Math.min(ramp(t, 0, 0.15), 1 - ramp(t, 0.75, 1));
+      gunRoot.position.set(base.pos.x + 0.1 * out, base.pos.y - 0.35 * out, base.pos.z);
+      gunRoot.rotation.z = base.rot.z - 0.4 * out;
+      // Knife: in from the right, slash across to the left.
+      const sw = ramp(t, 0.15, 0.5);
+      knifeRig.position.set(0.25 - 0.45 * sw - hip.x * (1 - s.ads), -0.05 - 0.1 * (1 - out) + 0.06 * Math.sin(sw * Math.PI), -0.12 - 0.15 * Math.sin(sw * Math.PI));
+      knifeRig.rotation.set(-0.3, 0.9 - 1.6 * sw, -0.9 + 1.2 * sw);
+      knifeRig.position.y -= (1 - out) * 0.3;
+    } else if (throwing) {
+      // One timeline for all three: 0-0.4 raise and cock, 0.42-0.62 toss, then drop away.
+      const t = kind === 'ready' ? 0.4 * s.actionT : kind === 'release' ? 0.42 + 0.58 * s.actionT : s.actionT;
+      const isHawk = item === 'tomahawk';
+      hawk.visible = isHawk && t < 0.55;
+      nade.visible = !isHawk && t < 0.55;
+      const out = Math.min(ramp(t, 0, 0.15), 1 - ramp(t, 0.8, 1));
+      gunRoot.position.set(base.pos.x + 0.05 * out, base.pos.y - 0.32 * out, base.pos.z + 0.05 * out);
+      gunRoot.rotation.x = base.rot.x - 0.3 * out;
+      const cock = ramp(t, 0.1, 0.4);
+      const toss = ramp(t, 0.42, 0.62);
+      // Held up: a slow breathing sway so it reads as "waiting to throw".
+      const idle = kind === 'ready' && s.actionT >= 1 ? Math.sin(s.time * 2.2) * 0.008 : 0;
+      if (isHawk) {
+        // Hatchet raised beside the head, blade forward, then a whip forward.
+        nadeRig.position.set(0.02 - hip.x * (1 - s.ads) * 0.5, -0.32 + 0.38 * cock - 0.12 * toss - 0.4 * ramp(t, 0.7, 1) + idle, -0.22 + 0.2 * cock - 0.4 * toss);
+        nadeRig.rotation.set(-1.1 * cock + 2.2 * toss, -0.15, 0.25 - 0.2 * cock);
+      } else {
+        nadeRig.position.set(-0.12 - hip.x * (1 - s.ads) * 0.5, -0.32 + 0.3 * cock - 0.1 * toss - 0.4 * ramp(t, 0.7, 1) + idle, -0.25 + 0.15 * cock - 0.35 * toss);
+        nadeRig.rotation.set(-0.6 * cock + 1.4 * toss, 0.2, 0.2);
+      }
+    }
+  };
+}
+
 export function buildWeaponViewmodel(c: ViewmodelCtx, model: string): ViewmodelSpec {
   const def = defForModel(model);
   const gunRoot = new THREE.Group();
@@ -54,27 +132,9 @@ export function buildWeaponViewmodel(c: ViewmodelCtx, model: string): ViewmodelS
   const leftHome = left?.position.clone() ?? new THREE.Vector3();
   const rightHome = right.position.clone();
 
-  // Knife hand and grenade hand for actions (hidden until used).
-  const knifeRig = new THREE.Group();
-  c.group.add(knifeRig);
-  const kk = new Kit(knifeRig, (t, o) => c.mat(t, o), null);
-  const knife = new THREE.Group();
-  knife.position.set(0, 0.03, -0.02);
-  knifeRig.add(knife);
-  knifeMesh(kk, knife);
-  hand(knifeRig, new THREE.Vector3(0, 0, 0.04), new THREE.Vector3(0.1, -0.25, 0.6), glove, sleeve);
-  knifeRig.visible = false;
-  const nadeRig = new THREE.Group();
-  c.group.add(nadeRig);
-  const nade = new THREE.Group();
-  nade.position.set(0, 0.06, -0.02);
-  nadeRig.add(nade);
-  grenadeMesh(kk, nade, c.mat('weapons.nadegreen', { rep: 0.1 }));
-  hand(nadeRig, new THREE.Vector3(0, 0, 0), new THREE.Vector3(-0.2, -0.3, 0.6), glove, sleeve);
-  nadeRig.visible = false;
-
   const pistol = build.pistol;
   const hip = pistol ? new THREE.Vector3(build.parts.offhand ? 0.16 : 0.14, -0.17, -0.34) : new THREE.Vector3(0.17, -0.21, -0.4);
+  const actions = actionHands(c, gunRoot, hip, glove, sleeve);
   const ads = build.noAds ? hip.clone() : new THREE.Vector3(0, -build.sightY, build.adsZ);
 
   const p = build.parts;
@@ -155,33 +215,7 @@ export function buildWeaponViewmodel(c: ViewmodelCtx, model: string): ViewmodelS
     if (p.slide && slideHome) p.slide.position.z = slideHome.z + (s.sinceShot < 0.09 ? 0.035 * (1 - s.sinceShot / 0.09) : 0);
     if (p.offhand) p.offhand.position.y = s.sinceShot < 0.12 && Math.floor(s.time * 20) % 2 === 0 ? 0.01 : 0;
 
-    // Actions.
-    knifeRig.visible = s.action === 'melee';
-    nadeRig.visible = s.action === 'throw';
-    gunRoot.position.set(0, 0, 0);
-    gunRoot.rotation.set(0, 0, 0);
-    if (s.action === 'melee') {
-      const t = s.actionT;
-      const out = Math.min(ramp(t, 0, 0.15), 1 - ramp(t, 0.75, 1));
-      gunRoot.position.set(0.1 * out, -0.35 * out, 0);
-      gunRoot.rotation.z = -0.4 * out;
-      // Knife: in from the right, slash across to the left.
-      const sw = ramp(t, 0.15, 0.5);
-      knifeRig.position.set(0.25 - 0.45 * sw - hip.x * (1 - s.ads), -0.05 - 0.1 * (1 - out) + 0.06 * Math.sin(sw * Math.PI), -0.12 - 0.15 * Math.sin(sw * Math.PI));
-      knifeRig.rotation.set(-0.3, 0.9 - 1.6 * sw, -0.9 + 1.2 * sw);
-      knifeRig.position.y -= (1 - out) * 0.3;
-    } else if (s.action === 'throw') {
-      const t = s.actionT;
-      const out = Math.min(ramp(t, 0, 0.15), 1 - ramp(t, 0.8, 1));
-      gunRoot.position.set(0.05 * out, -0.32 * out, 0.05 * out);
-      gunRoot.rotation.x = -0.3 * out;
-      // Grenade hand: up from below left, cock back, throw forward, drop away.
-      const cock = ramp(t, 0.1, 0.4);
-      const toss = ramp(t, 0.42, 0.62);
-      nadeRig.position.set(-0.12 - hip.x * (1 - s.ads) * 0.5, -0.32 + 0.3 * cock - 0.1 * toss - 0.4 * ramp(t, 0.7, 1), -0.25 + 0.15 * cock - 0.35 * toss);
-      nadeRig.rotation.set(-0.6 * cock + 1.4 * toss, 0.2, 0.2);
-      nade.visible = t < 0.55;
-    }
+    actions(s);
   };
 
   return { muzzle: build.muzzle, hip, ads, reload: p.barrels || p.cylinder || p.pump ? 'none' : pistol ? 'drop' : 'tilt', animate };
