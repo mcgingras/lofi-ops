@@ -107,10 +107,11 @@ export class KcRules extends TdmRules {
     const out: BotObjective[] = [];
     for (const tag of this.tags()) {
       const d = Math.hypot(tag.x - p.move.x, tag.z - p.move.z);
-      if (d > 40) continue;
       const enemyTag = tag.team !== p.team;
-      // Close tags are worth a detour; enemy tags score, own tags only deny.
-      const priority = Math.max(0.1, (enemyTag ? 0.8 : 0.55) - d / 80);
+      // Enemy tags score (worth a real detour; within ~6 m every bot grabs them); own tags only
+      // deny, so only when they are close. Bots used to deny far more than they confirmed.
+      if (d > (enemyTag ? 50 : 12)) continue;
+      const priority = enemyTag ? Math.max(0.15, 0.98 - d / 100) : Math.max(0.1, 0.4 - d / 40);
       out.push({ kind: 'collect', id: `tag:${tag.id}`, pos: { x: tag.x, y: tag.y, z: tag.z }, radius: T.pickupRadius, priority });
     }
     return out;

@@ -330,8 +330,9 @@ export function spawn(room: Room, p: PlayerState, point?: SpawnPoint): void {
 }
 
 /**
- * Best spawn: far from living enemies, not in their line of sight, not on top of anyone; picks
- * randomly among the best few so spawns don't become predictable.
+ * Best spawn: far from living enemies, never next to one or in their line of sight when there is
+ * a choice, not on top of anyone; picks randomly among the best few so spawns don't become
+ * predictable. Mode rules (features/modes/spawns.ts) usually hand it a short ranked list.
  */
 export function pickSpawn(room: Room, p: PlayerState): SpawnPoint {
   const map = room.map;
@@ -346,7 +347,8 @@ export function pickSpawn(room: Room, p: PlayerState): SpawnPoint {
     for (const e of enemies) {
       const d = Math.hypot(e.move.x - pt.x, e.move.z - pt.z);
       nearest = Math.min(nearest, d);
-      if (d < 45 && room.world.lineOfSight(eyeOf(e), { x: pt.x, y: pt.y + PLAYER.eye, z: pt.z })) s -= 25;
+      if (d < 12) s -= 150;
+      else if (d < 60 && room.world.lineOfSight(eyeOf(e), { x: pt.x, y: pt.y + PLAYER.eye, z: pt.z })) s -= 100;
     }
     s += nearest;
     for (const q of others) if (Math.hypot(q.move.x - pt.x, q.move.z - pt.z) < 1.2) s -= 200;

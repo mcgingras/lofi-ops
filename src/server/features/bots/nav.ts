@@ -28,6 +28,8 @@ const STEP = PLAYER.stepHeight - 0.02;
 export const JUMP_UP = MOVE.jumpHeight - 0.12;
 export const MAX_DROP = 4.5;
 const EPS = 0.003;
+/** A failed goal cell is not searched again for this many searches (shared by every room on the map). */
+const FAIL_MEMORY = 400;
 
 export type NavEdgeKind = 'walk' | 'jump' | 'drop';
 
@@ -79,6 +81,11 @@ export class NavGrid {
   private coreList: NavCell[] = [];
   private scratch: { g: Float64Array; came: Int32Array; seen: Uint32Array; closed: Uint32Array; kind: Uint8Array; stamp: number } | null = null;
   private heap = new Heap();
+  /** Cells expanded by every search so far (for budgeting and tests). */
+  expanded = 0;
+  /** Searches so far, and goal cells that recently failed (cell index -> search count then). */
+  private searches = 0;
+  private failed = new Map<number, number>();
   readonly buildMs: number;
 
   constructor(
@@ -287,17 +294,32 @@ export class NavGrid {
     return null;
   }
 
-  /** A* from one point to another: the cells to walk through (ending at the goal's cell), or null. */
-  path(from: Vec3, to: Vec3, limit = 30000): NavCell[] | null {
+  /**
+   * A* from one point to another: the cells to walk through (ending at the goal's cell), or null.
+   * The heuristic is weighted (`weight`, default 1.3): paths come out a few percent longer than
+   * optimal but searches expand far fewer cells, so long detours fit in `limit` (Afghan) and big
+   * maps don't spike the tick. `cost(cell)` multiplies the cost of stepping onto a cell (>= 1),
+   * e.g. for routes teammates already use.
+   */
+  path(from: Vec3, to: Vec3, limit = 60000, opts: { weight?: number; cost?: (c: NavCell) => number } = {}): NavCell[] | null {
     const a = this.cellAt(from);
     const b = this.cellAt(to, true) ?? this.cellAt(to);
     if (!a || !b) return null;
     if (a === b) return [b];
+    this.searches++;
+    // A goal that just failed fails again: skip the (expensive, exhaustive) search for a while.
+    const failedAt = this.failed.get(b.i);
+    if (failedAt !== undefined) {
+      if (this.searches - failedAt < FAIL_MEMORY) return null;
+      this.failed.delete(b.i);
+    }
     const n = this.cells.length;
     const s = this.scratchFor(n);
     const stamp = s.stamp;
     const cells = this.cells;
-    const h = (c: NavCell) => Math.hypot(c.x - b.x, c.z - b.z) + Math.abs(c.y - b.y) * 0.5;
+    const wgt = opts.weight ?? 1.3;
+    const extra = opts.cost;
+    const h = (c: NavCell) => (Math.hypot(c.x - b.x, c.z - b.z) + Math.abs(c.y - b.y) * 0.5) * wgt;
     s.seen[a.i] = stamp;
     s.g[a.i] = 0;
     s.came[a.i] = -1;
@@ -306,17 +328,19 @@ export class NavGrid {
     open.push(a.i, h(a));
     let count = 0;
     while (open.size && count++ < limit) {
+      this.expanded++;
       const ci = open.pop();
       if (ci === b.i) {
         const out: NavCell[] = [];
         for (let k = ci; k !== a.i && k >= 0; k = s.came[k]!) out.push(cells[k]!);
         return out.reverse();
       }
+      if (count === limit) break;
       if (s.closed[ci] === stamp) continue;
       s.closed[ci] = stamp;
       const gc = s.g[ci]!;
       for (const e of cells[ci]!.edges) {
-        const t = gc + e.cost;
+        const t = gc + (extra ? e.cost * extra(cells[e.to]!) : e.cost);
         if (s.seen[e.to] !== stamp || t < s.g[e.to]!) {
           s.seen[e.to] = stamp;
           s.g[e.to] = t;
@@ -325,6 +349,8 @@ export class NavGrid {
         }
       }
     }
+    if (this.failed.size > 512) this.failed.clear();
+    this.failed.set(b.i, this.searches);
     return null;
   }
 
