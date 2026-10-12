@@ -11,11 +11,12 @@ Owner: economy. Branch `feature/economy`.
 | Store catalog, reticles, emblem backgrounds, ownership keys, purchase/gate rules, class enforcement (pure, shared) | `src/shared/defs/store.ts` |
 | Wire types (RPCs, feature pushes, `results.ext.economy`) | `src/shared/defs/economy-net.ts` |
 | Crossbow + ballistic knife defs (wager only) | `src/shared/defs/wager-weapons.ts` |
+| Crossbow bolt and ballistic knife blade projectiles, blade pickups | `src/server/features/economy/projectiles.ts` |
 | Server feature: RPCs, CP at match end, `economy.grant`, spawn-time ownership check | `src/server/features/economy/{index,earn,shop,ledger,types}.ts` |
 | Wager matchmaking, bot backfill, escrow, payouts, live HUD state | `src/server/features/economy/wager.ts` |
 | Wager mode rules | `src/server/features/economy/modes/{oitc,gungame,sharpshooter,sticks,common}.ts` |
 | Client: camo recipes + `camoPreview`, STORE screen, WAGER screen, HUD widgets, wager viewmodels, bolt/tomahawk views, third-person camo | `src/client/features/economy/*` |
-| Tests | `tests/economy.test.ts` (rules), `tests/economy-wager.test.ts` (modes, escrow, bots; room-level), `tests/economy.integration.test.ts` (real server + sockets) |
+| Tests | `tests/economy.test.ts` (rules), `tests/economy-wager.test.ts` (modes incl. Sticks and Stones ammo, bolts, blades, tomahawk, bankrupt payouts; escrow, bots; room-level), `tests/economy.integration.test.ts` and `tests/sticks.integration.test.ts` (real server + sockets) |
 
 ## Earning CoD Points (BO1-like)
 
@@ -39,8 +40,14 @@ Modes (FFA, registered from the feature setup, ModeDefs in `WAGER_MODES`):
 - **One in the Chamber** `oitc`: M1911 with 1 bullet, no reserve; any bullet hit kills; every kill +1 bullet; knife (melee button); 3 lives, then eliminated (no respawn). Last player standing wins; on time, survivors rank by lives then score, the eliminated by how long they lasted. +50 per kill, +10 to survivors per elimination.
 - **Gun Game** `gungame`: ladder `GUN_GAME_LADDER_INTENT` filtered to weapons that exist (so it grows when the weapons area ships its roster; today: M1911, AK-47, Crossbow, Ballistic Knife). Kill = next gun immediately; knife kill demotes the victim (no promotion); suicide demotes. First kill on the last rung ends the match.
 - **Sharpshooter** `sharpshooter`: everyone gets the same random gun (classes ar/smg/lmg/sniper/shotgun/pistol), swapped for all every 45 s. Kills in a life stack: 2 = faster reload + x2, 3 = tighter spread, 4 = speed + x3, 6 = sprint + x4. +50 x multiplier per kill.
-- **Sticks and Stones** `sticks`: crossbow (bolt projectile; direct hit kills, otherwise it sticks and explodes after 1.2 s, 3.5 m) + ballistic knife + 1 tomahawk per life (lethal button, thrown projectile, one-hit). Tomahawk kill: +150 and the victim is **bankrupted** (score to 0). Other kills +100.
-- All wager modes: one-hit knife on the melee button (`wagerMelee`), wager-forced weapons (custom classes ignored).
+- **Sticks and Stones** `sticks` (BO1): everyone has the crossbow with explosive bolts (**6**: 1 loaded + 5), the ballistic knife (**2** blades: 1 + 1) and **one tomahawk**; no tacticals, no scavenging, no ammo for kills. Running dry is the point: blades and the tomahawk are picked back up from where they landed.
+  - Crossbow: a projectile with drop (60 m/s). A player hit takes 50 (BO1's direct impact) and the bolt **sticks to them**; after a 1.5 s fuse (beeping, blinking red tip) it explodes: the stuck player always dies, everyone within 4 m takes 200-75 (the shooter too). A world hit sticks to the surface and explodes the same way, so you can shoot the ground next to someone. The victim gets `economy.stuck` (red frame and a flashing STUCK!). Kills are `weapon: 'crossbow'` (`means: 'impact'` for a killing direct hit, `'explosive'` for the blast).
+  - Ballistic knife: the spring fires the blade (32 m/s, a visible arc) for a flat 250 on any body hit (one hit, BO1). A blade stays where it lands for 60 s: stuck in a wall (`s.k = 1`), or on the floor at the victim's body (`s.k = 2`). Anyone holding a ballistic knife takes it by walking within 1 m or holding USE within 2 m, up to 2 (an empty knife is loaded on the spot, otherwise it goes to reserve; BO2's `_ballistic_knife.gsc` has no owner check). The knife (melee button) still stabs with it in hand.
+  - Tomahawk: the weapons feature's lethal (hold to raise, release to throw, bounces, retrievable; see weapons.md). Sticks only forces it into the class.
+  - Points (BO1): 100 for a crossbow, blade or other kill, 25 for a knife, **10 for a tomahawk, which bankrupts the victim** (score to 0). Any suicide (your own bolt, falling) bankrupts you. `economy.bankrupt {victim, attacker, lost}` goes to everyone: the victim sees BANKRUPTED, the thrower HUMILIATION, everyone else a feed line. Payouts rank by the reduced score.
+  - HUD: the ammo counter reads "6 BOLTS" / "2 BLADES" with a pip per round, NO AMMO when dry (never RELOAD without reserve), the tomahawk hint ("HOLD [G]" / "PICK IT UP").
+  - Bots: the bots' own throw logic presses LETHAL (the tomahawk leaves on release), their usual melee-happy / rush style for `sticks`, and a goal registered from economy (`registerSticksBotGoals` through `bots/hooks.ts` `registerBotGoal`) sends a bot to the nearest blade or tomahawk it can use, urgently when it is out of bolts and blades. A bot's bolt / blade launch is lifted to land on whatever its aim ray meets (they don't lead for drop themselves).
+- All wager modes: one-hit knife on the melee button (`wagerMelee`), wager-forced weapons (custom classes ignored), no class grenades (lethal and tactical cleared at `beforeSpawn`, priority -20; Sticks sets its tomahawk after that).
 
 Flow (`economy.wagerQueue { mode, ante, bots }` -> join the returned room via the match screen):
 
@@ -51,7 +58,7 @@ Flow (`economy.wagerQueue { mode, ante, bots }` -> join the returned room via th
 5. **Payout at match end.** Places paid = min(3, staked - 1); splits 100% / 65-35 / 50-30-20 of the pot; leavers can't place (their shares are renormalised over who's left); rounding goes to 1st. Ranking = the mode's `rank()` (bots included in placement, skipped for money). `results.ext.economy.wager` lists ante/payout/net per staked player; each gets an `economy.award` push.
 6. **Crash safety.** An escrow whose match no longer exists is refunded by a sweeper (every 5 s for connected sessions, and on wager RPCs).
 
-HUD: `economy.lobby` (lobby card: mode, ante/pot, players, start countdown, bot difficulty, who's in), `economy.wager` (pot + IN THE MONEY #n +CP / OUT OF THE MONEY / PRACTICE WAGER), `economy.mode` (lives, gun rung, swap timer + bonus, tomahawks), `economy.award` (CP toast), `economy.reticle` (equipped reticle while aiming through an optic).
+HUD: `economy.lobby` (lobby card: mode, ante/pot, players, start countdown, bot difficulty, who's in), `economy.wager` (pot + IN THE MONEY #n +CP / OUT OF THE MONEY / PRACTICE WAGER), `economy.mode` (lives, gun rung, swap timer + bonus, tomahawk hint), `economy.award` (CP toast), `economy.splash` (BANKRUPTED / HUMILIATION, STUCK!), `economy.reticle` (equipped reticle while aiming through an optic).
 
 ## RPCs and pushes
 
@@ -63,7 +70,8 @@ economy.setCamo { loadout, slot, camo }           -> { loadouts }   (ownership-c
 economy.wagerQueue { mode, ante, bots? }          -> { roomId, practice }
 economy.wagerList {}                              -> { rooms: WagerRoomSummary[] }
 economy.wagerStart {}                             -> { ok }
-push economy.wager (WagerHud), economy.mode (WagerModeHud), economy.award { reason, lines, total, codPoints }
+push economy.wager (WagerHud), economy.mode (WagerModeHud), economy.award { reason, lines, total, codPoints },
+     economy.bankrupt { victim, attacker, lost } (everyone), economy.stuck { by, fuse }, economy.blade { total }
 room events: economy.grant { player, amount, reason, kind? }, economy.payout { player, profileId, amount, rank }
 ```
 
@@ -71,7 +79,7 @@ room events: economy.grant { player, amount, reason, kind? }, economy.payout { p
 
 - **progression**: pay challenge CoD Points with `room.bus.emit('economy.grant', { player, amount: def.codPoints, reason: 'Challenge: ' + def.name, kind: 'challenge' })`; don't touch `profile.codPoints` directly. Prestige can keep `owned` (CP purchases persist; level gates re-apply).
 - **frontend**: camo picker uses `CAMOS` + `camoPreview(id, size)` and `canUse(profile, keyOf.camo(id))` (or call `economy.setCamo`). `itemPreview(storeItem)`, `drawReticle`, `drawEmblemBackground` are exported from `src/client/features/economy/index.ts`. Loadout saving should run `enforceLoadout` or leave it to the spawn check. Wager entry is the `wager` screen; a custom lobby in a wager mode can set stakes via `wagersFor(room)?.setWagerAnte(room, ante, bots)` (otherwise it's practice). If you replace the main menu, keep rendering `menuItems` (Wager Match 30, Store 60).
-- **bots**: wager lobbies use core `botFill`; read the lobby settings with `wagerRoomInfo(room)` (`src/server/features/economy/index.ts`) or `player.ext.wager.skill` on each bot. Wager awareness: `player.ext.wager` has `lives`, `out`, `gunLevel`, `tomahawks`; weapons are forced by the mode (bots just fire what they hold); melee = `Buttons.MELEE` press, tomahawk = `Buttons.LETHAL` press (both edge-triggered `buttons` events — bots that set those bits in `think()` get them for free).
+- **bots**: wager lobbies use core `botFill`; read the lobby settings with `wagerRoomInfo(room)` (`src/server/features/economy/index.ts`) or `player.ext.wager.skill` on each bot. Wager awareness: `player.ext.wager` has `lives`, `out`, `gunLevel`; tomahawks are `player.ext.weapons.lethal === 'tomahawk'` / `lethalN`; weapons are forced by the mode (bots just fire what they hold); melee = `Buttons.MELEE` press, tomahawk = `Buttons.LETHAL` press then release (the throw leaves on release). Sticks and Stones retrieval is a `registerBotGoal('sticks', ...)` from economy; no bots files were changed for it.
 - **weapons**: crossbow/ballistic_knife are added to `WEAPONS` only if you don't define those ids (if you do, yours win and the economy's bolt behaviour isn't registered). Gun Game and Sharpshooter pick up your roster automatically. The wager knife is a separate one-hit melee bound to the melee button in wager modes only; a global melee of yours composes (a dead victim can't die twice). Store prices come from `WeaponDef.price` / `AttachmentDef.price` (defaults 1,500 / 1,000).
 - **modes / maps**: wager rooms pick maps from `mapsForMode(<wager id>)`, falling back to `mapsForMode('ffa')`; add wager ids to a map's `modes` to dedicate it.
 

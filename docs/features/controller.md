@@ -13,7 +13,7 @@ Tested against the Gamepad API "standard" mapping (Chrome, a USB Xbox-style pad 
 | LT | Aim down sights |
 | RT | Fire (analog: on at 40%, off below 30%) |
 | LB | Tactical |
-| RB | Lethal (hold to cook, like G) |
+| RB | Lethal (hold to raise, release to throw; a frag cooks while held; like G) |
 | A | Jump; from crouch or prone, stands up instead |
 | B | Tap: crouch toggle (prone -> crouch). Hold 0.35 s: prone |
 | X | Reload on press, and USE while held (crates, weapon swap, plant/defuse, revive). When a "HOLD [X]" prompt is up (crate, weapon on the floor, plant/defuse): tap = reload on release, hold = use |
