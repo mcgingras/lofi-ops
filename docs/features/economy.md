@@ -31,6 +31,7 @@ Everything that changes CP goes through `ledger.ts`, which keeps `profile.ext.ec
 - Camos are bought once and work on every weapon (simplified from BO1's per-weapon camos); the per-weapon choice is `WeaponLoadout.camo`.
 - Prestige: level gates apply again after a prestige (BO1); prestige-gated items stay open at higher prestige.
 - The server validates every purchase (`economy.buy`), checks the balance at the moment of spending and saves immediately.
+- Screen layout (BO1 style: a gun list grouped by class, then each gun's page with its attachments; Camos / Reticles / Emblems tabs) is described in `frontend.md` under **Store**. The browsing model is `src/shared/frontend/store-browse.ts`; the rules above are unchanged.
 - **Spawn-time check** (`beforeSpawn`, priority -50, humans, non-wager modes): weapons/attachments/camos the profile can't use are replaced (weapon -> starter weapon for that slot, attachment dropped, camo -> none) with a one-time notice. Switch off with `economyConfig.enforceOwnership = false` (`src/server/features/economy/shop.ts`) if a sandbox playlist needs it.
 
 ## Wager matches (screen `wager`, menu item "Wager Match")

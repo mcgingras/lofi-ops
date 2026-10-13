@@ -47,6 +47,35 @@ If a screen owned by another area (`barracks`, `store`, `wager`) isn't registere
 - Stat bars: damage, range, fire rate, accuracy, mobility. Hovering a weapon, attachment or camo shows the change in green or red.
 - Every edit is validated locally with the server's rules and then saved.
 
+**Store** (`store` screen, params `tab` = `weapon` | `camo` | `reticle` | `emblem` and `gun` = a weapon id; the old `tab=attachment` opens Weapons). The screen lives in economy's folder (`src/client/features/economy/store-screen.ts`, styles in `economy.css`). The browsing layout is BO1's: pick a gun, then see its attachments.
+- **Weapons tab: gun list.** Guns are grouped by class: Assault Rifles, SMGs, LMGs, Snipers, Shotguns, Pistols, Launchers / Specials. A group with nothing for sale is hidden. Within a group, guns are sorted by unlock level. Each row shows:
+  - a small side-on picture of the gun. `gun-thumbs.ts` renders the real viewmodel once per model through one shared offscreen WebGL renderer, without hands, and copies it into a 2D canvas.
+  - the name.
+  - Starter / Owned, the price, or the unlock level.
+  - one pip per attachment (green when owned) and "3/7 attachments owned".
+  - Group headers count owned guns.
+- **Quick search** above the list filters guns as you type. It matches the start of the name or of a word in it, ignoring case and punctuation ("ak47", "47" and "interv" all work), or a whole group by its name or class ("sniper", "assault"). Esc clears it.
+- **Gun page.** Breadcrumbs (Store > Weapons > Assault Rifles > AK-47; Store and Weapons are clickable) and a Back button labelled "Weapons". Below them:
+  - a live turntable of the gun alone. This is the Create-a-Class `WeaponPreview` with `{ gunOnly: true }`, which strips the gloves and sleeve via `stripHands`.
+  - stat bars.
+  - the unlock level and price, and the gun's own Buy / Owned / Locked button.
+  - every attachment the gun takes. Each row shows the slot, name, description, unlock state ("Unlocked (20 kills)", "40 kills with AK-47 (26/40)" with a progress bar, "Buy the ACR first", "Owned"), price and a Buy button.
+  - Hovering or focusing an attachment shows it on the turntable and shows the stat change in green or red.
+- **Camos** are global (bought once, usable on every gun), so they keep their own tab. The gun page links to it ("Browse camos"). **Reticles** and **Emblems** are unchanged apart from tidying.
+- **Purchases** still go through `economy.buy` (and `economy.equip`), with the same prices, rules and balance update. Lock states come from economy's `owns` / `gateReason` / `lockReason`.
+- **Focus.** Every card and row has exactly one focusable action button under a stable `data-k`: Buy, or an `aria-disabled` Owned / Locked / price button that explains itself in the status line when pressed. Re-renders (a purchase, a profile push) keep the focused control focused.
+- **Controller** (padnav):
+  - D-pad / stick moves over the rows and buttons.
+  - A opens a gun or buys.
+  - B is the `data-pad-back` Back button: on a gun page it returns to the list and refocuses the gun you came from; on the list it leaves the store.
+  - LB/RB switch tabs (hidden on a gun page).
+  - Opening a gun page focuses its Buy button, or else the first attachment you can buy. Only a pad player is scrolled to it; with a mouse the page opens at the top.
+  - Keyboard Esc behaves like B.
+- **Small windows.** The header (Back, title, breadcrumbs, CP balance and the status line) is sticky. The list becomes one column, the gun page stacks the turntable over the info, and attachment rows wrap.
+- **Pure model.** `src/shared/frontend/store-browse.ts` provides:
+  - `storeGunGroups(profile, catalog?, weapons?)`: groups, guns and attachments, each with `state` (`owned` | `buy` | `funds` | `locked`), `usable`, `lock` and `requirement`.
+  - `storeGun`, `filterGunGroups`, `attachmentCountLabel` and `gunPageFocusKey`.
+
 **In-match class picker** (`class-picker` overlay): press **B** (rebindable) at any time in a match, or **Y** on a controller while dead. On the death screen a HUD hint (`frontend.classHint`) shows the key and the class picked for the next spawn.
 
 **Settings** (`settings` screen, replaces the core one), in these tabs:
@@ -83,6 +112,7 @@ If a screen owned by another area (`barracks`, `store`, `wager`) isn't registere
   - `playlists.ts`
   - `equipment.ts`
   - `protocol.ts`: RPC and push types.
+  - `store-browse.ts`: the store's gun / attachment browsing model (client only; no server code uses it).
 
 RPCs (types in `shared/frontend/protocol.ts`):
 
@@ -153,6 +183,13 @@ The client joins a lobby by getting a ticket and then calling `navigate('match',
   - bot settings validation and custom skill clamping
   - limits and playlists
   - loadout unlocks and validation, with an injected catalog (Warlord, tiers, locked items, killstreak order) and stat bars
+- `tests/frontend-store.test.ts`, on the store browsing model with the real catalog:
+  - every sold gun appears once, under its class group, in BO1 group order, sorted by unlock level
+  - every attachment appears under exactly the gun it is sold for and nowhere else, in the def's order
+  - owned counts: starters, bought keys, keys for slots the gun doesn't have, and a real `purchase`
+  - lock states and requirement text: level, funds, "Buy the gun first", weapon kills with progress, owned but re-gated after a prestige, offline
+  - search, and the gun page's default focus
+  - The screen itself has no DOM test harness (vitest runs in Node without jsdom). It was checked in headless Chrome: the list, gun pages, a purchase, controller focus, B back and LB/RB tabs, and a 400 px window.
 - `tests/frontend-lobby.test.ts`, driving `LobbyManager` directly:
   - matchmaking, reservations
   - the 20 s wait then backfill to 12 with balanced teams
