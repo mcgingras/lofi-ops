@@ -11,7 +11,7 @@ Tested against the Gamepad API "standard" mapping (Chrome, a USB Xbox-style pad 
 | Left stick | Move (8-way, full walk speed past the threshold) |
 | Right stick | Look |
 | LT | Aim down sights |
-| RT | Fire (analog: on at 40%, off below 30%) |
+| RT | Fire (analog: on at 40%, off below 30%); throws the Care Package marker while it is up |
 | LB | Tactical |
 | RB | Lethal (hold to raise, release to throw; a frag cooks while held; like G) |
 | A | Jump; from crouch or prone, stands up instead |
@@ -77,7 +77,7 @@ Debug overlay: add `?aimdebug=1` to the URL: device, strength, slowdown, rotatio
 ## Prompts and device switching
 
 - Last-used device (`inputDevice()` in `game/gamepad.ts`): any pad button or a stick past 0.3 switches to the pad; a key, mouse button, wheel or real mouse travel (6 px within 250 ms) switches back. `<body data-input>` follows it.
-- `promptKey(action)` in `game/prompts.ts` is the one place prompts get key labels: "HOLD F" → "HOLD [X]", "[4] NAPALM" → "[↑] NAPALM", "[5] NEXT" → "[→] NEXT", "PRESS [F] TO SKIP" → "PRESS [X] TO SKIP", "PRESS R TO RELOAD" → "PRESS [X] TO RELOAD", the class hint ("PRESS [Y] TO CHANGE CLASS"), the tomahawk ([RB]), scope zoom ([↓]) and the streak driving hint ([RT]). The HUD draws ↑ ↓ ← → as pixel glyphs.
+- `promptKey(action)` in `game/prompts.ts` is the one place prompts get key labels: "HOLD F" → "HOLD [X]", "[4] NAPALM" → "[↑] NAPALM", "[5] NEXT" → "[→] NEXT", "PRESS [F] TO SKIP" → "PRESS [X] TO SKIP", "PRESS R TO RELOAD" → "PRESS [X] TO RELOAD", the class hint ("PRESS [Y] TO CHANGE CLASS"), the tomahawk ([RB]), scope zoom ([↓]), the streak driving hint ([RT]) and the Care Package marker ("[RT] THROW MARKER  [↑] PUT AWAY"). The HUD draws ↑ ↓ ← → as pixel glyphs.
 
 ## Menus
 
