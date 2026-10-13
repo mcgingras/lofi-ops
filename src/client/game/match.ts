@@ -56,6 +56,8 @@ export interface DeathInfo {
 }
 
 const DEG = Math.PI / 180;
+/** The weapon slot every life starts on (the primary), as the server's spawn does. */
+export const SPAWN_SLOT = 0;
 /** WeaponDef.recoil degrees -> view kick per shot (tuned so a BO-style spray is controllable). */
 const RECOIL_SCALE = 0.6;
 const nowSec = () => performance.now() / 1000;
@@ -379,7 +381,7 @@ export class Match {
         this.controls.pitch = 0;
         this.controls.clearPresses();
         this.recoil.pitch = this.recoil.yaw = 0;
-        this.slot = 0;
+        this.slot = SPAWN_SLOT;
         this.burstLeft = 0;
         this.burstQueued = false;
         this.pendingShots = [];
@@ -531,7 +533,12 @@ export class Match {
       this.reload = { seq: this.net.seq + 1, end: 0, dur: 1 };
       this.burstLeft = 0;
       this.burstQueued = false;
-    } else if (!alive) this.slot = me?.slot ?? this.slot;
+    } else if (!alive) {
+      // Dead (or the spawn not seen in a snapshot yet): every life starts on the primary, so ask
+      // for it. Following the dead body's slot here sent the old secondary in the first commands
+      // after a respawn and the server switched straight back to it.
+      this.slot = SPAWN_SLOT;
+    }
 
     // Reload.
     const def = this.weapon();

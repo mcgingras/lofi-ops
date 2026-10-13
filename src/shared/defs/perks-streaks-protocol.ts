@@ -64,8 +64,11 @@ declare module '../protocol' {
     'killstreaks.crate': { entity: number; contents: string; progress: number } | null;
     /** Players whose perks change what others hear/see (Ninja footsteps, Ghost Pro name tags). */
     'perks.public': { ninja: string[]; ghostPro: string[] };
-    /** Your last stand: until (room time) or null when it ends; revive progress 0..1. */
-    'perks.lastStand': { until: number | null; revive: number };
+    /**
+     * Your last stand: until (room time) or null when it ends; revive progress 0..1. On a revive
+     * `slot` is the weapon slot the server put back in your hands (the one you went down with).
+     */
+    'perks.lastStand': { until: number | null; revive: number; slot?: number };
     'perks.notice': { text: string };
   }
 }

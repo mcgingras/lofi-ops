@@ -4,11 +4,18 @@
  * damage finishes you, and when the timer runs out the player who put you down gets the kill.
  * Pro: a longer timer, and a teammate holding USE next to you for `reviveSec` gets you back up.
  *
+ * Weapons, as in BO1 (`maps/mp/_laststand.gsc`): going down remembers the weapon in hand
+ * (`self.previousPrimary = self GetCurrentWeapon()`) and switches to the pistol; a revive gives the
+ * weapons back and switches to that remembered weapon (`takePlayerOutOfLastStand`), so whoever went
+ * down on the primary gets the primary back and whoever was already on the secondary stays on it.
+ * Both switches are server-forced (`forceSlot`), and the revive push carries the slot so the
+ * client follows it.
+ *
  * Bots: while `player.ext.perks.lastStand` is set, return weaponSlot 1 from your brain.
  */
 import { PERK_TUNING as T } from '../../../shared/defs/perks';
 import { Buttons } from '../../../shared/input';
-import { switchWeapon } from '../../combat';
+import { forceSlot } from '../../combat';
 import type { PlayerState } from '../../player';
 import type { Room } from '../../room';
 import { hasPerk, isPro, perksOf } from './common';
@@ -19,11 +26,11 @@ const PISTOL_SLOT = 1;
 export function setupLastStand(room: Room): void {
   const down = (p: PlayerState) => p.ext.perks?.lastStand ?? null;
 
-  const end = (p: PlayerState) => {
+  const end = (p: PlayerState, slot?: number) => {
     const st = p.ext.perks;
     if (!st?.lastStand) return;
     st.lastStand = null;
-    room.sendFeature(p, 'perks.lastStand', { until: null, revive: 0 });
+    room.sendFeature(p, 'perks.lastStand', slot === undefined ? { until: null, revive: 0 } : { until: null, revive: 0, slot });
   };
 
   room.bus.on(
@@ -36,11 +43,11 @@ export function setupLastStand(room: Room): void {
       ev.cancel = true;
       const st = perksOf(v);
       const dur = isPro(v, 'second_chance') ? T.lastStandProSec : T.lastStandSec;
-      st.lastStand = { until: room.time + dur, attacker: ev.attacker, weapon: ev.weapon, means: ev.means, reviveBy: null, revive: 0 };
+      st.lastStand = { until: room.time + dur, attacker: ev.attacker, weapon: ev.weapon, means: ev.means, reviveBy: null, revive: 0, prevSlot: v.slot };
       v.health = Math.min(v.maxHealth, T.lastStandHealth);
       v.lastDamageTime = room.time;
       v.damageLog.push({ attacker: ev.attacker, amount: ev.amount, time: room.time });
-      if (v.weapons.length > PISTOL_SLOT && v.slot !== PISTOL_SLOT) switchWeapon(room, v, PISTOL_SLOT);
+      if (v.weapons.length > PISTOL_SLOT && v.slot !== PISTOL_SLOT) forceSlot(room, v, PISTOL_SLOT);
       room.send(ev.attacker, { t: 'hit', victim: v.id, part: ev.part ?? 'torso', damage: Math.round(ev.amount), kill: false });
       v.session?.send({ t: 'hurt', attacker: ev.attacker.id, amount: Math.round(ev.amount), from: ev.from ? [ev.from.x, ev.from.y, ev.from.z] : null, health: Math.ceil(v.health) });
       room.sendFeature(v, 'perks.lastStand', { until: st.lastStand.until, revive: 0 });
@@ -105,7 +112,10 @@ export function setupLastStand(room: Room): void {
       ls.reviveBy = reviver.id;
       ls.revive += dt;
       if (ls.revive >= T.reviveSec) {
-        end(p);
+        // Back to the weapon from before going down (BO1), the primary if that slot is gone.
+        const back = ls.prevSlot >= 0 && ls.prevSlot < p.weapons.length ? ls.prevSlot : 0;
+        forceSlot(room, p, back);
+        end(p, back);
         p.health = p.maxHealth * 0.5;
         p.lastDamageTime = room.time;
         room.addPlayerScore(reviver, 50, 'revive');

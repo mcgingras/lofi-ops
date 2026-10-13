@@ -30,6 +30,8 @@ export interface LastStand {
   means: string;
   reviveBy: string | null;
   revive: number;
+  /** Weapon slot in hand when they went down: a revive puts it back (BO1 `previousPrimary`). */
+  prevSlot: number;
 }
 
 export interface PerksExt {

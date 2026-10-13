@@ -267,6 +267,20 @@ export function switchWeapon(room: Room, p: PlayerState, slot: number): boolean 
   return true;
 }
 
+/** How long a server-chosen slot ignores commands that still ask for the old one (see `slotLock`). */
+export const SLOT_LOCK_SEC = 1.5;
+
+/**
+ * Put `slot` in the player's hands from the server side (last stand, revive) and hold it there
+ * until the client's commands catch up (`PlayerState.slotLock`). Returns false for a bad slot.
+ */
+export function forceSlot(room: Room, p: PlayerState, slot: number): boolean {
+  if (slot < 0 || slot >= p.weapons.length) return false;
+  switchWeapon(room, p, slot);
+  p.slotLock = { slot, until: room.time + SLOT_LOCK_SEC };
+  return true;
+}
+
 /** Per tick: finish reloads, regenerate health, respawn the dead, kill the out-of-bounds. */
 export function updateCombat(room: Room, p: PlayerState, dt: number): void {
   const now = room.time;
@@ -308,7 +322,10 @@ export function spawn(room: Room, p: PlayerState, point?: SpawnPoint): void {
   const at = ev.point ?? pickSpawn(room, p);
   p.loadout = loadout;
   p.weapons = [makeWeapon(loadout.primary, 'ak47'), makeWeapon(loadout.secondary, 'm1911')];
+  // CoD: every life starts on the primary, whatever was in hand at death. Commands already in
+  // flight from before the client saw the spawn must not switch it straight back.
   p.slot = 0;
+  p.slotLock = { slot: 0, until: room.time + SLOT_LOCK_SEC };
   p.swapEnd = room.time + 0.3;
   p.reloadEnd = 0;
   const m = createMoveState(at.x, at.y, at.z);

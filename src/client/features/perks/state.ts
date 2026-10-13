@@ -11,6 +11,8 @@ export const perkState = {
   ghostPro: new Set<string>(),
   lastStandUntil: null as number | null,
   revive: 0,
+  /** Revived: the slot the server put back in your hands, for the match hook to follow (then null). */
+  reviveSlot: null as number | null,
 };
 
 export const myPerks = (): string[] => perkState.loadout?.perks ?? [];
@@ -21,6 +23,7 @@ net.on('spawned', (m) => {
   perkState.loadout = m.loadout;
   perkState.spawnedAt = performance.now() / 1000;
   perkState.lastStandUntil = null;
+  perkState.reviveSlot = null;
 });
 
 onFeature('perks.public', (d) => {
@@ -31,6 +34,7 @@ onFeature('perks.public', (d) => {
 onFeature('perks.lastStand', (d) => {
   perkState.lastStandUntil = d.until;
   perkState.revive = d.revive;
+  if (d.until === null && typeof d.slot === 'number') perkState.reviveSlot = d.slot;
 });
 
 /** Ask the server which perks the profile has Pro for (on match start and after match end). */
