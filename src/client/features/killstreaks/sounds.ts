@@ -51,3 +51,5 @@ sfx.register('ks_fire', (ctx) => noise(ctx, 0.5, 5, () => 0.25));
 sfx.register('ks_static', (ctx) => noise(ctx, 0.35, 1, (k) => (k < 0.1 ? k * 10 : 1 - k) * 0.35));
 sfx.register('ks_mark', (ctx) => tone(ctx, 0.08, (t) => Math.sin(t * 2 * Math.PI * 2000) * 0.12 * Math.min(1, t / 0.004, (0.08 - t) / 0.01)));
 sfx.register('ks_confirm', (ctx) => tone(ctx, 0.1, (t) => Math.sin(t * 2 * Math.PI * 2000) * 0.15 * Math.min(1, t / 0.004, (0.1 - t) / 0.01)));
+// Care Package marker: the canister's smoke pouring out (a soft hiss, re-triggered while it smokes).
+sfx.register('ks_smoke', (ctx) => noise(ctx, 0.9, 1, (k) => Math.min(1, k * 8) * Math.min(1, (1 - k) * 4) * 0.16));

@@ -90,6 +90,48 @@ export const TOMAHAWK = { gravity: 15, restitution: 0.45, friction: 0.5, killSpe
 /** Entity kind for a thrown tomahawk; `s.k` = 1 once it lies still (retrievable). */
 export const TOMAHAWK_ENTITY = 'weapons.tomahawk';
 
+/**
+ * Cooking a grenade (the pin is out while LETHAL is held; only `cookable` equipment, the frag).
+ * The server owns the fuse: it pulls the pin when it applies the press and blows the grenade up in
+ * the hand once `cookLeft` reaches 0. The HUD runs the same maths from the local time of the
+ * input frame that carried the press (anchored by the server's `weapons.cook` ack), which is the
+ * deadline your release has to beat on the same input timeline.
+ *
+ * `warnSec`: the last stretch the HUD flashes ("throw now"); `tickSec`: one tick sound per whole
+ * second held; `warnTickSec`: faster ticks inside the warning.
+ */
+export const COOK = { warnSec: 1, tickSec: 1, warnTickSec: 0.25 } as const;
+
+/** Fuse left (s) on a cookable grenade held for `heldSec`: 0 means it has gone off in the hand. */
+export function cookLeft(fuse: number, heldSec: number): number {
+  return Math.max(0, fuse - Math.max(0, heldSec));
+}
+
+/** In the flashing "throw now" window (the last `COOK.warnSec` of the fuse)? */
+export function cookWarning(fuse: number, heldSec: number): boolean {
+  const left = cookLeft(fuse, heldSec);
+  return left > 0 && left <= COOK.warnSec + 1e-9;
+}
+
+const round3 = (v: number) => Math.round(v * 1000) / 1000;
+
+/**
+ * Held times (s) at which the cook ticks: every whole second before the warning, then every
+ * `warnTickSec` inside it, never at or past the fuse. Frag (3 s): 1, 2, 2.25, 2.5, 2.75.
+ */
+export function cookTickTimes(fuse: number): number[] {
+  const out: number[] = [];
+  const warnFrom = Math.max(0, fuse - COOK.warnSec);
+  for (let t = COOK.tickSec; t < warnFrom - 1e-9; t += COOK.tickSec) out.push(round3(t));
+  for (let t = warnFrom; t < fuse - 1e-9; t += COOK.warnTickSec) if (t > 1e-9) out.push(round3(t));
+  return [...new Set(out)];
+}
+
+/** Ticks due between two held times (prev, now]: how many tick sounds to play this frame. */
+export function cookTicksBetween(fuse: number, prevHeld: number, held: number): number {
+  return cookTickTimes(fuse).filter((t) => t > prevHeld + 1e-9 && t <= held + 1e-9).length;
+}
+
 /** Grenade bounce restitution and ground friction. */
 export const NADE_PHYSICS = { gravity: 18, restitution: 0.35, friction: 0.55, radius: 0.08 } as const;
 
@@ -116,5 +158,10 @@ declare module '../protocol' {
     'weapons.throw': { p: string; e: string };
     /** You picked equipment back up (tomahawk): `n` is how many you carry now. */
     'weapons.retrieve': { e: string; n: number };
+    /**
+     * The server pulled the pin on your cookable grenade `e` while applying input `seq`: its fuse
+     * (`fuse` s, see `cookLeft`) runs from that command. The HUD anchors its cook timer there.
+     */
+    'weapons.cook': { e: string; seq: number; fuse: number };
   }
 }
