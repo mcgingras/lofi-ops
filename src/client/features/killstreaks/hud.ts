@@ -1,6 +1,7 @@
 /**
  * Killstreak HUD: the streak ladder with pips (bottom right, above the ammo), the ready prompt,
- * announcements, the target designator, crate prompts, driving overlays and a mortar warning, plus
+ * announcements, the target designator (point streaks; the Care Package marker has its own preview
+ * in marker.ts), crate prompts, driving overlays and a mortar warning, plus
  * care package waypoints and the "HOLD F" prompt when you stand at a crate.
  */
 import { CRATE_REACH, KILLSTREAK_BY_ID, KS_ENTITY } from '../../../shared/defs/killstreaks';
@@ -66,7 +67,7 @@ registerHudWidget(
     if (st.ready.length && m.alive) {
       const sel = st.ready[st.selected] ?? st.ready[0]!;
       const flash = m.time - ksClient.earnedAt < 2 && blink(m.time, 0.3, 0.2);
-      const label = st.map ? 'RADIO' : st.armed ? 'DESIGNATING' : `${promptKey('streak', { brackets: true })} ${streakName(sel).toUpperCase()}`;
+      const label = st.map ? 'RADIO' : st.marker ? 'MARKER UP' : st.armed ? 'DESIGNATING' : `${promptKey('streak', { brackets: true })} ${streakName(sel).toUpperCase()}`;
       txt(g, label, W - 8 * u, y - 4 * u, 8, flash ? C.paper : C.hi, 'right', u);
       if (st.ready.length > 1) txt(g, `+${st.ready.length - 1}  ${promptKey('streakNext', { brackets: true })} NEXT`, W - 8 * u, y - 13 * u, 8, C.dim, 'right', u);
     }
@@ -110,7 +111,7 @@ registerHudWidget(
       }
       rect(g, cx - u, cy - u, 2 * u, 2 * u, C.warn);
       const need = st.armed.need;
-      const label = need > 1 ? `MARK TARGET ${st.armed.marks.length + 1}/${need}` : def?.targeting === 'line' ? 'MARK TARGET (RUNS ALONG YOUR FACING)' : def?.id === 'care_package' ? 'MARK DROP ZONE' : 'MARK TARGET';
+      const label = need > 1 ? `MARK TARGET ${st.armed.marks.length + 1}/${need}` : def?.targeting === 'line' ? 'MARK TARGET (RUNS ALONG YOUR FACING)' : 'MARK TARGET';
       txt(g, label, cx, cy + 16 * u, 8, C.hi, 'center', u);
       txt(g, `${promptKey('streak', { brackets: true })} CONFIRM  ${streakName(st.armed.id).toUpperCase()}`, cx, cy + 26 * u, 8, C.paper, 'center', u);
     }

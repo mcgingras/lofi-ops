@@ -342,6 +342,8 @@ export const SFX_SYNTH_ONLY: Record<string, string> = {
   ks_fire: 'napalm fire crackle: no fire recording in the manifest',
   'weapons.thump': 'Sticks and Stones BANKRUPTED sting: a low thump, no fitting recording',
   'weapons.beep': 'stuck crossbow bolt beep: a synthesized chirp, like the semtex blink',
+  'weapons.cook': 'frag cook tick: a short synthesized fuse tick, no fitting recording',
+  ks_smoke: 'Care Package marker smoke hiss: synthesized noise, no smoke recording in the manifest',
 };
 
 /** Recorded-only ids with no synthesized fallback on purpose: extra layers that may simply be absent until loaded. */

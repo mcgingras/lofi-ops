@@ -194,3 +194,45 @@ registerTexture('ks_laptop', {
   },
   photo: 'none',
 });
+
+// Care Package marker: the smoke canister's painted body (olive drab with a stencilled band and
+// lettering, like an M18 smoke grenade) and the landing ring of the throw preview (white, tinted
+// per use: friendly blue on a good spot, red where the crate can't come down).
+registerTexture('ks_canister', {
+  w: 16,
+  h: 32,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#4e5634', 0.1);
+    g.fillStyle = '#7d9ad8';
+    g.fillRect(0, 6, w, 4);
+    g.fillStyle = '#d8d4c0';
+    g.fillRect(3, 14, 10, 1);
+    g.fillRect(3, 17, 7, 1);
+    g.fillRect(3, 20, 9, 1);
+  },
+  photo: 'auto',
+});
+
+registerTexture('ks_drop_ring', {
+  w: 32,
+  h: 32,
+  wrap: false,
+  posterize: false,
+  draw(g) {
+    g.strokeStyle = '#ffffff';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.arc(16, 16, 13, 0, Math.PI * 2);
+    g.stroke();
+    g.beginPath();
+    g.arc(16, 16, 7, 0, Math.PI * 2);
+    g.stroke();
+    g.fillStyle = '#ffffff';
+    g.fillRect(15, 0, 2, 5);
+    g.fillRect(15, 27, 2, 5);
+    g.fillRect(0, 15, 5, 2);
+    g.fillRect(27, 15, 5, 2);
+    g.fillRect(15, 15, 2, 2);
+  },
+  photo: 'none',
+});

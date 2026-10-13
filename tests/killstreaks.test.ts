@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { botAutoStreaks, botCallDelay, callKillstreak, enemyStreakTargets, isDrivingStreak, readyKillstreaks, suggestTarget } from '../src/server/features/killstreaks/api';
-import { onStreakPressed } from '../src/server/features/killstreaks/index';
+import { onStreakPressed, throwMarker } from '../src/server/features/killstreaks/index';
 import { perksOf } from '../src/server/features/perks/common';
 import { ksOf, stateMsg } from '../src/server/features/killstreaks/state';
 import { cratesOf, rollContents, PACKAGE } from '../src/server/features/killstreaks/streaks/package';
@@ -214,21 +214,23 @@ describe('strikes', () => {
     expect(room.entities.byKind(KS_ENTITY.mortarMark)).toHaveLength(0);
   });
 
-  it('the Care Package designates with the STREAK button (arm, then mark where aiming)', () => {
+  it('the Care Package raises its marker with STREAK and throws it with FIRE (the drop follows the canister)', () => {
     const room = setup();
     const a = bot(room, 0);
     place(a, -1, 12);
     a.yaw = 0;
-    a.pitch = -0.5;
+    a.pitch = -0.3;
     give(a, 'care_package');
     onStreakPressed(room, a);
-    expect(ksOf(a).armed?.id).toBe('care_package');
+    expect(ksOf(a).marker?.id).toBe('care_package');
+    expect(ksOf(a).armed).toBeNull(); // no crosshair designator any more
     steps(room, 0.1);
-    expect(a.swapEnd).toBeGreaterThan(room.time); // weapon down while designating
-    onStreakPressed(room, a);
-    expect(ksOf(a).armed).toBeNull();
+    expect(a.swapEnd).toBeGreaterThan(room.time); // weapon down while the canister is up
+    throwMarker(room, a);
+    expect(ksOf(a).marker).toBeNull();
     expect(readyKillstreaks(a)).toEqual([]);
-    expect(room.entities.byKind(KS_ENTITY.dropHeli)).toHaveLength(1);
+    expect(room.entities.byKind(KS_ENTITY.marker)).toHaveLength(1);
+    expect(until(room, () => room.entities.byKind(KS_ENTITY.dropHeli).length === 1, 9)).toBeLessThan(9);
   });
 
   it('map streaks never fall back to the crosshair', () => {

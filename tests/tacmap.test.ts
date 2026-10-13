@@ -27,8 +27,8 @@ describe('tactical map maths (shared)', () => {
       ['attack_helicopter', 'area', 1],
       ['rolling_thunder', 'line', 1],
     ]);
-    // Care Package, Sentry and SAM keep their in-world placement.
-    expect([def('care_package').targeting, def('sentry_gun').targeting, def('sam_turret').targeting]).toEqual(['point', 'place', 'place']);
+    // Care Package (a thrown marker), Sentry and SAM keep their in-world placement.
+    expect([def('care_package').targeting, def('sentry_gun').targeting, def('sam_turret').targeting]).toEqual(['marker', 'place', 'place']);
   });
 
   it('run direction from a drag matches viewDir (yaw 0 = north = -z, +yaw towards -x)', () => {

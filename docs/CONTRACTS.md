@@ -126,7 +126,9 @@ declare module '../../modifiers' {
 
 ## 4. Per-player feature state
 
-`PlayerState` (`src/server/player.ts`) has `id, name, isBot, session, profile, team, alive, health, maxHealth, move (MoveState), yaw, pitch, buttons, loadout, weapons[], slot, stats {kills,deaths,assists,score,headshots,streak,bestStreak}, respawnAt, brain, ext`.
+`PlayerState` (`src/server/player.ts`) has `id, name, isBot, session, profile, team, alive, health, maxHealth, move (MoveState), yaw, pitch, buttons, loadout, weapons[], slot, slotLock, stats {kills,deaths,assists,score,headshots,streak,bestStreak}, respawnAt, brain, ext`.
+
+Weapon slots: every spawn puts slot 0 (the primary) in hand. A feature that switches a player's slot itself mid-life (Second Chance's pistol, a revive) calls `forceSlot(room, p, slot)` (`combat.ts`): it switches and sets `p.slotLock = { slot, until }` (1.5 s), so input commands that still ask for the old slot (sent before the client heard) are ignored until one asks for the forced slot. Push the slot to the client so it follows (Second Chance does it in `perks.lastStand`).
 
 ```ts
 declare module '../../player' {
@@ -181,6 +183,7 @@ Netcode contract for the client:
 - Predict with `stepMove(world, state, buttons, yaw, dt, snap.me.params)` from `shared/movement.ts`; `world = buildCollisionWorld(getMapData(mapId))`. On each `snap`: take `snap.me.move`, drop inputs with `seq <= snap.ack`, replay the rest; snap if the error > `RECONCILE_SNAP_M` (0.5 m) else smooth. Reset on `spawned`.
 - Remote players: interpolate `snap.players` `INTERP_DELAY_MS` (100 ms) behind, in room time (`snap.time`).
 - Shots: on each trigger pull send `fire` with `seq` = last input seq sent, `time` = the room time you are rendering remote players at, `origin` = your eye, `dir` = aim before spread, `shot` = a per-pull counter. The server applies spread with `spreadDirection(dir, spreadDegrees(...), shotSeed(hashString(playerId), shot, pellet))` (`shared/ballistics.ts`), so the client can draw the same tracer. Firing is refused while sprinting / within sprint-out, reloading, switching, out of ammo (auto-reload), or faster than the weapon's rpm.
+- Weapon slot in commands: the client sends slot 0 while dead and from the `spawned` message on (`frameSlot` / `SPAWN_SLOT` in `client/game/slots.ts`), matching the server's spawn on the primary; it used to follow the dead body's slot, so the first commands after a respawn switched back to the secondary.
 - `PlayerSnap.f` bits: `PlayerFlags` (ALIVE, CROUCH, SPRINT, ADS, GROUND, RELOADING, FIRING, SWITCHING).
 
 Codec: JSON behind `Codec`; `setCodec()` swaps it on both sides.
@@ -193,12 +196,13 @@ Each file exports a typed array and a `*_BY_ID` map (`indexById` throws on dupli
 |---|---|---|
 | `weapons.ts` | `WeaponDef` (optional `projectile`: no local hitscan tracer; `ammoNoun`: the HUD counts loaded + spare as "N BOLTS"), `WEAPONS`, `WEAPON_BY_ID`, `LOADOUT_WEAPONS` (create-a-class picks; `knife` and `gl` have slots `melee` / `attachment`), `shotsToKill`, `ttkMs`, `cycleSec` | weapons |
 | `attachments.ts` | `AttachmentDef` (`unlockKills`, `price`), `ATTACHMENTS`, `effectiveWeapon(def, ids)`, `validAttachments(def, ids, max)`, `canAttach`, `BASE_ATTACHMENT_SLOTS` (1) | weapons |
-| `equipment.ts` | `EquipmentDef`, `EQUIPMENT` (frag, semtex, tomahawk, flashbang, concussion), `LETHALS`, `TACTICALS`, `MELEE`, `GL_ROUND`, `NADE_ENTITY`, `TOMAHAWK` / `TOMAHAWK_ENTITY` (`weapons.tomahawk`, `s.k` = 1 once retrievable), weapons feature messages (incl. `weapons.retrieve`) | weapons |
+| `equipment.ts` | `EquipmentDef`, `EQUIPMENT` (frag, semtex, tomahawk, flashbang, concussion), `LETHALS`, `TACTICALS`, `MELEE`, `GL_ROUND`, `NADE_ENTITY`, `TOMAHAWK` / `TOMAHAWK_ENTITY` (`weapons.tomahawk`, `s.k` = 1 once retrievable), cook maths shared by the server fuse and the HUD (`COOK`, `cookLeft`, `cookWarning`, `cookTickTimes`, `cookTicksBetween`), weapons feature messages (incl. `weapons.retrieve`, `weapons.cook {e, seq, fuse}`: the pin came out on input `seq`) | weapons |
 | `perks.ts` | `PerkDef`, `PERKS` (seeded: lightweight, hardline (T1), steady_aim (T2)) | perks-streaks |
-| `killstreaks.ts` | `KillstreakDef` (`targeting`, `mapPick`, `marks`, `countsStreakKills`, `noWager`...), `KILLSTREAKS` (BO1's 14 + MW2's Tactical Nuke at 25), `KS_ENTITY`, `streakAllowedIn` | perks-streaks |
+| `killstreaks.ts` | `KillstreakDef` (`targeting`: `marker` for the Care Package's thrown canister, `mapPick`, `marks`, `countsStreakKills`, `noWager`...), `KILLSTREAKS` (BO1's 14 + MW2's Tactical Nuke at 25), `KS_ENTITY` (incl. `marker` = `ks_marker`, the canister: `s.k` 1 settled, `s.sm` smoke start, `s.v` 0 when the drop moved), `streakAllowedIn` | perks-streaks |
+| `care-marker.ts` | Care Package marker, shared by the server and the client's throw preview: `MARKER` tuning, `markerLaunch`, `markerStep` / `simulateMarker` (per tick at TICK_DT), `resolveDrop` (where the crate can come down: bounds, open sky, roof limit, walls, with the walk-back fallback), `groundTop`, `roofLimit` | perks-streaks |
 | `nuke.ts` | Tactical Nuke timeline `NUKE` (laptop 1.5 s, countdown 10 s, shockwave +2..+4 s, match end +5.5 s) and pure maths (`nukePhase`, `countdownNumber`, `shockAt`, `nukeWhite`, `nukeTimeScale`, `cloudGrowth`, `blastPoint`) | perks-streaks |
 | `tactical-map.ts` | tactical map (BO1 radio targeting): `STRIKE` footprints/timings, `validateMapTarget`, `yawFromDrag`, `strikeFootprint`, `MAP_MODE` | perks-streaks |
-| `perks-streaks-protocol.ts` | killstreak/perk RPCs and pushes, incl. `killstreaks.mapTarget {id, points, yaw?}`, `killstreaks.mapCancel`, `KillstreakStateMsg.map` | perks-streaks |
+| `perks-streaks-protocol.ts` | killstreak/perk RPCs and pushes, incl. `killstreaks.mapTarget {id, points, yaw?}`, `killstreaks.mapCancel`, `KillstreakStateMsg.map`, `KillstreakStateMsg.marker` (holding the Care Package canister), `perks.lastStand.slot` (the slot a revive put back) | perks-streaks |
 | `modes.ts` | `ModeDef`, `CORE_MODES` (tdm 75 kills / ffa 30 kills / dom 200 / sd 4 rounds / hq 250 / kc 65), `MODES` = core + `WAGER_MODES`, `MODE_TUNING`, `MODE_XP` | modes |
 | `modestate.ts` | modes wire types (`modes.state`, `modes.event`, `modes.killcam`, `modes.deathcam`), `MatchSummaryExt` (`results.ext.modes`), `MODE_ENTITY` kinds | modes |
 | `deathcam.ts` | per-death killcam: `DEATHCAM` timing, `deathcamWindow(at, respawnAt)` (clip cut so it ends by the respawn), `DeathcamPayload` / `KillerCard` (`modes.deathcam`, sent only to the victim), `packClip` / `unpackClip`, `NO_DEATHCAM_MEANS` (fall, world, suicide, nuke) | modes |
@@ -212,7 +216,7 @@ Each file exports a typed array and a `*_BY_ID` map (`indexById` throws on dupli
 | `pickups.ts` | weapon drops and pickups: `PICKUP` tuning (reach, hold time, life, room cap), `PICKUP_ENTITY` (`pickups_weapon`, `s = {w,a,c,l,m,r,o}`), `canDropWeapon`, `pickDropTarget` / `dropScore` (the same target maths on both sides), `pickups.swapped` / `pickups.ammo` messages; see docs/features/pickups.md | pickups |
 | `camos.ts` | `CamoDef {price, unlock, tier, recipe: CamoRecipe | null}`, `CAMOS` (16: Woodland ... Gold, Ice, Dragon); client texture `camo.<id>`, picker swatch `camoPreview(id)` from `src/client/features/economy` | economy |
 
-Also shared: `loadout.ts` (`Loadout`, `DEFAULT_LOADOUTS`, `sanitizeLoadout` = structural only, no unlock checks), `profile.ts` (`Profile`, `newProfile`, `bumpStat`), `ballistics.ts`, `collision.ts`, `movement.ts`, `math.ts` (`viewDir`: yaw 0 looks down -z).
+Also shared: `projectile.ts` (`stepBody`, `throwVelocity`: thrown-object flight, used by the server's grenades and the Care Package canister, and by the client to predict a throw), `loadout.ts` (`Loadout`, `DEFAULT_LOADOUTS`, `sanitizeLoadout` = structural only, no unlock checks), `profile.ts` (`Profile`, `newProfile`, `bumpStat`), `ballistics.ts`, `collision.ts`, `movement.ts`, `math.ts` (`viewDir`: yaw 0 looks down -z).
 
 Wager modes: economy appends to `WAGER_MODES` in `economy.ts` and registers rules from its feature `setup` (`api.registerMode('oitc', factory)`), so `modes.ts` stays the modes owner's. CoD Points for challenges: emit the room event `economy.grant { player, amount, reason, kind: 'challenge' }` instead of changing `profile.codPoints` (details: `docs/features/economy.md`).
 
@@ -324,6 +328,7 @@ render/            renderer.ts (low-res target + post + HUD composite), shader.t
                    mapbuilder.ts (MapData -> meshes, bake per time preset), recipes/*.ts, models/
 game/              match.ts (the session + frame loop), controls.ts, viewmodel.ts, remotes.ts, effects.ts, audio.ts
                    (+ sfx-mix.ts: variation/voice-cap/distance helpers, surfaces.ts: footstep surfaces)
+                   slots.ts (pure: the weapon slot sent each frame, `frameSlot`, `SPAWN_SLOT`)
                    controller: gamepad.ts (shared pad module), pad.ts (pure mapping/maths), prompts.ts (HUD key
                    labels), aim-assist.ts (pure); see "Controller" below and docs/features/controller.md
 hud/               hud.ts, widgets.ts (core widgets), draw.ts (pixel helpers)

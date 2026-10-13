@@ -35,6 +35,11 @@ registerMatchHook('perks.client', {
     perkState.lastStandUntil = null;
   },
   frame(m) {
+    // Revived: back to the weapon you went down with (BO1), as the server already switched.
+    if (perkState.reviveSlot !== null) {
+      if (m.alive && perkState.reviveSlot < (m.me?.weapons.length ?? 0)) m.slot = perkState.reviveSlot;
+      perkState.reviveSlot = null;
+    }
     if (perkState.lastStandUntil === null || !m.alive) return;
     // Last stand: pistol out, crawling low.
     if ((m.me?.weapons.length ?? 0) > 1) m.slot = 1;

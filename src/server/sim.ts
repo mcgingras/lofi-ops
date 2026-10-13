@@ -44,7 +44,10 @@ export function applyCommand(room: Room, p: PlayerState, cmd: Omit<InputCmd, 'se
   const pressed = buttons & ~prev;
   const released = prev & ~buttons;
   if (p.alive && room.phase === 'playing') {
-    if (cmd.weaponSlot !== p.slot) switchWeapon(room, p, cmd.weaponSlot | 0);
+    // A slot the server chose (spawn, last stand) holds until the client asks for it too.
+    const lock = p.slotLock;
+    if (lock && (cmd.weaponSlot === lock.slot || room.time >= lock.until)) p.slotLock = null;
+    if (cmd.weaponSlot !== p.slot && !p.slotLock) switchWeapon(room, p, cmd.weaponSlot | 0);
     if (pressed & Buttons.RELOAD) startReload(room, p);
   }
   if (p.alive) stepMove(room.world, p.move, buttons, p.yaw, dt, moveParamsFor(room, p));

@@ -89,6 +89,12 @@ export interface PlayerState {
   nextLoadout: Loadout | null;
   weapons: WeaponState[];
   slot: number;
+  /**
+   * The server put `slot` in the player's hands itself mid-life (`forceSlot`: last stand's pistol,
+   * a revive's gun from before). Commands asking for another slot were sent before the client
+   * knew, so they are ignored until one asks for this slot or `until` (room time) passes.
+   */
+  slotLock: { slot: number; until: number } | null;
   swapEnd: number;
   reloadEnd: number;
   /** Last time this player fired (radar ping), and whether that weapon was suppressed. */
@@ -134,6 +140,7 @@ export function createPlayer(id: string, name: string, opts: { session?: Session
     nextLoadout: null,
     weapons: [],
     slot: 0,
+    slotLock: null,
     swapEnd: 0,
     reloadEnd: 0,
     lastFireTime: -999,

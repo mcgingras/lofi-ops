@@ -6,7 +6,9 @@
  *
  * `targeting` says how a streak is aimed:
  *   none   - just called (Spy Plane, Counter-Spy Plane, Blackbird, Attack Dogs)
- *   point  - one designated spot where the caller aims (Care Package)
+ *   marker - a thrown marker (BO1 Care Package): STREAK raises the smoke canister, FIRE throws it,
+ *            the drop comes where it settles (defs/care-marker.ts); bots pass a target instead
+ *   point  - one designated spot where the caller aims (unused since the Care Package marker)
  *   line   - a spot plus the caller's facing as the run direction (unused since the tactical map)
  *   points - several designated spots where the caller aims (unused since the tactical map)
  *   map    - chosen on the overhead tactical map (BO1: the radio). `mapPick` says how:
@@ -19,7 +21,7 @@
  */
 import { indexById } from './registry';
 
-export type StreakTargeting = 'none' | 'point' | 'line' | 'points' | 'map' | 'place' | 'control';
+export type StreakTargeting = 'none' | 'marker' | 'point' | 'line' | 'points' | 'map' | 'place' | 'control';
 /** How a `map`-targeted streak is placed on the tactical map. */
 export type MapPick = 'line' | 'points' | 'area';
 
@@ -59,7 +61,7 @@ export const KILLSTREAKS: KillstreakDef[] = [
   { id: 'rcxd', name: 'RC-XD', kills: 3, description: 'Remote-control car packed with explosives. Fire to detonate.', unlockLevel: 1, kind: 'controlled', durationSec: 30, targeting: 'control', hp: 40, icon: 'ks_rcxd' },
   { id: 'counter_uav', name: 'Counter-Spy Plane', kills: 4, description: "Jams the enemy's minimap.", unlockLevel: 1, kind: 'called', durationSec: 30, targeting: 'none', air: true, hp: 700, icon: 'ks_cuav' },
   { id: 'sam_turret', name: 'SAM Turret', kills: 4, description: 'Placeable turret that shoots down enemy aircraft.', unlockLevel: 8, kind: 'called', durationSec: 60, targeting: 'place', hp: 450, icon: 'ks_sam' },
-  { id: 'care_package', name: 'Care Package', kills: 5, description: 'Airdrop a random killstreak where you aim.', unlockLevel: 1, kind: 'called', targeting: 'point', icon: 'ks_package' },
+  { id: 'care_package', name: 'Care Package', kills: 5, description: 'Throw the marker: a helicopter drops a crate with a random killstreak where it lands.', unlockLevel: 1, kind: 'called', targeting: 'marker', icon: 'ks_package' },
   { id: 'napalm', name: 'Napalm Strike', kills: 5, description: 'Pick a spot and a direction on the map: a jet burns a line through it.', unlockLevel: 1, kind: 'called', targeting: 'map', mapPick: 'line', icon: 'ks_napalm' },
   { id: 'sentry_gun', name: 'Sentry Gun', kills: 6, description: 'Placeable automated gun.', unlockLevel: 14, kind: 'called', durationSec: 90, targeting: 'place', hp: 450, icon: 'ks_sentry' },
   { id: 'mortar', name: 'Mortar Team', kills: 6, description: 'Mark three spots on the map for a mortar barrage.', unlockLevel: 1, kind: 'called', targeting: 'map', mapPick: 'points', marks: 3, icon: 'ks_mortar' },
@@ -104,6 +106,8 @@ export const KS_ENTITY = {
   blackbird: 'ks_blackbird',
   dropHeli: 'ks_dropheli',
   crate: 'ks_crate',
+  /** The Care Package smoke canister (held marker thrown, then lying and smoking): see defs/care-marker.ts. */
+  marker: 'ks_marker',
   jet: 'ks_jet',
   bomber: 'ks_bomber',
   fire: 'ks_fire',

@@ -33,6 +33,7 @@ import { Controls } from './controls';
 import { inputDevice, rumble } from './gamepad';
 import { Effects } from './effects';
 import { Remotes } from './remotes';
+import { frameSlot, SPAWN_SLOT } from './slots';
 import { ViewmodelRig } from './viewmodel';
 
 export interface KillfeedEntry {
@@ -379,7 +380,7 @@ export class Match {
         this.controls.pitch = 0;
         this.controls.clearPresses();
         this.recoil.pitch = this.recoil.yaw = 0;
-        this.slot = 0;
+        this.slot = SPAWN_SLOT;
         this.burstLeft = 0;
         this.burstQueued = false;
         this.pendingShots = [];
@@ -523,15 +524,17 @@ export class Match {
     if (!(this.scopedLast && this.weapon()?.zoomLevels.length) && c.consume('equipment')) want = this.slot === 2 ? 0 : 2;
     const wheel = c.consumeWheel();
     if (wheel) want = (((this.slot + wheel) % nWeapons) + nWeapons) % nWeapons;
-    if (alive && playing && want !== this.slot && want < nWeapons) {
-      this.slot = want;
-      const def = this.weapon(want);
+    // Dead (or the spawn not seen in a snapshot yet): ask for the primary every life starts on.
+    const next = frameSlot({ slot: this.slot, want, alive, playing, weapons: nWeapons });
+    this.slot = next.slot;
+    if (next.switched) {
+      const def = this.weapon(next.slot);
       const dur = (def?.swapMs ?? 500) / 1000;
       this.swap = { seq: this.net.seq + 1, end: server + dur, dur };
       this.reload = { seq: this.net.seq + 1, end: 0, dur: 1 };
       this.burstLeft = 0;
       this.burstQueued = false;
-    } else if (!alive) this.slot = me?.slot ?? this.slot;
+    }
 
     // Reload.
     const def = this.weapon();

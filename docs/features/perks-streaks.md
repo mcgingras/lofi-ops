@@ -8,17 +8,19 @@ Code lives in the pre-made feature folders (`perks` and `killstreaks`, already l
 src/shared/defs/perks.ts                  PerkDef x15, PERK_TUNING, PERK_PRO_CHALLENGES (ChallengeDef[])
 src/shared/defs/killstreaks.ts            KillstreakDef x15 (+targeting/mapPick/air/hp/countsStreakKills/noWager), CARE_PACKAGE_WEIGHTS, KS_ENTITY kinds
 src/shared/defs/nuke.ts                   Tactical Nuke timeline (NUKE) and pure maths: phases, countdown number, shockAt, white-out, slow motion, cloud growth
+src/shared/defs/care-marker.ts            Care Package marker: MARKER tuning, markerLaunch / simulateMarker / resolveDrop (shared with the client preview)
 src/shared/defs/tactical-map.ts           tactical map: STRIKE footprints/timings, validateMapTarget, yawFromDrag, strikeFootprint, rate-limit bucket
 src/shared/defs/perks-streaks-protocol.ts RPC + feature message types (declaration-merged into protocol.ts)
 src/server/features/perks/                index (modifiers, stamina, challenges, public lists), laststand, scavenger, common
 src/server/features/killstreaks/          index (buttons, RPCs, wiring), api (bot API), state (ladder), world (per-room ctx),
                                           mapmode (radio / tactical map), skill, streaks/{radar,airstrike,mortar,package,turrets,heli,vehicles,dogs,nuke}
 src/client/features/perks/                footstep filter, last stand, scavenger packs, perk list, state (my loadout/pro)
-src/client/features/killstreaks/          models, renderers, textures, sounds, fx, hud, radar, control, store,
+src/client/features/killstreaks/          models, renderers, textures, sounds, fx, hud, radar, control, store, marker (held canister, throw preview, smoke),
                                           tacmap (map mode), tacmap-logic (placement, no DOM), overhead (satellite picture), radio,
                                           nuke (laptop, countdown HUD, flash, cloud), nuke-logic (no DOM)
 tests/perks.test.ts, tests/killstreaks.test.ts, tests/perks-streaks.integration.test.ts (+ helpers),
-tests/tacmap.test.ts, tests/tacmap.integration.test.ts, tests/tacmap.client.test.ts, tests/nuke.test.ts, tests/nuke.client.test.ts
+tests/tacmap.test.ts, tests/tacmap.integration.test.ts, tests/tacmap.client.test.ts, tests/nuke.test.ts, tests/nuke.client.test.ts,
+tests/care-marker.test.ts, tests/marker-cook.integration.test.ts (Care Package marker), tests/laststand-revive.test.ts
 ```
 
 Sounds: `killstreaks/sounds.ts` holds the synthesized `ks_*` voices; the recorded versions (radio static, squelch and roger beep, jet / prop / rotor, sentry fire (the chopper gunner `ks_gunner` borrows it), rocket launch, incoming-mortar rush, explosions, dog bark / bite) are bindings in `src/shared/defs/sfx-recipes.ts`; streak ready (`ks_ready`) and enemy streak inbound (`ks_alarm`) are restrained synthesized radio cues (`sfx-cues.ts`), not the old walkie chirp and klaxon. `ks_buzz` (RC-XD motor) and `ks_fire` (napalm crackle) stay synthesized (no recording in the manifest).
@@ -40,7 +42,7 @@ Sounds: `killstreaks/sounds.ts` holds the synthesized `ks_*` voices; the recorde
 | 3 | Tactical Mask | `stunDurationMultiplier` 0.35 | enemies you stun (`perks.stunned` event) show on your radar for the stun |
 | 3 | Marathon | sprint stamina x2 | unlimited sprint |
 | 3 | Ninja | `silentFootsteps`; remote footsteps silent on clients | enemy footsteps x1.8 for you; `hearingMultiplier` 1.8 |
-| 3 | Second Chance | a lethal bullet/knife hit (not a headshot) puts you in last stand: 30 hp, pistol, crawl, no regen, 10 s, then the downer gets the kill | 15 s, and a teammate holding USE for 2 s revives you (+50 score) |
+| 3 | Second Chance | a lethal bullet/knife hit (not a headshot) puts you in last stand: 30 hp, pistol, crawl, no regen, 10 s, then the downer gets the kill | 15 s, and a teammate holding USE for 2 s revives you (+50 score), back on the weapon you went down with |
 | 3 | Hacker | enemy hardware (sentry, SAM, crate, RC-XD) marked red in the world and on your radar | hold USE 2 s next to an enemy sentry/SAM to take it over; taking an enemy Care Package booby-traps it instead |
 
 **Sprint stamina (everyone).** BO1 sprint runs out: 5 s (Marathon 10 s, Pro unlimited), regains 1 s/s, needs 1.2 s before sprinting again. Enforced through the new core `canSprint` modifier, so client prediction follows (`me.params.canSprint`). Tune in `PERK_TUNING`.
@@ -55,7 +57,7 @@ Sounds: `killstreaks/sounds.ts` holds the synthesized `ks_*` voices; the recorde
 | rcxd | RC-XD | 3 | drive it (movement keys + view yaw, chase cam); FIRE/STREAK detonates (6 m, 260); 30 s fuse; 40 hp, harmless when shot |
 | counter_uav | Counter-Spy Plane | 4 | `radarJammed` for your enemies (static on their radar) 30 s; 700 hp |
 | sam_turret | SAM Turret | 4 | placed in front; homing missiles (1000 dmg) at enemy aircraft in 160 m, 8 missiles, 60 s; 450 hp |
-| care_package | Care Package | 5 | designate a spot; Chinook drops a crate (crushes); hold USE: owner 0.5 s, team 1.25 s, enemy 3 s; random streak or ammo. Waypoint over your side's crates (enemy crates within 20 m), "HOLD F FOR CARE PACKAGE" once in reach (`CRATE_REACH`). A crate in reach claims USE (`useClaimed`), so the weapon swap prompt and swap stand aside |
+| care_package | Care Package | 5 | throw the marker canister (below); the Chinook drops a crate where it settles (crushes); hold USE: owner 0.5 s, team 1.25 s, enemy 3 s; random streak or ammo. Waypoint over your side's crates (enemy crates within 20 m), "HOLD F FOR CARE PACKAGE" once in reach (`CRATE_REACH`). A crate in reach claims USE (`useClaimed`), so the weapon swap prompt and swap stand aside |
 | napalm | Napalm Strike | 5 | tactical map: spot + direction; F-4 releases ~4 s after the call; 3 canisters (7 m) + 8 s burning ground (`fire` 30/s) |
 | sentry_gun | Sentry Gun | 6 | placed in front; turns to nearest visible enemy, spins up, 8 rounds/s; 90 s; 450 hp |
 | mortar | Mortar Team | 6 | tactical map: 3 spots; red ring warning, 2 rounds per spot from 3 s, 3.5 m blast radius (BO1: ~7 m across) |
@@ -83,7 +85,20 @@ Reference: the Call of Duty Wiki "Tactical Nuke" page (MW2 section) and MW2 foot
 - **Client** (`nuke.ts`, maths in `nuke-logic.ts`): the caller's laptop in first person (rugged olive case, red warning screen, gloved hand on the key, drawn over the world like the radio); a countdown for everyone ("TACTICAL NUKE INCOMING", the number, a line per side: mine / friendly (with the caller's name) / enemy, then "IMPACT IN 3..1") plus the generic "Friendly / Enemy Tactical Nuke inbound" announcement; at detonation the screen washes to white through the post pass (`renderer.white`, before the dither), eases down to a washed-out view of a low-poly mushroom cloud (cap, crown, glowing under-ring, stem, condensation ring, dust base, smoke texture from a greyed photo; white-hot to fire to ash) and an expanding dust wall (the shockwave), slow mouse look and camera shake; white again when the shockwave reaches you (or kills you), held until the results, whose reason reads "TACTICAL NUKE". A nuke death shows no "killed by / respawn" card.
 - **Sound** (reused ids, nothing new while the sound rework is in flight): the bomb beep (`modes.beep`) once per countdown second, `ks_bigboom` slightly lowered (rate 0.9, low-pass 900 Hz) at detonation and again (rate 0.94) when the shockwave reaches you. Big pitch-downs were dropped after the sound rework: they read as cartoonish.
 
-**Controls.** `4` (STREAK button): call the selected streak. The Care Package (`targeting: 'point'`) arms a designator (weapon lowered, HUD reticle): press `4` again where you aim; it cancels on weapon switch, death or after 15 s. Sentry Gun and SAM Turret are placed in front of you. Napalm, Mortar Team, Rolling Thunder and the Attack Helicopter (`targeting: 'map'`) open the **tactical map** (below). `5` cycles the selection (RPC `killstreaks.select`). While designating, holding the radio or driving, core firing is refused (the feature holds `swapEnd`); holding the radio or driving, the body's speed is 0.
+**Controls.** `4` (STREAK button): call the selected streak. The Care Package (`targeting: 'marker'`) raises its marker canister and FIRE throws it (next section). Sentry Gun and SAM Turret are placed in front of you. Napalm, Mortar Team, Rolling Thunder and the Attack Helicopter (`targeting: 'map'`) open the **tactical map** (below). `5` cycles the selection (RPC `killstreaks.select`). While holding the marker or the radio, designating or driving, core firing is refused (the feature holds `swapEnd`); holding the radio or driving, the body's speed is 0.
+
+## Care Package marker (BO1 supply drop canister)
+
+What Black Ops did (`maps/mp/gametypes/_supplydrop.gsc` in the T5 script dump; Call of Duty Wiki "Care Package"): the streak is a grenade-type weapon (`supplydrop_mp`). Calling it puts the canister in your hand; you throw it with the fire button; once it stops moving (`waitTillNotMoving`) the Chinook is sent to it (`heliDeliverCrate(weapon.origin, ...)`), and after the canister's fuse the smoke pours out (`fx_smoke_supply_drop_blue_mp`: **blue** in BO1, the wiki notes MW2's was red). A canister that never settles is deleted after 10 s (`GRENADE_LIFETIME`); a weapon change before the throw stops it.
+
+Ours (`shared/defs/care-marker.ts` for the shared maths, server `streaks/package.ts` and `index.ts`, client `marker.ts`):
+- **Raise.** STREAK (4 / D-pad up) with the Care Package selected sets `ks.marker` (pushed as `killstreaks.state.marker`): the gun goes down (the server holds `swapEnd`, so FIRE never shoots), no sprint, and the client shows the canister in a gloved hand (`buildMarkerCanister` in `models.ts`: an olive M18-style can with a blue band, spoon and pull ring), predicted on the press and confirmed by the state push.
+- **Preview.** While it is up the client runs the server's own maths every frame from its predicted eye and quantised aim: `markerLaunch` (the grenade release point and velocity, half the thrower's velocity carried), `simulateMarker` (`stepBody` at TICK_DT, the server's tick) and `resolveDrop`. It draws the arc as dots and a landing ring (`ks_drop_ring`, friendly blue) with a "DROP ZONE" waypoint, both over the world like the other waypoints. Where the crate can't come down on the canister the ring turns red with "NO DROP" and the reason, and a yellow ring plus "CRATE HERE" shows where it comes instead. Prompt: "[LMB] THROW MARKER  [4] PUT AWAY" (`promptKey`, so "[RT] ... [↑]" on a pad).
+- **Throw.** FIRE (left mouse / RT) throws it (`throwMarker`): the streak is used (`callKillstreak(..., { launch })`), a `ks_marker` entity flies with `markerStep` each tick (bounce `restitution 0.3`, gravity 18), settles, lies on its side and smokes from `s.sm` (1 s after it settles), seen by both teams. The drop goes where it settled (`resolveDrop`, the `killstreaks.marker` room event says where and why): the Chinook flies there and drops the crate (the old heli/crate code, unchanged). The smoke stops 6 s after the crate lands (40 s at most).
+- **Where the crate can land** (`resolveDrop`): on the canister when it lies inside the map (1 m in from the bounds, the old designator's clamp), under open sky (no surface more than 0.75 m above it, or the crate would land on the roof), not inside a wall, and no higher than the highest spawn + 4.5 m (roofs nobody can reach). Otherwise: clamp into the map, then walk from there back toward the thrower to the first spot a crate fits, at the canister's own level first (out from under a roof), then any height under the limit (down off a roof); the thrower's spot if nothing nearer works. A canister lost off the map or still moving after 8 s counts as `lost` and uses the same fallback.
+- **Put away** (the streak stays ready): STREAK again, a weapon switch, a grenade or the knife, death, or selecting another streak.
+- **Bots** never hold a canister: `callKillstreak(room, bot, 'care_package', { target })` (and the automatic use, with `suggestTarget`) works as before; a smoking canister appears at the target and the helicopter leaves at once.
+- Remote players see the canister and the smoke, not the canister in the thrower's hand (no third-person pose); the throw plays the usual `weapons.throw` arm swing.
 
 ## Tactical map (BO1 radio targeting)
 
@@ -115,7 +130,8 @@ isDrivingStreak(bot)                               // RC-XD / gunner / rockets r
 
 - **Automatic use (default):** bots call their own streaks. `player.ext.killstreaks.botStreakUse` (0..1) or `player.ext.bots.skill.streakUse` sets how soon (1.5 s at 1.0, up to ~15 s at 0) and how well (target error, holding a SAM for enemy air and a Counter-Spy Plane for enemy radar, not driving an RC-XD with an enemy in its face). Without either, the lobby default preset (`regular`, 0.6) applies. Set `ext.killstreaks.manual = true` to take over and call `callKillstreak` yourself.
 - **Driven streaks for bots** are flown by the feature: RC-XD drives at the nearest enemy and blows up close (skill: steering error, detonate distance), Valkyrie rockets home on enemies, the Chopper Gunner aims at visible enemies with skill-scaled error.
-- **Second Chance for bots:** while `player.ext.perks.lastStand` is set, return `weaponSlot: 1` from the brain (the server switches to the pistol, but a brain that keeps sending 0 flips it back).
+- **Second Chance for bots:** while `player.ext.perks.lastStand` is set, return `weaponSlot: 1` from the brain (the server switches to the pistol and holds it for 1.5 s with `slotLock`; a brain that keeps sending 0 after that flips it back). A revive puts back the slot the bot went down with.
+- **Care Package:** pass a `target` (no canister to hold); `isDesignating(p)` is also true while a player holds the marker canister.
 - **Hearing:** read `room.modifiers.any('silentFootsteps', target)` (Ninja) and `room.modifiers.mul('hearingMultiplier', bot)` when bots react to footsteps.
 
 ## Integration notes for other areas
@@ -134,6 +150,8 @@ isDrivingStreak(bot)                               // RC-XD / gunner / rockets r
 - `src/client/game/controls.ts`: `Controls.enabled = false` now also ignores mouse buttons, devlook drag taps and the wheel (it already zeroed buttons and look), so the tactical map can own the mouse.
 - `src/client/render/mapbuilder.ts`: `MapScene.sky` is public (hidden for the top-down capture).
 - `docs/CONTRACTS.md` (documents both), `NOTICE` (Blockyard attribution for the mortar pattern and rule shapes).
+- Second Chance weapons (BO1 `_laststand.gsc`: `previousPrimary` on going down, `SwitchToWeapon(previousPrimary)` in `takePlayerOutOfLastStand`): the pistol and the revive switch are server-forced with core's new `forceSlot` / `PlayerState.slotLock` (`src/server/combat.ts`, `player.ts`, `sim.ts`), so the client's commands already on the way don't flip them back; `perks.lastStand` carries `slot` on a revive and the perks client follows it.
+- Care Package marker: `src/server/features/killstreaks/world.ts` `groundAt` now calls the shared `groundTop`; `src/shared/projectile.ts` (moved out of the weapons server folder) is the throw physics both sides run; `src/shared/defs/sfx-recipes.ts` (`ks_smoke` synth-only) and `src/client/features/frontend/sound-test-data.ts` (its volume).
 - Tactical Nuke: `src/server/room.ts` `endLock` (scores freeze, only `endMatch(endLock)` ends the match; cleared at match start); `src/client/render/renderer.ts` `white` (post-pass white-out uniform); `src/shared/defs/deathcam.ts` (`'nuke'` in `NO_DEATHCAM_MEANS`); `src/server/features/modes/index.ts` (no final killcam on reason `nuke`); `src/client/features/modes/summary-data.ts` (reason label); `src/shared/defs/challenges.ts` (`ks_nuke_called`).
 
 ## Not done / simplified
@@ -143,6 +161,7 @@ isDrivingStreak(bot)                               // RC-XD / gunner / rockets r
 - Valkyrie is simplified (no launcher weapon; two auto-launched guided rockets).
 - Tactical Nuke: other players don't see the caller's laptop (no third-person pose); no announcer voice (HUD lines only); in FFA the caller always wins (MW2 withheld the win when an enemy had more kills); Last Stand doesn't save you from it (MW2's Last Stand / Final Stand did).
 - Care Packages hold streaks or ammo only (no Death Machine / Grim Reaper weapons). Crates have no collision.
+- Care Package marker: nobody else sees the canister in the thrower's hand (only once thrown); "unreachable roof" is a height rule (highest spawn + 4.5 m), not a reachability test; the canister passes through players (BO1 could kill with it); its smoke doesn't block bot sight or aim assist (`registerSightBlocker`).
 - Ghost Pro's hidden red name tag is not applied (core `core.names` widget); `perks.public.ghostPro` lists the ids for whoever replaces it.
 - No mantle in core, so Marathon Pro's faster mantle is a description only; no penetration in core yet (`penetrationMultiplier` is for the weapons area).
 - Dogs steer straight at targets with stuck-hops and hotspot detours (no nav graph); once the bots area has a nav graph they can use it.

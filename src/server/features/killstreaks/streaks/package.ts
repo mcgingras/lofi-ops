@@ -1,11 +1,14 @@
 /**
- * Care Package: a helicopter flies in and drops a crate on the designated spot. Anyone can take it
+ * Care Package: the caller throws a smoke canister (BO1's marker); where it settles a helicopter
+ * flies in and drops a crate. Anyone can take it
  * by holding USE next to it (owner fast, teammates slower, enemies slowest); it holds a random
  * killstreak or an ammo refill. Hardline Pro: the owner's first USE press rerolls the contents.
  * Hacker Pro: an enemy hacker booby-traps it instead of taking it; the next of the owner's side to
  * take it blows up (credited to the hacker). Landing on someone crushes them.
  */
+import { MARKER, markerBody, markerStep, resolveDrop } from '../../../../shared/defs/care-marker';
 import { CARE_PACKAGE_WEIGHTS, CRATE_REACH, KS_ENTITY } from '../../../../shared/defs/killstreaks';
+import type { Body } from '../../../../shared/projectile';
 import { Buttons } from '../../../../shared/input';
 import type { Vec3 } from '../../../../shared/math';
 import type { Entity } from '../../../entities';
@@ -57,56 +60,120 @@ export function dropCrate(ctx: KsRoom, act: Active, owner: PlayerState, from: Ve
   return c;
 }
 
+/** The smoke canister of one Care Package: flying (`body`), then lying where the drop goes. */
+interface Canister {
+  ent: Entity;
+  body: Body | null;
+  flown: number;
+  from: Vec3;
+  /** Room time it goes away (set when the crate lands). */
+  until: number;
+}
+
+/**
+ * A Care Package. Humans throw the marker canister (`args.launch`, from the STREAK + FIRE flow):
+ * it flies with the shared marker physics, and where it settles (`resolveDrop`: on it, or the
+ * clamped fallback for out-of-map, covered, roof or in-wall spots) the Chinook drops the crate
+ * while the canister smokes. Bots (and tests) pass a `target`: the canister appears there,
+ * smoking, and the helicopter comes at once.
+ */
 export function callCarePackage(ctx: KsRoom, p: PlayerState, args: CallArgs): string | null {
-  if (!args.target) return 'no_target';
   const room = ctx.room;
-  const target = ctx.clampToMap(args.target);
-  const inYaw = Math.atan2(-(target.x - ctx.center.x), -(target.z - ctx.center.z)) + Math.PI + (Math.random() - 0.5);
-  const start = ctx.edgePoint(inYaw, 30, ctx.heliY());
-  const heli = room.entities.add({ kind: KS_ENTITY.dropHeli, ...start, yaw: 0, owner: p.id, team: p.team });
+  let canister: Canister;
+  let target: Vec3 | null = null;
+  if (args.launch) {
+    const l = args.launch.throw;
+    const ent = room.entities.add({ kind: KS_ENTITY.marker, x: l.pos.x, y: l.pos.y, z: l.pos.z, yaw: Math.atan2(-l.vel.x, -l.vel.z), owner: p.id, team: p.team, s: { k: 0 } });
+    canister = { ent, body: markerBody(l), flown: 0, from: { ...args.launch.from }, until: room.time + MARKER.smokeMaxSec };
+  } else {
+    if (!args.target) return 'no_target';
+    const t = ctx.clampToMap(args.target);
+    target = { x: t.x, y: ctx.groundAt(t.x, t.z), z: t.z };
+    const ent = room.entities.add({ kind: KS_ENTITY.marker, ...target, yaw: Math.random() * Math.PI * 2, owner: p.id, team: p.team, s: { k: 1, sm: room.time, v: 1 } });
+    canister = { ent, body: null, flown: 0, from: target, until: room.time + MARKER.smokeMaxSec };
+  }
+  let heli: Entity | null = null;
   let phase: 'in' | 'hover' | 'out' = 'in';
   let hoverUntil = 0;
   let outDir = { x: 0, z: 0 };
+  const deliver = (to: Vec3) => {
+    target = to;
+    const inYaw = Math.atan2(-(to.x - ctx.center.x), -(to.z - ctx.center.z)) + Math.PI + (Math.random() - 0.5);
+    heli = room.entities.add({ kind: KS_ENTITY.dropHeli, ...ctx.edgePoint(inYaw, 30, ctx.heliY()), yaw: 0, owner: p.id, team: p.team });
+    act.entities.push(heli.id);
+  };
   const act: Active = {
     streak: 'care_package',
     owner: p,
-    entities: [heli.id],
+    entities: [canister.ent.id],
     update(dt) {
-      if (room.entities.get(heli.id)) {
+      // The canister in flight: the same per-tick steps as the thrower's preview.
+      const b = canister.body;
+      if (b && room.entities.get(canister.ent.id)) {
+        markerStep(room.world, b, dt);
+        canister.flown += dt;
+        const e = canister.ent;
+        if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) > 1e-3) e.yaw = Math.atan2(-(b.pos.x - e.x), -(b.pos.z - e.z));
+        e.x = b.pos.x;
+        e.y = b.pos.y;
+        e.z = b.pos.z;
+        const lost = b.pos.y < room.map.bounds.min.y - 20;
+        if (b.resting || lost || canister.flown >= MARKER.maxFlightSec - 1e-6) {
+          canister.body = null;
+          const drop = resolveDrop(room.world, room.map, b.pos, canister.from, b.resting);
+          // A canister that left the map (or fell through it) lies at the drop instead.
+          if (lost || drop.reason === 'bounds') {
+            e.x = drop.x;
+            e.y = drop.y;
+            e.z = drop.z;
+          }
+          e.s = { k: 1, sm: room.time + MARKER.smokeDelaySec, v: drop.valid ? 1 : 0 };
+          room.bus.emit('killstreaks.marker', { player: p, x: drop.x, y: drop.y, z: drop.z, valid: drop.valid, reason: drop.reason });
+          deliver({ x: drop.x, y: drop.y, z: drop.z });
+        }
+      }
+      const h = heli as Entity | null;
+      if (h && target && room.entities.get(h.id)) {
         if (phase === 'in') {
-          const dx = target.x - heli.x;
-          const dz = target.z - heli.z;
+          const dx = target.x - h.x;
+          const dz = target.z - h.z;
           const d = Math.hypot(dx, dz);
-          heli.yaw = Math.atan2(-dx, -dz);
+          h.yaw = Math.atan2(-dx, -dz);
           const step = PACKAGE.heliSpeed * dt;
           if (d <= step) {
-            heli.x = target.x;
-            heli.z = target.z;
+            h.x = target.x;
+            h.z = target.z;
             phase = 'hover';
             hoverUntil = room.time + PACKAGE.hover;
-            dropCrate(ctx, act, p, { x: target.x, y: heli.y - 2, z: target.z });
+            dropCrate(ctx, act, p, { x: target.x, y: h.y - 2, z: target.z });
             outDir = { x: dx / Math.max(d, 1e-6), z: dz / Math.max(d, 1e-6) };
           } else {
-            heli.x += (dx / d) * step;
-            heli.z += (dz / d) * step;
+            h.x += (dx / d) * step;
+            h.z += (dz / d) * step;
           }
         } else if (phase === 'hover') {
           if (room.time >= hoverUntil) phase = 'out';
         } else {
-          heli.x += outDir.x * PACKAGE.heliSpeed * dt;
-          heli.z += outDir.z * PACKAGE.heliSpeed * dt;
-          heli.y += 3 * dt;
-          if (Math.hypot(heli.x - ctx.center.x, heli.z - ctx.center.z) > ctx.radius + 40) ctx.removeEntity(heli.id);
+          h.x += outDir.x * PACKAGE.heliSpeed * dt;
+          h.z += outDir.z * PACKAGE.heliSpeed * dt;
+          h.y += 3 * dt;
+          if (Math.hypot(h.x - ctx.center.x, h.z - ctx.center.z) > ctx.radius + 40) ctx.removeEntity(h.id);
         }
       }
       updateCrates(ctx, act, dt);
-      return !!room.entities.get(heli.id) || cratesOf(ctx).some((c) => act.entities.includes(c.ent.id));
+      // The smoke keeps going a little after the crate is down.
+      const mine = cratesOf(ctx).filter((c) => act.entities.includes(c.ent.id));
+      if (mine.some((c) => c.landed)) canister.until = Math.min(canister.until, room.time + MARKER.smokeAfterLandSec);
+      if (room.entities.get(canister.ent.id) && !canister.body && room.time >= canister.until) ctx.removeEntity(canister.ent.id);
+      return !!canister.body || !!(heli && room.entities.get((heli as Entity).id)) || mine.length > 0 || (!heli && !!room.entities.get(canister.ent.id));
     },
     cleanup() {
       const list = cratesOf(ctx);
       for (let i = list.length - 1; i >= 0; i--) if (act.entities.includes(list[i]!.ent.id)) list.splice(i, 1);
     },
   };
+  // A target (bots): the helicopter is on its way at once.
+  if (target) deliver(target);
   ctx.add(act);
   return null;
 }

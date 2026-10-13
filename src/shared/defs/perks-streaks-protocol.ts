@@ -18,6 +18,8 @@ export interface KillstreakStateMsg {
   selected: number;
   /** Designating targets for a streak (press STREAK again at each spot). */
   armed: { id: string; marks: [number, number, number][]; need: number; until: number } | null;
+  /** Holding the Care Package marker canister for streak `id` (FIRE throws it, STREAK puts it away). */
+  marker?: { id: string } | null;
   /** The tactical map is up (radio raised) for streak `id` until room time `until`. */
   map: { id: string; until: number } | null;
   /** Driving / gunning one: the entity id the camera follows and when it ends (room time). */
@@ -64,8 +66,11 @@ declare module '../protocol' {
     'killstreaks.crate': { entity: number; contents: string; progress: number } | null;
     /** Players whose perks change what others hear/see (Ninja footsteps, Ghost Pro name tags). */
     'perks.public': { ninja: string[]; ghostPro: string[] };
-    /** Your last stand: until (room time) or null when it ends; revive progress 0..1. */
-    'perks.lastStand': { until: number | null; revive: number };
+    /**
+     * Your last stand: until (room time) or null when it ends; revive progress 0..1. On a revive
+     * `slot` is the weapon slot the server put back in your hands (the one you went down with).
+     */
+    'perks.lastStand': { until: number | null; revive: number; slot?: number };
     'perks.notice': { text: string };
   }
 }

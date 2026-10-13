@@ -6,7 +6,7 @@
  */
 import { playerHitboxes, rayHitboxes } from '../../../shared/collision';
 import { PLAYER } from '../../../shared/constants';
-import { EQUIPMENT_BY_ID, GL_ROUND, NADE_ENTITY, THROW_RECOVERY, THROW_WINDUP, type EquipmentDef } from '../../../shared/defs/equipment';
+import { cookLeft, EQUIPMENT_BY_ID, GL_ROUND, NADE_ENTITY, THROW_RECOVERY, THROW_WINDUP, type EquipmentDef } from '../../../shared/defs/equipment';
 import { Buttons } from '../../../shared/input';
 import { dist, normalize, viewDir, type Vec3 } from '../../../shared/math';
 import { eyeHeight } from '../../../shared/movement';
@@ -74,6 +74,9 @@ export function startThrow(room: Room, p: PlayerState, kind: 'lethal' | 'tactica
   // Gun lowered (core refuses to fire while switching) until the throw is done.
   p.swapEnd = Math.max(p.swapEnd, room.time + THROW_WINDUP + THROW_RECOVERY);
   sendEquip(room, p);
+  // The fuse starts now, on the command that carried the press: tell the thrower which one so the
+  // HUD's cook timer runs from the same input.
+  if (equip.cookable) room.sendFeature(p, 'weapons.cook', { e: equip.id, seq: p.lastSeq, fuse: equip.fuse });
   return true;
 }
 
@@ -93,7 +96,7 @@ export function updateThrow(room: Room, p: PlayerState): void {
   if (t.releasedAt === null) {
     // Held up: keep the gun down; a frag held past its fuse goes off in hand.
     p.swapEnd = Math.max(p.swapEnd, now + THROW_RECOVERY);
-    if (t.equip.cookable && now - t.pinAt >= t.equip.fuse) {
+    if (t.equip.cookable && cookLeft(t.equip.fuse, now - t.pinAt) <= 0) {
       x.throwing = null;
       const at = eyeOf(p);
       explode(room, at, t.equip, p.id);
@@ -112,7 +115,7 @@ function releaseGrenade(room: Room, p: PlayerState, t: ThrowState): Entity {
   const right = { x: Math.cos(p.yaw), z: -Math.sin(p.yaw) };
   let start = { x: eye.x + dir.x * 0.4 + right.x * 0.15, y: eye.y - 0.1 + dir.y * 0.4, z: eye.z + dir.z * 0.4 + right.z * 0.15 };
   if (!room.world.lineOfSight(eye, start, 'bullets')) start = { ...eye };
-  const fuseLeft = t.equip.cookable ? Math.max(0.05, t.equip.fuse - (room.time - t.pinAt)) : t.equip.fuse;
+  const fuseLeft = t.equip.cookable ? Math.max(0.05, cookLeft(t.equip.fuse, room.time - t.pinAt)) : t.equip.fuse;
   const vel = throwVelocity(dir, t.equip.speed, t.equip.loft, { x: p.move.vx, y: p.move.vy, z: p.move.vz });
   p.swapEnd = Math.max(p.swapEnd, room.time + THROW_RECOVERY);
   room.bus.emit('weapons.thrown', { player: p, equipment: t.equip.id });

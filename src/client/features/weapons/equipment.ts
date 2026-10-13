@@ -7,16 +7,17 @@
  * on the press, held up while the button is down and thrown on release, as on the server).
  */
 import * as THREE from 'three';
-import { EQUIPMENT_BY_ID, MELEE, NADE_ENTITY, THROW_RECOVERY, THROW_WINDUP, TOMAHAWK_ENTITY } from '../../../shared/defs/equipment';
+import { cookLeft, cookTicksBetween, cookWarning, EQUIPMENT_BY_ID, MELEE, NADE_ENTITY, THROW_RECOVERY, THROW_WINDUP, TOMAHAWK_ENTITY } from '../../../shared/defs/equipment';
 import { sfx } from '../../game/audio';
 import { rumble } from '../../game/gamepad';
 import type { Match } from '../../game/match';
-import { HUD_COLORS as C, rect, txt, unit } from '../../hud/draw';
+import { blink, HUD_COLORS as C, rect, txt, unit } from '../../hud/draw';
 import { onFeature, registerEntityRenderer, registerHudWidget, registerMatchHook } from '../../registry';
 import { makeLookMaterial, setDynLight, type LookMaterial } from '../../render/shader';
 import { getTexture, unbindTexture } from '../../render/textures';
 import { currentMatch } from '../../state';
 import { shakeAmplitude, stunStrength } from './camfx';
+import { frameTimeOfSeq, pushFrame, type FrameSeq } from './cook';
 
 export const equipState = {
   lethal: null as string | null,
@@ -183,8 +184,24 @@ function boom(m: Match, x: number, y: number, z: number, e: string) {
 let prevHeld = { melee: false, lethal: false, tactical: false };
 let meleeReadyAt = 0;
 let throwBusyUntil = 0;
-/** Equipment raised in the hand while the button is held (thrown on release). */
-let holding: { kind: 'lethal' | 'tactical'; id: string; since: number } | null = null;
+/**
+ * Equipment raised in the hand while the button is held (thrown on release). `since`: local time
+ * of the input frame that carried the press (a cookable grenade's fuse runs from there; the
+ * server's `weapons.cook` ack re-anchors it to the command it actually pulled the pin on).
+ * `ticked`: held time of the last cook tick played.
+ */
+let holding: { kind: 'lethal' | 'tactical'; id: string; since: number; acked: boolean; ticked: number } | null = null;
+/** Recent frames: the last input seq each one sent and its local time (to map the ack's seq back). */
+const frameSeqs: FrameSeq[] = [];
+
+/** The cook on screen right now: held seconds, fuse left and the warning flag, or null. */
+export function cookState(now: number): { id: string; fuse: number; held: number; left: number; warn: boolean } | null {
+  if (!holding) return null;
+  const def = EQUIPMENT_BY_ID.get(holding.id);
+  if (!def?.cookable) return null;
+  const held = Math.max(0, now - holding.since);
+  return { id: def.id, fuse: def.fuse, held, left: cookLeft(def.fuse, held), warn: cookWarning(def.fuse, held) };
+}
 
 registerMatchHook('weapons.equipment', {
   start(m) {
@@ -195,7 +212,15 @@ registerMatchHook('weapons.equipment', {
     equipState.shake = { at: -99, amount: 0 };
     prevHeld = { melee: false, lethal: false, tactical: false };
     holding = null;
+    frameSeqs.length = 0;
     const offs = [
+      // The server pulled the pin on this command: run the cook timer from the frame that sent it.
+      onFeature('weapons.cook', (d) => {
+        if (!holding || holding.id !== d.e || holding.kind !== 'lethal') return;
+        const t = frameTimeOfSeq(frameSeqs, d.seq);
+        if (t !== null) holding.since = t;
+        holding.acked = true;
+      }),
       onFeature('weapons.flash', (d) => {
         equipState.flash = { at: m.time, dur: d.dur, amount: d.amount };
         sfx.play('weapons.ring', { volume: 0.6 * d.amount });
@@ -217,7 +242,16 @@ registerMatchHook('weapons.equipment', {
         m.notices.push({ t: m.time, text: `+1 ${(EQUIPMENT_BY_ID.get(d.e)?.name ?? d.e).toUpperCase()}` });
       }),
       onFeature('weapons.throw', (d) => {
-        if (d.p === m.myId) return;
+        if (d.p === m.myId) {
+          // The server let go of the grenade we still show in hand (a hitch long enough for it to
+          // idle our buttons): follow it rather than keep a cook timer for a grenade in the air.
+          if (holding && holding.acked && holding.id === d.e) {
+            m.viewmodel.action(`release:${holding.id}`, 0.4);
+            throwBusyUntil = m.time + THROW_RECOVERY;
+            holding = null;
+          }
+          return;
+        }
         const v = m.remotes.views.get(d.p);
         if (v) sfx.play('weapons.pin', { at: { x: v.x, y: v.y + 1.4, z: v.z }, volume: 0.6 });
       }),
@@ -243,6 +277,9 @@ registerMatchHook('weapons.equipment', {
       }
     }
 
+    // This frame's input already went out (hooks run after the command): remember its last seq.
+    pushFrame(frameSeqs, m.net.seq, m.time);
+
     // Local knife / throw: start the viewmodel action on the key edge (the server decides the outcome).
     const c = m.controls;
     const held = { melee: c.isHeld('melee'), lethal: c.isHeld('lethal'), tactical: c.isHeld('tactical') };
@@ -255,8 +292,17 @@ registerMatchHook('weapons.equipment', {
     // Lethal / tactical: raise on the press and hold it up (a held viewmodel action) until release.
     if (holding) {
       const def = EQUIPMENT_BY_ID.get(holding.id);
-      const cookedOff = !!def?.cookable && m.time - holding.since >= def.fuse;
-      if (!ok || cookedOff) {
+      const heldSec = m.time - holding.since;
+      const cookedOff = !!def?.cookable && cookLeft(def.fuse, heldSec) <= 0;
+      // Cook ticks: one per second held, faster in the last second (shared schedule).
+      if (def?.cookable && !cookedOff && heldSec > holding.ticked) {
+        const warn = cookWarning(def.fuse, heldSec);
+        if (cookTicksBetween(def.fuse, holding.ticked, heldSec) > 0) sfx.play('weapons.cook', { volume: warn ? 0.6 : 0.45, rate: warn ? 1.25 : 1 });
+        holding.ticked = heldSec;
+      }
+      // A cook the server never acknowledged (it refused the press): drop the prediction.
+      const unconfirmed = !!def?.cookable && !holding.acked && heldSec > Math.max(0.5, m.netRtt * 2 + 0.25);
+      if (!ok || cookedOff || unconfirmed) {
         m.viewmodel.endAction();
         holding = null;
       } else if (!held[holding.kind]) {
@@ -273,7 +319,7 @@ registerMatchHook('weapons.equipment', {
         const n = kind === 'lethal' ? equipState.lethalN : equipState.tacticalN;
         const id = kind === 'lethal' ? equipState.lethal : equipState.tactical;
         if (n <= 0 || !id) continue;
-        holding = { kind, id, since: m.time };
+        holding = { kind, id, since: m.time, acked: false, ticked: 0 };
         m.viewmodel.action(`ready:${id}`, THROW_WINDUP, true);
         if (id !== 'tomahawk') sfx.play('weapons.pin', { volume: 0.5 });
         break;
@@ -369,6 +415,35 @@ registerHudWidget(
     }
   },
   42,
+);
+
+// Cook timer under the crosshair while a cookable grenade (frag) is held with the pin out: the
+// grenade icon, a bar that drains to the detonation (a notch per second) and the seconds left;
+// the last second flashes red ("throw now"). It runs on the shared `cookLeft` maths from the
+// frame whose input carried the press, re-anchored by the server's `weapons.cook` ack.
+registerHudWidget(
+  'weapons.cook',
+  (g, W, H) => {
+    const m = currentMatch();
+    if (!m || !m.alive) return;
+    const ck = cookState(m.time);
+    if (!ck || ck.left <= 0) return;
+    const u = unit(H);
+    const bw = 40 * u;
+    const bh = 3 * u;
+    const x = Math.round(W / 2 - bw / 2);
+    const y = Math.round(H / 2 + 30 * u);
+    const flashOn = !ck.warn || blink(m.time, 0.16, 0.09);
+    const col = ck.warn ? (flashOn ? C.warn : C.paper) : C.hi;
+    icon(g, ck.id, x - 9 * u, y - 2 * u, u, false);
+    rect(g, x - u, y - u, bw + 2 * u, bh + 2 * u, C.ink);
+    rect(g, x, y, bw, bh, C.empty);
+    rect(g, x, y, Math.round(bw * (ck.left / ck.fuse)), bh, col);
+    for (let s = 1; s < ck.fuse; s++) rect(g, x + Math.round((bw * s) / ck.fuse), y, u, bh, C.ink);
+    txt(g, ck.left.toFixed(1), x + bw + 4 * u, y - 2 * u, 8, col, 'left', u);
+    if (ck.warn && flashOn) txt(g, 'THROW', W / 2, y + 6 * u, 8, C.warn, 'center', u);
+  },
+  27,
 );
 
 // Grenade danger: an icon over live grenades close to you (BO1-style), at the screen edge when behind.
