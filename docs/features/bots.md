@@ -13,6 +13,7 @@ Owner: bots. Covers DESIGN.md section 8a (hard requirement): every lobby runs wi
 | `src/server/features/bots/nav.ts` | nav grid generated from map brushes, plus A* |
 | `src/server/features/bots/brain.ts` | the `player.brain`: perception, fighting, roaming, objectives, lethals, streaks |
 | `src/server/features/bots/aim.ts` | the aim controller and the noticing time, as pure functions |
+| `src/server/features/bots/sight.ts` | what a bot can see and shoot through: collision plus the map's drawn geometry (occluders), and the body points it looks for |
 | `src/server/features/bots/roles.ts` | roles, lanes, goal claims, chase limits and the team path-usage grid (pure) |
 | `src/server/features/modes/spawns.ts` | spawn scoring (owner: modes) and `recentSpawns`, which bots read to stay off the enemy's spawn |
 | `src/server/features/bots/skill.ts` | settings validation, per-bot variance, skill rating |
@@ -64,13 +65,80 @@ The bot's view comes out of a controller a person's hand could produce; nothing 
 - **Situation multiplier** on error and sway: `(1 + d/150) × (1 + min(0.8, 0.05 × lateral m/s)) × (1 + 0.8 × moving × (1 − 0.6 × ADS)) × (1 + 0.6 × hip)`.
 - **Recoil:** each shot kicks the view exactly like the client (`WeaponDef.recoil × 0.6 × (1 − 0.35 × ADS)`, random horizontal), recovering at the weapon's recovery speed (35 % while spraying). The bot pulls down `0.85 × burstControl` of it and doesn't notice the rest. Server spread applies as for players.
 - **Flinch:** being hit knocks the view ~2.5° (× `flinchMultiplier`, so Hardened Pro halves it) and adds re-acquisition error.
-- **Firing:** it fires when its view (minus the recoil it ignores) is within a body-width tolerance of the point it *means* to hit. It can't see its own error, so accuracy follows skill.
+- **Firing:** it fires when its view (minus the recoil it ignores) is within a body-width tolerance of the point it *means* to hit. It can't see its own error, so accuracy follows skill. It also needs a line of fire (see Walls below): it sees the target this tick, and a bullet from its eye would reach that point.
 - **Looking around** (walking, noises, grenades) uses the same spring with relaxed limits.
 
 ### Perception
 
-- **Seeing:** enemies inside the FOV with line of sight (chest, or head over cover) build up a noticing meter. The time to notice is `(0.02 + 0.15 × reaction) × (1 + d/40) × (1 + 1.5 × (off/halfFov)²)`, halved for someone firing and ×0.35 for someone who just hurt it. The current target is kept while it stays in view.
+- **Seeing:** enemies inside the FOV with line of sight (chest, or their eyes over cover) build up a noticing meter. The time to notice is `(0.04 + 0.22 × reaction) × (1 + d/40) × (1 + 1.5 × (off/halfFov)²)`, halved for someone firing and ×0.35 for someone who just hurt it. Out of sight, the meter drains at 1.5 per second.
+- **Line of sight** (`sight.ts`) is collision's `sight` mask *and* the map's drawn geometry: a bot can't see through anything that is drawn opaque, even where collision lets sight through (see Walls).
+- **Keeping a target:** checked every tick. While the target is in view, the bot aims at it where it is. On the first tick it isn't, the bot stops firing and holds its aim on the last point it saw. After `LOST_GRACE` (0.25 s) it lets the target go and falls back to the last-seen position (look, chase, flank or hold). A target seen again within the grace is followed without a new reaction; after that, noticing it again costs the noticing time and a full reaction.
 - **Being shot from outside the FOV:** like a player's damage indicator, it knows the direction and turns that way (with the controller), but still has to see the shooter.
+- **Hearing and radar** only turn it or send it somewhere. Neither lets it engage or fire.
+
+### Walls: seeing and shooting through cover
+
+Playtest report: "I keep dying through walls from the bots. They shouldn't be able to see me, then instantly snap on and kill me through a wall." Each way this could happen, and what holds now (`tests/bots.walls.test.ts`):
+
+1. **Drawn cover with no collision for sight or bullets.** Many props are drawn opaque but collide less than they look, or not at all:
+   - render-only boxes: Rust's tanker, truck and pickup, Terminal's counter panel, Firing Range's sheds and truck, Nuketown's crates;
+   - boxes drawn turned over smaller, unturned collision (the corners poke out);
+   - couches and mannequins that stop bullets but not the `sight` channel;
+   - bushes.
+
+   A bot that trusted collision saw straight through them, and its bullets went through the render-only ones. Fix: `sight.ts` builds, per map, every drawn box (and non-colliding cylinder) that collision doesn't already cover for sight, as the turned box the renderer draws.
+   - See-through materials (glass, fences, lattices, railings, nets, alpha cut-out cards) are skipped.
+   - Foliage hides you but doesn't stop bullets. Other occluders at least 20 cm thick count as bullet-proof.
+   - A segment that starts inside an occluder isn't blocked by it (from inside a bush you can see out).
+   - The bot sees a point only if collision's `sight` mask and the occluders both leave the line clear.
+2. **Firing without a line of fire.** The bot used to fire whenever its view was on the target. It checked only sight, and not even that on perception ticks. Behind bullet-proof glass (sight passes, bullets don't) or a couch, it emptied magazines into the cover. Now it fires only when both hold:
+   - it sees the target this tick;
+   - a bullet from its eye would reach the aim point (collision's `bullets` mask plus the bullet-stopping occluders).
+
+   Each shot is also traced first (`combat.traceShot`, with the same spread seed that `room.fire` then uses). The shot is held if any pellet would hit someone through drawn bullet-proof geometry. There is no suppressive fire at a last-known position.
+3. **Penetration.** There is no penetration model. Anything with `bullets` collision stops every bullet, whatever the weapon and with or without Hardened (the perk's `penetrationMultiplier` is declared but nothing reads it). Only brushes marked `bullets: false` let bullets through, at full damage:
+   - thin plank and board walls (Estate's boathouse, Afghan's shack, Firing Range's ply boards);
+   - fences and foliage;
+   - Hanoi's wooden rails.
+
+   No thick wall, concrete, rock or plain map brush is marked that way. A bot doesn't shoot at what it can't see behind them either.
+4. **Target memory.** The bot used to aim at the target's live position behind a wall, and record it as last seen, for up to 50 ms (until the next perception tick). Now see "Keeping a target" above: it stops firing on the first tick the target is out of view and aims at the last point it saw.
+5. **Server timing.** Bot shots (`room.fire` with no `time`) used to be checked against the lag-compensation history's newest frame, which is the previous tick. That is up to 17 ms behind, so you could be hit where you had just been. A shot at the present now uses live positions. Human shots still rewind to the shooter's view time.
+6. **Re-acquiring after hiding.** Out of sight the noticing meter drains at 1.5 per second. A dropped target needs the noticing time again plus a full reaction (0.7-1.3 × `reactionMs`). If you were hidden for more than a second, the first shot after you peek again takes at least that. In the sim below the fastest was 0.23 s for veterans and 0.62 s for regulars. Only a target lost for less than `LOST_GRACE` is followed straight away, as a person holding the angle would.
+7. **Head over cover.** The "head over cover" sight check used the centre of the head, 2 cm above a standing player's eye and 8 cm above a crouched one's. A bot could see you over a wall you couldn't see over. It now uses your eyes, so it sees you over cover exactly when you could see it, and in that case it aims at your eyes.
+
+**Peek sim** (`npx tsx scripts/bots-walls.ts`, `tests/bots-walls.ts`): a bot against a scripted player who hides behind cover and peeks out 1-2.5 m, over and over, 40 s per spot. Spots:
+- the six covers of the synthetic cover box;
+- 6 wall spots on each of Nuketown, Rust, Terminal, Firing Range and Estate;
+- 3-4 drawn-cover spots on each of those maps.
+
+Shares of the player's deaths to bot bullets, and bot shots:
+
+| | before | after |
+|---|---|---|
+| killing ray crossed bullet-stopping collision | 0 % everywhere | 0 % |
+| player fully behind collision on the server when hit | 0 % | 0 % |
+| killing ray crossed drawn bullet-stopping geometry (drawn-cover spots) | Rust 77-78 %, Terminal 52-78 %, Firing Range 46-54 %, Estate 24-36 %, Nuketown 7-16 % | 0 % |
+| killing ray crossed drawn bullet-stopping geometry (elsewhere) | cover box 38-48 %, wall spots 0-14 % | 0 % |
+| bot shots at a player fully hidden from bullets | 107-119 per 240 s on the cover box (the glass and the couch), 7-12 at Nuketown's couches | 0 |
+| fastest first shot after a peek, after more than 1 s hidden | 0.02 s (it had seen through drawn cover all along) | regular 0.62 s, veteran 0.23 s |
+
+**Latency.**
+- **On the server**, a bullet can hit your trailing shoulder while your camera (at the centre of your body, 0.3 m from its edge) is already behind the corner.
+- **On your screen** you are further behind cover still. Your client predicts you ahead of the server by about RTT + 17 ms: the round trip, plus input batching (half a 60 Hz slot on average), plus the wait for the next server tick (half a tick on average).
+- **From Colorado to Fly's dfw** (RTT 30-40 ms) that is about 52 ms: 0.26 m walking, 0.37 m sprinting, 0.14 m crouched.
+
+In the sim, the player ducks back the instant it is hit. Share of deaths where the player couldn't see the bot when the kill reached their screen:
+
+| RTT | after the fixes | before |
+|---|---|---|
+| 35 ms | 2.4 % (also 2.4 % when the bullet hit, so latency adds about nothing) | 30.3 % (25.8 % when the bullet hit, mostly drawn cover) |
+| 80 ms | 4.9 % | |
+| 150 ms | 9.8 % | |
+
+Nothing in the server adds avoidable delay. Inputs are applied on the next tick, `hurt` and `died` go out at once (ws sockets are no-delay), and bot shots no longer lag a tick. Two client presentation effects remain (see Known limits):
+- remote players are drawn `INTERP_DELAY_MS` (100 ms) in the past while damage arrives at once, so a bot's turn toward you shows about 100 ms after its bullets land;
+- remote shots (tracers, sound) ride the 20 Hz snapshots, up to 50 ms after the damage.
 
 ### Spawns (owner: modes, `features/modes/spawns.ts`)
 
@@ -137,7 +205,7 @@ The bot's view comes out of a controller a person's hand could produce; nothing 
 
 ### Brain behaviour (brain.ts)
 
-- **Perception at 20 Hz**, staggered between bots: see Perception above. It hears gunfire and footsteps. It knows about enemies the radar shows it (`radarVisible` modifier returning true, which is the UAV hook).
+- **Perception at 20 Hz**, staggered between bots (the current target is checked every tick): see Perception above. It hears gunfire and footsteps. It knows about enemies the radar shows it (`radarVisible` modifier returning true, which is the UAV hook); a radar contact is a place to go, never something to shoot at.
 - **Fighting:**
   - The aim model above.
   - Bursts for auto and burst weapons; paced shots for semi, bolt and pump.
@@ -209,6 +277,12 @@ The bot's view comes out of a controller a person's hand could produce; nothing 
   - `tests/bots.sim.test.ts` (with `tests/bots-sim.ts`): seeded sims with metric thresholds. Regular bots kill a 25 m strafer in under 0.6 s ≤ 10 % of the time. On Nuketown TDM, spawn deaths are < 8 % and packs of 3+ < 20 %. KC confirms ≥ denies.
   - `tests/bots.room.test.ts`: walking across the Yard, climbing stairs and a ramp, kills, accuracy by difficulty, hearing, backfill, replacement, retire at next death, matchmaking wait, Play with bots, custom and live skill, lobby phase, goals hook.
   - `tests/bots.integration.test.ts`: real sockets: playWithBots, roster, status push, host-only settings, bots moving, a kill.
+  - `tests/bots.walls.test.ts` (with `tests/bots-walls.ts`): walls.
+    - Covers: the synthetic cover box (concrete, render-only wall, bullet-proof glass, thin planks, a couch, a turned crate), and seeded cover spots on Nuketown, Rust, Terminal, Firing Range and Estate (behind collision, and behind drawn geometry only).
+    - The bot never notices, fires at or hurts a player behind cover, standing, crouched or firing (it hears and turns). Behind glass it sees but holds fire.
+    - No weapon gets a bullet through bullet-stopping cover, even with Hardened; thin planks let them through.
+    - Also: target memory, the grace, bot shots at live positions (human shots still rewind), the reaction after more than 1 s hidden, and radar steering without firing.
+    - The peek sim: 0 deaths through collision or drawn cover, 0 shots at a hidden player, and no first shot within 0.7 × the veteran reaction after more than 1 s hidden.
   - Fixture map: `tests/bots-fixtures.ts`.
 
 ## Known limits / next steps
@@ -217,4 +291,14 @@ The bot's view comes out of a controller a person's hand could produce; nothing 
 - **S&D plants.** Planting rose from 1 per 17 rounds to 6 per 15, but Highrise still sees none: rounds end by elimination before the carrier reaches a site. Carriers could wait for escorts or take the less contested site.
 - **Pace** is unchanged: about 100 kills per 3 min in 12-bot TDM on small maps.
 - There is no arc compensation for crossbow or tomahawk projectiles.
+- **Map data (owner: maps).** Drawn props without bullet collision still let *human* bullets through what looks solid. Bots now neither see nor shoot through them. Examples:
+  - Rust's tanker (brushes 439 and 440), truck (438) and pickup (447);
+  - Terminal's counter panel (208) and several aluminium props (459-463);
+  - Firing Range's corrugated sheds (221, 222) and truck (3501);
+  - Nuketown's crates (153, 423), and its couches and mannequins (bullets stop, sight passes);
+  - Estate's trim and plaster pieces.
+
+  `occludersFor(map).list` in `sight.ts` (`stops: true`) lists them per map. Giving them `bullets` (and `sight`) collision would fix it for everyone. The bake's shadow rays use the `sight` mask, so adding sight collision also changes their shadows.
+- **Second Chance bleed-out** (perks): a downed player who crawls behind cover and bleeds out is killed by `room.kill(p, killer, { means: ls.means })`. The kill is credited to the bot, with its weapon icon and `means: 'bullet'`, so it reads as a kill through a wall. A distinct means (for example `'bleedout'`) would make that clear.
+- **Client presentation** (core netcode): a bot's turn is drawn 100 ms late (`INTERP_DELAY_MS`) while its damage is immediate, and remote tracers and gunshots wait for the next 20 Hz snapshot. Two changes would make a bot's snap look like what it is: draw remote shots at the interpolation time (or send them with `hurt`), and shorten the interpolation delay (30 Hz snapshots, about 70 ms).
 - The nav grid is static per map. It needs a rebuild if maps gain destructible or openable geometry.

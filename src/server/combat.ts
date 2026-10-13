@@ -1,6 +1,7 @@
 /**
  * Firing, damage, death and respawn. Hitscan is lag compensated: targets are rewound to the
- * shooter's view time (clamped to MAX_REWIND_MS); the world is hit first, then hitboxes.
+ * shooter's view time (clamped to MAX_REWIND_MS); the world is hit first, then hitboxes. A shot at
+ * the present (bots) uses where everyone is now. `traceShot` traces a shot without firing it.
  *
  * Extension points:
  *   - `registerWeaponBehavior(idOrClass, behavior)`: replace hitscan for a weapon id or class
@@ -20,7 +21,7 @@ import type { SpawnPoint } from '../shared/maps/types';
 import { dist, normalize, type Vec3 } from '../shared/math';
 import { createMoveState, eyeHeight } from '../shared/movement';
 import { q3 } from '../shared/protocol';
-import { HitboxHistory } from './lagcomp';
+import { HitboxHistory, type Pose } from './lagcomp';
 import { currentWeapon, makeWeapon, type PlayerState, type WeaponState } from './player';
 import type { Room } from './room';
 
@@ -102,45 +103,24 @@ export function fire(room: Room, p: PlayerState, req: ShotRequest): FireResult {
     return { ok: true };
   }
 
-  // Hitscan, lag compensated.
+  // Hitscan, lag compensated. A shot at the present (bots: `room.fire` passes room.time) hits
+  // where everyone is now: the history's newest frame is the previous tick, a tick behind.
   const viewTime = HitboxHistory.clampTime(req.time, now);
-  const poses = room.history.rewind(viewTime);
-  const moving = Math.hypot(p.move.vx, p.move.vz) > 0.5;
-  const spread = spreadDegrees(def, p.move.ads, moving, room.modifiers.mul('spreadMultiplier', p));
-  const range = def.range ?? DEFAULT_RANGE;
-  const pellets = Math.max(1, def.pellets ?? 1);
+  const poses = viewTime >= now ? null : room.history.rewind(viewTime);
+  const traced = traceShot(room, p, origin, dir, req.shot, poses);
   const perVictim = new Map<PlayerState, { damage: number; part: HitPart; distance: number }>();
-  let end: Vec3 = { x: origin.x + dir.x * range, y: origin.y + dir.y * range, z: origin.z + dir.z * range };
+  const first = traced[0]!;
+  const end: Vec3 = { x: origin.x + first.dir.x * first.t, y: origin.y + first.dir.y * first.t, z: origin.z + first.dir.z * first.t };
   let hitAny = false;
-  for (let i = 0; i < pellets; i++) {
-    const d = spreadDirection(dir, spread, shotSeed(p.seed, req.shot, i));
-    const wall = room.world.raycast(origin, d, range, 'bullets');
-    let maxT = wall ? wall.t : range;
-    let victim: PlayerState | null = null;
-    let part: HitPart = 'torso';
-    let lower = false;
-    for (const q of room.players.values()) {
-      if (q === p || !q.alive || !room.canDamage(p, q)) continue;
-      const pose = poses.get(q.id) ?? { x: q.move.x, y: q.move.y, z: q.move.z, crouched: q.move.crouched, alive: true };
-      if (!pose.alive) continue;
-      const hit = rayHitboxes(origin, d, playerHitboxes(pose, pose.crouched), maxT);
-      if (hit) {
-        maxT = hit.t;
-        victim = q;
-        part = hit.part;
-        lower = part === 'torso' && isLowerTorso(pose, pose.crouched, origin.y + d.y * hit.t);
-      }
-    }
-    if (i === 0) end = { x: origin.x + d.x * maxT, y: origin.y + d.y * maxT, z: origin.z + d.z * maxT };
-    if (victim) {
-      hitAny = true;
-      const dmg = damageAtRange(def, maxT) * partMultiplier(def, part, lower);
-      const acc = perVictim.get(victim);
-      if (acc) {
-        acc.damage += dmg;
-        if (part === 'head') acc.part = 'head';
-      } else perVictim.set(victim, { damage: dmg, part, distance: maxT });
-    }
+  for (const pel of traced) {
+    if (!pel.victim) continue;
+    hitAny = true;
+    const dmg = damageAtRange(def, pel.t) * partMultiplier(def, pel.part, pel.lower);
+    const acc = perVictim.get(pel.victim);
+    if (acc) {
+      acc.damage += dmg;
+      if (pel.part === 'head') acc.part = 'head';
+    } else perVictim.set(pel.victim, { damage: dmg, part: pel.part, distance: pel.t });
   }
 
   const hits: { victim: PlayerState; part: HitPart; damage: number }[] = [];
@@ -152,6 +132,54 @@ export function fire(room: Room, p: PlayerState, req: ShotRequest): FireResult {
   room.bus.emit('fire', { player: p, weapon: def.base.id, origin, dir, hits, end });
   if (w.mag <= 0) startReload(room, p);
   return { ok: true };
+}
+
+/** One pellet of a traced shot: its direction, where it stopped (t), and whom it hit there. */
+export interface Pellet {
+  dir: Vec3;
+  /** Distance to the hit (the victim's hitbox, else the world, else the weapon's range). */
+  t: number;
+  victim: PlayerState | null;
+  part: HitPart;
+  /** Lower torso (for weapons with a lower-torso multiplier). */
+  lower: boolean;
+}
+
+/**
+ * The pellets of one trigger pull of `p`'s current weapon: spread around `dir` by the shot seed
+ * (`shot`), stopped by the world ('bullets' mask), then the nearest hitbox at `poses` (a rewound
+ * frame, or null for where everyone is now). `fire` uses it; bots call it to check a shot before
+ * taking it. Pure: no ammo, no damage.
+ */
+export function traceShot(room: Room, p: PlayerState, origin: Vec3, dir: Vec3, shot: number, poses: Map<string, Pose> | null = null): Pellet[] {
+  const def = currentWeapon(p)?.def;
+  if (!def) return [];
+  const moving = Math.hypot(p.move.vx, p.move.vz) > 0.5;
+  const spread = spreadDegrees(def, p.move.ads, moving, room.modifiers.mul('spreadMultiplier', p));
+  const range = def.range ?? DEFAULT_RANGE;
+  const out: Pellet[] = [];
+  for (let i = 0; i < Math.max(1, def.pellets ?? 1); i++) {
+    const d = spreadDirection(dir, spread, shotSeed(p.seed, shot, i));
+    const wall = room.world.raycast(origin, d, range, 'bullets');
+    let maxT = wall ? wall.t : range;
+    let victim: PlayerState | null = null;
+    let part: HitPart = 'torso';
+    let lower = false;
+    for (const q of room.players.values()) {
+      if (q === p || !q.alive || !room.canDamage(p, q)) continue;
+      const pose = poses?.get(q.id) ?? { x: q.move.x, y: q.move.y, z: q.move.z, crouched: q.move.crouched, alive: true };
+      if (!pose.alive) continue;
+      const hit = rayHitboxes(origin, d, playerHitboxes(pose, pose.crouched), maxT);
+      if (hit) {
+        maxT = hit.t;
+        victim = q;
+        part = hit.part;
+        lower = part === 'torso' && isLowerTorso(pose, pose.crouched, origin.y + d.y * hit.t);
+      }
+    }
+    out.push({ dir: d, t: maxT, victim, part, lower });
+  }
+  return out;
 }
 
 /**
