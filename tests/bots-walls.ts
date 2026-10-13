@@ -292,13 +292,14 @@ export function coverSpots(map: MapData, n: number, seed: number, kind: 'wall' |
       const eye = eyeAt(b);
       const pose: Pose = { x: c.x, y: c.y, z: c.z, crouched: false };
       const chest = { x: c.x, y: c.y + 1.15, z: c.z };
+      // Hidden from the bot's eye standing and crouched (bots crouch while holding a spot).
+      const eyes = [eye, eyeAt(b, true)];
       if (kind === 'wall') {
-        if (!hiddenFromBullets({ world, map }, eye, pose)) continue;
-        if (!hiddenFromSight({ world, map }, eye, pose, false)) continue;
+        if (!eyes.every((e) => hiddenFromBullets({ world, map }, e, pose) && hiddenFromSight({ world, map }, e, pose, false))) continue;
       } else {
         // Collision lets sight through to the chest; the drawn geometry hides everything.
         if (!world.lineOfSight(eye, chest, 'sight')) continue;
-        if (!hiddenFromSight({ world, map }, eye, pose, true)) continue;
+        if (!eyes.every((e) => hiddenFromSight({ world, map }, e, pose, true))) continue;
       }
       // A peek cell 1-2.5 m away, walkable in a straight line, with the chest in plain view.
       let peek: Vec3 | null = null;
@@ -336,6 +337,8 @@ export interface PeekSimOpts {
   seed?: number;
   /** Round trip for the on-screen estimate (ms); input batching and tick wait are added. */
   rttMs?: number;
+  /** The player ducks back into cover the moment it's hit (as a person would). */
+  retreatOnHit?: boolean;
   /** Cover counts as penetrable (bullets may pass by design) for these spot indices. */
   penetrable?: (spot: number) => boolean;
   /** Called once per spot with the room and its two players (debugging). */
@@ -419,6 +422,10 @@ export function peekSim(o: PeekSimOpts): PeekSimResult {
           }
         });
         o.onRoom?.(r, bot, player, si);
+        if (o.retreatOnHit)
+          r.bus.on('damage', (e) => {
+            if (e.victim === player && (phase === 'out' || phase === 'hold')) phase = 'back';
+          });
         const eyeOfBot = () => ({ x: bot.move.x, y: bot.move.y + (bot.move.crouched ? PLAYER.crouchEye : PLAYER.eye), z: bot.move.z });
         let pendingKill: { attacker: PlayerState; pose: Pose; vx: number; vz: number; retreating: boolean; t: number } | null = null;
         r.bus.on('death', (e) => {
