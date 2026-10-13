@@ -86,7 +86,7 @@ describe('bot settings', () => {
     expect(c.reactionMs).toBe(100);
     expect(c.aimErrorDeg).toBeCloseTo(3.3, 5);
     expect(c.aggression).toBe(1);
-    expect(c.turnSpeedDeg).toBe(240); // junk -> previous (regular preset)
+    expect(c.turnSpeedDeg).toBe(200); // junk -> previous (regular preset)
     // A later patch only touching one knob keeps the others.
     const s2 = sanitizeBotSettings({ custom: { strafe: 0.9 } }, s, max);
     expect(s2.custom).toEqual({ ...c, strafe: 0.9 });

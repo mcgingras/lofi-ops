@@ -337,7 +337,8 @@ export const turnToward = (from: number, to: number, rate: number) => from + cla
 export function noticeTime(skill: BotSkill, d: number, offDegrees: number, firing = false): number {
   const half = skill.fovDeg / 2;
   if (offDegrees > half) return Infinity;
-  const base = 0.02 + (skill.reactionMs / 1000) * 0.15;
+  // Tuned up after playtests: bots holding an angle noticed and shot too fast.
+  const base = 0.04 + (skill.reactionMs / 1000) * 0.22;
   const per = offDegrees / half;
   return base * (1 + d / 40) * (1 + 1.5 * per * per) * (firing ? 0.5 : 1);
 }

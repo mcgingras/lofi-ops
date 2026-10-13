@@ -29,7 +29,7 @@ export function roleWeights(skill: BotSkill, objectiveMode: boolean): Record<Bot
     flanker: 0.25 + 0.6 * a,
     hunter: 0.3 + 0.6 * a,
     objective: objectiveMode ? 0.4 + 1.4 * skill.objectivePlay : 0,
-    camper: 0.04 + 0.12 * (1 - a),
+    camper: 0.02 + 0.06 * (1 - a),
   };
 }
 

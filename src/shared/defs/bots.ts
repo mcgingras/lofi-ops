@@ -40,11 +40,11 @@ export interface BotDifficultyDef {
 
 export const BOT_DIFFICULTIES: BotDifficultyDef[] = [
   { id: 'recruit', name: 'Recruit', description: 'Slow to react, misses a lot. Good for learning maps.',
-    skill: { reactionMs: 900, aimErrorDeg: 9, turnSpeedDeg: 140, headshotBias: 0.05, fovDeg: 90, hearingRange: 15, strafe: 0.1, burstControl: 0.2, objectivePlay: 0.3, streakUse: 0.3, aggression: 0.3, weaponPickup: 0.2 } },
+    skill: { reactionMs: 900, aimErrorDeg: 9, turnSpeedDeg: 140, headshotBias: 0.05, fovDeg: 90, hearingRange: 15, strafe: 0.1, burstControl: 0.2, objectivePlay: 0.3, streakUse: 0.3, aggression: 0.45, weaponPickup: 0.2 } },
   { id: 'regular', name: 'Regular', description: 'A casual public-match player.',
-    skill: { reactionMs: 550, aimErrorDeg: 5, turnSpeedDeg: 240, headshotBias: 0.15, fovDeg: 110, hearingRange: 30, strafe: 0.35, burstControl: 0.5, objectivePlay: 0.5, streakUse: 0.6, aggression: 0.5, weaponPickup: 0.5 } },
+    skill: { reactionMs: 550, aimErrorDeg: 6.5, turnSpeedDeg: 200, headshotBias: 0.08, fovDeg: 110, hearingRange: 30, strafe: 0.35, burstControl: 0.4, objectivePlay: 0.5, streakUse: 0.6, aggression: 0.65, weaponPickup: 0.5 } },
   { id: 'hardened', name: 'Hardened', description: 'Quick, accurate, plays the objective.',
-    skill: { reactionMs: 320, aimErrorDeg: 2.5, turnSpeedDeg: 360, headshotBias: 0.3, fovDeg: 120, hearingRange: 45, strafe: 0.6, burstControl: 0.75, objectivePlay: 0.7, streakUse: 0.85, aggression: 0.65, weaponPickup: 0.75 } },
+    skill: { reactionMs: 320, aimErrorDeg: 3.2, turnSpeedDeg: 360, headshotBias: 0.3, fovDeg: 120, hearingRange: 45, strafe: 0.6, burstControl: 0.75, objectivePlay: 0.7, streakUse: 0.85, aggression: 0.65, weaponPickup: 0.75 } },
   { id: 'veteran', name: 'Veteran', description: 'Sweaty. Pre-aims, strafes, punishes mistakes.',
     skill: { reactionMs: 180, aimErrorDeg: 1.2, turnSpeedDeg: 520, headshotBias: 0.45, fovDeg: 130, hearingRange: 60, strafe: 0.85, burstControl: 0.9, objectivePlay: 0.85, streakUse: 1, aggression: 0.8, weaponPickup: 0.9 } },
 ];

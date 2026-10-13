@@ -143,7 +143,7 @@ describe('bots: combat', () => {
         });
         brain.target = null;
         brain.aim.yaw = -Math.PI / 2 + (rnd() - 0.5) * 0.6;
-        steps(r, 2.5);
+        steps(r, 4); // recruits notice and turn slowly since the playtest tuning
       }
       lobby!.shutdown();
       store!.close();

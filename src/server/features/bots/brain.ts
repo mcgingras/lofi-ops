@@ -653,8 +653,9 @@ export class Brain implements BotBrain {
     if (g && g.kind === 'roam' && pathDone && !expired && !this.forced) {
       this.goal = null;
       this.path = null;
-      const camp = this.role === 'camper' ? 8 + this.rnd() * 14 : 0;
-      this.lingerUntil = now + Math.min(this.overlooksEnemySpawn(room, self) ? 2 : 99, 0.5 + this.rnd() * (1 - sk.aggression) * 6 + camp);
+      // Short stops: playtests found bots parked too long ("they camp, they don't leave positions").
+      const camp = this.role === 'camper' ? 4 + this.rnd() * 6 : 0;
+      this.lingerUntil = now + Math.min(this.overlooksEnemySpawn(room, self) ? 2 : 99, 0.3 + this.rnd() * (1 - sk.aggression) * 2 + camp);
       return null;
     }
     // Keep going where we were going unless it's time to re-plan.
@@ -696,7 +697,7 @@ export class Brain implements BotBrain {
       if (crowded && this.rnd() < 0.6) {
         this.goal = null;
         this.path = null;
-        this.lingerUntil = now + 1 + this.rnd() * 2;
+        this.lingerUntil = now + 0.5 + this.rnd() * 0.8;
         return null;
       }
       if (this.rnd() < 0.25 + sk.aggression * 0.75 + (this.role === 'hunter' ? 0.2 : 0) - (this.role === 'camper' ? 0.4 : 0)) {
@@ -716,7 +717,7 @@ export class Brain implements BotBrain {
         // Hold the angle a moment.
         this.goal = null;
         this.path = null;
-        this.lingerUntil = now + 1.5 + this.rnd() * 2.5;
+        this.lingerUntil = now + 0.6 + this.rnd() * 1.2;
         return null;
       }
     }
