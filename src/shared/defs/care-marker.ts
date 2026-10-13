@@ -30,7 +30,7 @@ export const MARKER = {
   smokeAfterLandSec: 6,
   smokeMaxSec: 40,
   /** BO1 blue (`fx_smoke_supply_drop_blue_mp`). Change here for MW2's red (0xd04030). */
-  smokeColor: 0x6f8fe0,
+  smokeColor: 0x8da3cc,
   /** A surface this far above the canister means it is under cover: the crate would land on the roof. */
   coverClear: 0.75,
   /** Tops higher than the highest spawn + this are roofs nobody can reach. */
@@ -160,7 +160,8 @@ export function resolveDrop(world: CollisionWorld, map: DropMap, rest: Vec3, fro
   let reason: DropReason = 'ok';
   if (!settled || rest.y < b.min.y - 1) reason = 'lost';
   else if (!inBounds(b, rest.x, rest.z)) reason = 'bounds';
-  else if (world.overlapping(rest.x, rest.y + 0.02, rest.z, 0.04, 0.06).length) reason = 'solid';
+  // Inside a wall: its centre is in a solid (resting against one, it can sit a few cm from it).
+  else if (world.overlapping(rest.x, rest.y + 0.03, rest.z, 0.01, 0.02).length) reason = 'solid';
   else if (groundTop(world, b, rest.x, rest.z, fallbackY) > rest.y + MARKER.coverClear) reason = 'covered';
   else if (rest.y > limit) reason = 'roof';
   if (reason === 'ok') return { x: rest.x, y: groundTop(world, b, rest.x, rest.z, rest.y), z: rest.z, valid: true, reason };

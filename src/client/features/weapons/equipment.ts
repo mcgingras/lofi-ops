@@ -242,7 +242,16 @@ registerMatchHook('weapons.equipment', {
         m.notices.push({ t: m.time, text: `+1 ${(EQUIPMENT_BY_ID.get(d.e)?.name ?? d.e).toUpperCase()}` });
       }),
       onFeature('weapons.throw', (d) => {
-        if (d.p === m.myId) return;
+        if (d.p === m.myId) {
+          // The server let go of the grenade we still show in hand (a hitch long enough for it to
+          // idle our buttons): follow it rather than keep a cook timer for a grenade in the air.
+          if (holding && holding.acked && holding.id === d.e) {
+            m.viewmodel.action(`release:${holding.id}`, 0.4);
+            throwBusyUntil = m.time + THROW_RECOVERY;
+            holding = null;
+          }
+          return;
+        }
         const v = m.remotes.views.get(d.p);
         if (v) sfx.play('weapons.pin', { at: { x: v.x, y: v.y + 1.4, z: v.z }, volume: 0.6 });
       }),
@@ -423,7 +432,7 @@ registerHudWidget(
     const bw = 40 * u;
     const bh = 3 * u;
     const x = Math.round(W / 2 - bw / 2);
-    const y = Math.round(H / 2 + 16 * u);
+    const y = Math.round(H / 2 + 30 * u);
     const flashOn = !ck.warn || blink(m.time, 0.16, 0.09);
     const col = ck.warn ? (flashOn ? C.warn : C.paper) : C.hi;
     icon(g, ck.id, x - 9 * u, y - 2 * u, u, false);

@@ -12,7 +12,7 @@
  *   smokes (everyone sees it), and the Chinook drops the crate there.
  */
 import * as THREE from 'three';
-import { markerLaunch, resolveDrop, simulateMarker, MARKER, type DropReason, type DropSpot } from '../../../shared/defs/care-marker';
+import { groundTop, markerLaunch, resolveDrop, simulateMarker, MARKER, type DropReason, type DropSpot } from '../../../shared/defs/care-marker';
 import { KILLSTREAK_BY_ID, KS_ENTITY } from '../../../shared/defs/killstreaks';
 import { clamp, quantizeAngle, type Vec3 } from '../../../shared/math';
 import { eyeHeight } from '../../../shared/movement';
@@ -50,6 +50,8 @@ export interface MarkerPreview {
   rest: Vec3;
   settled: boolean;
   drop: DropSpot;
+  /** Where the landing ring goes: the rest point, or where the arc leaves the map when it does. */
+  ring: Vec3;
 }
 
 let local: { phase: LocalPhase; at: number } | null = null;
@@ -75,7 +77,19 @@ export function previewThrow(m: Match, yaw: number, pitch: number): MarkerPrevie
   const launch = markerLaunch(world, eye, quantizeAngle(yaw), clamp(quantizeAngle(pitch), -1.55, 1.55), { x: st.vx, y: st.vy, z: st.vz });
   const flight = simulateMarker(world, launch, map.bounds.min.y - 20);
   const drop = resolveDrop(world, map, flight.rest, { x: st.x, y: st.y, z: st.z }, flight.settled);
-  return { path: flight.path, rest: flight.rest, settled: flight.settled, drop };
+  let ring = flight.rest;
+  if (drop.reason === 'lost' || drop.reason === 'bounds') {
+    const b = map.bounds;
+    const inside = (v: Vec3) => v.x > b.min.x && v.x < b.max.x && v.z > b.min.z && v.z < b.max.z && v.y > b.min.y;
+    for (let i = flight.path.length - 1; i >= 0; i--) {
+      const v = flight.path[i]!;
+      if (inside(v)) {
+        ring = { x: v.x, y: groundTop(world, b, v.x, v.z, v.y), z: v.z };
+        break;
+      }
+    }
+  }
+  return { path: flight.path, rest: flight.rest, settled: flight.settled, drop, ring };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -97,12 +111,13 @@ class FirstPersonCanister {
     }
     if (!this.kit) {
       const kit = new Kit();
-      const can = buildMarkerCanister(kit);
-      can.scale.setScalar(1.25);
+      buildMarkerCanister(kit);
+      // Gloved fingers round the can's lower half, the wrist and sleeve running back off screen.
       const glove = kit.mat('glove', { rep: 0.25 });
       const sleeve = kit.mat('camo', { rep: 0.4 });
-      kit.box(kit.root, 0.075, 0.07, 0.085, glove, 0.012, 0.06, 0.02);
-      kit.box(kit.root, 0.07, 0.065, 0.22, sleeve, 0.03, 0.03, 0.15);
+      kit.box(kit.root, 0.074, 0.05, 0.05, glove, 0, 0.04, 0.012);
+      kit.box(kit.root, 0.05, 0.05, 0.06, glove, 0.01, 0.02, 0.05);
+      kit.box(kit.root, 0.06, 0.06, 0.2, sleeve, 0.02, 0.0, 0.17);
       kit.root.traverse((o) => {
         if (!(o instanceof THREE.Mesh)) return;
         (o.material as THREE.ShaderMaterial).depthTest = false; // never clips into the wall you face
@@ -119,7 +134,7 @@ class FirstPersonCanister {
     const k = 1 - Math.pow(1 - Math.min(1, raise), 3);
     // Throw: the hand swings forward and up, out of view.
     const t = Math.min(1, thrown);
-    this.off.set(0.16 - 0.1 * t, -0.42 + 0.24 * k + 0.25 * t, -0.36 - 0.45 * t);
+    this.off.set(0.2 - 0.12 * t, -0.48 + 0.22 * k + 0.3 * t, -0.48 - 0.4 * t);
     root.position.copy(this.off).applyMatrix4(cam.matrixWorld);
     root.quaternion.copy(cam.getWorldQuaternion(this.q)).multiply(this.tilt);
     if (t > 0) root.rotateX(-1.6 * t);
@@ -147,9 +162,10 @@ class PreviewView {
   readonly root = new THREE.Group();
   private dots: THREE.Points;
   private dotPos = new Float32Array(MAX_DOTS * 3);
-  private dotMat = new THREE.PointsMaterial({ color: FRIEND, size: 3, sizeAttenuation: false, depthWrite: false });
-  private ringMat = new THREE.MeshBasicMaterial({ map: getTexture('ks_drop_ring'), color: FRIEND, transparent: true, alphaTest: 0.4, depthWrite: false, side: THREE.DoubleSide });
-  private dropMat = new THREE.MeshBasicMaterial({ map: getTexture('ks_drop_ring'), color: FALLBACK, transparent: true, alphaTest: 0.4, depthWrite: false, side: THREE.DoubleSide });
+  // Drawn over the world (like the waypoint labels), so the landing spot reads behind low cover.
+  private dotMat = new THREE.PointsMaterial({ color: FRIEND, size: 4, sizeAttenuation: false, depthWrite: false, depthTest: false });
+  private ringMat = new THREE.MeshBasicMaterial({ map: getTexture('ks_drop_ring'), color: FRIEND, transparent: true, alphaTest: 0.4, depthWrite: false, depthTest: false, side: THREE.DoubleSide });
+  private dropMat = new THREE.MeshBasicMaterial({ map: getTexture('ks_drop_ring'), color: FALLBACK, transparent: true, alphaTest: 0.4, depthWrite: false, depthTest: false, side: THREE.DoubleSide });
   private ring: THREE.Mesh;
   private dropRing: THREE.Mesh;
   private ringGeo = new THREE.PlaneGeometry(2.4, 2.4).rotateX(-Math.PI / 2);
@@ -161,6 +177,7 @@ class PreviewView {
     this.dots.frustumCulled = false;
     this.ring = new THREE.Mesh(this.ringGeo, this.ringMat);
     this.dropRing = new THREE.Mesh(this.ringGeo, this.dropMat);
+    this.dots.renderOrder = this.ring.renderOrder = this.dropRing.renderOrder = 800;
     this.root.add(this.dots, this.ring, this.dropRing);
   }
 
@@ -186,7 +203,7 @@ class PreviewView {
     geo.setDrawRange(0, n);
     (geo.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     const spin = m.time * 1.5;
-    this.ring.position.set(p.rest.x, p.rest.y + 0.04, p.rest.z);
+    this.ring.position.set(p.ring.x, p.ring.y + 0.04, p.ring.z);
     this.ring.rotation.y = spin;
     this.ring.scale.setScalar(p.drop.valid ? 1 : 0.8);
     this.dropRing.visible = !p.drop.valid;
@@ -276,7 +293,7 @@ registerHudWidget(
     if (p) {
       if (p.drop.valid) drawWaypoint(m, g, W, H, { x: p.rest.x, y: p.rest.y + 1.2, z: p.rest.z, label: 'DROP ZONE', color: C.friend }, placed);
       else {
-        drawWaypoint(m, g, W, H, { x: p.rest.x, y: p.rest.y + 1.2, z: p.rest.z, label: 'NO DROP', caption: REASON[p.drop.reason], color: C.warn }, placed);
+        drawWaypoint(m, g, W, H, { x: p.ring.x, y: p.ring.y + 1.2, z: p.ring.z, label: 'NO DROP', caption: REASON[p.drop.reason], color: C.warn }, placed);
         drawWaypoint(m, g, W, H, { x: p.drop.x, y: p.drop.y + 1.2, z: p.drop.z, label: 'CRATE HERE', color: C.hi, small: true }, placed);
       }
     }
@@ -300,7 +317,7 @@ interface Puff {
   size: number;
 }
 
-const SHADES = [0, 0.12, -0.12, 0.22];
+const SHADES = [0, 0.06, -0.08, 0.12];
 /** One wind direction for every plume (m/s): BO1 smoke leans and drifts. */
 const WIND = { x: 0.55, z: 0.25 };
 
@@ -321,7 +338,7 @@ export class SmokePlume {
 
   /** Emit at `at` (rate scales the density; 0 stops emitting and lets the column thin out). */
   update(dt: number, at: Vec3, rate: number, hearAt?: (p: Vec3) => void): void {
-    this.acc += dt * 14 * rate;
+    this.acc += dt * 11 * rate;
     while (this.acc >= 1 && this.puffs.length < 90) {
       this.acc -= 1;
       const s = new THREE.Sprite(this.mats[Math.floor(Math.random() * this.mats.length)]!);
