@@ -131,7 +131,7 @@ export function callCarePackage(ctx: KsRoom, p: PlayerState, args: CallArgs): st
           room.bus.emit('killstreaks.marker', { player: p, x: drop.x, y: drop.y, z: drop.z, valid: drop.valid, reason: drop.reason });
           deliver({ x: drop.x, y: drop.y, z: drop.z });
         }
-      } else if (!heli && target) deliver(target);
+      }
       const h = heli as Entity | null;
       if (h && target && room.entities.get(h.id)) {
         if (phase === 'in') {
@@ -172,6 +172,8 @@ export function callCarePackage(ctx: KsRoom, p: PlayerState, args: CallArgs): st
       for (let i = list.length - 1; i >= 0; i--) if (act.entities.includes(list[i]!.ent.id)) list.splice(i, 1);
     },
   };
+  // A target (bots): the helicopter is on its way at once.
+  if (target) deliver(target);
   ctx.add(act);
   return null;
 }

@@ -149,8 +149,9 @@ const inBounds = (b: AABB, x: number, z: number) => x >= b.min.x + MARKER.edge &
  * Where the crate comes down for a canister that ended up at `rest` (thrown from `from`, the
  * thrower's feet). On the canister when it lies inside the map, under open sky, inside no wall and
  * not on a roof higher than anyone can climb. Otherwise the same clamp the old designator used,
- * plus a walk back: clamp into the map, then step from there toward the thrower until the top
- * surface is low enough for a crate to sit on; the thrower's own spot when nothing nearer works.
+ * plus a walk back: clamp into the map, then step from there toward the thrower to the first open
+ * spot a crate fits on, at the canister's own level first (out from under a roof) and then at any
+ * height under the roof limit (down off a roof); the thrower's own spot when nothing nearer works.
  */
 export function resolveDrop(world: CollisionWorld, map: DropMap, rest: Vec3, from: Vec3, settled = true): DropSpot {
   const b = map.bounds;
@@ -163,10 +164,13 @@ export function resolveDrop(world: CollisionWorld, map: DropMap, rest: Vec3, fro
   else if (groundTop(world, b, rest.x, rest.z, fallbackY) > rest.y + MARKER.coverClear) reason = 'covered';
   else if (rest.y > limit) reason = 'roof';
   if (reason === 'ok') return { x: rest.x, y: groundTop(world, b, rest.x, rest.z, rest.y), z: rest.z, valid: true, reason };
-  const fits = (x: number, z: number): number | null => {
+  // Prefer spots at the canister's own level (out from under a roof onto the same floor), then any
+  // surface low enough (off an unreachable roof down to the ground).
+  const level = reason === 'lost' ? from.y : Math.min(rest.y, limit);
+  const fits = (x: number, z: number, near: boolean): number | null => {
     if (!inBounds(b, x, z)) return null;
     const y = groundTop(world, b, x, z, fallbackY);
-    if (y > limit) return null;
+    if (y > limit || (near && Math.abs(y - level) > MARKER.coverClear)) return null;
     return world.overlapping(x, y + 0.05, z, MARKER.crateRadius, MARKER.crateHeight).length ? null : y;
   };
   const sx = clamp(rest.x, b.min.x + MARKER.edge, b.max.x - MARKER.edge);
@@ -175,11 +179,13 @@ export function resolveDrop(world: CollisionWorld, map: DropMap, rest: Vec3, fro
   const ez = clamp(from.z, b.min.z + MARKER.edge, b.max.z - MARKER.edge);
   const len = Math.hypot(ex - sx, ez - sz);
   const n = Math.max(1, Math.ceil(len / MARKER.searchStep));
-  for (let i = 0; i <= n; i++) {
-    const x = sx + ((ex - sx) * i) / n;
-    const z = sz + ((ez - sz) * i) / n;
-    const y = fits(x, z);
-    if (y !== null) return { x, y, z, valid: false, reason };
+  for (const near of [true, false]) {
+    for (let i = 0; i <= n; i++) {
+      const x = sx + ((ex - sx) * i) / n;
+      const z = sz + ((ez - sz) * i) / n;
+      const y = fits(x, z, near);
+      if (y !== null) return { x, y, z, valid: false, reason };
+    }
   }
   return { x: ex, y: groundTop(world, b, ex, ez, fallbackY), z: ez, valid: false, reason };
 }
