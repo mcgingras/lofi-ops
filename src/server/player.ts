@@ -90,8 +90,8 @@ export interface PlayerState {
   weapons: WeaponState[];
   slot: number;
   /**
-   * The server put `slot` in the player's hands itself (spawn: the primary; last stand: the pistol;
-   * revive: the gun from before). Commands asking for another slot were sent before the client
+   * The server put `slot` in the player's hands itself mid-life (`forceSlot`: last stand's pistol,
+   * a revive's gun from before). Commands asking for another slot were sent before the client
    * knew, so they are ignored until one asks for this slot or `until` (room time) passes.
    */
   slotLock: { slot: number; until: number } | null;

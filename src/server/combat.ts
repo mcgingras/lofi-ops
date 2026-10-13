@@ -322,10 +322,10 @@ export function spawn(room: Room, p: PlayerState, point?: SpawnPoint): void {
   const at = ev.point ?? pickSpawn(room, p);
   p.loadout = loadout;
   p.weapons = [makeWeapon(loadout.primary, 'ak47'), makeWeapon(loadout.secondary, 'm1911')];
-  // CoD: every life starts on the primary, whatever was in hand at death. Commands already in
-  // flight from before the client saw the spawn must not switch it straight back.
+  // CoD: every life starts on the primary, whatever was in hand at death. (The client asks for
+  // slot 0 while dead, so the commands in flight across the respawn agree; see Match.)
   p.slot = 0;
-  p.slotLock = { slot: 0, until: room.time + SLOT_LOCK_SEC };
+  p.slotLock = null;
   p.swapEnd = room.time + 0.3;
   p.reloadEnd = 0;
   const m = createMoveState(at.x, at.y, at.z);
