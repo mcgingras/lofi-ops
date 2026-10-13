@@ -6,6 +6,10 @@
  * where the player was already behind cover on their own screen (latency), plus how soon bots
  * fired after each peek.
  *
+ * Then the latency part: the player ducks back the moment it's hit, and the deaths that arrive
+ * when the player is already fully behind cover on their own screen are counted for a few round
+ * trips (Fly dfw from Colorado is about 30-40 ms).
+ *
  *   npx tsx scripts/bots-walls.ts [seconds-per-spot=40] [rttMs=35]
  */
 import { getMapData } from '../src/shared/defs/maps';
@@ -29,4 +33,17 @@ for (const difficulty of ['regular', 'veteran'] as const) {
       console.log(formatPeek(`${id} drawn(${drawn.length}: ${drawn.map((d) => d.blocker).join(' ')}) ${difficulty}`, rd));
     }
   }
+}
+
+console.log('-- latency: the player ducks back into cover when hit (regular bots, wall spots on the five maps + the cover box)');
+for (const rtt of [35, 80, 150]) {
+  const all = [peekSim({ map: coverMap(), spots: coverMapSpots(), seconds, rttMs: rtt, retreatOnHit: true, penetrable: (i) => COVERS[i]!.penetrable })];
+  for (const id of MAPS) all.push(peekSim({ map: id, spots: coverSpots(getMapData(id), 6, 3), seconds, rttMs: rtt, retreatOnHit: true }));
+  const deaths = all.reduce((a, x) => a + x.deaths, 0);
+  const onScreen = all.reduce((a, x) => a + x.hiddenOnScreen, 0);
+  const retreating = all.reduce((a, x) => a + x.whileRetreating, 0);
+  const eyeServer = all.reduce((a, x) => a + x.eyeHiddenOnServer, 0);
+  const eyeScreen = all.reduce((a, x) => a + x.eyeHiddenOnScreen, 0);
+  const pct = (n: number) => `${((100 * n) / Math.max(1, deaths)).toFixed(1)}%`;
+  console.log(`rtt ${rtt} ms (+${(all[0]!.screenLagMs - rtt).toFixed(0)} ms input batching and tick wait): ${deaths} deaths, ${retreating} while ducking back; couldn't see the bot when the bullet hit ${eyeServer} (${pct(eyeServer)}), when the kill reached the screen ${eyeScreen} (${pct(eyeScreen)}); whole body behind cover on screen ${onScreen} (${pct(onScreen)})`);
 }

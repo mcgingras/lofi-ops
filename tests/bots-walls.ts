@@ -360,6 +360,13 @@ export interface PeekSimResult {
   throughDrawn: number;
   /** Already fully behind cover (collision or drawn) on the victim's screen when the kill arrived. */
   hiddenOnScreen: number;
+  /**
+   * The victim's own eye couldn't see the shooter: when the bullet hit (on the server: a shoulder
+   * still out while the camera is already behind the corner), and when the kill arrived on their
+   * screen (that, plus the latency). "I was behind the wall."
+   */
+  eyeHiddenOnServer: number;
+  eyeHiddenOnScreen: number;
   /** Deaths while walking back into cover. */
   whileRetreating: number;
   /** Bot shots fired while the target was fully hidden from them (bullets), and all bot shots. */
@@ -377,7 +384,7 @@ export const INPUT_DELAY_MS = 1000 / 60 / 2 + 1000 / 60 / 2;
 export function peekSim(o: PeekSimOpts): PeekSimResult {
   const rtt = o.rttMs ?? 35;
   const lag = (rtt + INPUT_DELAY_MS) / 1000;
-  const res: PeekSimResult = { seconds: 0, peeks: 0, deaths: 0, throughSolid: 0, hiddenOnServer: 0, throughDrawn: 0, hiddenOnScreen: 0, whileRetreating: 0, shotsAtHidden: 0, shots: 0, reacquire: [], screenLagMs: lag * 1000 };
+  const res: PeekSimResult = { seconds: 0, peeks: 0, deaths: 0, throughSolid: 0, hiddenOnServer: 0, throughDrawn: 0, hiddenOnScreen: 0, eyeHiddenOnServer: 0, eyeHiddenOnScreen: 0, whileRetreating: 0, shotsAtHidden: 0, shots: 0, reacquire: [], screenLagMs: lag * 1000 };
   o.spots.forEach((spot, si) => {
     withSeed((o.seed ?? 11) * 1000 + si, () => {
       const tr = testRoom(o.map, o.difficulty ?? 'regular');
@@ -466,6 +473,9 @@ export function peekSim(o: PeekSimOpts): PeekSimResult {
           if (hiddenOnServer) res.hiddenOnServer++;
           if (throughDrawn) res.throughDrawn++;
           if (hiddenOnScreen) res.hiddenOnScreen++;
+          const eyeOfPose = (q: Pose) => ({ x: q.x, y: q.y + (q.crouched ? PLAYER.crouchEye : PLAYER.eye), z: q.z });
+          if (!botCanSee(r.world, r.map, eyeOfPose(k.pose), e.origin)) res.eyeHiddenOnServer++;
+          if (!botCanSee(r.world, r.map, eyeOfPose(screen), e.origin)) res.eyeHiddenOnScreen++;
           o.onKill?.({ spot: si, time: r.time, origin: e.origin, end: e.end, pose: k.pose, botAt: { ...bot.move }, throughSolid, hiddenOnServer, throughDrawn, hiddenOnScreen, weapon: e.weapon, deathAt: k.t, hits: e.hits.map((h) => `${h.victim.name}:${h.part}:${h.damage.toFixed(0)}`).join(',') });
         });
         const total = Math.round(o.seconds / TICK_DT);
@@ -501,5 +511,5 @@ export function formatPeek(label: string, s: PeekSimResult): string {
     xs.sort((a, b) => a - b);
     return `${xs.length}x min ${xs[0]!.toFixed(2)} med ${xs[Math.floor(xs.length / 2)]!.toFixed(2)}`;
   };
-  return `${label}: ${s.seconds}s, ${s.peeks} peeks, ${s.deaths} deaths | through collision ${s.throughSolid} (${pct(s.throughSolid)}), hidden on server ${s.hiddenOnServer} (${pct(s.hiddenOnServer)}), through drawn cover ${s.throughDrawn} (${pct(s.throughDrawn)}), hidden on screen @${s.screenLagMs.toFixed(0)}ms ${s.hiddenOnScreen} (${pct(s.hiddenOnScreen)}), retreating ${s.whileRetreating} | shots ${s.shots}, at fully hidden ${s.shotsAtHidden} | first shot after peek: hidden<0.3s ${rq(0, 0.3)}; 0.3-1s ${rq(0.3, 1)}; >=1s ${rq(1, 99)}`;
+  return `${label}: ${s.seconds}s, ${s.peeks} peeks, ${s.deaths} deaths | through collision ${s.throughSolid} (${pct(s.throughSolid)}), hidden on server ${s.hiddenOnServer} (${pct(s.hiddenOnServer)}), through drawn cover ${s.throughDrawn} (${pct(s.throughDrawn)}), hidden on screen @${s.screenLagMs.toFixed(0)}ms ${s.hiddenOnScreen} (${pct(s.hiddenOnScreen)}), couldn't see the bot when hit ${pct(s.eyeHiddenOnServer)} / on screen ${pct(s.eyeHiddenOnScreen)}, retreating ${s.whileRetreating} | shots ${s.shots}, at fully hidden ${s.shotsAtHidden} | first shot after peek: hidden<0.3s ${rq(0, 0.3)}; 0.3-1s ${rq(0.3, 1)}; >=1s ${rq(1, 99)}`;
 }
