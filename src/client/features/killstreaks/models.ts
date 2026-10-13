@@ -289,3 +289,27 @@ export function buildPack(kit: Kit): void {
   kit.box(kit.root, 0.4, 0.22, 0.28, m, 0, 0.11, 0);
   kit.box(kit.root, 0.2, 0.06, 0.06, kit.mat('ks_dark'), 0, 0.25, 0);
 }
+
+/**
+ * Care Package marker: a smoke canister (M18-style can, olive with a blue band; BO1's supply drop
+ * marker smokes blue), standing on its base at the origin, ~0.15 m tall: body, crimped top, the
+ * fuse head with its spoon down one side and the pull ring. Returns the group (y up).
+ */
+export function buildMarkerCanister(kit: Kit, parent: THREE.Object3D = kit.root): THREE.Group {
+  const g = new THREE.Group();
+  const body = kit.mat('ks_canister', { rep: 1 });
+  const dark = kit.mat('ks_dark');
+  const steel = kit.mat('gunmetal', { rep: 0.3 });
+  kit.cyl(g, 0.032, 0.032, 0.12, body, 0, 0.06, 0, 'y', 8);
+  kit.cyl(g, 0.034, 0.034, 0.008, dark, 0, 0.004, 0, 'y', 8);
+  kit.cyl(g, 0.034, 0.028, 0.012, dark, 0, 0.126, 0, 'y', 8);
+  kit.cyl(g, 0.012, 0.012, 0.022, steel, 0, 0.142, 0, 'y', 6);
+  // Spoon: up over the head and down the side.
+  kit.box(g, 0.012, 0.006, 0.03, steel, 0, 0.155, 0.012);
+  kit.box(g, 0.012, 0.09, 0.005, steel, 0, 0.11, 0.036);
+  // Pull ring.
+  const ring = kit.cyl(g, 0.014, 0.014, 0.003, steel, -0.02, 0.15, -0.004, 'x', 8);
+  ring.rotation.y = 0.4;
+  parent.add(g);
+  return g;
+}
