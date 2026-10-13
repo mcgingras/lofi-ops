@@ -5,6 +5,7 @@
  */
 import { damageAtRange } from '../../../shared/ballistics';
 import { PLAYER, type Team } from '../../../shared/constants';
+import { groundTop } from '../../../shared/defs/care-marker';
 import { KILLSTREAK_BY_ID } from '../../../shared/defs/killstreaks';
 import { WEAPON_BY_ID } from '../../../shared/defs/weapons';
 import { clamp, viewDir, type Vec3 } from '../../../shared/math';
@@ -54,8 +55,6 @@ export const ksRoom = (room: Room): KsRoom => {
   return c;
 };
 
-const DOWN: Vec3 = { x: 0, y: -1, z: 0 };
-
 export class KsRoom {
   readonly actives: Active[] = [];
   readonly hp = new Map<number, Damageable>();
@@ -86,12 +85,9 @@ export class KsRoom {
     return this.groundY + 45;
   }
 
-  /** Ground (or roof) height under x,z. */
+  /** Ground (or roof) height under x,z: the top surface a crate dropped from the sky lands on. */
   groundAt(x: number, z: number): number {
-    const b = this.room.map.bounds;
-    const top = b.max.y + 5;
-    const hit = this.room.world.raycast({ x, y: top, z }, DOWN, top - b.min.y + 5, 'players');
-    return hit ? hit.point.y : this.groundY;
+    return groundTop(this.room.world, this.room.map.bounds, x, z, this.groundY);
   }
 
   /** Where `p` is aiming (world hit within 250 m), clamped inside the map, or null for the sky. */

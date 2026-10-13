@@ -18,6 +18,8 @@ export interface KillstreakStateMsg {
   selected: number;
   /** Designating targets for a streak (press STREAK again at each spot). */
   armed: { id: string; marks: [number, number, number][]; need: number; until: number } | null;
+  /** Holding the Care Package marker canister for streak `id` (FIRE throws it, STREAK puts it away). */
+  marker?: { id: string } | null;
   /** The tactical map is up (radio raised) for streak `id` until room time `until`. */
   map: { id: string; until: number } | null;
   /** Driving / gunning one: the entity id the camera follows and when it ends (room time). */

@@ -14,6 +14,12 @@ export interface KsControl {
   until: number;
 }
 
+/** Holding the Care Package marker canister (STREAK raised it; FIRE throws it). */
+export interface KsMarker {
+  id: string;
+  since: number;
+}
+
 /** The tactical map is up (radio raised) for `id`. */
 export interface KsMapMode {
   id: string;
@@ -34,6 +40,8 @@ export interface KillstreakExt {
   selected: number;
   armed: KsArmed | null;
   control: KsControl | null;
+  /** The Care Package marker canister is in hand (weapon down) until thrown or put away. */
+  marker?: KsMarker | null;
   /** Tactical map open (humans; bots pick targets server-side). */
   map?: KsMapMode | null;
   /** Rate limit for map RPCs. */
@@ -62,6 +70,8 @@ declare module '../../../shared/events' {
     'killstreaks.ended': { player: P | null; id: string; destroyed: boolean; by: P | null };
     /** The Tactical Nuke called by `player` went off (everyone dies over the next seconds, then the match ends). */
     'killstreaks.nuke': { player: P; phase: 'detonated' };
+    /** A Care Package marker settled: the crate comes down at x,y,z (`valid` false: moved off the canister, `reason` why). */
+    'killstreaks.marker': { player: P; x: number; y: number; z: number; valid: boolean; reason: string };
     /** A piece of killstreak hardware (entity `kind`) was destroyed by `by`. */
     'killstreaks.destroyed': { owner: P | null; id: string; kind: string; by: P | null };
   }

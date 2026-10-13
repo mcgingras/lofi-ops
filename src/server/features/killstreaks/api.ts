@@ -15,6 +15,7 @@
  * Bots also use their streaks automatically (skill `streakUse`: how soon and how well), unless the
  * bots feature sets `player.ext.killstreaks.manual = true` to drive the calls itself.
  */
+import type { MarkerLaunch } from '../../../shared/defs/care-marker';
 import { KILLSTREAK_BY_ID, streakAllowedIn } from '../../../shared/defs/killstreaks';
 import type { Vec3 } from '../../../shared/math';
 import type { PlayerState } from '../../player';
@@ -60,6 +61,8 @@ export interface CallOptions {
   targets?: Vec3[];
   /** Run direction for line strikes (default: the caller's yaw). */
   yaw?: number;
+  /** A thrown marker leaving the hand (Care Package canister): the drop goes where it settles. */
+  launch?: { throw: MarkerLaunch; from: Vec3 };
 }
 
 /** Earned streaks waiting to be called, oldest first. */
@@ -71,12 +74,14 @@ export const killstreakState = (room: Room, p: PlayerState) => stateMsg(room, p)
 /** True while the player drives / aims a streak (RC-XD, Chopper Gunner, Valkyrie). */
 export const isDrivingStreak = (p: PlayerState): boolean => !!p.ext.killstreaks?.control;
 
-/** True while designating targets (holding the marker, or the radio with the tactical map up). */
-export const isDesignating = (p: PlayerState): boolean => !!(p.ext.killstreaks?.armed || p.ext.killstreaks?.map);
+/** True while designating targets (holding the marker canister, the radio with the tactical map up, or the old designator). */
+export const isDesignating = (p: PlayerState): boolean => !!(p.ext.killstreaks?.armed || p.ext.killstreaks?.map || p.ext.killstreaks?.marker);
 
 /**
- * Call a ready streak now. Targets default to where the player aims (point/line), their marks or
- * aim (mortar), or the spot in front of them (placed turrets).
+ * Call a ready streak now. Targets default to where the player aims (point/line/marker), their
+ * marks or aim (mortar), or the spot in front of them (placed turrets). The Care Package (`marker`)
+ * takes either a `target` (bots: the crate comes there, a smoking canister marks it) or the
+ * `launch` of a thrown canister (humans: STREAK raises it, FIRE throws it, index.ts).
  */
 export function callKillstreak(room: Room, p: PlayerState, id: string, opts: CallOptions = {}): CallResult {
   const def = KILLSTREAK_BY_ID.get(id);
@@ -96,12 +101,14 @@ export function callKillstreak(room: Room, p: PlayerState, id: string, opts: Cal
   const fallback = def.targeting === 'map' ? (def.mapPick === 'area' ? ctx.center : null) : ctx.aimPoint(p);
   const target = opts.target ? ctx.clampToMap(opts.target) : opts.targets?.[0] ? ctx.clampToMap(opts.targets[0]) : fallback;
   const targets = (opts.targets?.length ? opts.targets : target ? [target] : []).map((t) => ctx.clampToMap(t));
-  if ((def.targeting === 'point' || def.targeting === 'line' || def.targeting === 'points' || def.targeting === 'map') && !targets.length) return { ok: false, reason: 'no_target' };
-  const reason = impl(ctx, p, { target: target ?? targets[0] ?? null, targets, yaw: opts.yaw ?? p.yaw });
+  const aimed = def.targeting === 'point' || def.targeting === 'line' || def.targeting === 'points' || def.targeting === 'map' || def.targeting === 'marker';
+  if (aimed && !targets.length && !(def.targeting === 'marker' && opts.launch)) return { ok: false, reason: 'no_target' };
+  const reason = impl(ctx, p, { target: target ?? targets[0] ?? null, targets, yaw: opts.yaw ?? p.yaw, launch: def.targeting === 'marker' ? opts.launch : undefined });
   if (reason) return { ok: false, reason };
   ks.ready.splice(idx, 1);
   ks.selected = Math.max(0, Math.min(ks.selected, ks.ready.length - 1));
   if (ks.armed?.id === id) ks.armed = null;
+  if (ks.marker?.id === id) ks.marker = null;
   if (ks.map?.id === id) {
     room.entities.remove(ks.map.entity);
     ks.map = null;
@@ -192,7 +199,7 @@ export function botWants(room: Room, p: PlayerState, id: string, skill: number):
 /** Automatic streak use for bots (every few ticks from the feature). */
 export function botAutoStreaks(room: Room, p: PlayerState): void {
   const ks = p.ext.killstreaks;
-  if (!ks || ks.manual || !p.alive || !ks.ready.length || ks.control || ks.armed || ks.map) return;
+  if (!ks || ks.manual || !p.alive || !ks.ready.length || ks.control || ks.armed || ks.map || ks.marker) return;
   const skill = botStreakSkill(p);
   ks.botNextCall ??= room.time + botCallDelay(skill);
   if (room.time < ks.botNextCall) return;
