@@ -925,6 +925,10 @@ export function buildHighrise(): MapData {
     S(-0.8, 44.6, 0), S(24.0, 56.4, 0), S(16.0, -34.5, PI / 2), S(-13.5, 53.8, -PI / 2),
   ];
 
+  // Seam fill: the slot between the pit stairs and the ledge beside them dropped to the pit floor
+  // with no way back up. Raised flush with the ledge.
+  slab(2.55, 0, -2.7, 6.6, 3.9, -2.1, 'concrete');
+
   return {
     id: 'highrise',
     name: 'Highrise',

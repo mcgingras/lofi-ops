@@ -990,6 +990,10 @@ export function buildEstate(): MapData {
   const sdAttack: SpawnPoint[] = [face(-58, -36, -40, 0), face(-54, -34, -40, 0), face(-50, -34, -40, 0), face(-46, -31, -30, 0), face(-58, -31, -40, 0), face(-53, -29, -40, 0), face(-49, -28, -30, 0), face(-53, -41, -40, 0)];
   const sdDefend: SpawnPoint[] = [face(-15, 70, -14, 40), face(-10, 70, -14, 40), face(-5, 70, -6, 40), face(0, 71, 4, 50), face(-14, 76, -14, 40), face(-9, 77, -14, 40), face(-4, 77, -6, 40), face(1, 79, 4, 50)];
 
+  // The pocket in the outline's notch by the gravel plateau sat 3.2 m below it: easy to drop into,
+  // impossible to climb out. Raised flush with the plateau.
+  k.slab(8.0, 0, 57.0, 12.0, 9.6, 60.0, 'gravel');
+
   return {
     id: 'estate',
     name: 'Estate',

@@ -1346,6 +1346,12 @@ export function buildJungle(): MapData {
   const redIn = rf.p(2.0, L.redHut, 3.5);
   const v = (a: number, b: number, from = 9): Vec3 => ({ x: px(a), y: gy(px(a), pz(b), from), z: pz(b) });
 
+  // Escapes found by a reachability check: a crate step in the sandbagged pocket by the east spawn
+  // (the ring is taller than a jump from inside), and seam fills between the terrain ramp and the
+  // rock south of the bridge.
+  k.aabb(32.9, 0, -32.0, 33.5, 0.45, -31.3, 'crate', { uv: 'raw' });
+  for (const [x0, y1, z0, x1, z1] of [[16.35, 2.0, -2.05, 16.85, -1.55], [15.85, 1.6, -0.55, 16.35, 0.45], [16.85, 2.5, -3.85, 17.45, -2.35]] as const) k.aabb(x0, 0, z0, x1, y1, z1, 'floor');
+
   return {
     id: 'jungle',
     name: 'Jungle',

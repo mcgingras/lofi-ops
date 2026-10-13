@@ -915,6 +915,14 @@ export function buildAfghan(): MapData {
     face(28.8, 0.6, 10, 20), face(44.0, 4.8, 30, 30), face(36.0, 4.4, 10, 20), face(44.4, 9.4, 30, 30), face(42.4, 16.0, 30, 30),
   ];
 
+  // Seam fills: thin slots where rock blocks and terrain patches nearly meet dropped to the base
+  // floor with walls too high to jump. Found by a reachability check (you could fall in but not
+  // walk back out); each is raised flush with the ground beside it.
+  for (const [x0, y1, z0, x1, z1] of [
+    [-6.05, 2.5, -46.45, -4.95, -45.95], [-37.95, 2.5, 13.3, -34.95, 13.95], [1.55, 2.5, -35.9, 3.6, -35.3],
+    [18.4, 2.5, -38.6, 19.0, -38.0], [40.2, 2.0, -22.9, 41.8, -22.3],
+  ] as const) k.slab(x0, 0, z0, x1, y1, z1, 'ground');
+
   return {
     id: 'afghan',
     name: 'Afghan',
