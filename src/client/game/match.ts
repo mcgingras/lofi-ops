@@ -33,6 +33,7 @@ import { Controls } from './controls';
 import { inputDevice, rumble } from './gamepad';
 import { Effects } from './effects';
 import { Remotes } from './remotes';
+import { frameSlot, SPAWN_SLOT } from './slots';
 import { ViewmodelRig } from './viewmodel';
 
 export interface KillfeedEntry {
@@ -56,8 +57,6 @@ export interface DeathInfo {
 }
 
 const DEG = Math.PI / 180;
-/** The weapon slot every life starts on (the primary), as the server's spawn does. */
-export const SPAWN_SLOT = 0;
 /** WeaponDef.recoil degrees -> view kick per shot (tuned so a BO-style spray is controllable). */
 const RECOIL_SCALE = 0.6;
 const nowSec = () => performance.now() / 1000;
@@ -525,19 +524,16 @@ export class Match {
     if (!(this.scopedLast && this.weapon()?.zoomLevels.length) && c.consume('equipment')) want = this.slot === 2 ? 0 : 2;
     const wheel = c.consumeWheel();
     if (wheel) want = (((this.slot + wheel) % nWeapons) + nWeapons) % nWeapons;
-    if (alive && playing && want !== this.slot && want < nWeapons) {
-      this.slot = want;
-      const def = this.weapon(want);
+    // Dead (or the spawn not seen in a snapshot yet): ask for the primary every life starts on.
+    const next = frameSlot({ slot: this.slot, want, alive, playing, weapons: nWeapons });
+    this.slot = next.slot;
+    if (next.switched) {
+      const def = this.weapon(next.slot);
       const dur = (def?.swapMs ?? 500) / 1000;
       this.swap = { seq: this.net.seq + 1, end: server + dur, dur };
       this.reload = { seq: this.net.seq + 1, end: 0, dur: 1 };
       this.burstLeft = 0;
       this.burstQueued = false;
-    } else if (!alive) {
-      // Dead (or the spawn not seen in a snapshot yet): every life starts on the primary, so ask
-      // for it. Following the dead body's slot here sent the old secondary in the first commands
-      // after a respawn and the server switched straight back to it.
-      this.slot = SPAWN_SLOT;
     }
 
     // Reload.
