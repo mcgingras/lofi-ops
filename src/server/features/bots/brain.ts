@@ -4,10 +4,14 @@
  * movement code and fire through `room.fire` with all the human rules (rate, ammo, sprint-out,
  * spread). Everything it does is scaled by its BotSkill.
  *
- *   perceive (20 Hz)  enemies inside its FOV with line of sight (chest or head over cover), noticed
- *                     after a time that grows with distance and peripheral angle; someone right
- *                     next to it; gunfire and footsteps it hears; the direction it was shot from;
- *                     enemies a UAV puts on its radar (the radarVisible modifier).
+ *   perceive (20 Hz)  enemies inside its FOV with line of sight (chest or eyes over cover; sight.ts:
+ *                     collision plus drawn geometry), noticed after a time that grows with
+ *                     distance and peripheral angle; someone right next to it; gunfire and
+ *                     footsteps it hears; the direction it was shot from; enemies a UAV puts on its
+ *                     radar (the radarVisible modifier). Hearing and radar only turn or steer it.
+ *   target            re-checked every tick: out of view it stops firing at once, aims at the last
+ *                     point it saw, and lets go after LOST_GRACE. It fires only with a line of fire
+ *                     (a bullet from its eye would reach the aim point), each shot traced first.
  *   fight             the aim controller (aim.ts: reaction, spring acquisition, sway, flinch),
  *                     head/chest, bursts and recoil by burstControl, ADS by range, strafing and
  *                     crouch spam by `strafe`, holding its weapon's range, switching to the pistol
@@ -583,11 +587,12 @@ export class Brain implements BotBrain {
   }
 
   /**
-   * Sight: enemies inside the FOV with line of sight (chest, or head over cover) are *noticed*
+   * Sight: enemies inside the FOV with line of sight (chest, or eyes over cover; `visiblePart`) are *noticed*
    * after `noticeTime` of continuous sight (longer far away and in the corner of the eye, shorter
    * when they're firing or just hurt it); someone right next to it is noticed in ~0.35 s from any
    * side. Nothing outside the FOV is seen: being shot or hearing someone (gunfire, footsteps)
-   * makes it turn that way first. The current target is kept while it stays in view.
+   * makes it turn that way first. The current target is kept while it stays in view, and for
+   * LOST_GRACE after it leaves it.
    */
   private perceive(room: Room, self: PlayerState, now: number) {
     const sk = this.skill;
