@@ -8,9 +8,10 @@ import * as THREE from 'three';
 import { buildViewmodel } from '../../render/models/viewmodels';
 import { setDynLight } from '../../render/shader';
 import { unbindTexture } from '../../render/textures';
+import { stripHands } from '../frontend/preview';
 
-export const THUMB_W = 96;
-export const THUMB_H = 36;
+export const THUMB_W = 120;
+export const THUMB_H = 45;
 
 let gl: THREE.WebGLRenderer | null | undefined;
 const done = new Map<string, HTMLCanvasElement>();
@@ -52,10 +53,11 @@ function draw(model: string): HTMLCanvasElement | null {
   cam.position.set(0, 0, 5);
   cam.lookAt(0, 0, 0);
   const vm = buildViewmodel(model, [], 'none');
+  stripHands(vm.group); // just the gun
   const turn = new THREE.Group();
   turn.add(vm.group);
   // Viewmodels point down -Z: turn the barrel to face right, tilted a touch towards the viewer.
-  turn.rotation.set(0.08, Math.PI / 2 - 0.12, 0);
+  turn.rotation.set(0.06, -Math.PI / 2 + 0.1, 0);
   const holder = new THREE.Group();
   holder.add(turn);
   scene.add(holder);

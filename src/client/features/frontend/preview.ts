@@ -7,10 +7,25 @@
 import * as THREE from 'three';
 import { buildViewmodel, type BuiltViewmodel } from '../../render/models/viewmodels';
 import { setDynLight } from '../../render/shader';
-import { unbindTexture } from '../../render/textures';
+import { getTexture, unbindTexture } from '../../render/textures';
 
 /** Internal render height in pixels (the look's low-res target). */
 const LOW_H = 180;
+
+/** Remove the gloves and sleeves (and hidden action rigs) a viewmodel carries, leaving the gun. */
+export function stripHands(group: THREE.Object3D): void {
+  const skin = new Set([getTexture('glove'), getTexture('camo')]);
+  const drop: THREE.Object3D[] = [];
+  group.traverse((o) => {
+    if (o === group) return;
+    if (!o.visible) drop.push(o);
+    else if (o instanceof THREE.Mesh && skin.has((o.material as THREE.ShaderMaterial).uniforms?.tMap?.value)) drop.push(o);
+  });
+  for (const o of drop) {
+    o.removeFromParent();
+    o.traverse((x) => x instanceof THREE.Mesh && x.geometry.dispose());
+  }
+}
 
 export class WeaponPreview {
   readonly canvas = document.createElement('canvas');
@@ -28,7 +43,8 @@ export class WeaponPreview {
   private ro: ResizeObserver | null = null;
   readonly ok: boolean;
 
-  constructor(host: HTMLElement) {
+  /** `gunOnly`: show the gun without the viewmodel's hands and sleeve (store). */
+  constructor(host: HTMLElement, private readonly opts: { gunOnly?: boolean } = {}) {
     host.prepend(this.canvas);
     try {
       this.gl = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, alpha: true });
@@ -83,6 +99,7 @@ export class WeaponPreview {
     this.key = key;
     this.disposeModel();
     const vm = buildViewmodel(model, attachments, camo);
+    if (this.opts.gunOnly) stripHands(vm.group);
     this.vm = vm;
     // Centre the gun on the pivot and fit it to the view.
     const box = new THREE.Box3().setFromObject(vm.group);

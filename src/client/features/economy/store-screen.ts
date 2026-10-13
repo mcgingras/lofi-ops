@@ -29,6 +29,7 @@ import {
 } from '../../../shared/frontend/store-browse';
 import { hashString } from '../../../shared/math';
 import type { Profile } from '../../../shared/profile';
+import { inputDevice } from '../../game/gamepad';
 import { h } from '../../menus/dom';
 import { net } from '../../net';
 import { registerScreen } from '../../registry';
@@ -151,14 +152,16 @@ registerScreen('store', (root, params) => {
     const a = document.activeElement as HTMLElement | null;
     return a && root.contains(a) ? (a.dataset.k ?? null) : null;
   };
-  const focusKey = (k: string | null): boolean => {
+  const focusKey = (k: string | null, scroll = true): boolean => {
     if (!k) return false;
     const el = root.querySelector<HTMLElement>(`[data-k="${CSS.escape(k)}"]`);
     if (!el || el.closest('[hidden]')) return false;
     el.focus({ preventScroll: true });
-    el.scrollIntoView?.({ block: 'nearest' });
+    if (scroll) el.scrollIntoView?.({ block: 'nearest' });
     return true;
   };
+  /** A gun page opens at the top; only a controller player is scrolled to the focused control. */
+  const focusGunPage = (gun: BrowseGun) => focusKey(gunPageFocusKey(gun), inputDevice() === 'pad');
   const scroller = () => root; // #screen scrolls
 
   // ---- navigation -------------------------------------------------------------------------
@@ -171,7 +174,7 @@ registerScreen('store', (root, params) => {
     render();
     scroller().scrollTop = 0;
     const gun = storeGun(net.profile, id);
-    if (gun) focusKey(gunPageFocusKey(gun));
+    if (gun) focusGunPage(gun);
   };
   const closeGun = () => {
     const from = gunId;
@@ -303,9 +306,13 @@ registerScreen('store', (root, params) => {
                     'button',
                     { type: 'button', class: `ec-gun${gun.owned ? ' owned' : ''}${gun.state === 'locked' ? ' locked' : ''}`, 'data-k': `gun:${gun.id}`, onclick: () => openGun(gun.id), 'aria-label': `${gun.name}, ${st.text}, ${attachmentCountLabel(gun)}` },
                     gunThumb(gun.model, gun.name),
-                    h('span', { class: 'ec-gun-main' }, h('span', { class: 'ec-name' }, gun.name), h('span', { class: `ec-state ${st.cls}` }, st.text)),
-                    h('span', { class: 'ec-gun-atts' }, h('span', {}, attachmentCountLabel(gun)), gun.attachments.length ? h('span', { class: 'ec-pips' }, ...pips) : null),
-                    h('span', { class: 'ec-chev', 'aria-hidden': 'true' }, '>'),
+                    h(
+                      'span',
+                      { class: 'ec-gun-main' },
+                      h('span', { class: 'ec-name' }, gun.name),
+                      h('span', { class: 'ec-gun-line' }, h('span', { class: `ec-state ${st.cls}` }, st.text), gun.attachments.length ? h('span', { class: 'ec-pips', 'aria-hidden': 'true' }, ...pips) : null),
+                      h('span', { class: 'ec-gun-atts' }, attachmentCountLabel(gun)),
+                    ),
                   );
                 }),
               ),
@@ -342,13 +349,13 @@ registerScreen('store', (root, params) => {
     if (previewGun !== gun.id) {
       disposePreview();
       previewGun = gun.id;
-      preview = new WeaponPreview(previewBox);
+      preview = new WeaponPreview(previewBox, { gunOnly: true });
       if (!preview.ok) previewBox.append(h('div', { class: 'lf-center ec-dim' }, '3D preview unavailable'));
       previewBox.append(h('div', { class: 'ec-cap' }, gun.name, h('small', {}, groupLabel(gun.group))));
     }
     const hovered = gun.attachments.find((a) => a.id === hoverAtt) ?? null;
     statsHost = h('div', {});
-    const stateLine = gun.state === 'owned' ? (gun.usable ? 'Owned' : `Owned · ${gun.requirement} to use`) : gun.state === 'buy' ? 'Available' : (gun.requirement ?? 'Locked');
+    const stateLine = gun.state === 'owned' ? (gun.usable ? `Owned · ${attachmentCountLabel(gun)}` : `Owned · ${gun.requirement} to use`) : gun.state === 'buy' ? 'Available' : (gun.requirement ?? 'Locked');
     gunInfo.replaceChildren(
       h('h2', { class: 'ec-gun-title' }, gun.name),
       h('div', { class: 'ec-meta' }, [groupLabel(gun.group), gun.unlockLevel > 1 ? `Unlocks at level ${gun.unlockLevel}` : 'Unlocked from the start', gun.item.price ? cp(gun.item.price) : 'Free'].join(' · ')),
@@ -475,7 +482,7 @@ registerScreen('store', (root, params) => {
   render();
   if (gunId) {
     const gun = storeGun(net.profile, gunId);
-    if (gun) requestAnimationFrame(() => focusKey(gunPageFocusKey(gun)));
+    if (gun) requestAnimationFrame(() => focusGunPage(gun));
   }
   const offs = [net.on('profile', () => render()), net.on('welcome', () => render()), net.onStatus(() => render())];
   return () => {

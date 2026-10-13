@@ -43,13 +43,13 @@
 .ec-group { display: flex; flex-direction: column; gap: 6px; }
 .ec-group-h { margin: 0; font-size: 12px; font-weight: 400; letter-spacing: 0.1em; text-transform: uppercase; color: var(--hi); display: flex; gap: 10px; align-items: baseline; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
 .ec-group-h small { font-size: 9px; color: var(--dim); letter-spacing: 0.06em; }
-.ec-gun-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 4px; }
-.ec-gun { all: unset; box-sizing: border-box; cursor: pointer; font-family: var(--ui); display: grid; grid-template-columns: 96px minmax(0, 1fr) auto 10px; gap: 10px; align-items: center; padding: 5px 8px 5px 5px; background: var(--chip); border: 1px solid var(--line); min-width: 0; }
+.ec-gun-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 4px; }
+.ec-gun { all: unset; box-sizing: border-box; cursor: pointer; font-family: var(--ui); display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; align-items: center; padding: 5px 8px 5px 5px; background: var(--chip); border: 1px solid var(--line); min-width: 0; }
 .ec-gun:hover, .ec-gun:focus-visible { border-color: var(--hi); background: rgba(40, 34, 10, 0.8); outline: none; }
-.ec-gun:hover .ec-name, .ec-gun:focus-visible .ec-name, .ec-gun:hover .ec-chev, .ec-gun:focus-visible .ec-chev { color: var(--hi); }
+.ec-gun:hover .ec-name, .ec-gun:focus-visible .ec-name { color: var(--hi); }
 .ec-gun.locked .ec-thumb { opacity: 0.45; filter: grayscale(0.8); }
 .ec-gun.locked .ec-name { color: var(--dim); }
-.ec-thumb { width: 96px; height: 36px; image-rendering: pixelated; background: radial-gradient(ellipse at 50% 60%, #252b4a 0%, #0c0e1a 80%); border: 1px solid var(--line); display: block; }
+.ec-thumb { width: 120px; height: 45px; image-rendering: pixelated; background: radial-gradient(ellipse at 50% 60%, #252b4a 0%, #0c0e1a 80%); border: 1px solid var(--line); display: block; }
 .ec-gun-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .ec-gun-main .ec-name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ec-state { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dim); }
@@ -57,11 +57,12 @@
 .ec-state.hi { color: var(--hi); }
 .ec-state.warn { color: var(--warn); }
 .ec-state.lock::before { content: ''; display: inline-block; width: 5px; height: 4px; border: 1px solid currentColor; border-top-width: 2px; margin-right: 4px; }
-.ec-gun-atts { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 9px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dim); text-align: right; }
+.ec-gun-line { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
+.ec-gun-line .ec-state { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ec-gun-atts { font-size: 9px; letter-spacing: 0.02em; text-transform: uppercase; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ec-pips { display: flex; gap: 2px; }
 .ec-pips i { width: 6px; height: 6px; border: 1px solid var(--line-hi); background: #000; }
 .ec-pips i.on { background: #7adf6a; border-color: #7adf6a; }
-.ec-chev { color: var(--dim); font-size: 12px; }
 
 /* ---- store: gun page --------------------------------------------------------------------- */
 .ec-gun-top { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(260px, 1fr); gap: 14px; align-items: start; }
@@ -140,9 +141,7 @@ body[data-input='pad'] #app .ec-gun:focus .ec-name { color: var(--hi); }
   .ec-crumbs { order: 5; flex-basis: 100%; }
   .ec-grid { grid-template-columns: 1fr; }
   .ec-gun-list { grid-template-columns: 1fr; }
-  .ec-gun { grid-template-columns: 72px minmax(0, 1fr) auto; gap: 8px; }
-  .ec-gun .ec-thumb { width: 72px; height: 27px; }
-  .ec-gun .ec-chev { display: none; }
+  .ec-gun { grid-template-columns: 120px minmax(0, 1fr); gap: 8px; }
   .ec-att { grid-template-columns: minmax(0, 1fr) auto; }
   .ec-att .ec-slot { grid-column: 1 / -1; justify-self: start; }
   .ec-search-row { flex-wrap: wrap; }
