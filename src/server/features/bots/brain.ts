@@ -33,6 +33,7 @@ import type { WeaponClass } from '../../../shared/defs/weapons';
 import { Buttons, type InputCmd } from '../../../shared/input';
 import { clamp, dist, viewDir, yawTo, type Vec3 } from '../../../shared/math';
 import { eyeHeight } from '../../../shared/movement';
+import { traceShot } from '../../combat';
 import { currentWeapon, type BotBrain, type PlayerState } from '../../player';
 import type { Room } from '../../room';
 import { addRecoil, angleDiff, engage, feltOffDeg, flinch, lookToward, newAimState, noticeTime, stepAim, toleranceDeg, type AimState } from './aim';
@@ -41,6 +42,7 @@ import { navFor, type NavCell, type NavGrid } from './nav';
 import { recentSpawns } from '../modes/spawns';
 import { hasObjectives } from '../modes/bots';
 import { chasersNear, crowdPenalty, depthOf, laneOf, mapAxis, pickLane, rollRole, type BotRole, type GoalClaim, type PathUsage } from './roles';
+import { botCanHit, chestOf, eyePointOf, headOf, occludersFor, visiblePart } from './sight';
 
 const DEG = Math.PI / 180;
 
@@ -55,6 +57,12 @@ export interface BrainWorld {
   /** Path searches and cells expanded this tick, across the room's bots (`tick` is room.tick). */
   nav?: { tick: number; used: number; expanded?: number };
 }
+
+/**
+ * After losing sight of its target the bot holds its aim on the last point it saw (no firing) for
+ * this long, then lets the target go. Seen again within it, the fight just carries on.
+ */
+export const LOST_GRACE = 0.25;
 
 /** Path searches per room tick, and cells they may expand in total; more wait for a later tick. */
 export const NAV_SEARCHES_PER_TICK = 3;
@@ -74,13 +82,7 @@ const CLASS_STYLE: Record<WeaponClass, { range: number; ads: number; rush?: bool
 
 type Goal = { at: Vec3; radius: number; hold: boolean; holdButtons: number; sprint: boolean; kind: 'objective' | 'heard' | 'radar' | 'chase' | 'flank' | 'roam' | 'cover' | 'forced'; until: number; then?: Goal; linger?: number };
 
-/** Points on a body to aim at / check sight to. */
-export function chestOf(p: PlayerState): Vec3 {
-  return { x: p.move.x, y: p.move.y + (p.move.crouched ? 0.78 : 1.15), z: p.move.z };
-}
-export function headOf(p: PlayerState): Vec3 {
-  return { x: p.move.x, y: p.move.y + (p.move.crouched ? 1.08 : 1.62), z: p.move.z };
-}
+export { chestOf, headOf } from './sight';
 export const eyeOf = (p: PlayerState): Vec3 => ({ x: p.move.x, y: p.move.y + eyeHeight(p.move), z: p.move.z });
 
 export class Brain implements BotBrain {
@@ -95,6 +97,10 @@ export class Brain implements BotBrain {
   private notice = new Map<string, number>();
   private noticeAt = -1;
   lastSeen: { at: Vec3; t: number; id: string } | null = null;
+  /** The point it last aimed at on the target while it could see it (held while it can't). */
+  private lastAim: Vec3 | null = null;
+  /** Shots it held back because a pellet would have gone through drawn cover (tests). */
+  heldShots = 0;
   heard: { at: Vec3; t: number } | null = null;
   hurt: { at: Vec3; t: number; by: string | null } | null = null;
   radar: { at: Vec3; t: number } | null = null;
@@ -160,6 +166,7 @@ export class Brain implements BotBrain {
     this.path = null;
     this.goal = null;
     this.lastSeen = null;
+    this.lastAim = null;
     this.heard = null;
     this.hurt = null;
     this.radar = null;
@@ -253,18 +260,33 @@ export class Brain implements BotBrain {
       this.perceive(room, self, now);
     }
     if (this.target && (!this.target.alive || !room.players.has(this.target.id))) this.target = null;
+    const eye = eyeOf(self);
+
+    // Sight of the target, every tick. Seen: aim at it where it is now. Not seen: stop firing at
+    // once, hold the aim on the last point it saw, and let the target go after LOST_GRACE.
+    let vis: 'body' | 'head' | null = null;
+    if (this.target) {
+      const t = this.target;
+      vis = visiblePart(room.world, room.map, eye, t);
+      if (vis) {
+        this.seen = vis;
+        this.lastSeen = { at: { ...t.move }, t: now, id: t.id };
+        this.lastAim = this.aimPoint(eye, t);
+      } else if (!this.lastSeen || this.lastSeen.id !== t.id || now - this.lastSeen.t >= LOST_GRACE) this.target = null;
+    }
 
     const w = currentWeapon(self);
     const def = w?.def;
     const cls = CLASS_STYLE[def?.class ?? 'ar'] ?? CLASS_STYLE.ar;
-    const eye = eyeOf(self);
     const primary = self.weapons[0];
     const secondary = self.weapons[1];
 
     if (this.target) {
       // ================================ FIGHT ================================
       const t = this.target;
-      const aimPt = this.aimPoint(eye, t);
+      // Where it can't see the target it works from the last sighting, never the live position.
+      const aimPt = vis || !this.lastAim ? this.aimPoint(eye, t) : this.lastAim;
+      const tpos: Vec3 = vis || !this.lastSeen ? t.move : this.lastSeen.at;
       const d = dist(eye, aimPt);
       const trueYaw = yawTo(eye, aimPt);
       const truePitch = Math.atan2(aimPt.y - eye.y, Math.hypot(aimPt.x - eye.x, aimPt.z - eye.z));
@@ -272,10 +294,9 @@ export class Brain implements BotBrain {
       const lx = eye.x - aimPt.x;
       const lz = eye.z - aimPt.z;
       const ll = Math.hypot(lx, lz) || 1;
-      const latSpeed = Math.abs((t.move.vx * -lz + t.move.vz * lx) / ll);
+      const latSpeed = vis ? Math.abs((t.move.vx * -lz + t.move.vz * lx) / ll) : 0;
       const ctx = { dist: d, latSpeed, moving: Math.hypot(self.move.vx, self.move.vz) > 0.5, ads: self.move.ads };
       const intended = stepAim(this.aim, sk, trueYaw, truePitch, dt, ctx, def?.recoil.recovery ?? 10);
-      this.lastSeen = { at: { ...t.move }, t: now, id: t.id };
 
       // Weapon: dry up close -> sidearm (quicker than a reload); empty everything -> sidearm.
       if (w && w.mag === 0 && this.slotWanted === 0 && secondary && secondary.mag > 0 && (d < 12 || (primary?.reserve ?? 0) === 0)) this.slotWanted = 1;
@@ -287,9 +308,12 @@ export class Brain implements BotBrain {
       const tight = style.conserveAmmo ? 0.55 : 1;
       const onTarget = this.aim.react <= 0 && feltOffDeg(this.aim, sk, intended.yaw, intended.pitch) < toleranceDeg(d, tight);
       const steadyOk = !style.conserveAmmo || (this.aim.track > 0.25 && (!wantAds || self.move.ads > 0.85));
-      const visibleNow = this.lastPerceive === now ? true : room.world.lineOfSight(eye, aimPt);
+      // Line of fire: it sees the target now and a bullet from its eye would reach the point it
+      // aims at (collision's bullets mask and drawn bullet-stopping geometry). No firing at walls,
+      // at a last-known position, or through bullet-proof glass.
+      const lineOfFire = !!vis && botCanHit(room.world, room.map, eye, aimPt);
 
-      if (ready && onTarget && steadyOk && visibleNow && def) {
+      if (ready && onTarget && steadyOk && lineOfFire && def) {
         const auto = def.mode === 'auto' || def.mode === 'burst';
         if (auto) {
           if (now >= this.pauseUntil) {
@@ -297,8 +321,8 @@ export class Brain implements BotBrain {
               const bc = sk.burstControl;
               this.burstLeft = def.mode === 'burst' ? (def.burst ?? 3) : d > 14 ? Math.round(9 - 6 * bc) : d > 7 ? Math.round(14 - 6 * bc) : 30;
             }
-            const res = room.fire(self, { dir: viewDir(this.aim.yaw, this.aim.pitch) });
-            if (res.ok) {
+            const res = this.shoot(room, self, eye);
+            if (res?.ok) {
               this.stats.shots++;
               this.burstLeft--;
               addRecoil(this.aim, def.recoil, self.move.ads, this.rnd);
@@ -307,8 +331,8 @@ export class Brain implements BotBrain {
             buttons |= Buttons.FIRE;
           }
         } else if (now >= this.nextShotAt) {
-          const res = room.fire(self, { dir: viewDir(this.aim.yaw, this.aim.pitch) });
-          if (res.ok) {
+          const res = this.shoot(room, self, eye);
+          if (res?.ok) {
             this.stats.shots++;
             addRecoil(this.aim, def.recoil, self.move.ads, this.rnd);
             const interval = 60 / Math.max(30, def.rpm);
@@ -325,7 +349,7 @@ export class Brain implements BotBrain {
 
       // Knife when touching (or when a melee-happy wager mode has us close and dry).
       const outOfAmmo = !!w && w.mag === 0 && w.reserve === 0;
-      if ((d < 1.7 || (style.meleeHappy && outOfAmmo && d < 2.2)) && now >= this.nextMeleeAt) {
+      if (vis && (d < 1.7 || (style.meleeHappy && outOfAmmo && d < 2.2)) && now >= this.nextMeleeAt) {
         pulse(Buttons.MELEE);
         this.nextMeleeAt = now + 0.75;
       }
@@ -334,8 +358,8 @@ export class Brain implements BotBrain {
       if (w && w.mag === 0 && w.reserve > 0 && self.reloadEnd === 0 && this.slotWanted === self.slot) pulse(Buttons.RELOAD);
 
       // ---- Movement in a fight.
-      const tx = t.move.x - self.move.x;
-      const tz = t.move.z - self.move.z;
+      const tx = tpos.x - self.move.x;
+      const tz = tpos.z - self.move.z;
       const td = Math.hypot(tx, tz) || 1;
       const ux = tx / td;
       const uz = tz / td;
@@ -343,7 +367,7 @@ export class Brain implements BotBrain {
       const dry = !!w && w.mag === 0 && (this.slotWanted === self.slot || !secondary || secondary.mag === 0);
       if (((lowHealth && (sk.aggression < 0.75 || td > 10)) || (dry && td > 6)) && now >= this.retreatUntil && this.goal?.kind !== 'cover') {
         // Back off to cover (reload / heal behind it); not more often than every few seconds.
-        const cover = findCover(room, nav, self, eyeOf(t), this.rnd);
+        const cover = findCover(room, nav, self, { x: tpos.x, y: tpos.y + PLAYER.eye, z: tpos.z }, this.rnd);
         if (cover) this.setGoal(nav, self, { at: { x: cover.x, y: cover.y, z: cover.z }, radius: 0.6, hold: false, holdButtons: 0, sprint: true, kind: 'cover', until: now + 3.5 });
         this.retreatUntil = now + 6;
       }
@@ -519,6 +543,27 @@ export class Brain implements BotBrain {
     return { buttons, yaw: this.aim.yaw, pitch: clamp(this.aim.pitch, -1.4, 1.4), weaponSlot: slot };
   }
 
+  /**
+   * Pull the trigger along the current view. The exact shot (its spread seed) is traced first:
+   * if any pellet would hit someone through drawn geometry that looks bullet-proof (a render-only
+   * truck, a crate drawn bigger than its collision), the shot is held. Null when held.
+   */
+  private shoot(room: Room, self: PlayerState, eye: Vec3) {
+    const dir = viewDir(this.aim.yaw, this.aim.pitch);
+    // A fresh spread seed per pull, drawn like room.fire's default.
+    const shot = Math.floor(Math.random() * 1e9);
+    const occ = occludersFor(room.map);
+    for (const pel of traceShot(room, self, eye, dir, shot)) {
+      if (!pel.victim) continue;
+      const at = { x: eye.x + pel.dir.x * pel.t, y: eye.y + pel.dir.y * pel.t, z: eye.z + pel.dir.z * pel.t };
+      if (occ.first(eye, at, true)) {
+        this.heldShots++;
+        return null;
+      }
+    }
+    return room.fire(self, { dir, shot });
+  }
+
   // -------------------------------------------------------------------------------------------
   // Senses
   // -------------------------------------------------------------------------------------------
@@ -528,7 +573,8 @@ export class Brain implements BotBrain {
    * head shows over cover, else centre mass with a per-engagement offset across the torso.
    */
   private aimPoint(eye: Vec3, t: PlayerState): Vec3 {
-    if (this.aim.head || this.seen === 'head') return headOf(t);
+    if (this.seen === 'head') return eyePointOf(t);
+    if (this.aim.head) return headOf(t);
     const c = chestOf(t);
     const dx = c.x - eye.x;
     const dz = c.z - eye.z;
@@ -566,10 +612,7 @@ export class Brain implements BotBrain {
       const tracking = q === this.target && off < halfFov * 1.6;
       const near = d < 2.5;
       let seen: 'body' | 'head' | null = null;
-      if (off <= halfFov || tracking || near) {
-        if (room.world.lineOfSight(eye, c)) seen = 'body';
-        else if (room.world.lineOfSight(eye, headOf(q))) seen = 'head';
-      }
+      if (off <= halfFov || tracking || near) seen = visiblePart(room.world, room.map, eye, q);
       if (!seen) {
         if (prev > 0) this.notice.set(q.id, Math.max(0, prev - dtp * 1.5));
         // Footsteps: someone moving fast nearby, out of sight (Ninja is silent).
@@ -594,6 +637,11 @@ export class Brain implements BotBrain {
         best = q;
         bestSeen = seen;
       }
+    }
+    // Just lost sight of the target: keep it (aim held on the last sighting) for LOST_GRACE.
+    if (!best && this.target?.alive && this.lastSeen?.id === this.target.id && now - this.lastSeen.t < LOST_GRACE) {
+      best = this.target;
+      bestSeen = this.seen;
     }
     this.seen = bestSeen;
     if (best !== this.target) {
