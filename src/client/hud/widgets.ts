@@ -19,6 +19,7 @@ import { promptKey } from '../game/prompts';
 import { registerHudWidget } from '../registry';
 import { settings } from '../settings';
 import { currentMatch } from '../state';
+import { ammoHint, ammoWarn } from './ammo-hint';
 import { blink, box, clock, HUD_COLORS as C, rect, txt, unit } from './draw';
 
 /** Display name for a kill's weapon id: guns, lethals, killstreaks ("Attack Helicopter", not "ATTACK_HELICOPTER"). */
@@ -197,7 +198,21 @@ registerHudWidget(
     if (!def) return;
     const u = unit(H);
     const { mag, reserve } = m.ammo();
-    txt(g, String(mag), W - 30 * u, H - 24 * u, 16, mag <= Math.ceil(def.magazine * 0.25) ? C.warn : C.hi, 'right', u);
+    const warn = ammoWarn({ magazine: def.magazine, mag, reserve, reloading: false });
+    if (def.ammoNoun) {
+      // Single-load wager weapons: count every bolt / blade left (loaded one bright, spares dim).
+      const total = mag + reserve;
+      txt(g, `${total} ${total === 1 ? def.ammoNoun.replace(/S$/, '') : def.ammoNoun}`, W - 8 * u, H - 20 * u, 8, total === 0 ? C.warn : C.hi, 'right', u);
+      txt(g, def.name.toUpperCase(), W - 8 * u, H - 9 * u, 8, C.dim, 'right', u);
+      for (let i = 0; i < Math.min(total, 12); i++) {
+        const x = W - 10 * u - i * 5 * u;
+        const y = H - 32 * u;
+        rect(g, x - u, y - u, 4 * u, 7 * u, C.ink);
+        rect(g, x, y, 2 * u, 5 * u, i < mag ? C.ammo : C.empty);
+      }
+      return;
+    }
+    txt(g, String(mag), W - 30 * u, H - 24 * u, 16, warn ? C.warn : C.hi, 'right', u);
     txt(g, '/' + reserve, W - 8 * u, H - 18 * u, 8, '#d8d0c0', 'right', u);
     txt(g, def.name.toUpperCase(), W - 8 * u, H - 9 * u, 8, C.dim, 'right', u);
     const n = Math.min(def.magazine, 60);
@@ -288,13 +303,14 @@ registerHudWidget(
     if (!m) return;
     const u = unit(H);
     if (m.alive) {
-      if (m.reloadProgress() >= 0) txt(g, 'RELOADING', W / 2, H / 2 + 14 * u, 8, C.paper, 'center', u);
-      else {
-        const def = m.weapon();
-        const a = m.ammo();
-        if (def && a.mag === 0 && a.reserve === 0) txt(g, 'NO AMMO', W / 2, H / 2 + 14 * u, 8, C.warn, 'center', u);
-        else if (def && a.mag <= Math.ceil(def.magazine * 0.25)) txt(g, `PRESS ${promptKey('reload')} TO RELOAD`, W / 2, H / 2 + 14 * u, 8, blink(m.time, 0.8, 0.5) ? C.warn : C.paper, 'center', u);
-      }
+      const def = m.weapon();
+      const a = m.ammo();
+      const hint = def ? ammoHint({ magazine: def.magazine, mag: a.mag, reserve: a.reserve, reloading: m.reloadProgress() >= 0 }) : null;
+      const y = H / 2 + 14 * u;
+      if (hint === 'reloading') txt(g, 'RELOADING', W / 2, y, 8, C.paper, 'center', u);
+      else if (hint === 'no-ammo') txt(g, 'NO AMMO', W / 2, y, 8, C.warn, 'center', u);
+      else if (hint === 'low') txt(g, 'LOW AMMO', W / 2, y, 8, C.dim, 'center', u);
+      else if (hint === 'reload') txt(g, `PRESS ${promptKey('reload')} TO RELOAD`, W / 2, y, 8, blink(m.time, 0.8, 0.5) ? C.warn : C.paper, 'center', u);
     }
     m.notices = m.notices.filter((n) => m.time - n.t < 4);
     m.notices.forEach((n, i) => txt(g, n.text.toUpperCase(), W / 2, H * 0.62 + i * 10 * u, 8, C.hi, 'center', u));

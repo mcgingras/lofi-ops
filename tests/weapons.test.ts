@@ -4,7 +4,7 @@
  * tacticals, shell reloads, the underbarrel launcher) through a real Room.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import weaponsFeature, { melee, startThrow, flashedAmount, stunnedAmount, explode } from '../src/server/features/weapons/index';
+import weaponsFeature, { melee, startThrow, flashedAmount, stunnedAmount, explode, spawnTomahawk } from '../src/server/features/weapons/index';
 import { stepBody, tacticalAmount, throwVelocity } from '../src/server/features/weapons/projectile';
 import { shellReloadSec } from '../src/server/features/weapons/reload';
 import { wext } from '../src/server/features/weapons/state';
@@ -13,7 +13,7 @@ import type { PlayerState } from '../src/server/player';
 import type { Room, RoomOptions } from '../src/server/room';
 import { Store } from '../src/server/store';
 import { ATTACHMENTS, ATTACHMENT_BY_ID, canAttach, effectiveWeapon, validAttachments } from '../src/shared/defs/attachments';
-import { EQUIPMENT_BY_ID, GL_ROUND, MELEE, NADE_ENTITY } from '../src/shared/defs/equipment';
+import { EQUIPMENT_BY_ID, GL_ROUND, MELEE, NADE_ENTITY, TOMAHAWK_ENTITY } from '../src/shared/defs/equipment';
 import { LOADOUT_WEAPONS, shotsToKill, timeForRounds, ttkMs, WEAPONS, WEAPON_BY_ID } from '../src/shared/defs/weapons';
 import { buildCollisionWorld } from '../src/shared/maps/types';
 import { getMapData } from '../src/shared/defs/maps';
@@ -406,6 +406,71 @@ describe('weapons in a room', () => {
     expect(e!.s?.k).toBe(1);
     steps(room, 2.2);
     expect(b.alive).toBe(false);
+  });
+
+  it('semtex and flashbangs are held up as long as the button is down and thrown on release', () => {
+    const room = setup();
+    const { a, setButtons } = duel(room, 'ak47', 8, [], { lethal: 'semtex' });
+    setButtons(Buttons.LETHAL);
+    steps(room, 3); // longer than the semtex fuse: nothing happens while held
+    expect(a.alive).toBe(true);
+    expect(wext(a).throwing).not.toBeNull();
+    expect(room.entities.byKind(NADE_ENTITY).length).toBe(0);
+    setButtons(0);
+    steps(room, 0.1);
+    expect(room.entities.byKind(NADE_ENTITY).length).toBe(1);
+  });
+
+  it('tomahawk (a create-a-class lethal too): hold to raise, release to throw, one-hit kill, bounces, retrievable', () => {
+    const room = setup();
+    const { a, b, setButtons } = duel(room, 'ak47', 7, [], { lethal: 'tomahawk' });
+    expect(wext(a)).toMatchObject({ lethal: 'tomahawk', lethalN: 1 });
+    let held = true;
+    a.brain = { think: () => ({ buttons: held ? Buttons.LETHAL : 0, yaw: 0, pitch: Math.atan2(1.1 - PLAYER.eye, 7), weaponSlot: 0 }) };
+    room.step();
+    expect(wext(a).throwing?.equip.id).toBe('tomahawk');
+    steps(room, 1.5);
+    expect(room.entities.byKind(TOMAHAWK_ENTITY).length).toBe(0); // still raised
+    expect(room.fire(a, { dir: { x: 0, y: 0, z: -1 } })).toEqual({ ok: false, reason: 'switching' }); // gun down
+    held = false;
+    room.step();
+    room.step();
+    expect(room.entities.byKind(TOMAHAWK_ENTITY).length).toBe(1);
+    const kills: string[] = [];
+    room.bus.on('death', (e) => kills.push(`${e.weapon}/${e.means}`));
+    steps(room, 0.6);
+    expect(b.alive).toBe(false);
+    expect(kills).toEqual(['tomahawk/thrown']);
+    expect(b.stats.score).toBeGreaterThanOrEqual(0); // no bankrupt outside Sticks and Stones
+    steps(room, 2);
+    const hawk = room.entities.byKind(TOMAHAWK_ENTITY)[0]!;
+    expect(hawk.s?.k).toBe(1);
+    setButtons(0);
+    place(a, hawk.x, hawk.z);
+    a.move.y = Math.max(0, hawk.y - 0.1);
+    steps(room, 0.1);
+    expect(room.entities.byKind(TOMAHAWK_ENTITY).length).toBe(0);
+    expect(wext(a).lethalN).toBe(1);
+  });
+
+  it('a tomahawk bounces off a wall instead of sticking', () => {
+    const room = setup();
+    const { a } = duel(room, 'ak47', 8);
+    expect(room.phase).toBe('playing');
+    // The first wall along -z from the spawn-free middle; throw at it from 3 m away.
+    const o = { x: 0, y: 1.5, z: 0 };
+    const hit = room.world.raycast(o, { x: 0, y: 0, z: -1 }, 80, 'bullets');
+    expect(hit).not.toBeNull();
+    const start = { x: 0, y: 1.5, z: -(hit!.t - 3) };
+    const t = spawnTomahawk(room, a, start, { x: 0, y: 0, z: -20 });
+    let bounced = false;
+    for (let i = 0; i < 400 && !t.s?.k; i++) {
+      const z0 = t.z;
+      room.step();
+      if (t.z > z0 + 1e-4) bounced = true;
+    }
+    expect(bounced).toBe(true);
+    expect(t.s?.k).toBe(1);
   });
 
   it('flashbang blinds an enemy facing it; teammates are spared; concussion slows', () => {

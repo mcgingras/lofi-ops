@@ -14,4 +14,5 @@ import './equipment';
 export { equipState } from './equipment';
 export { scopeState } from './scope';
 export { dressSoldier } from './worldmodels';
-export { buildWeaponViewmodel } from './viewmodels';
+export { actionHands, buildWeaponViewmodel } from './viewmodels';
+export { tomahawkMesh } from './gunkit';

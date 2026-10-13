@@ -52,6 +52,7 @@ export const IN_GAME_VOLUME: Record<string, number> = {
   'weapons.boom': 1.6,
   'weapons.flashbang': 1.2,
   'weapons.ring': 0.6,
+  'weapons.beep': 0.7,
   'weapons.thump': 1,
   ks_ready: 0.6,
   ks_call: 0.5,

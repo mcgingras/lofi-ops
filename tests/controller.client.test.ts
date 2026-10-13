@@ -12,6 +12,7 @@ import { gamepad, inputDevice, setInputDevice, setPadSource, usePromptActive } f
 import { PAD } from '../src/client/game/pad';
 import { actionGlyph, promptKey, registerPromptKey } from '../src/client/game/prompts';
 import { useKey } from '../src/client/hud/waypoints';
+import { TOMAHAWK_ENTITY } from '../src/shared/defs/equipment';
 import { Buttons } from '../src/shared/input';
 import { createMoveState } from '../src/shared/movement';
 import type { ServerMessages, ServerMsgOf } from '../src/shared/protocol';
@@ -278,3 +279,46 @@ it('a drifting stick on a plugged-in pad does nothing while the mouse is the las
     controls.dispose();
   }
 });
+
+it('RB held raises the tomahawk (Sticks and Stones) and releasing RB throws it', async () => {
+  const room = server.lobby.createRoom({ mode: 'sticks', map: 'yard', closeWhenEmpty: true, countdownSec: 0, botFill: 0 });
+  const { client, welcome } = await FakeClient.connect(server.url, 'PadHawk');
+  const fp = fakePad();
+  restorePad = setPadSource(() => [fp.pad]);
+  const controls = new Controls(canvasStub);
+  try {
+    client.send({ t: 'joinRoom', roomId: room.id });
+    const joined = await client.waitFor('joined');
+    const mn = new MatchNet(adapterFor(client), joined);
+    const sp = await client.waitFor('spawned');
+    mn.predictor.reset({ ...createMoveState(sp.x, sp.y, sp.z), onGround: true });
+    await client.waitFor('snap', (s) => s.phase === 'playing' && !!s.me?.alive, 5000);
+    const p = room.players.get(welcome.sessionId)!;
+    expect(p.ext.weapons).toMatchObject({ lethal: 'tomahawk', lethalN: 1 });
+    controls.yaw = sp.yaw;
+    fp.set({ buttons: { A: 1 } });
+    setInputDevice('pad');
+    controls.requestLock();
+    controls.update(1 / 60);
+    fp.set();
+    await drive(controls, mn, 100);
+    // Hold RB well past the wind-up: raised, not thrown.
+    fp.set({ buttons: { RB: 1 } });
+    await drive(controls, mn, 900);
+    await client.waitFor('snap', (s) => s.ack >= mn.seq, 3000);
+    expect(p.buttons & Buttons.LETHAL).toBe(Buttons.LETHAL);
+    expect(p.ext.weapons?.throwing).not.toBeNull();
+    expect(p.ext.weapons?.lethalN).toBe(0);
+    expect(room.entities.byKind(TOMAHAWK_ENTITY).length).toBe(0);
+    // Let go: it flies.
+    fp.set();
+    await drive(controls, mn, 250);
+    await client.waitFor('snap', (s) => s.ack >= mn.seq, 3000);
+    expect(p.ext.weapons?.throwing).toBeNull();
+    expect(room.entities.byKind(TOMAHAWK_ENTITY).length).toBe(1);
+    mn.dispose();
+  } finally {
+    controls.dispose();
+    client.close();
+  }
+}, 20000);

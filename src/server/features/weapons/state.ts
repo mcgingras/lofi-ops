@@ -55,6 +55,8 @@ declare module '../../../shared/events' {
   interface RoomEvents<P> {
     /** A grenade/launcher round left someone's hand or barrel. */
     'weapons.thrown': { player: P; equipment: string };
+    /** Someone picked thrown equipment back up (a tomahawk). */
+    'weapons.retrieved': { player: P; equipment: string };
     /** A tactical hit someone (amount 0..1). */
     'weapons.tactical': { player: P | null; victim: P; equipment: string; amount: number };
     /** A knife swing (victim null on a miss). */

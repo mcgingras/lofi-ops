@@ -3,11 +3,13 @@
  *
  *   setup: the underbarrel grenade launcher behaviour (weapon id `gl`).
  *   room:  attachment count (1 + `attachmentSlotsOffset`, Warlord) at `beforeSpawn`; equipment and
- *          the GL slot at `spawn`; knife / lethal / tactical on button edges; projectiles, cooking
+ *          the GL slot at `spawn`; knife on the MELEE edge; lethal / tactical raised on the press
+ *          and thrown on release (frags cook while held); grenades, tomahawks (retrievable),
  *          and shell-by-shell reloads every tick; concussion slows movement and ADS.
  *
  * Bots: call `melee(room, bot)` / `startThrow(room, bot, 'lethal')` directly (or press the MELEE /
- * LETHAL / TACTICAL buttons), read `flashedAmount` / `stunnedAmount` to blind/slow their brains.
+ * LETHAL / TACTICAL buttons; the throw leaves on release, so a one-tick press throws right after
+ * the wind-up), read `flashedAmount` / `stunnedAmount` to blind/slow their brains.
  */
 import { BASE_ATTACHMENT_SLOTS, validAttachments } from '../../../shared/defs/attachments';
 import { WEAPON_BY_ID } from '../../../shared/defs/weapons';
@@ -18,10 +20,12 @@ import { makeWeapon } from '../../player';
 import { dropCooked, equipAtSpawn, launchGrenade, startThrow, stunnedAmount, updateNades, updateThrow } from './equipment';
 import { melee } from './melee';
 import { onReload, updateShells } from './reload';
+import { updateTomahawks } from './tomahawk';
 import { wext } from './state';
 
 export { melee, meleeTarget } from './melee';
 export { startThrow, flashedAmount, stunnedAmount, explode, spawnNade } from './equipment';
+export { canRetrieveTomahawk, dropTomahawk, spawnTomahawk } from './tomahawk';
 export type { WeaponsExt } from './state';
 
 const GL_BEHAVIOR: WeaponBehavior = {
@@ -83,6 +87,7 @@ const feature: Feature = {
         updateShells(room, p);
       }
       updateNades(room, dt);
+      updateTomahawks(room, dt);
     });
 
     // Concussion: slower movement and aiming while it lasts.

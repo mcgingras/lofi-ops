@@ -107,7 +107,7 @@ export interface WagerModeHud {
   rotateAt?: number;
   bonus?: string | null;
   multiplier?: number;
-  /** Sticks and Stones: tomahawks left this life. */
+  /** Sticks and Stones: tomahawks carried right now (thrown ones can be picked back up). */
   tomahawks?: number;
   /** Eliminated (OITC) and spectating. */
   out?: boolean;
@@ -145,5 +145,14 @@ declare module '../protocol' {
     'economy.wager': WagerHud;
     'economy.mode': WagerModeHud;
     'economy.award': { reason: EconomyTxn['kind']; lines: CpLine[]; total: number; codPoints: number };
+    /**
+     * Sticks and Stones: someone was bankrupted (everyone gets it). `attacker` null = they did it
+     * to themselves (suicide). `lost` = the score they lost.
+     */
+    'economy.bankrupt': { victim: string; attacker: string | null; lost: number };
+    /** You have a crossbow bolt stuck in you (BO1 "stuck" warning); `fuse` seconds to go. */
+    'economy.stuck': { by: string | null; fuse: number };
+    /** You picked a ballistic knife blade back up: `total` = loaded + spare now. */
+    'economy.blade': { total: number };
   }
 }

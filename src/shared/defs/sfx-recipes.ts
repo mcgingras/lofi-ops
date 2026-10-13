@@ -340,7 +340,8 @@ SFX_BINDINGS['shot.ballistic_knife'] = { files: ['mech_charge'], gain: 1.6, pitc
 export const SFX_SYNTH_ONLY: Record<string, string> = {
   ks_buzz: 'RC-XD motor: no small-motor recording in the manifest',
   ks_fire: 'napalm fire crackle: no fire recording in the manifest',
-  'weapons.thump': 'registered but not played anywhere',
+  'weapons.thump': 'Sticks and Stones BANKRUPTED sting: a low thump, no fitting recording',
+  'weapons.beep': 'stuck crossbow bolt beep: a synthesized chirp, like the semtex blink',
 };
 
 /** Recorded-only ids with no synthesized fallback on purpose: extra layers that may simply be absent until loaded. */

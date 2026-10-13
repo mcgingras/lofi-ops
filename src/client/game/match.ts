@@ -775,7 +775,7 @@ export class Match {
     const spread = spreadDegrees(def, st.ads, moving);
     const seed = hashString(this.myId);
     const o = { x: origin[0], y: origin[1], z: origin[2] };
-    const pellets = Math.max(1, def.pellets ?? 1);
+    const pellets = def.projectile ? 0 : Math.max(1, def.pellets ?? 1);
     for (let i = 0; i < pellets; i++) {
       const d = spreadDirection(dir, spread, shotSeed(seed, this.shot, i));
       const range = def.range ?? 200;

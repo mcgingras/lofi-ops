@@ -360,7 +360,7 @@ export const PAD_LAYOUT: [string, string][] = [
   ['LT', 'Aim down sights'],
   ['RT', 'Fire'],
   ['LB', 'Tactical'],
-  ['RB', 'Lethal (hold to cook)'],
+  ['RB', 'Lethal (hold to raise, release to throw)'],
   ['A', 'Jump (stands up from crouch)'],
   ['B', 'Crouch (tap) · Prone (hold)'],
   ['X', 'Reload · hold: Use (crates, weapon swap, plant/defuse, revive)'],

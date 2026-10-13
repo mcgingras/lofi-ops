@@ -2,10 +2,13 @@
  * Server side of the 'economy' feature area (owner: economy). See docs/features/economy.md.
  *
  *   setup: store RPCs (economy.state/buy/equip/setCamo), wager RPCs (economy.wagerQueue/
- *          wagerList/wagerStart), the four wager modes, the crossbow behaviour, the escrow sweeper.
- *   room:  CP at match end, `economy.grant`, spawn-time ownership checks, wager escrow + HUD.
+ *          wagerList/wagerStart), the four wager modes, the crossbow bolt and ballistic knife blade
+ *          behaviours, Sticks and Stones bot goals, the escrow sweeper.
+ *   room:  CP at match end, `economy.grant`, spawn-time ownership checks, wager escrow + HUD,
+ *          bolt/blade projectiles every tick, no class grenades in wager modes.
  */
 import { WAGER_ONLY_WEAPONS } from '../../../shared/defs/wager-weapons';
+import { registerWeaponBehavior } from '../../combat';
 import type { Feature, ServerApi } from '../../feature';
 import type { Room } from '../../room';
 import { RpcError } from '../../rpc';
@@ -13,7 +16,8 @@ import { wireEarning } from './earn';
 import { gunGameRules } from './modes/gungame';
 import { oitcRules } from './modes/oitc';
 import { sharpshooterRules } from './modes/sharpshooter';
-import { crossbowBehavior, sticksRules } from './modes/sticks';
+import { registerSticksBotGoals, sticksRules } from './modes/sticks';
+import { ballisticKnifeBehavior, crossbowBehavior, updateWagerProjectiles } from './projectiles';
 import { enforceClasses, registerShopRpcs } from './shop';
 import './types';
 import { WagerManager } from './wager';
@@ -30,6 +34,12 @@ export const wagersFor = (room: Room) => managerFor(room);
 export function wagerRoomInfo(room: Room) {
   const s = managerFor(room)?.states.get(room.id);
   return s && s.room === room ? { ante: s.ante, practice: s.practice, bots: s.bots, target: s.target } : null;
+}
+
+/** Only our own defs get our projectile behaviours (a weapons-area crossbow brings its own). */
+function registerWagerBehaviors(register: ServerApi['registerWeaponBehavior']) {
+  if (WAGER_ONLY_WEAPONS.has('crossbow')) register('crossbow', crossbowBehavior);
+  if (WAGER_ONLY_WEAPONS.has('ballistic_knife')) register('ballistic_knife', ballisticKnifeBehavior);
 }
 
 const feature: Feature = {
@@ -50,10 +60,23 @@ const feature: Feature = {
     api.registerMode('gungame', gunGameRules);
     api.registerMode('sharpshooter', () => sharpshooterRules());
     api.registerMode('sticks', sticksRules);
-    // Only our own crossbow def gets our bolt behaviour (a weapons-area crossbow brings its own).
-    if (WAGER_ONLY_WEAPONS.has('crossbow')) api.registerWeaponBehavior('crossbow', crossbowBehavior);
+    registerWagerBehaviors(api.registerWeaponBehavior);
+    registerSticksBotGoals();
   },
   room(room) {
+    // Idempotent: also here so rooms built without the app (unit tests) get the projectiles.
+    registerWagerBehaviors(registerWeaponBehavior);
+    room.bus.on('tick', ({ dt }) => updateWagerProjectiles(room, dt));
+    // Wager matches have no class grenades (BO1); Sticks and Stones sets its tomahawk after this.
+    room.bus.on(
+      'beforeSpawn',
+      (e) => {
+        if (!room.mode.wager) return;
+        e.loadout.lethal = null;
+        e.loadout.tactical = null;
+      },
+      { priority: -20 },
+    );
     wireEarning(room);
     enforceClasses(room);
     managerFor(room)?.attach(room);

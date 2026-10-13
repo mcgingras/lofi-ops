@@ -4,6 +4,7 @@
  *   economy.wager  52  pot + "IN THE MONEY #n +CP" / "OUT OF THE MONEY" / "PRACTICE" (under the score)
  *   economy.mode   53  mode state: OITC lives, Gun Game rung, Sharpshooter swap timer, tomahawks
  *   economy.award  86  CP toast after a match / payout / refund
+ *   economy.splash 87  Sticks and Stones: BANKRUPTED / HUMILIATION, and the STUCK warning
  *   economy.reticle 21 the equipped reticle while aiming through an optic
  */
 import { ATTACHMENT_BY_ID } from '../../../shared/defs/attachments';
@@ -12,6 +13,8 @@ import { WAGER_MODES } from '../../../shared/defs/economy';
 import type { WagerHud, WagerModeHud } from '../../../shared/defs/economy-net';
 import type { CpLine } from '../../../shared/defs/economy';
 import { DEFAULT_RETICLE, RETICLE_BY_ID } from '../../../shared/defs/store';
+import { sfx } from '../../game/audio';
+import { rumble } from '../../game/gamepad';
 import { promptKey } from '../../game/prompts';
 import { blink, box, clock, HUD_COLORS as C, rect, textWidth, txt, unit } from '../../hud/draw';
 import { net } from '../../net';
@@ -22,7 +25,15 @@ import { drawReticle } from './paint';
 const GREEN = '#7adf6a';
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 
-const state: { wager: WagerHud | null; mode: WagerModeHud | null; award: { at: number; reason: string; lines: CpLine[]; total: number } | null } = { wager: null, mode: null, award: null };
+const state: {
+  wager: WagerHud | null;
+  mode: WagerModeHud | null;
+  award: { at: number; reason: string; lines: CpLine[]; total: number } | null;
+  /** Big centre splash (match time it started). */
+  splash: { at: number; title: string; sub: string; color: string } | null;
+  /** A crossbow bolt is stuck in you until `until` (match time). */
+  stuck: { until: number } | null;
+} = { wager: null, mode: null, award: null, splash: null, stuck: null };
 
 onFeature('economy.wager', (d) => (state.wager = d));
 onFeature('economy.mode', (d) => (state.mode = d));
@@ -32,12 +43,41 @@ onFeature('economy.award', (d) => {
 });
 
 registerMatchHook('economy.hud', {
-  start() {
+  start(m) {
     state.wager = null;
     state.mode = null;
+    state.splash = null;
+    state.stuck = null;
+    const offs = [
+      onFeature('economy.bankrupt', (d) => {
+        const victim = m.nameOf(d.victim);
+        if (d.victim === m.myId) {
+          state.splash = { at: m.time, title: 'BANKRUPTED', sub: d.attacker ? `BY ${m.nameOf(d.attacker).toUpperCase()}` : 'SUICIDE', color: C.warn };
+          sfx.play('weapons.thump', { volume: 0.9 });
+        } else if (d.attacker === m.myId) {
+          state.splash = { at: m.time, title: 'HUMILIATION', sub: `${victim.toUpperCase()} BANKRUPTED`, color: GREEN };
+        }
+        else {
+          // Everyone else: a feed line (the two involved get the splash instead).
+          m.notices.push({ t: m.time, text: d.attacker ? `${victim} was BANKRUPTED by ${m.nameOf(d.attacker)}` : `${victim} BANKRUPTED themselves` });
+          if (m.notices.length > 4) m.notices.shift();
+        }
+      }),
+      onFeature('economy.stuck', (d) => {
+        state.stuck = { until: m.time + d.fuse };
+        rumble('explosion', 0.4);
+      }),
+      onFeature('economy.blade', () => {
+        sfx.play('weapons.shell', { volume: 0.8 });
+        m.notices.push({ t: m.time, text: '+1 BLADE' });
+      }),
+    ];
     return () => {
+      offs.forEach((f) => f());
       state.wager = null;
       state.mode = null;
+      state.splash = null;
+      state.stuck = null;
     };
   },
 });
@@ -149,9 +189,12 @@ registerHudWidget(
         if (d.bonus) txt(g, `x${d.multiplier} ${d.bonus.toUpperCase()}`, x, y + 10 * u, 8, GREEN, 'left', u);
         break;
       }
-      case 'sticks':
-        txt(g, `TOMAHAWK x${d.tomahawks ?? 0}  ${promptKey('lethal', { brackets: true })}`, x, y, 8, (d.tomahawks ?? 0) > 0 ? C.hi : C.dim, 'left', u);
+      case 'sticks': {
+        const n = d.tomahawks ?? 0;
+        txt(g, n > 0 ? `TOMAHAWK  HOLD ${promptKey('lethal', { brackets: true })}` : 'TOMAHAWK  PICK IT UP', x, y, 8, n > 0 ? C.hi : C.dim, 'left', u);
+        txt(g, 'A TOMAHAWK KILL BANKRUPTS', x, y + 10 * u, 8, C.dim, 'left', u);
         break;
+      }
     }
   },
   53,
@@ -185,6 +228,43 @@ registerHudWidget(
     txt(g, `${a.total >= 0 ? '+' : ''}${fmt(a.total)} CP`, x + bw - 6 * u, ty, 8, a.total >= 0 ? GREEN : C.warn, 'right', u);
   },
   86,
+);
+
+registerHudWidget(
+  'economy.splash',
+  (g, W, H) => {
+    const m = currentMatch();
+    if (!m) return;
+    const u = unit(H);
+    const sp = state.splash;
+    if (sp) {
+      const age = m.time - sp.at;
+      if (age > 3 || age < 0) state.splash = null;
+      else {
+        // Above the death card (core.death sits at 30 % of the height).
+        const y = H * 0.14;
+        rect(g, 0, y - 6 * u, W, 34 * u, 'rgba(10,10,10,.55)');
+        txt(g, sp.title, W / 2, y, 16, age < 0.6 && blink(m.time, 0.15, 0.075) ? C.paper : sp.color, 'center', u);
+        txt(g, sp.sub, W / 2, y + 18 * u, 8, C.paper, 'center', u);
+      }
+    }
+    const st = state.stuck;
+    if (st) {
+      if (!m.alive || m.time > st.until) state.stuck = null;
+      else {
+        // BO1-style: a red frame and a flashing STUCK! under the crosshair.
+        const on = blink(m.time, 0.25, 0.125);
+        const t = 2 * u;
+        const col = on ? 'rgba(220,40,30,.85)' : 'rgba(220,40,30,.35)';
+        rect(g, 0, 0, W, t, col);
+        rect(g, 0, H - t, W, t, col);
+        rect(g, 0, 0, t, H, col);
+        rect(g, W - t, 0, t, H, col);
+        txt(g, 'STUCK!', W / 2, H / 2 + 26 * u, 16, on ? C.warn : C.paper, 'center', u);
+      }
+    }
+  },
+  87,
 );
 
 registerHudWidget(

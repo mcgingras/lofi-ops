@@ -140,4 +140,5 @@ sfx.register('weapons.flashbang', (ctx) => {
   });
 });
 sfx.register('weapons.ring', (ctx) => tone(ctx, 3, (t) => Math.sin(t * 2 * Math.PI * 3400) * Math.pow(1 - t / 3, 1.5) * 0.12));
+sfx.register('weapons.beep', (ctx) => tone(ctx, 0.07, (t) => (Math.sin(t * 2 * Math.PI * 2600) > 0 ? 0.22 : -0.22) * Math.pow(1 - t / 0.07, 2)));
 sfx.register('weapons.thump', (ctx) => tone(ctx, 0.25, (t) => Math.sin(t * 2 * Math.PI * (90 - 120 * t)) * Math.pow(1 - t / 0.25, 3) * 0.9));

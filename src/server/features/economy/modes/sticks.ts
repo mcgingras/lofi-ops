@@ -1,44 +1,72 @@
 /**
- * Sticks and Stones (BO1 wager): crossbow with explosive bolts, ballistic knife, one tomahawk per
- * life (lethal button). Kills score; a tomahawk kill also bankrupts the victim (score to 0).
+ * Sticks and Stones (BO1 wager): everyone has the crossbow (6 explosive bolts), the ballistic
+ * knife (2 blades) and a tomahawk. No scavenging and no ammo for kills: fired blades and thrown
+ * tomahawks are picked back up from where they landed.
  *
- * The crossbow behaviour (bolt projectile, sticks and explodes, direct hits kill) is registered
- * globally from the feature setup (`crossbowBehavior`), the tomahawk lives here.
+ * Points (BO1): 100 for a crossbow / blade / other kill, 25 for a knife, 10 for a tomahawk, which
+ * also bankrupts the victim (score to 0). Any suicide (your own bolt, falling) bankrupts yourself.
+ *
+ * Pieces live where they belong: the bolt and blade projectiles in `../projectiles.ts` (registered
+ * from the feature setup), the tomahawk (hold to raise, release to throw, retrievable) in the
+ * weapons feature as an ordinary lethal; this file forces the loadout, scores, bankrupts and
+ * points bots at their lost blades and tomahawks.
  */
-import { STICKS } from '../../../../shared/defs/economy';
+import { BLADE_ENTITY, STICKS } from '../../../../shared/defs/economy';
+import { TOMAHAWK_ENTITY } from '../../../../shared/defs/equipment';
 import { Buttons } from '../../../../shared/input';
-import type { WeaponBehavior } from '../../../combat';
 import type { Entity } from '../../../entities';
+import type { PlayerState } from '../../../player';
 import type { Room } from '../../../room';
-import { byScore, giveWeapons, pushHud, rankedResults, stepProjectile, throwFrom, wagerMelee, wx, type Projectile, type WagerRules } from './common';
+import { registerBotGoal } from '../../bots/hooks';
+import { canRetrieveTomahawk } from '../../weapons/index';
+import { bladeRoom } from '../projectiles';
+import { byScore, giveWeapons, pushHud, rankedResults, wagerMelee, type WagerRules } from './common';
 
-const TOMAHAWK_SPEED = 24;
-const BOLT_SPEED = 70;
+/** Tomahawks the player carries right now (the weapons feature owns the count). */
+const tomahawksOf = (p: PlayerState) => (p.ext.weapons?.lethal === STICKS.lethal ? p.ext.weapons.lethalN : 0);
+
+/** Take a player's score to 0 and tell everyone (BO1 "BANKRUPTED"). */
+export function bankrupt(room: Room, victim: PlayerState, attacker: PlayerState | null): void {
+  const lost = Math.max(0, victim.stats.score);
+  if (lost > 0) room.addPlayerScore(victim, -lost, 'bankrupt');
+  room.sendFeature(null, 'economy.bankrupt', { victim: victim.id, attacker: attacker?.id ?? null, lost });
+}
 
 export function sticksRules(): WagerRules {
   const rules: WagerRules = {
     id: 'sticks',
     setup(room) {
+      // Forced class (runs after progression's gate and the economy's no-grenades default).
+      room.bus.on(
+        'beforeSpawn',
+        (e) => {
+          e.loadout.primary = { weapon: STICKS.primary, attachments: [], camo: e.loadout.primary.camo };
+          e.loadout.secondary = { weapon: STICKS.secondary, attachments: [], camo: e.loadout.secondary.camo };
+          e.loadout.lethal = STICKS.lethal;
+          e.loadout.tactical = null;
+        },
+        { priority: -30 },
+      );
       room.bus.on('spawn', ({ player }) => {
         giveWeapons(room, player, [STICKS.primary, STICKS.secondary]);
-        wx(player).tomahawks = STICKS.tomahawksPerLife;
         pushHud(room, rules, player);
       });
       room.bus.on('buttons', ({ player, pressed }) => {
         if (pressed & Buttons.MELEE) wagerMelee(room, player);
-        if (pressed & Buttons.LETHAL) throwTomahawk(room, player.id);
       });
+      room.bus.on('weapons.thrown', ({ player }) => pushHud(room, rules, player));
+      room.bus.on('weapons.retrieved', ({ player }) => pushHud(room, rules, player));
       room.bus.on('death', (e) => {
         const a = e.attacker;
-        if (!a || a === e.victim) return;
-        if (e.weapon === 'tomahawk') {
+        if (!a || a === e.victim) {
+          bankrupt(room, e.victim, null);
+          return;
+        }
+        if (e.weapon === STICKS.lethal) {
           room.addPlayerScore(a, STICKS.tomahawkScore, 'tomahawk');
-          if (e.victim.stats.score > 0) room.addPlayerScore(e.victim, -e.victim.stats.score, 'bankrupt');
-          room.sendFeature(null, 'core.notice', { text: `${e.victim.name} was BANKRUPTED by ${a.name}` });
-        } else room.addPlayerScore(a, STICKS.killScore, 'kill');
-      });
-      room.bus.on('tick', ({ dt }) => {
-        for (const e of room.entities.byKind('tomahawk')) stepTomahawk(room, e, dt);
+          bankrupt(room, e.victim, a);
+        } else if (e.means === 'melee') room.addPlayerScore(a, STICKS.meleeScore, 'melee');
+        else room.addPlayerScore(a, STICKS.killScore, 'kill');
       });
     },
     assignTeam: () => null,
@@ -49,71 +77,40 @@ export function sticksRules(): WagerRules {
       return rankedResults(room, reason, rules.rank(room));
     },
     hud(_room, p) {
-      return { mode: 'sticks', tomahawks: wx(p).tomahawks ?? 0 };
+      return { mode: 'sticks', tomahawks: tomahawksOf(p) };
     },
   };
-
-  function throwTomahawk(room: Room, id: string) {
-    const p = room.players.get(id);
-    if (!p || !p.alive || room.phase !== 'playing') return;
-    const st = wx(p);
-    if ((st.tomahawks ?? 0) <= 0) return;
-    st.tomahawks = (st.tomahawks ?? 0) - 1;
-    const { origin, vel } = throwFrom(p, TOMAHAWK_SPEED, 2);
-    const data: Projectile = { vel, gravity: 9.8, owner: p.id, born: room.time, life: 4 };
-    room.entities.add({ kind: 'tomahawk', x: origin.x, y: origin.y, z: origin.z, yaw: p.yaw, owner: p.id, data });
-    pushHud(room, rules, p);
-  }
-
-  function stepTomahawk(room: Room, e: Entity, dt: number) {
-    const hit = stepProjectile(room, e, dt);
-    if (!hit) return;
-    room.entities.remove(e.id);
-    if ('player' in hit) {
-      const owner = room.players.get((e.data as Projectile).owner) ?? null;
-      room.damage({ victim: hit.player, attacker: owner, amount: 1000, weapon: 'tomahawk', part: hit.part, means: 'thrown', from: hit.at, distance: owner ? Math.hypot(owner.move.x - hit.at.x, owner.move.z - hit.at.z) : 0 });
-    }
-  }
-
   return rules;
 }
 
-/** Crossbow: a fast bolt; a direct hit kills, otherwise it sticks and explodes after a short fuse. */
-export const crossbowBehavior: WeaponBehavior = {
-  fire(room, player, _weapon, shot) {
-    const vel = { x: shot.dir.x * BOLT_SPEED, y: shot.dir.y * BOLT_SPEED, z: shot.dir.z * BOLT_SPEED };
-    const data: Projectile = { vel, gravity: 3, owner: player.id, born: room.time, life: 3 };
-    room.entities.add({ kind: 'bolt', x: shot.origin.x, y: shot.origin.y, z: shot.origin.z, yaw: player.yaw, owner: player.id, data });
-    ensureBoltTicker(room);
-  },
-};
+let botGoalsRegistered = false;
 
-const tickers = new WeakSet<Room>();
-function ensureBoltTicker(room: Room) {
-  if (tickers.has(room)) return;
-  tickers.add(room);
-  room.bus.on('tick', ({ dt }) => {
-    for (const e of room.entities.byKind('bolt')) stepBolt(room, e, dt);
+/**
+ * Bots in Sticks and Stones: go and pick up a blade or tomahawk they can use (nearest first). The
+ * goal is urgent when the bot is out of bolts and blades, mild when it's only missing a spare.
+ * Registered once from the economy setup through the bots feature's public goal hook.
+ */
+export function registerSticksBotGoals(): void {
+  if (botGoalsRegistered) return;
+  botGoalsRegistered = true;
+  registerBotGoal('sticks', (room, bot) => {
+    const wantBlade = bladeRoom(bot) > 0;
+    const wantHawk = canRetrieveTomahawk(room, bot);
+    if (!wantBlade && !wantHawk) return null;
+    let best: Entity | null = null;
+    let bestD = 40;
+    const consider = (e: Entity) => {
+      const d = Math.hypot(e.x - bot.move.x, e.z - bot.move.z) + Math.abs(e.y - bot.move.y) * 2;
+      if (d < bestD) {
+        best = e;
+        bestD = d;
+      }
+    };
+    if (wantBlade) for (const e of room.entities.byKind(BLADE_ENTITY)) if (e.s?.k) consider(e);
+    if (wantHawk) for (const e of room.entities.byKind(TOMAHAWK_ENTITY)) if (e.s?.k) consider(e);
+    const target = best as Entity | null;
+    if (!target) return null;
+    const dry = bot.weapons.every((w) => w.mag + w.reserve === 0);
+    return { at: { x: target.x, y: target.y - (target.s?.k === 1 ? 1 : 0), z: target.z }, radius: 0.6, priority: dry ? 0.95 : 0.55, sprint: dry, label: `retrieve ${target.kind}` };
   });
-}
-
-function stepBolt(room: Room, e: Entity, dt: number) {
-  const pr = e.data as Projectile;
-  const owner = room.players.get(pr.owner) ?? null;
-  if (pr.stuckAt !== undefined) {
-    if (room.time - pr.stuckAt >= STICKS.boltFuseSec) {
-      room.entities.remove(e.id);
-      room.radiusDamage({ x: e.x, y: e.y, z: e.z }, STICKS.boltRadius, 160, 40, { attacker: owner, weapon: 'crossbow', means: 'explosive', hitSelf: true });
-    }
-    return;
-  }
-  const hit = stepProjectile(room, e, dt);
-  if (!hit) return;
-  if ('player' in hit) {
-    room.entities.remove(e.id);
-    room.damage({ victim: hit.player, attacker: owner, amount: 1000, weapon: 'crossbow', part: hit.part, means: 'bullet', from: hit.at, distance: owner ? Math.hypot(owner.move.x - hit.at.x, owner.move.z - hit.at.z) : 0 });
-    return;
-  }
-  pr.stuckAt = room.time;
-  e.s = { stuck: true };
 }
