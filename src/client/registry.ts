@@ -175,6 +175,21 @@ export function registerAimAssistGate(id: string, fn: AimAssistGate): void {
   aimAssistGates.set(id, fn);
 }
 
+// ---------------------------------------------------------------------------------------------
+// Outgoing buttons
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Rewrite this frame's `Buttons` bits before they go out in the input command (after pause
+ * masking). The Valkyrie rocket cam sends the tactical button as its boost bit and drops the
+ * grenade and knife bits, so the body standing in the world doesn't throw or stab.
+ */
+export type ButtonFilter = (match: Match, buttons: number) => number;
+export const buttonFilters = new Map<string, ButtonFilter>();
+export function registerButtonFilter(id: string, fn: ButtonFilter): void {
+  buttonFilters.set(id, fn);
+}
+
 /** Return true when something other than world geometry (smoke...) blocks sight from a to b. */
 export type SightBlocker = (a: Vec3, b: Vec3) => boolean;
 export const sightBlockers = new Map<string, SightBlocker>();

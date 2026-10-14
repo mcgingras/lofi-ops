@@ -12,13 +12,15 @@
  * 3. The rockets (`fireLauncher`, one `Active` per launcher): FIRE launches one from the eye along
  *    the aim; the first shot uses the streak and tells everyone it is inbound. While it flies the
  *    owner's view rides it (`ks.control`), their body stands still and can be killed, look steers
- *    it (`stepRocket`: turn rate, no gravity), the boost button boosts it, FIRE detonates it, and
+ *    it (`stepRocket`: turn rate, no gravity), holding boost speeds it up, FIRE detonates it, and
  *    it blows up on whatever it hits (the world, a player, an aircraft) or when its fuel runs out
  *    or it stays out of the play area for 2 s. The camera holds on the blast for 1 s, then the
  *    owner is back with the launcher, which reloads (3 s) before the second rocket.
  *
  * The rocket is hardware: any bullet (over 5 damage) or a SAM missile destroys it, and it then
- * detonates as BO1's did. If the owner dies it flies on dead straight; if they leave it detonates.
+ * detonates as BO1's did. If the owner dies it flies on dead straight and they don't respawn until
+ * it is gone plus 2 s (BO1 `killstreak_waitamount` / `WaitTillKillStreakDone`); if they leave it
+ * detonates.
  * Bots raise the launcher through the same API; the feature aims and fires for them and steers
  * their rockets at the nearest enemy with a skill-scaled error.
  */
@@ -39,7 +41,11 @@ import type { CallArgs } from './types';
 
 export { VALKYRIE, VALKYRIE_LAUNCHER };
 
-/** The boost button while steering (see docs/features/perks-streaks.md: ADS, right mouse / LT). */
+/**
+ * The boost bit on the wire. BO1 boosts with the tactical-grenade button; the client sends that
+ * (Q / LB, or ADS: right mouse / LT) as ADS while steering and drops the TACTICAL bit, so the body
+ * standing in the world doesn't throw a grenade. See docs/features/perks-streaks.md.
+ */
 export const BOOST_BUTTON = Buttons.ADS;
 
 /** The earned streak: a supply drop whose crate holds the launcher (BO1 `m220_tow_drop_mp`). */
@@ -139,6 +145,9 @@ export function rocketTrack(room: Room, ownerId: string): RocketTrack | null {
   return tracks.get(room)?.get(ownerId) ?? null;
 }
 
+/** An owner killed while their rocket flew respawns this long after it is gone (BO1 `WaitTillKillStreakDone`). */
+const RESPAWN_AFTER_ROCKET = 2;
+
 /** Seconds of path kept for the killcam (longer than any clip). */
 const TRACK_SEC = 6;
 
@@ -154,6 +163,8 @@ interface Flight {
   lastTrack: number;
   /** Bots: this rocket's steering error (unit-vector offset), from their skill. */
   bias: Vec3;
+  /** The boost button was let go since the launch (BO1 needs that before boosting). */
+  boostArmed: boolean;
 }
 
 /** One launcher's rockets, from the first shot until the last rocket is done (or the launcher is lost). */
@@ -203,7 +214,7 @@ class ValkyrieRun {
     byOwner.set(p.id, track);
     const err = p.isBot ? (1 - botStreakSkill(p)) * VALKYRIE.botError : 0;
     const bias = { x: (Math.random() - 0.5) * err, y: (Math.random() - 0.5) * err * 0.5, z: (Math.random() - 0.5) * err };
-    this.flight = { ent, st, guided: true, outSince: null, backAt: null, backFrom: 0, track, lastTrack: room.time, bias };
+    this.flight = { ent, st, guided: true, outSince: null, backAt: null, backFrom: 0, track, lastTrack: room.time, bias, boostArmed: (p.buttons & BOOST_BUTTON) === 0 };
     this.prevButtons = p.buttons;
     ks.control = { id: 'valkyrie', entity: ent.id, until: room.time + st.fuel };
     room.sendFeature(null, 'killstreaks.fx', { kind: 'rocket_launch', x: round(st.pos.x), y: round(st.pos.y), z: round(st.pos.z) });
@@ -222,12 +233,25 @@ class ValkyrieRun {
     });
   }
 
-  /** The owner died mid-flight: the rocket flies on dead straight (BO1 doesn't detonate it), and the launcher is gone. */
+  /**
+   * The owner died mid-flight: the rocket flies on dead straight (BO1 doesn't detonate it), the
+   * launcher is gone, and their respawn waits for the rocket (then 2 s more).
+   */
   orphan(): void {
     this.orphaned = true;
-    if (this.flight) this.flight.guided = false;
     this.holdUntil = 0;
+    const f = this.flight;
+    if (!f) return;
+    f.guided = false;
+    const p = this.p;
+    if (!p.alive && p.respawnAt !== null) {
+      this.heldRespawn = p.respawnAt;
+      p.respawnAt = null;
+    }
   }
+
+  /** The owner's respawn time while it waits for an orphaned rocket. */
+  private heldRespawn: number | null = null;
 
   private update(dt: number): boolean {
     const room = this.room;
@@ -277,10 +301,14 @@ class ValkyrieRun {
     if (f.guided && p.alive) {
       if (p.isBot) {
         want = botSteer(this.ctx, p, f);
-        boost = !f.st.boost && botStreakSkill(p) > 0.5 && !!want && f.st.fuel < VALKYRIE.fuel - 1.5;
+        // Skilled bots boost on the long straight run in, and let go to turn in at the end.
+        const t = want ? this.ctx.targetsFor(p, KS_ENTITY.rocket, f.st.pos, 400, false)[0] : undefined;
+        boost = !!t && botStreakSkill(p) > 0.5 && Math.hypot(t.move.x - f.st.pos.x, t.move.z - f.st.pos.z) > 30;
       } else {
         want = viewDir(p.yaw, p.pitch);
-        boost = (p.buttons & BOOST_BUTTON) !== 0;
+        const held = (p.buttons & BOOST_BUTTON) !== 0;
+        if (!held) f.boostArmed = true;
+        boost = held && f.boostArmed;
       }
     }
     const next = stepRocket(f.st, want, boost, dt);
@@ -319,7 +347,7 @@ class ValkyrieRun {
       while (f.track.points.length > 2 && f.track.points[0]!.t < room.time - TRACK_SEC) f.track.points.shift();
     }
     const ks = ksOf(p);
-    if (ks.control?.entity === e.id) ks.control.until = room.time + Math.max(0, next.fuel) / (next.boost ? VALKYRIE.boostBurn : 1);
+    if (ks.control?.entity === e.id) ks.control.until = room.time + Math.max(0, next.fuel);
     if (next.fuel <= 0 || (f.outSince !== null && room.time - f.outSince >= VALKYRIE.outOfBoundsSec - 1e-6)) this.explode(next.pos);
     else if (ks.control?.entity === e.id && Math.floor((room.time - dt) * 4) !== Math.floor(room.time * 4)) markDirty(room, p);
   }
@@ -365,6 +393,10 @@ class ValkyrieRun {
       markDirty(room, p);
     }
     this.holdUntil = steering && p.alive && !this.orphaned ? room.time + VALKYRIE.holdSec : 0;
+    if (this.heldRespawn !== null) {
+      if (!p.alive && p.respawnAt === null && room.players.get(p.id) === p) p.respawnAt = Math.max(this.heldRespawn, room.time + RESPAWN_AFTER_ROCKET);
+      this.heldRespawn = null;
+    }
     this.ctx.blast(at, VALKYRIE.blast.r, VALKYRIE.blast.max, VALKYRIE.blast.min, p, 'valkyrie', { fx: 'bigboom' });
   }
 

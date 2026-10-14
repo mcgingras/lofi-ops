@@ -14,13 +14,13 @@ import { cratesOf, PACKAGE } from '../src/server/features/killstreaks/streaks/pa
 import { rocketTrack } from '../src/server/features/killstreaks/streaks/valkyrie';
 import { ksRoom } from '../src/server/features/killstreaks/world';
 import { KILLSTREAK_BY_ID, KS_ENTITY } from '../src/shared/defs/killstreaks';
-import { clampLead, dirAngles, rocketLaunch, rocketOutOfBounds, signalWhite, steerToward, stepRocket, VALKYRIE, VALKYRIE_LAUNCHER, wrapAngle } from '../src/shared/defs/valkyrie';
+import { bankRoll, clampLead, dirAngles, rocketLaunch, rocketOutOfBounds, signalWhite, steerToward, stepRocket, turnRateAt, VALKYRIE, VALKYRIE_LAUNCHER, wrapAngle } from '../src/shared/defs/valkyrie';
 import { TICK_DT } from '../src/shared/constants';
 import { Buttons } from '../src/shared/input';
 import { viewDir, type Vec3 } from '../src/shared/math';
 import type { PlayerState } from '../src/server/player';
 import type { Room } from '../src/server/room';
-import { followRocket, holdView, launcherPhase, predictAhead, predictRocket, rocketHudInfo, rocketStateOf } from '../src/client/features/killstreaks/rocketcam-logic';
+import { followRocket, holdView, launcherPhase, predictAhead, predictRocket, rocketButtons, rocketHudInfo, rocketStateOf } from '../src/client/features/killstreaks/rocketcam-logic';
 import { bot, give, input, place, rig, steps, until, type Rig } from './perks-streaks.helpers';
 
 let r: Rig | undefined;
@@ -245,23 +245,44 @@ describe('Valkyrie Rockets: flight', () => {
     expect(angle(prev, want)).toBeGreaterThan(0.5); // a third of a second can't swing it round
   });
 
-  it('boost (ADS) speeds it up for good and burns the fuel three times as fast', () => {
+  it('boost: held, it ramps to three times cruise speed; let go, back down; it must be let go once after the launch', () => {
     const room = setup();
     const a = human(room, 0, -1, 14);
     raised(room, a);
-    pressFire(room, a, 0, 0.6);
-    steps(room, 0.2);
-    expect(rocketEnt(room)!.s?.v).toBeCloseTo(VALKYRIE.speed, 0);
-    input(room, a, Buttons.ADS, 0, 0.6);
+    // Launched with the boost bit already held: no boost until it is let go (BO1).
+    input(room, a, Buttons.FIRE | Buttons.ADS, 0, 0.7);
     room.step();
-    input(room, a, 0, 0, 0.6);
-    steps(room, 0.8);
+    for (let i = 0; i < 12; i++) {
+      input(room, a, Buttons.ADS, 0, 0.7);
+      room.step();
+    }
+    expect(rocketEnt(room)!.s?.b).toBe(0);
+    expect(rocketEnt(room)!.s?.v).toBeCloseTo(VALKYRIE.speed, 0);
+    input(room, a, 0, 0, 0.7);
+    room.step();
+    const fuel0 = rocketEnt(room)!.s!.f as number;
+    for (let i = 0; i < 60; i++) {
+      input(room, a, Buttons.ADS, 0, 0.7);
+      room.step();
+    }
     const e = rocketEnt(room)!;
     expect(e.s?.b).toBe(1);
     expect(e.s?.v).toBeCloseTo(VALKYRIE.boostSpeed, 0);
+    expect(fuel0 - (e.s!.f as number)).toBeCloseTo(VALKYRIE.boostBurn, 0); // 1 s boosted burns 2 s of fuel
+    for (let i = 0; i < 60; i++) {
+      input(room, a, 0, 0, 0.7);
+      room.step();
+    }
+    expect(rocketEnt(room)?.s?.v).toBeCloseTo(VALKYRIE.speed, 0);
   });
 
-  it('flies 15 s unboosted, 5 s boosted (pure flight steps)', () => {
+  it('turns slower at boost speed (sideways acceleration cap)', () => {
+    expect(turnRateAt(VALKYRIE.speed)).toBeLessThanOrEqual(VALKYRIE.turnRate);
+    expect(turnRateAt(VALKYRIE.speed)).toBeGreaterThan(0.9);
+    expect(turnRateAt(VALKYRIE.boostSpeed)).toBeCloseTo(VALKYRIE.maxSteerAccel / VALKYRIE.boostSpeed, 6);
+  });
+
+  it('flies 15 s unboosted, 7.5 s boosted (pure flight steps)', () => {
     const fly = (boost: boolean) => {
       let s = rocketLaunch({ x: 0, y: 0, z: 0 }, 0, 0);
       let t = 0;
@@ -333,12 +354,12 @@ describe('Valkyrie Rockets: flight', () => {
     const room = setup();
     const a = human(room, 0, -1, 14);
     raised(room, a);
-    pressFire(room, a, 0, 1.4); // nearly straight up
-    input(room, a, Buttons.ADS, 0, 1.4);
+    pressFire(room, a, 0, 1.4); // nearly straight up, boosting
     let whiteSeen = 0;
     const t = until(
       room,
       () => {
+        input(room, a, Buttons.ADS, 0, 1.4);
         const e = rocketEnt(room);
         if (e && typeof e.s?.w === 'number') whiteSeen = Math.max(whiteSeen, e.s.w);
         return !e;
@@ -391,6 +412,7 @@ describe('Valkyrie Rockets: the owner', () => {
     steps(room, 0.1);
     const dir0 = entDir(rocketEnt(room)!);
     room.kill(a, bot(room, 1), { weapon: 'ak47', means: 'bullet' });
+    expect(a.respawnAt).toBeNull(); // held while the rocket flies
     expect(ksOf(a).launcher).toBeNull();
     expect(ksOf(a).control).toBeNull();
     const v = bot(room, 1);
@@ -404,6 +426,8 @@ describe('Valkyrie Rockets: the owner', () => {
     if (e2) expect(angle(entDir(e2), dir0)).toBeLessThan(1e-3);
     expect(until(room, () => !rocketEnt(room), 4)).toBeLessThan(4);
     expect(deaths.some((d) => d.victim === v && d.attacker === a && d.weapon === 'valkyrie')).toBe(true);
+    // The respawn waited for the rocket: 2 s after it went off.
+    expect(a.respawnAt).toBeGreaterThanOrEqual(room.time + 2 - 0.01);
     steps(room, 0.1);
     expect(ksRoom(room).activeOf(a, 'valkyrie')).toHaveLength(0);
   });
@@ -492,6 +516,15 @@ describe('Valkyrie flight maths (shared)', () => {
     expect(Math.abs(wrapAngle(seam.yaw - (-Math.PI + 0.05)))).toBeLessThan(1e-9);
   });
 
+  it('banks into turns up to 35 degrees, level when straight', () => {
+    let r = 0;
+    for (let i = 0; i < 120; i++) r = bankRoll(r, VALKYRIE.turnRate * 2, 1 / 60);
+    expect(r).toBeCloseTo(VALKYRIE.maxRoll, 2);
+    for (let i = 0; i < 240; i++) r = bankRoll(r, 0, 1 / 60);
+    expect(Math.abs(r)).toBeLessThan(0.01);
+    expect(bankRoll(0, -1, 1)).toBeLessThan(0);
+  });
+
   it('out of bounds past the map edge or above the height limit; the no-signal white ramps', () => {
     const b = { min: { x: -10, y: -1, z: -10 }, max: { x: 10, y: 20, z: 10 } };
     expect(rocketOutOfBounds({ x: 0, y: 5, z: 0 }, b, 0)).toBe(false);
@@ -548,6 +581,14 @@ describe('rocket cam maths (client)', () => {
     expect(h.pos.z).toBeGreaterThan(-10);
     expect(h.pos.y).toBeGreaterThan(0);
     expect(angle(h.dir, { x: 0, y: -h.pos.y, z: -10 - h.pos.z })).toBeLessThan(0.3);
+  });
+
+  it('while steering, tactical (Q / LB) or ADS goes out as the boost bit; grenades and the knife are dropped', () => {
+    const F = Buttons.FIRE;
+    expect(rocketButtons(Buttons.TACTICAL | F, true)).toBe(Buttons.ADS | F);
+    expect(rocketButtons(Buttons.ADS, true)).toBe(Buttons.ADS);
+    expect(rocketButtons(Buttons.LETHAL | Buttons.MELEE | Buttons.FORWARD, true)).toBe(Buttons.FORWARD);
+    expect(rocketButtons(Buttons.TACTICAL | Buttons.LETHAL, false)).toBe(Buttons.TACTICAL | Buttons.LETHAL);
   });
 
   it('launcher phases and the overlay readouts', () => {

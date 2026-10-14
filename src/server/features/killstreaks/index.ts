@@ -34,7 +34,7 @@ import { registerNukeModifiers } from './streaks/nuke';
 import { registerRadarModifiers } from './streaks/radar';
 import { botLauncher, fireLauncher, onOwnerDeath, putAwayLauncher, raiseLauncher, syncLauncherEntity } from './streaks/valkyrie';
 import { ksRoom } from './world';
-import { VALKYRIE_LAUNCHER } from '../../../shared/defs/valkyrie';
+import { VALKYRIE, VALKYRIE_LAUNCHER } from '../../../shared/defs/valkyrie';
 
 export { callKillstreak, readyKillstreaks, enemyStreakTargets, suggestTarget, isDrivingStreak, isDesignating, isHoldingLauncher, killstreakState, botAutoStreaks } from './api';
 
@@ -201,6 +201,8 @@ const feature: Feature = {
     // Driving a streak or holding the radio (tactical map): the body stands still with its weapon
     // down; designating: no sprint.
     room.modifiers.add('speedMultiplier', (p) => (p.ext.killstreaks?.control || p.ext.killstreaks?.map ? 0 : undefined), 'killstreaks.control');
+    // Walking with the Valkyrie launcher up (weapon file `moveSpeedScale 0.8`).
+    room.modifiers.add('speedMultiplier', (p) => (p.ext.killstreaks?.launcher && !p.ext.killstreaks.control ? VALKYRIE.moveScale : undefined), 'killstreaks.launcher');
     room.modifiers.add('canSprint', (p) => (p.ext.killstreaks?.control || p.ext.killstreaks?.armed || p.ext.killstreaks?.map || p.ext.killstreaks?.marker || p.ext.killstreaks?.launcher ? false : undefined), 'killstreaks.control_sprint');
     // USE takes a care package in reach (before any weapon pickup), and does nothing else while driving or on the radio.
     room.modifiers.add('useClaimed', (p) => (p.ext.killstreaks?.control || p.ext.killstreaks?.map || crateInReach(ctx, p) ? true : undefined), 'killstreaks.use');

@@ -23,7 +23,7 @@ import { MatchNet, net, type Net } from '../net';
 import { MapScene } from '../render/mapbuilder';
 import type { Renderer } from '../render/renderer';
 import { develop, prioritize } from '../render/textures';
-import { aimAssistGates, entityRenderers, matchHooks, onFeature, sightBlockers, type EntityView } from '../registry';
+import { aimAssistGates, buttonFilters, entityRenderers, matchHooks, onFeature, sightBlockers, type EntityView } from '../registry';
 import { settings } from '../settings';
 import { client } from '../state';
 import { drawHud } from '../hud/hud';
@@ -550,6 +550,13 @@ export class Match {
       this.wantReload = false;
     }
     if (!c.locked) buttons &= Buttons.CROUCH; // paused: stand still (keep crouch)
+    for (const [id, f] of buttonFilters) {
+      try {
+        buttons = f(this, buttons);
+      } catch (err) {
+        console.error(`[button filter ${id}]`, err);
+      }
+    }
     this.yaw = c.yaw + this.recoil.yaw;
     this.pitch = Math.max(-1.5, Math.min(1.5, c.pitch + this.recoil.pitch));
     this.net.input(buttons, this.yaw, this.pitch, this.slot, dt);

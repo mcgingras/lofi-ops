@@ -14,6 +14,18 @@
  */
 import { clamp, viewDir, type Vec3 } from '../../../shared/math';
 import { dirAngles, steerToward, stepRocket, VALKYRIE, type RocketState } from '../../../shared/defs/valkyrie';
+import { Buttons } from '../../../shared/input';
+
+/**
+ * The input bits sent while steering a rocket: the tactical button (BO1's boost, Q / LB) or ADS
+ * (right mouse / LT) goes out as the boost bit (ADS); the grenade and knife bits are dropped so
+ * the body left standing doesn't throw or stab. Not steering: unchanged.
+ */
+export function rocketButtons(b: number, steering: boolean): number {
+  if (!steering) return b;
+  const boost = (b & (Buttons.TACTICAL | Buttons.ADS)) !== 0;
+  return (b & ~(Buttons.TACTICAL | Buttons.LETHAL | Buttons.MELEE | Buttons.ADS)) | (boost ? Buttons.ADS : 0);
+}
 
 export interface RocketEnt {
   x: number;

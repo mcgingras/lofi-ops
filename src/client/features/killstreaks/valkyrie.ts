@@ -16,18 +16,18 @@
  */
 import * as THREE from 'three';
 import { KS_ENTITY } from '../../../shared/defs/killstreaks';
-import { clampLead, VALKYRIE, VALKYRIE_LAUNCHER } from '../../../shared/defs/valkyrie';
+import { bankRoll, clampLead, VALKYRIE, VALKYRIE_LAUNCHER, wrapAngle } from '../../../shared/defs/valkyrie';
 import { viewDir } from '../../../shared/math';
 import { sfx } from '../../game/audio';
 import type { Match } from '../../game/match';
 import { promptKey } from '../../game/prompts';
 import { blink, rect, txt, unit, HUD_COLORS as C } from '../../hud/draw';
-import { registerAimAssistGate, registerEntityRenderer, registerHudWidget, registerMatchHook } from '../../registry';
+import { registerAimAssistGate, registerButtonFilter, registerEntityRenderer, registerHudWidget, registerMatchHook } from '../../registry';
 import type { Soldier } from '../../render/models/soldier';
 import { setDynLight, type LookMaterial } from '../../render/shader';
 import { currentMatch } from '../../state';
 import { buildValkyrieLauncher, Kit, type LauncherParts } from './models';
-import { followRocket, holdView, launcherPhase, poseAngles, predictAhead, predictRocket, rocketHudInfo, rocketStateOf, type CamPose } from './rocketcam-logic';
+import { followRocket, holdView, launcherPhase, poseAngles, predictAhead, predictRocket, rocketButtons, rocketHudInfo, rocketStateOf, type CamPose } from './rocketcam-logic';
 import { ksClient } from './store';
 
 // ---------------------------------------------------------------------------------------------
@@ -44,6 +44,8 @@ export const valkyrieClient = {
   cam: false,
   /** This frame's camera pose while it is on. */
   pose: null as CamPose | null,
+  /** Dead, with our rocket still in the air. */
+  orphan: false,
 };
 
 let local: { phase: 'raise' | 'away'; at: number } | null = null;
@@ -51,6 +53,11 @@ let prev = { streak: false, fire: false, slot: 0 };
 let follow: CamPose | null = null;
 let followEnt = -1;
 let setFeed = false;
+/** Camera bank (rad) and the last camera yaw, for the turn rate. */
+let roll = 0;
+let lastYaw: number | null = null;
+/** Our rocket flew on after we died (BO1 holds the respawn until it is gone). */
+let orphanSeen = false;
 
 const launcherSelected = () => {
   const st = ksClient.state;
@@ -65,6 +72,16 @@ function rocketControl() {
 
 // No controller aim assist while the stick flies a rocket.
 registerAimAssistGate('killstreaks.valkyrie', () => !rocketControl());
+
+/**
+ * While steering: BO1 boosts with the tactical-grenade button (Q / LB); right mouse / LT works too.
+ * Either goes out as the boost bit (ADS); the grenade and knife bits are dropped so the body
+ * standing in the world doesn't throw or stab.
+ */
+registerButtonFilter('killstreaks.valkyrie', (m, b) => rocketButtons(b, !!rocketControl() && m.alive));
+
+/** The boost is held this frame (tactical or ADS), for the prediction. */
+const boostHeld = (m: Match) => m.controls.adsHeld || m.controls.isHeld('tactical');
 
 // ---------------------------------------------------------------------------------------------
 // First person: the launcher on the right shoulder
@@ -181,6 +198,13 @@ registerMatchHook('killstreaks.valkyrie', {
     if (held && !shownBefore) valkyrieClient.raisedAt = m.time;
     valkyrieClient.held = held;
 
+    // Killed while our rocket flies on: the respawn waits for it; follow the server's time.
+    const mine = m.net.lastSnap?.ents.some((e) => e.kind === KS_ENTITY.rocket && e.owner === m.myId) ?? false;
+    if (m.alive) orphanSeen = false;
+    else if (mine) orphanSeen = true;
+    valkyrieClient.orphan = !m.alive && mine;
+    if (orphanSeen && m.death && m.me && m.death.respawnAt !== m.me.respawnAt) m.death.respawnAt = m.me.respawnAt;
+
     // The rocket cam.
     const cam = updateRocketCam(m, dt, ctl);
     valkyrieClient.cam = cam;
@@ -205,6 +229,8 @@ function updateRocketCam(m: Match, dt: number, ctl: ReturnType<typeof rocketCont
   if (!ctl || !m.alive) {
     follow = null;
     followEnt = -1;
+    roll = 0;
+    lastYaw = null;
     valkyrieClient.pose = null;
     if (setFeed) {
       r.feed = 0;
@@ -228,7 +254,7 @@ function updateRocketCam(m: Match, dt: number, ctl: ReturnType<typeof rocketCont
     const aim = clampLead(base.dir, m.controls.yaw, m.controls.pitch);
     m.controls.yaw = aim.yaw;
     m.controls.pitch = aim.pitch;
-    const boost = m.controls.adsHeld;
+    const boost = boostHeld(m);
     const pred = predictRocket(base, viewDir(aim.yaw, aim.pitch), boost, predictAhead(m.serverTime, snap!.time, m.netRtt));
     if (followEnt !== ent.id) {
       follow = null;
@@ -240,8 +266,12 @@ function updateRocketCam(m: Match, dt: number, ctl: ReturnType<typeof rocketCont
   const pose = follow!;
   valkyrieClient.pose = pose;
   const a = poseAngles(pose);
+  // Banks into turns (BO1: up to 35 degrees), level while it holds on the blast.
+  const yawRate = lastYaw === null || ctl.hold || dt <= 0 ? 0 : wrapAngle(a.yaw - lastYaw) / dt;
+  lastYaw = a.yaw;
+  roll = bankRoll(roll, yawRate, dt);
   r.cam.position.set(pose.pos.x, pose.pos.y, pose.pos.z);
-  r.cam.rotation.set(a.pitch, a.yaw, 0, 'YXZ');
+  r.cam.rotation.set(a.pitch, a.yaw, roll, 'YXZ');
   // The rocket cam ignores ADS (that button boosts) and ADS sensitivity.
   r.zoom = 1;
   r.updateFov();
@@ -362,16 +392,29 @@ registerHudWidget(
     rect(g, cx - fw / 2 - u, 38 * u - u, fw + 2 * u, 5 * u, C.ink);
     rect(g, cx - fw / 2, 38 * u, fw * info.fuel, 3 * u, info.fuel < 0.25 ? C.warn : C.hi);
     txt(g, 'FUEL', cx - fw / 2 - 4 * u, 36 * u, 8, C.dim, 'right', u);
-    // Boost: the button, then lit once it burns (it can't be turned off).
+    // Boost: the button, lit while it burns.
     const bx = cx + R * 0.72;
     const by = cy + R * 0.55;
     if (info.boost) {
       if (blink(m.time, 0.3, 0.2)) txt(g, 'BOOST', bx, by, 16, C.warn, 'center', u);
-    } else txt(g, `${promptKey('ads', { brackets: true })} BOOST`, bx, by, 8, C.paper, 'center', u);
+    } else txt(g, `${promptKey('tactical', { brackets: true })} BOOST`, bx, by, 8, C.paper, 'center', u);
     txt(g, `${promptKey('fire', { brackets: true })} DETONATE`, cx - R * 0.72, by, 8, C.paper, 'center', u);
     if (info.white > 0 && blink(m.time, 0.5, 0.3)) txt(g, 'LOSING SIGNAL', cx, cy - 30 * u, 16, C.warn, 'center', u);
   },
   64,
+);
+
+// Dead with the rocket still flying: say why the respawn waits.
+registerHudWidget(
+  'killstreaks.rocketWait',
+  (g, W, H) => {
+    const m = currentMatch();
+    if (!m || m.alive || !valkyrieClient.orphan || m.phase !== 'playing') return;
+    const u = unit(H);
+    clearBox(g, 0, H * 0.62 - 2 * u, W, 12 * u);
+    txt(g, 'YOUR ROCKET IS STILL FLYING', W / 2, H * 0.62, 8, C.hi, 'center', u);
+  },
+  81,
 );
 
 // ---------------------------------------------------------------------------------------------
