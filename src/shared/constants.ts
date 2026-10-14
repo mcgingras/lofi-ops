@@ -66,27 +66,27 @@ export const MOVE = {
  * Sources and reasoning: docs/features/movement.md.
  */
 export const PRONE = {
-  /** Standing or crouched -> fully prone. */
-  downSec: 0.8,
+  /** Standing or crouched -> fully prone (BO1: stand->crouch 200 ms + crouch->prone 400 ms). */
+  downSec: 0.6,
   /** Prone -> standing (slower than going down). */
-  upSec: 1.0,
-  /** Prone -> crouched. */
-  toCrouchSec: 0.7,
+  upSec: 0.8,
+  /** Prone -> crouched (BO1 400 ms). */
+  toCrouchSec: 0.45,
   /** The weapon is down (no firing) until the transition is this close to done (0..1 of proneT). */
   fireReady: 0.15,
   /** Lying body behind the eye: legs reach this far back (hitboxes, the room check, leg collision). */
   length: 1.6,
-  /** Hip / ADS spread multiplier while fully prone (BO1 hipSpreadProneMin vs stand). */
-  spread: 0.6,
+  /** Hip / ADS spread multiplier while fully prone (hip spread prone 2-5 vs standing 3-7 degrees). */
+  spread: 0.65,
   /** Recoil (view kick) multiplier while fully prone. */
   recoil: 0.6,
-  /** Scope / weapon sway multiplier while fully prone. */
-  sway: 0.5,
-  /** Dolphin dive (sprint + crouch/prone): horizontal speed at take-off, lift, slide decel, busy time. */
-  diveSpeed: 6.6,
-  diveUp: 3.2,
-  diveSlide: 9,
-  diveSec: 0.75,
+  /** Scope / weapon sway multiplier while fully prone (weapon files' idleProneFactor 0.4). */
+  sway: 0.4,
+  /** Dolphin dive (sprint + crouch/prone): least horizontal speed at take-off (a sprint carries over), lift, slide decel, busy time. */
+  diveSpeed: 7.2,
+  diveUp: 5.0,
+  diveSlide: 15,
+  diveSec: 0.9,
 } as const;
 
 /**

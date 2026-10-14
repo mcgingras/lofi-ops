@@ -82,7 +82,7 @@ describe('prone through the room', () => {
     steps(room, 1.2);
     prone = false;
     // B gets up: past half way (proneT < 0.5) the hitboxes stand.
-    steps(room, 0.6);
+    steps(room, 0.45);
     expect(b.move.prone).toBe(false);
     expect(b.move.proneT).toBeLessThan(0.5);
     const seenAt = room.time - 0.2; // the shooter's screen (200 ms behind) still shows B lying

@@ -208,8 +208,8 @@ function substep(world: CollisionWorld, s: MoveState, buttons: number, yaw: numb
   s.sinceSprint = sprint ? 0 : s.sinceSprint + h;
   updateAds(s, adsHeld && !sprint, h, p);
 
-  // Mantle: jump (a fresh press, or held while airborne) facing a ledge you can't step onto.
-  if (jumpDown && f > 0 && p.canMantle !== false && !s.prone && s.proneT <= 0 && s.dive <= 0 && (jumpPress || !s.onGround)) {
+  // Mantle (BO1): jump held, standing, moving forward into a ledge you can't step onto.
+  if (jumpDown && f > 0 && p.canMantle !== false && !s.crouched && !s.prone && s.proneT <= 0 && s.dive <= 0) {
     const plan = findMantle(world, s, yaw);
     if (plan) {
       startMantle(s, plan);
@@ -223,6 +223,8 @@ function substep(world: CollisionWorld, s: MoveState, buttons: number, yaw: numb
   if (lowStance) speed *= MOVE.prone;
   else if (s.crouched) speed *= MOVE.crouch;
   speed *= 1 + (p.adsMove - 1) * s.ads;
+  // BO1: aiming down sights while prone, you can't crawl.
+  if (s.prone && s.ads > 0.5) speed = 0;
   const sy = Math.sin(yaw);
   const cy = Math.cos(yaw);
   const wx = (-sy * f + cy * side) * speed;
@@ -416,8 +418,9 @@ function startDive(s: MoveState, yaw: number) {
   s.proneT = Math.max(s.proneT, 0.3);
   s.dive = PRONE.diveSec;
   s.sprinting = false;
-  s.vx = dx * PRONE.diveSpeed;
-  s.vz = dz * PRONE.diveSpeed;
+  const sp = Math.max(v, PRONE.diveSpeed);
+  s.vx = dx * sp;
+  s.vz = dz * sp;
   s.vy = PRONE.diveUp;
   s.onGround = false;
 }
