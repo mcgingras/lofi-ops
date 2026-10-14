@@ -44,6 +44,8 @@ export interface Damageable {
   active: Active;
   /** Points to whoever destroys it. */
   score: number;
+  /** Damage taken x these: bullets (`onFire`) and explosions (`blast`, `explosion`). Default 1. */
+  scale?: { bullet?: number; explosive?: number };
   /** What happens when destroyed (default: the whole active ends). */
   onDestroyed?(by: PlayerState | null): void;
 }
@@ -191,7 +193,8 @@ export class KsRoom {
     if (!best) return;
     const e = this.room.entities.get(best.id)!;
     const base = def ? damageAtRange(def, best.t) * Math.max(1, Math.min(4, def.pellets ?? 1)) : 30;
-    this.hurtEntity(best.id, base * this.room.modifiers.mul('killstreakDamageDealt', shooter, e.kind), shooter);
+    const scale = this.hp.get(best.id)?.scale?.bullet ?? 1;
+    this.hurtEntity(best.id, base * scale * this.room.modifiers.mul('killstreakDamageDealt', shooter, e.kind), shooter);
   }
 
   /** An explosion by `owner`'s streak: players (core radiusDamage) plus enemy ground hardware. */
@@ -200,14 +203,26 @@ export class KsRoom {
     if (fxKind) this.fx({ kind: fxKind, x: center.x, y: center.y, z: center.z, r: radius });
     // Lifted a little so a blast on the floor isn't blocked by the floor's own surface.
     const hit = this.room.radiusDamage({ x: center.x, y: center.y + 0.3, z: center.z }, radius, max, min, { attacker: owner, weapon, means: opts.means ?? 'killstreak' });
+    this.explosion(center, radius, max, min, owner, false);
+    return hit;
+  }
+
+  /**
+   * Explosion damage to ground hardware within `radius` (max at the centre down to min at the edge,
+   * times each one's explosive scale). Streak blasts reach through walls (`los` false, as before);
+   * players' grenades and launcher rounds need a clear line (`los`).
+   */
+  explosion(center: Vec3, radius: number, max: number, min: number, by: PlayerState | null, los = true): void {
     for (const [id, d] of [...this.hp]) {
       if (d.air) continue;
       const e = this.room.entities.get(id);
       if (!e) continue;
-      const dist = Math.hypot(e.x - center.x, e.y + d.yOff - center.y, e.z - center.z);
-      if (dist <= radius) this.hurtEntity(id, max + (min - max) * (dist / radius), owner);
+      const c = { x: e.x, y: e.y + d.yOff, z: e.z };
+      const dist = Math.max(0, Math.hypot(c.x - center.x, c.y - center.y, c.z - center.z) - d.radius * 0.5);
+      if (dist > radius) continue;
+      if (los && !this.room.world.lineOfSight({ x: center.x, y: center.y + 0.2, z: center.z }, c, 'bullets')) continue;
+      this.hurtEntity(id, (max + (min - max) * (dist / radius)) * (d.scale?.explosive ?? 1), by);
     }
-    return hit;
   }
 
   fx(f: KillstreakFx): void {

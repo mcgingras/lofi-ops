@@ -227,7 +227,7 @@ export class CollisionWorld {
   }
 
   /** Is a player box free of the world? */
-  free(x: number, y: number, z: number, r = PLAYER.radius, h = PLAYER.height): boolean {
+  free(x: number, y: number, z: number, r: number = PLAYER.radius, h: number = PLAYER.height): boolean {
     const cand = this.near(x - r, x + r, z - r, z + r, [] as Solid[]);
     for (const s of cand) if (CollisionWorld.overlaps(s, x, y, z, r, h)) return false;
     return true;
@@ -237,7 +237,7 @@ export class CollisionWorld {
    * Highest walkable surface under a footprint between `fromY - drop` and `fromY + EPS`, or null.
    * Used for ground snapping and spawn placement.
    */
-  groundBelow(x: number, z: number, fromY: number, drop: number, r = PLAYER.radius): number | null {
+  groundBelow(x: number, z: number, fromY: number, drop: number, r: number = PLAYER.radius): number | null {
     let best: number | null = null;
     for (const s of this.near(x - r, x + r, z - r, z + r, [] as Solid[])) {
       if (x + r <= s.min.x + EPS || x - r >= s.max.x - EPS || z + r <= s.min.z + EPS || z - r >= s.max.z - EPS) continue;

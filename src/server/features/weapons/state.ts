@@ -61,6 +61,12 @@ declare module '../../../shared/events' {
     'weapons.tactical': { player: P | null; victim: P; equipment: string; amount: number };
     /** A knife swing (victim null on a miss). */
     'weapons.melee': { player: P; victim: P | null };
+    /**
+     * Equipment went off at x,y,z (frag, semtex, launcher round `gl`, flashbang, concussion), for
+     * whatever else it should affect (killstreak hardware takes the blast; tacticals stun turrets).
+     * `max`/`min` are the blast damage at the centre / edge of `radius` (0 for tacticals).
+     */
+    'weapons.detonated': { player: P | null; equipment: string; effect: string; x: number; y: number; z: number; radius: number; max: number; min: number };
   }
 }
 

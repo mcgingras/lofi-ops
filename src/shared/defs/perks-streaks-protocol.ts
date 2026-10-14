@@ -20,6 +20,12 @@ export interface KillstreakStateMsg {
   armed: { id: string; marks: [number, number, number][]; need: number; until: number } | null;
   /** Holding the Care Package marker canister for streak `id` (FIRE throws it, STREAK puts it away). */
   marker?: { id: string } | null;
+  /**
+   * Carrying a Sentry Gun / SAM Turret (`id`) to place it: FIRE or USE puts it down where the
+   * preview shows (`turretPlacement`), STREAK puts it away. `moved`: a placed turret picked back up
+   * (STREAK puts it back where it was instead; the streak is already used).
+   */
+  carry?: { id: string; moved: boolean } | null;
   /** The tactical map is up (radio raised) for streak `id` until room time `until`. */
   map: { id: string; until: number } | null;
   /**

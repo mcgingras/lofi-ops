@@ -207,6 +207,7 @@ function explodeAt(room: Room, e: Entity, n: NadeData, at: Vec3) {
     const c = { x: at.x, y: at.y + 0.1, z: at.z };
     room.radiusDamage(c, GL_ROUND.radius, GL_ROUND.max, GL_ROUND.min, { attacker: owner, weapon: 'gl', means: 'explosive', hitSelf: true });
     room.sendFeature(null, 'weapons.boom', { x: c.x, y: c.y, z: c.z, e: 'gl', owner: n.owner });
+    room.bus.emit('weapons.detonated', { player: owner, equipment: 'gl', effect: 'gl', ...c, radius: GL_ROUND.radius, max: GL_ROUND.max, min: GL_ROUND.min });
   }
 }
 
@@ -215,6 +216,7 @@ export function explode(room: Room, at: Vec3, equip: EquipmentDef, ownerId: stri
   const owner = ownerId ? (room.players.get(ownerId) ?? null) : null;
   const c = { x: at.x, y: at.y + 0.1, z: at.z };
   room.sendFeature(null, 'weapons.boom', { x: c.x, y: c.y, z: c.z, e: equip.id, owner: ownerId });
+  room.bus.emit('weapons.detonated', { player: owner, equipment: equip.id, effect: equip.effect, ...c, radius: equip.radius, max: equip.max, min: equip.min });
   if (equip.effect === 'frag' || equip.effect === 'semtex') {
     room.radiusDamage(c, equip.radius, equip.max, equip.min, { attacker: owner, weapon: equip.id, means: 'explosive', hitSelf: true });
     return;

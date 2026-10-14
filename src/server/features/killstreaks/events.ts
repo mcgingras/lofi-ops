@@ -34,6 +34,27 @@ export interface KsMarker {
   since: number;
 }
 
+/**
+ * A turret (Sentry Gun, SAM Turret) in hand: STREAK raised it fresh from the ready list, or USE
+ * picked a placed one back up. FIRE or USE puts it down where the preview shows (shared
+ * `turretPlacement`). `entity` is the turret others see in your hands.
+ */
+export interface KsCarry {
+  id: string;
+  since: number;
+  entity: number;
+  /** A placed turret picked back up (null: fresh from the ready list, so putting it away keeps the streak). */
+  turret: CarriedTurret | null;
+}
+
+/** What the carry code needs from a placed turret that was picked up (streaks/turrets.ts). */
+export interface CarriedTurret {
+  /** Put it down at a (validated) spot, facing `spot.yaw`. */
+  place(spot: { x: number; y: number; z: number; yaw: number }): void;
+  /** Put it back where it was picked up. */
+  putBack(): void;
+}
+
 /** The tactical map is up (radio raised) for `id`. */
 export interface KsMapMode {
   id: string;
@@ -58,6 +79,8 @@ export interface KillstreakExt {
   marker?: KsMarker | null;
   /** The Valkyrie launcher is in hand (weapon down) until both rockets are used or it is put away. */
   launcher?: KsLauncher | null;
+  /** A Sentry Gun / SAM Turret in hand (weapon down, slower, no sprint) until placed or put away. */
+  carry?: KsCarry | null;
   /** Tactical map open (humans; bots pick targets server-side). */
   map?: KsMapMode | null;
   /** Rate limit for map RPCs. */
