@@ -3,7 +3,9 @@
  * damage falloff, hit-part multipliers, and deterministic spread so both sides agree on where a
  * pellet went given the shot's seed.
  */
-import { playerHitboxes, type HitPart } from './collision';
+import { playerHitboxes, type HitPart, type Stance } from './collision';
+import { PRONE } from './constants';
+import { fullyProne, type StanceState } from './movement';
 import type { WeaponDef } from './defs/weapons';
 import { normalize, rng, type Vec3 } from './math';
 
@@ -22,10 +24,13 @@ export function partMultiplier(w: Pick<WeaponDef, 'multipliers'>, part: HitPart,
 }
 
 /** Is height `y` in the lower half of the torso box of a player with feet at `p`? */
-export function isLowerTorso(p: Vec3, crouched: boolean, y: number): boolean {
-  const t = playerHitboxes(p, crouched).torso;
+export function isLowerTorso(p: Vec3, stance: boolean | Stance, y: number): boolean {
+  const t = playerHitboxes(p, stance).torso;
   return y < (t.min.y + t.max.y) / 2;
 }
+
+/** Spread multiplier for the shooter's stance: tighter fully prone (BO1 prone spread), else 1. */
+export const stanceSpread = (s: StanceState): number => (fullyProne(s) ? PRONE.spread : 1);
 
 /** Spread cone half-angle (degrees) for an ads fraction and whether moving. */
 export function spreadDegrees(w: Pick<WeaponDef, 'spread'>, ads: number, moving: boolean, mult = 1): number {
