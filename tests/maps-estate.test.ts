@@ -206,7 +206,7 @@ describe('estate walk tests', () => {
       expect(res.escapes, `escaped at ${JSON.stringify(res.escapes.slice(0, 3))}`).toHaveLength(0);
       expect(res.falls, `fell at ${JSON.stringify(res.falls.slice(0, 3))}`).toHaveLength(0);
     }
-  });
+  }, 180_000); // the first walk flood (it mantles too) runs here
 
   it('every walk node stays inside the outline', () => {
     const inside = (x: number, z: number) => {

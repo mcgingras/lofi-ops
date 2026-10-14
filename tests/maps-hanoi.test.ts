@@ -220,7 +220,7 @@ describe('hanoi play space', () => {
     // Upper floors: the Guardhouse, the Barracks, the East House (balcony), the Cell Block guard end, the wall walk, the gallows.
     for (const [name, p] of [['guardhouse', v(-2.6, 3.2, 3.4)], ['barracks', v(18.7, 3.2, 9)], ['east house', v(31.4, 3.2, 16)], ['balcony', v(28.5, 3.1, 15.0)], ['cell block upstairs', C(27, 3.2, -1)], ['wall walk', v(30, 3.2, -7.2)], ['gallows', v(-8, 1.5, -16.8)]] as const) expect(r.near(p, 0.9), name).toBe(true);
     expect(r.nodes.filter((n) => n.y > 2.5).length).toBeGreaterThan(80);
-  });
+  }, 180_000); // the first walk flood (it mantles too) runs here
 
   it('bounds are closed: no reachable spot is outside, and sprint-jumping outwards stops at the walls', () => {
     const r = reach();

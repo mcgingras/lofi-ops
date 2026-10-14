@@ -4,12 +4,12 @@
  * projectiles simulated in the room entity store (`weapons.nade`), explosions through
  * `room.radiusDamage`, flashbang/concussion effects, and the underbarrel grenade launcher round.
  */
-import { playerHitboxes, rayHitboxes } from '../../../shared/collision';
+import { rayHitboxes } from '../../../shared/collision';
 import { PLAYER } from '../../../shared/constants';
 import { cookLeft, EQUIPMENT_BY_ID, GL_ROUND, NADE_ENTITY, THROW_RECOVERY, THROW_WINDUP, type EquipmentDef } from '../../../shared/defs/equipment';
 import { Buttons } from '../../../shared/input';
 import { dist, normalize, viewDir, type Vec3 } from '../../../shared/math';
-import { eyeHeight } from '../../../shared/movement';
+import { eyeHeight, moveHitboxes } from '../../../shared/movement';
 import type { Entity } from '../../entities';
 import type { PlayerState } from '../../player';
 import type { Room } from '../../room';
@@ -254,9 +254,11 @@ export function playerOnPath(room: Room, a: Vec3, b: Vec3, ownerId: string | nul
   let best: { p: PlayerState; at: Vec3; t: number; part: 'head' | 'torso' | 'legs' } | null = null;
   for (const q of room.players.values()) {
     if (!q.alive || q.id === ownerId || skip?.has(q.id)) continue;
-    const hb = playerHitboxes(q.move, q.move.crouched);
+    const hb = moveHitboxes(q.move, q.yaw);
     if (pad > 0) for (const k of ['head', 'torso', 'legs'] as const) {
       hb[k] = { min: { x: hb[k].min.x - pad, y: hb[k].min.y - pad, z: hb[k].min.z - pad }, max: { x: hb[k].max.x + pad, y: hb[k].max.y + pad, z: hb[k].max.z + pad } };
+      const L = hb.local; // a prone body's turned boxes (what rayHitboxes tests)
+      if (L) L[k] = { min: { x: L[k].min.x - pad, y: L[k].min.y - pad, z: L[k].min.z - pad }, max: { x: L[k].max.x + pad, y: L[k].max.y + pad, z: L[k].max.z + pad } };
     }
     const hit = rayHitboxes(a, d, hb, len);
     if (hit && (!best || hit.t < best.t)) best = { p: q, at: { x: a.x + d.x * hit.t, y: a.y + d.y * hit.t, z: a.z + d.z * hit.t }, t: hit.t, part: hit.part };

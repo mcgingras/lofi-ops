@@ -13,7 +13,8 @@
  * Bots don't lead for drop on their own, so for a bot shooter the launch direction is lifted to
  * land on whatever its aim ray meets first (the only bot-specific bit, kept here).
  */
-import { playerHitboxes, rayHitboxes, type HitPart } from '../../../shared/collision';
+import { rayHitboxes, type HitPart } from '../../../shared/collision';
+import { moveHitboxes } from '../../../shared/movement';
 import { BLADE, BLADE_ENTITY, BOLT, BOLT_ENTITY } from '../../../shared/defs/economy';
 import { Buttons } from '../../../shared/input';
 import { normalize, type Vec3 } from '../../../shared/math';
@@ -60,7 +61,7 @@ export function botLaunchDir(room: Room, p: PlayerState, origin: Vec3, dir: Vec3
   let t = room.world.raycast(origin, dir, 80, 'bullets')?.t ?? 80;
   for (const q of room.players.values()) {
     if (q === p || !q.alive || !room.canDamage(p, q)) continue;
-    const h = rayHitboxes(origin, dir, playerHitboxes(q.move, q.move.crouched), t);
+    const h = rayHitboxes(origin, dir, moveHitboxes(q.move, q.yaw), t);
     if (h) t = h.t;
   }
   const flight = t / speed;
@@ -85,7 +86,7 @@ function fly(room: Room, e: Entity, f: Flight, dt: number): Hit {
   for (const q of room.players.values()) {
     if (!q.alive || q.id === f.owner) continue;
     if (owner && !room.canDamage(owner, q)) continue;
-    const hit = rayHitboxes(from, dir, playerHitboxes(q.move, q.move.crouched), maxT);
+    const hit = rayHitboxes(from, dir, moveHitboxes(q.move, q.yaw), maxT);
     if (hit) {
       maxT = hit.t;
       victim = q;

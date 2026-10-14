@@ -13,13 +13,13 @@ import type { MatchPhase, MatchResults } from '../shared/events';
 import { buildCollisionWorld, type MapData } from '../shared/maps/types';
 import { bumpStat } from '../shared/profile';
 import type { CollisionWorld } from '../shared/collision';
-import { PlayerFlags, q3, type FeatureId, type FeatureMessages, type InputCmd, type MeSnap, type PlayerSnap, type RoomSummary, type ServerMsg, type ServerMsgOf, type ShotSnap } from '../shared/protocol';
-import { copyMoveState } from '../shared/movement';
+import { PlayerFlags, q3, stanceFlags, type FeatureId, type FeatureMessages, type InputCmd, type MeSnap, type PlayerSnap, type RoomSummary, type ServerMsg, type ServerMsgOf, type ShotSnap } from '../shared/protocol';
+import { copyMoveState, movePose } from '../shared/movement';
 import { EventBus, type ServerEvents } from './bus';
 import { damage as applyDamage, fire as doFire, kill as doKill, radiusDamage, spawn as doSpawn, updateCombat, type ShotRequest } from './combat';
 import { EntityStore } from './entities';
 import type { Feature } from './feature';
-import { HitboxHistory } from './lagcomp';
+import { HitboxHistory, type Pose } from './lagcomp';
 import { createRules, smallerTeam, standardResults, type ModeRules } from './modes/index';
 import { ModifierRegistry } from './modifiers';
 import { createPlayer, currentWeapon, emptyStats, type PlayerState } from './player';
@@ -197,7 +197,7 @@ export class Room {
     }
     this.history.record(
       this.time,
-      [...this.players.values()].map((p) => [p.id, { x: p.move.x, y: p.move.y, z: p.move.z, crouched: p.move.crouched, alive: p.alive }] as [string, { x: number; y: number; z: number; crouched: boolean; alive: boolean }]),
+      [...this.players.values()].map((p) => [p.id, { ...movePose(p.move, p.yaw), alive: p.alive }] as [string, Pose]),
     );
     this.updatePhase();
     this.bus.emit('tick', { dt, time: this.time, tick: this.tick });
@@ -623,7 +623,7 @@ export class Room {
     const w = currentWeapon(p);
     let f = 0;
     if (p.alive) f |= PlayerFlags.ALIVE;
-    if (m.crouched) f |= PlayerFlags.CROUCH;
+    f |= stanceFlags(m);
     if (m.sprinting) f |= PlayerFlags.SPRINT;
     if (m.ads > 0.5) f |= PlayerFlags.ADS;
     if (m.onGround) f |= PlayerFlags.GROUND;

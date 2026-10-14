@@ -14,11 +14,11 @@ Tested against the Gamepad API "standard" mapping (Chrome, a USB Xbox-style pad 
 | RT | Fire (analog: on at 40%, off below 30%); throws the Care Package marker while it is up; fires the Valkyrie launcher, and detonates its rocket in flight |
 | LB | Tactical; boosts a Valkyrie rocket while held (BO1's boost is the tactical button) |
 | RB | Lethal (hold to raise, release to throw; a frag cooks while held; like G) |
-| A | Jump; from crouch or prone, stands up instead |
-| B | Tap: crouch toggle (prone -> crouch). Hold 0.35 s: prone |
+| A | Jump. Held at a ledge, window sill or low wall with the stick forward: mantle (climb onto it or vault over it). From crouch or prone: stands up instead |
+| B | Tap: crouch toggle (prone -> crouch). Hold 0.35 s: prone. While sprinting: dolphin dive (lands prone) |
 | X | Reload on press, and USE while held (crates, weapon swap, plant/defuse, revive). When a "HOLD [X]" prompt is up (crate, weapon on the floor, plant/defuse): tap = reload on release, hold = use |
 | Y | Switch weapon (primary <-> secondary); on the death screen: change class |
-| L3 | Sprint, CoD style: click to sprint, it stops when you stop pushing forward, aim, fire or crouch. Held while scoped: hold breath |
+| L3 | Sprint, CoD style: click to sprint, it stops when you stop pushing forward, aim, fire or crouch. From prone it stands you up into the sprint. Held while scoped: hold breath (you stay down) |
 | R3 | Melee |
 | D-pad up | Killstreak (STREAK) |
 | D-pad left / right | Cycle ready killstreaks |
@@ -31,6 +31,14 @@ The same table is on Settings → Controller (`PAD_LAYOUT` in `src/client/game/p
 Tactical map (killstreak radio): left stick / D-pad move the cursor, right stick X rotates, A marks, X undoes, B cancels.
 
 Valkyrie rocket cam: right stick steers (the rocket turns at its own rate, 60 deg/s, slower when boosted; the view can't lead its nose by more than 0.45 rad), RT detonates, hold LB to boost (LT works too). While steering, the pad's LB / LT go out as the boost bit and RB / R3 do nothing, so the soldier left standing doesn't throw a grenade or knife. No aim assist while steering.
+
+## Prone and mantling on the pad
+
+- **Prone:** B hold latches prone. The `PRONE` bit stays on until B is tapped, A is pressed or L3 sprints. A B tap from prone goes to crouch.
+- **Dive:** B pressed while sprinting on the ground latches prone at once, and the movement turns it into the dive.
+- **The body's state:** the mapper gets the predicted body through `MapperContext.sprinting` / `prone` (from `Controls.stanceHint`). If the body refused to go prone (no room for the legs), the latch lets go after 0.3 s, so it doesn't drop you later.
+- **Mantling:** nothing extra; press A with the stick forward at a ledge.
+- Rules and numbers: docs/features/movement.md.
 
 ## Movement: why it stays digital
 
@@ -104,6 +112,7 @@ Debug overlay: add `?aimdebug=1` to the URL: device, strength, slowdown, rotatio
 ## Tests
 
 - `tests/pad.test.ts`: deadzone, curve, ramp, 8-way movement, the button layout → Buttons, triggers, X tap/hold, B crouch/prone, L3 sprint, suppression, device switching.
+- `tests/movement.client.test.ts`: B hold → prone, B tap → crouch, A → stand, L3 + B → dive, through the real `Controls` and `MatchNet` against a real server; also the keyboard's Z / C / Space.
 - `tests/aim-assist.test.ts`: off for mouse/keyboard, slowdown only near visible alive enemies, cone vs distance, walls (a real `CollisionWorld`), rotation direction and the move requirement, the cap and easing, no pull without relative motion, decay, visible target preferred.
 - `tests/controller.client.test.ts`: prompt labels per device and after rebinding, the gamepad module's device switching, and a fake `Gamepad` through the real `Controls` loop into the real `MatchNet` against a real server (buttons, movement, look, X reload/use, Y, D-pad, engage without pointer lock, Start pauses).
 - `tests/frontend-lobby.test.ts`: the lobby's aim assist rule.

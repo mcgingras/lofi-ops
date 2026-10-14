@@ -4,6 +4,7 @@
  * replay it through the killer's eyes with stand-in soldiers (the live remotes are hidden), slow
  * motion for the last moment, then hand over to the summary screen.
  */
+import { PLAYER } from '../../../shared/constants';
 import { WEAPON_BY_ID } from '../../../shared/defs/weapons';
 import { PlayerFlags } from '../../../shared/protocol';
 import type { Match } from '../../game/match';
@@ -46,7 +47,7 @@ function frame(m: Match, dt: number): void {
   actors.update(m, poses, clip.killer, dt, slow ? SLOW_RATE : 1);
   const k = poses.get(clip.killer);
   if (k) {
-    const eye = k.f & PlayerFlags.CROUCH ? 1.0 : 1.6;
+    const eye = k.f & PlayerFlags.PRONE ? PLAYER.proneEye : k.f & PlayerFlags.CROUCH ? PLAYER.crouchEye : PLAYER.eye;
     m.renderer.cam.position.set(k.x, k.y + eye, k.z);
     m.renderer.cam.rotation.set(k.pitch, k.yaw, 0, 'YXZ');
     m.renderer.zoom = k.f & PlayerFlags.ADS ? 1.3 : 1;

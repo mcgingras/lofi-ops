@@ -219,7 +219,8 @@ export function mapSolids(map: MapData): Solid[] {
     const bullets = b.bullets ?? c;
     const sight = b.sight ?? c;
     if (!players && !bullets && !sight) return;
-    out.push({ min: { ...b.min }, max: { ...b.max }, ramp: b.ramp, players, bullets, sight, source: i, mat: b.mat });
+    const clip = !!b.noRender && players && !bullets && !sight;
+    out.push({ min: { ...b.min }, max: { ...b.max }, ramp: b.ramp, players, bullets, sight, source: i, mat: b.mat, ...(clip ? { clip } : {}), ...(b.tag ? { tag: b.tag } : {}) });
   });
   map.props.forEach((p, j) => {
     const source = map.brushes.length + j;

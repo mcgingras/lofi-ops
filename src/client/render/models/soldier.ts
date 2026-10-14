@@ -1,7 +1,9 @@
 /**
  * The soldier from reference/yard-lab.html (`figure`), rebuilt as a small rig so it can animate:
  * legs are hip -> knee pivots (walk cycle, crouch), the head and the arms+rifle pitch with aim,
- * and a `fall` pivot at the feet does the death topple. Lit by a per-object light (dyn materials).
+ * and a `fall` pivot at the feet does the death topple. A `lie` group above it lays the body down
+ * for prone (head at the origin, where the player's eye is; legs trailing behind) and reaches up for
+ * a mantle. Lit by a per-object light (dyn materials).
  * Feet at the origin, facing +z (set `root.rotation.y = yaw + PI` to face a game yaw).
  */
 import * as THREE from 'three';
@@ -24,6 +26,10 @@ export const TEAM_LOOKS: SoldierLook[] = [
 export const FFA_LOOK: SoldierLook = { vest: 0xffffff, helmet: 0xa8ad90 };
 
 const UP = new THREE.Vector3(0, 1, 0);
+const smoothstep = (t: number) => {
+  const k = Math.max(0, Math.min(1, t));
+  return k * k * (3 - 2 * k);
+};
 
 function worldUVBox(w: number, h: number, d: number): THREE.BoxGeometry {
   const geo = new THREE.BoxGeometry(w, h, d);
@@ -40,6 +46,8 @@ function worldUVBox(w: number, h: number, d: number): THREE.BoxGeometry {
 
 export class Soldier {
   readonly root = new THREE.Group();
+  /** Prone: lays the whole body down along the facing (head forward). */
+  readonly lie = new THREE.Group();
   /** Pivot at the feet for the death fall. */
   readonly fall = new THREE.Group();
   readonly body = new THREE.Group();
@@ -57,6 +65,7 @@ export class Soldier {
   private fallT = 0;
   private fallDir = 1;
   private deadSide = 0;
+  private mantleK = 0;
 
   constructor(look: SoldierLook = FFA_LOOK, flashTex?: THREE.Texture) {
     const mk = (texture: string, o: { rep?: number; tint?: number } = {}) => {
@@ -73,7 +82,8 @@ export class Soldier {
     const helm = mk('camo', { rep: 0.35, tint: look.helmet });
     const steel = mk('gunmetal', { rep: 0.25 });
 
-    this.root.add(this.fall);
+    this.root.add(this.lie);
+    this.lie.add(this.fall);
     this.fall.add(this.body);
 
     const add = (parent: THREE.Object3D, geo: THREE.BufferGeometry, mat: THREE.Material | THREE.Material[], x: number, y: number, z: number) => {
@@ -175,29 +185,45 @@ export class Soldier {
 
   /**
    * Pose for this frame. `speed` m/s along the ground, `forward` sign of motion relative to facing,
-   * `pitch` aim pitch, `crouch` 0..1, `firing` shows a flash, `alive` false topples.
+   * `pitch` aim pitch, `crouch` 0..1, `prone` 0..1 (lying down), `mantle` climbing, `firing` shows
+   * a flash, `alive` false topples.
    */
-  animate(dt: number, s: { speed: number; forward: number; pitch: number; crouch: number; sprint: boolean; firing: boolean; alive: boolean; time: number }): void {
-    const amp = Math.min(1, s.speed / 5) * (s.sprint ? 1.25 : 0.85);
-    this.phase += dt * s.speed * (s.sprint ? 2.0 : 2.4) * (s.forward < 0 ? -1 : 1);
-    const crouch = s.crouch;
+  animate(dt: number, s: { speed: number; forward: number; pitch: number; crouch: number; prone?: number; mantle?: boolean; sprint: boolean; firing: boolean; alive: boolean; time: number }): void {
+    const lieK = smoothstep(s.prone ?? 0);
+    this.mantleK += ((s.mantle ? 1 : 0) - this.mantleK) * Math.min(1, dt * 12);
+    const mk = this.mantleK * (1 - lieK);
+    const crawl = lieK > 0.9 ? Math.min(1, s.speed / 1.2) : 0;
+    const amp = Math.min(1, s.speed / 5) * (s.sprint ? 1.25 : 0.85) * (1 - lieK);
+    this.phase += dt * (crawl > 0 ? 5.5 * crawl : s.speed * (s.sprint ? 2.0 : 2.4)) * (s.forward < 0 ? -1 : 1);
+    // Lying down straightens the legs (a prone body is also flagged crouched).
+    const crouch = Math.max(s.crouch * (1 - lieK), mk * 0.4);
     this.body.position.y = -0.5 * crouch;
     for (let i = 0; i < 2; i++) {
       const ph = this.phase + i * Math.PI;
       const swing = Math.sin(ph) * 0.62 * amp;
       const bend = Math.max(0, -Math.cos(ph)) * 0.9 * amp;
-      this.hips[i]!.rotation.x = swing * (1 - crouch * 0.6) - 1.2 * crouch;
-      this.knees[i]!.rotation.x = bend + 2.0 * crouch;
+      this.hips[i]!.rotation.x = swing * (1 - crouch * 0.6) - 1.2 * crouch - mk * 0.5 * (i === 0 ? 1 : 0.2);
+      this.knees[i]!.rotation.x = bend + 2.0 * crouch + Math.max(0, Math.sin(ph)) * 0.7 * crawl;
+      // The crawl: knees drawn up one side at a time.
+      this.hips[i]!.rotation.z = (i === 0 ? -1 : 1) * (0.12 * lieK + Math.max(0, Math.sin(ph)) * 0.35 * crawl);
     }
-    this.body.rotation.z = Math.sin(this.phase) * 0.03 * amp;
-    this.body.rotation.x = s.sprint ? 0.15 : 0;
-    this.aim.rotation.x = s.sprint ? 0.5 : -s.pitch;
+    this.body.rotation.z = Math.sin(this.phase) * (0.03 * amp + 0.06 * crawl);
+    this.body.rotation.x = s.sprint ? 0.15 : mk * 0.35;
+    // Arms: pitch with aim; laid flat they point ahead along the ground; mantling they reach up.
+    this.aim.rotation.x = s.sprint ? 0.5 : -s.pitch * (1 - lieK * 0.6) - (Math.PI / 2) * lieK - mk * 0.9 + Math.sin(this.phase * 2) * 0.05 * crawl;
     this.aim.rotation.y = s.sprint ? 0.5 : 0;
-    this.head.rotation.x = -s.pitch * 0.6;
+    this.head.rotation.x = -s.pitch * 0.6 * (1 - lieK) - 1.25 * lieK;
+    // Lay down: tip forward about the feet, then slide back so the head sits at the origin.
+    // (A few degrees short of flat: chest and head up a little, as when aiming prone, boots on the ground.)
+    this.lie.rotation.x = (Math.PI / 2 - 0.07) * lieK;
+    this.lie.position.set(0, 0.12 * lieK, -1.62 * lieK);
     this.flash.visible = s.firing && s.alive && Math.floor(s.time * 30) % 2 === 0;
     if (this.flash.visible) this.flash.rotation.z = Math.random() * 6;
-    // Death: topple at the feet, knees buckle.
-    if (!s.alive) {
+    // Death: topple at the feet, knees buckle (already lying down: just go limp).
+    if (!s.alive && lieK > 0.5) {
+      for (const kn of this.knees) kn.rotation.x = 0.3;
+      this.aim.rotation.x = -(Math.PI / 2) * lieK + 0.6;
+    } else if (!s.alive) {
       if (this.fallT === 0) {
         this.fallDir = Math.random() < 0.7 ? 1 : -1;
         this.deadSide = (Math.random() - 0.5) * 0.8;

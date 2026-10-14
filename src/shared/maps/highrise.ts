@@ -722,6 +722,9 @@ export function buildHighrise(): MapData {
     const win = (a: number, b: number): [number, number, number, number] => [a, b, 1.0, 2.8];
     outer('x', -19.6, 27.6, 32.95, [win(-17.5, -6.0), door(-5.4, -3.8), win(-3.0, 1.6), door(2.4, 4.0), win(4.8, 10.0), win(11.0, 16.6), door(17.0, 18.6), win(22.0, 27.0)]);
     for (const [a, b] of [[-17.5, -6.0], [-3.0, 1.6], [4.8, 10.0], [11.0, 16.6], [22.0, 27.0]] as const) wallDecal(b - a, 1.8, 'glass', (a + b) / 2, 1.0, 32.95, PI, 2);
+    // The east window looks out over the drop past the walkway's end: shoot through it, but no
+    // mantling out of it into the void.
+    clip(22.0, 1.0, 32.8, 27.0, 2.8, 33.1);
     wallDecal(46, 3.0, 'winUp', 4.0, 4.2, 32.78, PI, 8);
     outer('z', 32.8, 39.0, 27.45);
     outer('x', 22.3, 27.6, 38.85);

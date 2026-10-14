@@ -3,6 +3,8 @@
  * hold-breath on Shift (sprint is cancelled by ADS, so Shift is free while aiming), variable zoom
  * (X or middle mouse cycles levels), and local mechanical sounds (bolt, pump, magazine, shells).
  */
+import { PRONE } from '../../../shared/constants';
+import { fullyProne } from '../../../shared/movement';
 import { sfx } from '../../game/audio';
 import type { Match } from '../../game/match';
 import { promptKey } from '../../game/prompts';
@@ -152,7 +154,9 @@ registerMatchHook('weapons.scope', {
       }
     } else if (!wantHold) scopeState.breath = Math.min(max, scopeState.breath + dt * 0.8);
     const base = def?.sway ?? 0.8;
-    const amp = (scopeState.holding ? base * 0.06 : now < scopeState.exhausted ? base * 1.8 : base) * DEG;
+    // Prone steadies the scope (BO1: less idle sway lying down).
+    const stance = fullyProne(m.net.predictor.state) ? PRONE.sway : 1;
+    const amp = (scopeState.holding ? base * 0.06 : now < scopeState.exhausted ? base * 1.8 : base) * DEG * stance;
     const ty = amp * (Math.sin(swayT * 0.9) * 0.7 + Math.sin(swayT * 1.7 + 1) * 0.3);
     const tp = amp * (Math.sin(swayT * 1.3 + 2) * 0.6 + Math.sin(swayT * 0.6) * 0.4);
     // Ease towards the target so holding/releasing breath doesn't snap.

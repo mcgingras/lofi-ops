@@ -31,6 +31,9 @@ export const PLAYER = {
   crouchHeight: 1.2,
   eye: 1.6,
   crouchEye: 1.0,
+  /** Prone body (movement box) height and eye height (BO1-ish; see docs/features/movement.md). */
+  proneHeight: 0.55,
+  proneEye: 0.4,
   stepHeight: 0.45,
 } as const;
 
@@ -40,6 +43,8 @@ export const MOVE = {
   sprint: 7.2,
   /** Multiplier while crouched. */
   crouch: 0.55,
+  /** Multiplier while prone (the crawl). */
+  prone: 0.27,
   /** Default multiplier while fully aimed down sights (weapons may not override this in v1). */
   ads: 0.6,
   jumpHeight: 1.1,
@@ -54,6 +59,55 @@ export const MOVE = {
   sprintMaxAds: 0.05,
   /** Fall below this y and you die (out of the world). */
   killY: -40,
+} as const;
+
+/**
+ * Prone (BO1): transitions, the lying body, accuracy and the dolphin dive. Times in seconds.
+ * Sources and reasoning: docs/features/movement.md.
+ */
+export const PRONE = {
+  /** Standing or crouched -> fully prone (BO1: stand->crouch 200 ms + crouch->prone 400 ms). */
+  downSec: 0.6,
+  /** Prone -> standing (slower than going down). */
+  upSec: 0.8,
+  /** Prone -> crouched (BO1 400 ms). */
+  toCrouchSec: 0.45,
+  /** The weapon is down (no firing) until the transition is this close to done (0..1 of proneT). */
+  fireReady: 0.15,
+  /** Lying body behind the eye: legs reach this far back (hitboxes, the room check, leg collision). */
+  length: 1.6,
+  /** Hip / ADS spread multiplier while fully prone (hip spread prone 2-5 vs standing 3-7 degrees). */
+  spread: 0.65,
+  /** Recoil (view kick) multiplier while fully prone. */
+  recoil: 0.6,
+  /** Scope / weapon sway multiplier while fully prone (weapon files' idleProneFactor 0.4). */
+  sway: 0.4,
+  /** Dolphin dive (sprint + crouch/prone): least horizontal speed at take-off (a sprint carries over), lift, slide decel, busy time. */
+  diveSpeed: 7.2,
+  diveUp: 5.0,
+  diveSlide: 15,
+  diveSec: 0.9,
+} as const;
+
+/**
+ * Mantling (jump at a ledge, sill or low wall): climb up onto it, or over it when it is thin.
+ * Heights are above the floor in front of the obstacle. Sources: docs/features/movement.md.
+ */
+export const MANTLE = {
+  /** Highest ledge you can climb onto or over (above the floor you stand on). */
+  maxHeight: 1.5,
+  /** The obstacle's face must be within this distance of the front of your body. */
+  reach: 0.4,
+  /** Obstacles at most this deep (along your facing) at their top are vaulted over, not climbed onto. */
+  thin: 0.5,
+  /** Room needed above the ledge for the climb itself (windows lower than this can't be climbed through). */
+  clearance: 1.0,
+  /** Climb time: base + per metre risen + per metre moved forward. */
+  baseSec: 0.3,
+  perRise: 0.3,
+  perForward: 0.2,
+  /** Forward speed when a vault over ends (you drop down the far side). */
+  overExit: 2.5,
 } as const;
 
 export const HEALTH = {

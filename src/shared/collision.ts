@@ -3,7 +3,7 @@
  * map's `MapData` (see `maps/types.ts`). Used by the server sim, client prediction, bots (line of
  * sight) and the renderer's bake (shadow rays). Also player hitboxes and ray-vs-box helpers.
  */
-import { PLAYER } from './constants';
+import { PLAYER, PRONE } from './constants';
 import type { AABB, Vec3 } from './math';
 
 /** Which way a ramp's top surface rises: '+x' means low at min.x, high (max.y) at max.x. */
@@ -25,6 +25,10 @@ export interface Solid {
   source: number;
   /** Material id (for impact effects / penetration rules). */
   mat: string;
+  /** An invisible player clip (not drawn, players only): nothing to climb onto (mantling skips it). */
+  clip?: boolean;
+  /** The source brush's tag (`perimeter`, `roof`, `stairs`, ...). */
+  tag?: string;
 }
 
 export type RayMask = 'bullets' | 'sight' | 'players';
@@ -398,18 +402,50 @@ const at = (o: Vec3, d: Vec3, t: number): Vec3 => ({ x: o.x + d.x * t, y: o.y + 
 
 export type HitPart = 'head' | 'torso' | 'legs';
 
+/** Body stance for hitboxes and eye heights. */
+export type Stance = 'stand' | 'crouch' | 'prone';
+
+/** Stance of a recorded pose (`prone` = lying, as `stanceOf` in movement.ts decides it). */
+export const poseStance = (p: { crouched: boolean; prone?: boolean }): Stance => (p.prone ? 'prone' : p.crouched ? 'crouch' : 'stand');
+
+/** Hitboxes of a recorded pose (lag compensation history, killcam frames). */
+export const poseHitboxes = (p: Vec3 & { crouched: boolean; prone?: boolean; yaw?: number }): Hitboxes => playerHitboxes(p, poseStance(p), p.yaw ?? 0);
+
 export interface Hitboxes {
+  /** World AABBs of each part (for a prone body: the bounds of the turned box). */
   head: AABB;
   torso: AABB;
   legs: AABB;
+  /**
+   * Prone only: the parts as boxes in the body's own frame (x across, z along the facing, origin at
+   * the movement position `cx, cz`), turned by `yaw`. `rayHitboxes` tests these exactly.
+   */
+  local?: { cx: number; cz: number; yaw: number; head: AABB; torso: AABB; legs: AABB };
 }
 
 /** Fractions of body height where torso and head start, and half widths. */
 const HB = { legsTop: 0.47, torsoTop: 0.8, legsHalf: 0.24, torsoHalf: 0.3, headHalf: 0.15 };
 
-/** Hitboxes of a player standing (or crouched) with feet at p. Axis aligned; yaw is ignored. */
-export function playerHitboxes(p: Vec3, crouched: boolean): Hitboxes {
-  const h = crouched ? PLAYER.crouchHeight : PLAYER.height;
+/**
+ * The lying body in its own frame: `a0..a1` along the facing (+ = ahead of the eye, which is at the
+ * movement position), `y0..y1` above the feet, half width `w`. The head and shoulders are at the
+ * movement box and the legs trail PRONE.length behind it (the camera sits at the head, as in BO1).
+ */
+export const PRONE_BODY = {
+  head: { a0: -0.14, a1: 0.16, y0: 0.14, y1: 0.46, w: 0.14 },
+  torso: { a0: -0.8, a1: -0.14, y0: 0.02, y1: 0.36, w: 0.24 },
+  legs: { a0: -PRONE.length, a1: -0.8, y0: 0, y1: 0.26, w: 0.22 },
+} as const;
+
+/**
+ * Hitboxes of a player with feet at p. Standing and crouched boxes are axis aligned (yaw is
+ * ignored); a prone body lies along `yaw` (yaw 0 faces -z) with the legs behind. `stance` also
+ * takes the old `crouched` boolean.
+ */
+export function playerHitboxes(p: Vec3, stance: boolean | Stance, yaw = 0): Hitboxes {
+  const st: Stance = stance === true ? 'crouch' : stance === false ? 'stand' : stance;
+  if (st === 'prone') return proneHitboxes(p, yaw);
+  const h = st === 'crouch' ? PLAYER.crouchHeight : PLAYER.height;
   const box = (half: number, y0: number, y1: number): AABB => ({
     min: { x: p.x - half, y: p.y + y0, z: p.z - half },
     max: { x: p.x + half, y: p.y + y1, z: p.z + half },
@@ -421,12 +457,55 @@ export function playerHitboxes(p: Vec3, crouched: boolean): Hitboxes {
   };
 }
 
+/** World offset of a body-frame point (right `lx`, along the facing `lz`) for `yaw`. */
+const bodyToWorld = (yaw: number, lx: number, lz: number): [number, number] => [Math.cos(yaw) * lx - Math.sin(yaw) * lz, -Math.sin(yaw) * lx - Math.cos(yaw) * lz];
+
+function proneHitboxes(p: Vec3, yaw: number): Hitboxes {
+  const local = (b: { a0: number; a1: number; y0: number; y1: number; w: number }): AABB => ({
+    min: { x: -b.w, y: p.y + b.y0, z: b.a0 },
+    max: { x: b.w, y: p.y + b.y1, z: b.a1 },
+  });
+  const world = (b: AABB): AABB => {
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let z0 = Infinity;
+    let z1 = -Infinity;
+    for (const lx of [b.min.x, b.max.x])
+      for (const lz of [b.min.z, b.max.z]) {
+        const [ox, oz] = bodyToWorld(yaw, lx, lz);
+        x0 = Math.min(x0, p.x + ox);
+        x1 = Math.max(x1, p.x + ox);
+        z0 = Math.min(z0, p.z + oz);
+        z1 = Math.max(z1, p.z + oz);
+      }
+    return { min: { x: x0, y: b.min.y, z: z0 }, max: { x: x1, y: b.max.y, z: z1 } };
+  };
+  const head = local(PRONE_BODY.head);
+  const torso = local(PRONE_BODY.torso);
+  const legs = local(PRONE_BODY.legs);
+  return { head: world(head), torso: world(torso), legs: world(legs), local: { cx: p.x, cz: p.z, yaw, head, torso, legs } };
+}
+
 /** Nearest hitbox part a ray enters (within maxT), or null. */
 export function rayHitboxes(o: Vec3, d: Vec3, hb: Hitboxes, maxT = Infinity): { t: number; part: HitPart } | null {
   let best: { t: number; part: HitPart } | null = null;
+  let ro = o;
+  let rd = d;
+  let boxes: { head: AABB; torso: AABB; legs: AABB } = hb;
+  const L = hb.local;
+  if (L) {
+    // Into the body frame (the inverse of bodyToWorld): local x = right, local z = facing.
+    const c = Math.cos(L.yaw);
+    const s = Math.sin(L.yaw);
+    const ox = o.x - L.cx;
+    const oz = o.z - L.cz;
+    ro = { x: c * ox - s * oz, y: o.y, z: -s * ox - c * oz };
+    rd = { x: c * d.x - s * d.z, y: d.y, z: -s * d.x - c * d.z };
+    boxes = L;
+  }
   for (const part of ['head', 'torso', 'legs'] as const) {
-    const b = hb[part];
-    const r = rayAABB(o, d, b.min, b.max, best ? best.t : maxT);
+    const b = boxes[part];
+    const r = rayAABB(ro, rd, b.min, b.max, best ? best.t : maxT);
     if (r && (!best || r.t < best.t)) best = { t: r.t, part };
   }
   return best;

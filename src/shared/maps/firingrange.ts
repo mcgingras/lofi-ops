@@ -687,6 +687,8 @@ function tower(k: MapKit): void {
   // The sandbagged shed behind it, along the foot of the hill (turned 29 degrees).
   const a = new Frame(k, -3.0, 1.6, 29 * DEG);
   a.box(0, 0, 8.5, 2.5, 0, 2.6, 'corr');
+  // Its roof is off limits (mantling reached it, and the gap behind it against the hill was a pit).
+  a.solid(0, 0, 8.5, 2.5, 2.6, 6, 'clip', { bullets: false, sight: false });
   a.vis(-0.1, -0.1, 8.6, 2.6, 2.6, 2.75, 'tin');
   a.vis(0.3, 2.0, 8.2, 2.5, 2.75, 3.25, 'sandbag');
   // Crossroads cover: the jeep with its sandbags, an L of sandbags west of the flag.

@@ -33,7 +33,7 @@ export function callDogs(ctx: KsRoom, p: PlayerState, _args: CallArgs): string |
   const dogs: Dog[] = [];
   let released = 0;
   let nextRelease = room.time;
-  const params = { ...DEFAULT_MOVE_PARAMS, speed: DOGS.speed, canSprint: false };
+  const params = { ...DEFAULT_MOVE_PARAMS, speed: DOGS.speed, canSprint: false, canMantle: false, canProne: false };
   const act: Active = { streak: 'attack_dogs', owner: p, entities: [], update: () => false };
 
   const spawnPoints = (): Vec3[] => {

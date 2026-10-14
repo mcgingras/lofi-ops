@@ -73,9 +73,16 @@ export interface AimTarget {
   vy?: number;
   vz: number;
   crouched: boolean;
+  /** Lying down: a low target (the head and shoulders at the feet position, the body behind). */
+  prone?: boolean;
+  /** Facing (where a prone body's legs trail from). */
+  yaw?: number;
   alive: boolean;
   enemy: boolean;
 }
+
+/** Height of the body column the assist works on. */
+const targetHeight = (t: Pick<AimTarget, 'crouched' | 'prone'>) => (t.prone ? 0.5 : t.crouched ? 1.2 : 1.8);
 
 export interface AimInput {
   device: InputDevice;
@@ -127,12 +134,12 @@ const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const smooth = (t: number) => t * t * (3 - 2 * t);
 
 /** How close the aim (yaw, pitch from eye) is to a target: 1 over the body, fading to 0 at the cone edge. */
-export function targetWeight(eye: Vec3, yaw: number, pitch: number, t: Pick<AimTarget, 'x' | 'y' | 'z' | 'crouched'>): { w: number; dist: number; aimY: number } {
+export function targetWeight(eye: Vec3, yaw: number, pitch: number, t: Pick<AimTarget, 'x' | 'y' | 'z' | 'crouched' | 'prone'>): { w: number; dist: number; aimY: number } {
   const dx = t.x - eye.x;
   const dz = t.z - eye.z;
   const D = Math.hypot(dx, dz);
   if (D < 0.5) return { w: 0, dist: D, aimY: t.y + 1 };
-  const h = t.crouched ? 1.2 : 1.8;
+  const h = targetHeight(t);
   const y0 = t.y + h * 0.15;
   const y1 = t.y + h;
   const yawT = Math.atan2(-dx, -dz);
@@ -168,7 +175,7 @@ export function aimAssist(inp: AimInput, state: AimState): AimResult {
     const tw = targetWeight(eye, inp.yaw, inp.pitch, t);
     if (tw.w <= 0) continue;
     if (best && (tw.w < best.w || (tw.w === best.w && tw.dist >= best.dist))) continue;
-    const h = t.crouched ? 1.2 : 1.8;
+    const h = targetHeight(t);
     const chest = { x: t.x, y: t.y + h * 0.65, z: t.z };
     const head = { x: t.x, y: t.y + h * 0.93, z: t.z };
     if (!inp.los(eye, chest) && !inp.los(eye, head)) continue;

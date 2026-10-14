@@ -43,7 +43,7 @@ export function callRcxd(ctx: KsRoom, p: PlayerState, _args: CallArgs): string |
   markDirty(room, p);
   let prevButtons = p.buttons;
   let boom = false;
-  const params = { ...DEFAULT_MOVE_PARAMS, speed: RCXD.speed, canSprint: false, adsTime: 1 };
+  const params = { ...DEFAULT_MOVE_PARAMS, speed: RCXD.speed, canSprint: false, adsTime: 1, canMantle: false, canProne: false };
   const act: Active = {
     streak: 'rcxd',
     owner: p,

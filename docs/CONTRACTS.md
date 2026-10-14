@@ -184,7 +184,13 @@ Netcode contract for the client:
 - Remote players: interpolate `snap.players` `INTERP_DELAY_MS` (100 ms) behind, in room time (`snap.time`).
 - Shots: on each trigger pull send `fire` with `seq` = last input seq sent, `time` = the room time you are rendering remote players at, `origin` = your eye, `dir` = aim before spread, `shot` = a per-pull counter. The server applies spread with `spreadDirection(dir, spreadDegrees(...), shotSeed(hashString(playerId), shot, pellet))` (`shared/ballistics.ts`), so the client can draw the same tracer. Firing is refused while sprinting / within sprint-out, reloading, switching, out of ammo (auto-reload), or faster than the weapon's rpm.
 - Weapon slot in commands: the client sends slot 0 while dead and from the `spawned` message on (`frameSlot` / `SPAWN_SLOT` in `client/game/slots.ts`), matching the server's spawn on the primary; it used to follow the dead body's slot, so the first commands after a respawn switched back to the secondary.
-- `PlayerSnap.f` bits: `PlayerFlags` (ALIVE, CROUCH, SPRINT, ADS, GROUND, RELOADING, FIRING, SWITCHING).
+- `PlayerSnap.f` bits: `PlayerFlags` (ALIVE, CROUCH, SPRINT, ADS, GROUND, RELOADING, FIRING, SWITCHING, PRONE, MANTLE); `stanceFlags(move)` gives the stance bits (killcam frames use it too).
+- Movement state (`MoveState`, shared `movement.ts`):
+  - It includes prone (`prone`, `proneT` 0 up..1 down, `proneHeld`, `dive`) and a mantle in progress (`mantle: { t, dur, from, to, over } | null`). Copy it with `copyMoveState`, which is deep.
+  - `moveBusy(move)` means the weapon is down (mantling, diving, mid stance change). The server refuses shots with `reason: 'stance'`.
+  - Helpers: `eyeHeight`, `bodyHeight`, `stanceOf` (`'stand' | 'crouch' | 'prone'`; prone once `proneT >= 0.5`), `moveHitboxes(move, yaw)`, `movePose(move, yaw)`.
+  - `MoveParams.canMantle` / `canProne` default to true. They are false for bodies that borrow player movement: RC-XD, dogs.
+  - Details: docs/features/movement.md.
 
 Codec: JSON behind `Codec`; `setCodec()` swaps it on both sides.
 
@@ -269,6 +275,11 @@ interface MapData {
 - `buildCollisionWorld(map)` (cached) gives the `CollisionWorld` for server, prediction, bots and the bake's shadow rays (`sight` mask).
 - `tests/collision.test.ts` checks every registered map: spawns on the ground, free and in bounds; every material referenced exists.
 - Objective conventions (maps-bo maps follow them; modes read them): `objectives.dom` = A/B/C (A nearest team 0's spawns), `objectives.sd` = sites A/B (S&D roles swap between halves, so use `modeSpawns.sd.attackers` / `.defenders`, which `SdRules.roleSpawns` reads with a fallback to the team spawn side; `team: 1` on a site only marks the default defenders), `objectives.hq` = the rotation of Headquarters points. Kill Confirmed and wagers use `spawns`. Brush `tag`s from `maps/bo-kit.ts`: `stairs` (invisible clip ramps players climb), `fence-low` (0.9 m jumpable clips), `perimeter` (bounds clips), useful for bot nav.
+- **Mantling** (jump at a ledge, sill or low wall):
+  - Anything players collide with can be climbed if its top is at most 1.5 m above the floor in front of it and there's 1.0 m of room above it. Deep tops are climbed onto; tops ≤ 0.5 m deep are vaulted.
+  - Never climbed: invisible player clips (`noRender` + players only; `Solid.clip`) and brushes tagged `perimeter`, `roof`, `clip`, `glass`. Clips in the way also stop the climb, so a map keeps players off a roof or out of a window with a players-only clip above it (tag `roof`).
+  - Window openings need 1.0 m above the sill.
+  - `buildCollisionWorld` solids carry `clip` and `tag`. The walk floods in the map tests mantle (`tests/maps-mw2-walk.ts`).
 - `maps/bo-kit.ts` (`MapKit`) is an optional authoring helper: walls with door/window holes, stairs, ground with holes, half-turn symmetric lots (`with('rot180', ...)`), backdrop silhouette rings.
 
 Texture recipe ids used by the Yard (the client texture developer must provide them, names = prototype `TX` keys): `ground warehouse steel shutter hazard lamp num01 num02 num03 winRow door exit shed fence container0..container5 hut hutWin tank yellow rubber crate pallet barrel barrier paint`, skies `skyNight skyGrey skyDusk`. `none` is for invisible clip brushes.
@@ -375,7 +386,12 @@ registerButtonFilter('killstreaks.valkyrie', (match, buttons) => buttons); // re
 
 `controls.enabled = false` hands the input to a feature (the killstreaks tactical map does this): no buttons go out, mouse look, mouse buttons, devlook drag taps and the wheel are ignored, key releases still register. Set it back to `true` when done.
 
-Feature buttons: held keys go out as `Buttons` bits (G lethal, Q tactical, 4 streak, V/E melee, F use, Z prone; on a controller LB tactical, RB lethal, D-pad up streak, R3 melee, hold X use, hold B prone); the server sees edges in the `buttons` room event. Rebind by assigning `KEYMAP[code] = action` (frontend owns key settings); keys that are not game buttons (menus, streak selection) can use plain `keydown` listeners while `controls.locked`, but also consume the matching controller press: `controls.consume('streakNext' | 'streakPrev' | 'weaponNext' | 'equipment')` (D-pad right/left, Y, D-pad down; these are `Action`s too, so keys can be bound to them).
+Feature buttons: held keys go out as `Buttons` bits (G lethal, Q tactical, 4 streak, V/E melee, F use; on a controller LB tactical, RB lethal, D-pad up streak, R3 melee, hold X use); the server sees edges in the `buttons` room event.
+
+Stance: `CROUCH` and `PRONE` are held-state bits that the client latches.
+- Keyboard: Z toggles prone. C from prone crouches, Space or Shift stands, and crouch or prone while sprinting dives.
+- Pad: B tap crouches and B hold goes prone. B while sprinting dives, and A stands.
+- `controls.stanceHint` is set by the match each frame from the predicted body. It drives the dive and lets a refused prone go. See docs/features/movement.md. Rebind by assigning `KEYMAP[code] = action` (frontend owns key settings); keys that are not game buttons (menus, streak selection) can use plain `keydown` listeners while `controls.locked`, but also consume the matching controller press: `controls.consume('streakNext' | 'streakPrev' | 'weaponNext' | 'equipment')` (D-pad right/left, Y, D-pad down; these are `Action`s too, so keys can be bound to them).
 
 ### Controller (Gamepad API)
 
@@ -440,7 +456,13 @@ Settings: `settings.<key>` + `updateSettings`; feature settings go under `settin
 
 ## 13. Weapon behaviours
 
-Hitscan is the default for every weapon: each pellet is stopped by the world (`bullets` mask) first, then by the nearest hitbox. There is no penetration model: anything with `bullets` collision stops every bullet, whatever the weapon or the Hardened perk (`penetrationMultiplier` is declared but unused); only brushes marked `bullets: false` (thin boards, fences, foliage) let bullets through, at full damage. Human shots rewind targets to the shooter's view time (`HitboxHistory`, at most `MAX_REWIND_MS`); a shot at the present (bots: `room.fire` without `time`) uses live positions. `traceShot(room, p, origin, dir, shot, poses?)` (combat.ts) traces a trigger pull's pellets without firing (no ammo, no damage), with the same spread seed as `fire`. For projectiles, melee or anything else:
+Hitscan is the default for every weapon: each pellet is stopped by the world (`bullets` mask) first, then by the nearest hitbox.
+
+Hitboxes:
+- `playerHitboxes(feet, stance, yaw)`, where `stance` is `'stand' | 'crouch' | 'prone'` or the old `crouched` boolean.
+- A prone body lies along `yaw`, with the head at the movement position and the legs 1.6 m behind. Its parts are turned boxes that `rayHitboxes` tests exactly (`hb.local`); the `head` / `torso` / `legs` AABBs bound them.
+- Use `moveHitboxes(p.move, p.yaw)` for a live player and `poseHitboxes(pose)` for a recorded one. Lag compensation poses carry `prone` and `yaw`.
+- Fully prone shooters get `stanceSpread` (×0.65) on top of `spreadMultiplier`. There is no penetration model: anything with `bullets` collision stops every bullet, whatever the weapon or the Hardened perk (`penetrationMultiplier` is declared but unused); only brushes marked `bullets: false` (thin boards, fences, foliage) let bullets through, at full damage. Human shots rewind targets to the shooter's view time (`HitboxHistory`, at most `MAX_REWIND_MS`); a shot at the present (bots: `room.fire` without `time`) uses live positions. `traceShot(room, p, origin, dir, shot, poses?)` (combat.ts) traces a trigger pull's pellets without firing (no ammo, no damage), with the same spread seed as `fire`. For projectiles, melee or anything else:
 
 ```ts
 api.registerWeaponBehavior('launcher', {

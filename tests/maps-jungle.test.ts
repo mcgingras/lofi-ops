@@ -213,7 +213,7 @@ describe('jungle: reachability and bounds', () => {
     expect(r.nodes.filter((n) => Math.abs(n.y - L.bridge) < 0.3).length).toBeGreaterThan(20);
     expect(r.nodes.filter((n) => Math.abs(n.y - L.lookout) < 0.3).length).toBeGreaterThan(40);
     expect(r.nodes.filter((n) => n.y < -1).length).toBeGreaterThan(40);
-  });
+  }, 180_000); // the first walk flood (it mantles too) runs here
 
   it('bounds are closed: nothing reachable outside, and sprinting and jumping outwards stops at the clip', () => {
     const r = reach();

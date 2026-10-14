@@ -12,14 +12,14 @@
  *   - modifiers: damageTaken, damageDealt, reloadMultiplier, swapMultiplier, sprintOutMultiplier,
  *     spreadMultiplier, regenDelayMultiplier, maxHealthMultiplier.
  */
-import { damageAtRange, isLowerTorso, partMultiplier, shotInterval, shotSeed, spreadDegrees, spreadDirection } from '../shared/ballistics';
-import { playerHitboxes, rayHitboxes, type HitPart } from '../shared/collision';
+import { damageAtRange, isLowerTorso, partMultiplier, shotInterval, shotSeed, spreadDegrees, spreadDirection, stanceSpread } from '../shared/ballistics';
+import { poseHitboxes, poseStance, rayHitboxes, type HitPart } from '../shared/collision';
 import { HEALTH, PLAYER, RESPAWN_DELAY } from '../shared/constants';
 import type { DamageInfo, DamageMeans } from '../shared/events';
 import { cloneLoadout, DEFAULT_LOADOUTS, sanitizeLoadout, type Loadout } from '../shared/loadout';
 import type { SpawnPoint } from '../shared/maps/types';
 import { dist, normalize, type Vec3 } from '../shared/math';
-import { createMoveState, eyeHeight } from '../shared/movement';
+import { bodyHeight, createMoveState, eyeHeight, moveBusy, movePose } from '../shared/movement';
 import { q3 } from '../shared/protocol';
 import { HitboxHistory, type Pose } from './lagcomp';
 import { currentWeapon, makeWeapon, type PlayerState, type WeaponState } from './player';
@@ -73,6 +73,8 @@ export function fire(room: Room, p: PlayerState, req: ShotRequest): FireResult {
   }
   const sprintOut = (def.sprintOutMs / 1000) * room.modifiers.mul('sprintOutMultiplier', p);
   if (p.move.sprinting || p.move.sinceSprint + 0.05 < sprintOut) return { ok: false, reason: 'sprinting' };
+  // Mantling, diving, or going to / getting up from prone: the weapon is down.
+  if (moveBusy(p.move)) return { ok: false, reason: 'stance' };
 
   // Rate: a token bucket refilling at the weapon's rate, a little slack for network bunching.
   const interval = shotInterval(def);
@@ -155,7 +157,7 @@ export function traceShot(room: Room, p: PlayerState, origin: Vec3, dir: Vec3, s
   const def = currentWeapon(p)?.def;
   if (!def) return [];
   const moving = Math.hypot(p.move.vx, p.move.vz) > 0.5;
-  const spread = spreadDegrees(def, p.move.ads, moving, room.modifiers.mul('spreadMultiplier', p));
+  const spread = spreadDegrees(def, p.move.ads, moving, room.modifiers.mul('spreadMultiplier', p) * stanceSpread(p.move));
   const range = def.range ?? DEFAULT_RANGE;
   const out: Pellet[] = [];
   for (let i = 0; i < Math.max(1, def.pellets ?? 1); i++) {
@@ -167,14 +169,14 @@ export function traceShot(room: Room, p: PlayerState, origin: Vec3, dir: Vec3, s
     let lower = false;
     for (const q of room.players.values()) {
       if (q === p || !q.alive || !room.canDamage(p, q)) continue;
-      const pose = poses?.get(q.id) ?? { x: q.move.x, y: q.move.y, z: q.move.z, crouched: q.move.crouched, alive: true };
+      const pose = poses?.get(q.id) ?? { ...movePose(q.move, q.yaw), alive: true };
       if (!pose.alive) continue;
-      const hit = rayHitboxes(origin, d, playerHitboxes(pose, pose.crouched), maxT);
+      const hit = rayHitboxes(origin, d, poseHitboxes(pose), maxT);
       if (hit) {
         maxT = hit.t;
         victim = q;
         part = hit.part;
-        lower = part === 'torso' && isLowerTorso(pose, pose.crouched, origin.y + d.y * hit.t);
+        lower = part === 'torso' && isLowerTorso(pose, poseStance(pose), origin.y + d.y * hit.t);
       }
     }
     out.push({ dir: d, t: maxT, victim, part, lower });
@@ -264,7 +266,8 @@ export function radiusDamage(room: Room, center: Vec3, radius: number, max: numb
   for (const q of room.players.values()) {
     if (!q.alive) continue;
     if (q === opts.attacker && !opts.hitSelf) continue;
-    const chest = { x: q.move.x, y: q.move.y + PLAYER.crouchHeight * 0.6, z: q.move.z };
+    // A crouched body's chest height (lower for someone lying down, so prone behind cover is cover).
+    const chest = { x: q.move.x, y: q.move.y + Math.min(PLAYER.crouchHeight, bodyHeight(q.move)) * 0.6, z: q.move.z };
     const d = dist(center, chest);
     if (d > radius || !room.world.lineOfSight(center, chest, 'bullets')) continue;
     const amount = max + (min - max) * (d / radius);
