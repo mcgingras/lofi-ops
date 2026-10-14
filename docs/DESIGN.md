@@ -68,7 +68,7 @@ Feature areas own their folders (`src/*/features/<area>/`, their defs file, thei
 - Local player: predict with `movement.ts`, keep unacked inputs, reconcile on snapshot (snap if error > 0.5 m, otherwise smooth).
 - Remote players: interpolate 100 ms behind.
 - Hitscan: client sends `fire {seq, time, origin, dir}`; server rewinds hitboxes to the shooter's view time (clamped to 250 ms), raycasts world first then hitboxes (head ×multiplier, torso, limbs), applies damage with range falloff.
-- Movement feel (BO1-ish): walk 5.0 m/s, sprint 7.2 m/s (sprint blocks firing, sprint-out delay), ADS move ×0.6, crouch, prone optional, jump 1.1 m, step height 0.45 m, no air control beyond 30 %, slide not required. Eye height 1.6 m standing.
+- Movement feel (BO1-ish): walk 5.0 m/s, sprint 7.2 m/s (sprint blocks firing, sprint-out delay), ADS move ×0.6, crouch, prone (crawl ×0.27, eye 0.4 m, BO1 dolphin dive), mantling (jump at a ledge, sill or low wall up to 1.5 m), jump 1.1 m, step height 0.45 m, no air control beyond 30 %, slide not required. Eye height 1.6 m standing. Details: docs/features/movement.md.
 - Player hitbox: capsule-ish AABB 0.6 × 1.8 m for movement; separate head/torso/legs boxes for hits.
 
 ## 5. Worlds and the look
