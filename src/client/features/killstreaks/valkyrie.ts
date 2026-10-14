@@ -277,7 +277,7 @@ function updateRocketCam(m: Match, dt: number, ctl: ReturnType<typeof rocketCont
   r.updateFov();
   m.controls.lookScale = 1;
   r.feed = 1;
-  r.white = white;
+  r.white = Math.max(r.white, white);
   setFeed = true;
   const fwd = viewDir(a.yaw, a.pitch);
   sfx.listener(pose.pos.x, pose.pos.y, pose.pos.z, fwd.x, fwd.y, fwd.z);
@@ -362,7 +362,7 @@ registerHudWidget(
     for (let y = 0; y < H; y += step * 2) {
       const dy = y - cy;
       const half = dy * dy < R * R ? Math.sqrt(R * R - dy * dy) : 0;
-      for (let x = (y / step) % 2 ? step : 0; x < W; x += step * 2) {
+      for (let x = Math.floor(y / (step * 2)) % 2 ? step : 0; x < W; x += step * 2) {
         const dx = x - cx;
         if (Math.abs(dx) > half) g.fillRect(x, y, step, step);
       }
@@ -385,13 +385,13 @@ registerHudWidget(
       rect(g, x, sy < 0 ? y : y - bl + u, u, bl, col);
     }
     for (let i = 1; i <= 3; i++) rect(g, cx - 3 * u, cy + gap + arm + 4 * u + i * 6 * u, 7 * u, u, C.dim);
-    // Header: name, rocket, fuel.
-    txt(g, 'VALKYRIE', cx, 18 * u, 8, C.hi, 'center', u);
-    txt(g, `ROCKET ${info.rocket}/${VALKYRIE.rockets}`, cx, 28 * u, 8, C.paper, 'center', u);
+    // Header (under the announcements): name, rocket, fuel.
+    const hy = 54 * u;
+    txt(g, `VALKYRIE  ROCKET ${info.rocket}/${VALKYRIE.rockets}`, cx, hy, 8, C.hi, 'center', u);
     const fw = 70 * u;
-    rect(g, cx - fw / 2 - u, 38 * u - u, fw + 2 * u, 5 * u, C.ink);
-    rect(g, cx - fw / 2, 38 * u, fw * info.fuel, 3 * u, info.fuel < 0.25 ? C.warn : C.hi);
-    txt(g, 'FUEL', cx - fw / 2 - 4 * u, 36 * u, 8, C.dim, 'right', u);
+    rect(g, cx - fw / 2 - u, hy + 11 * u, fw + 2 * u, 5 * u, C.ink);
+    rect(g, cx - fw / 2, hy + 12 * u, fw * info.fuel, 3 * u, info.fuel < 0.25 ? C.warn : C.hi);
+    txt(g, 'FUEL', cx - fw / 2 - 4 * u, hy + 10 * u, 8, C.paper, 'right', u);
     // Boost: the button, lit while it burns.
     const bx = cx + R * 0.72;
     const by = cy + R * 0.55;

@@ -16,10 +16,11 @@ import './hud';
 import './radar';
 import './control';
 import './marker';
-import './valkyrie';
 import './radio';
 import './tacmap';
 import './nuke';
+// After the nuke: its frame resets `renderer.white`, the rocket cam's white goes on top of it.
+import './valkyrie';
 
 export { ksClient, streakName } from './store';
 export { tacmapOpen } from './tacmap';
