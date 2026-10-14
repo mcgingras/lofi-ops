@@ -20,7 +20,7 @@
  * The brain sees a point when collision's `sight` mask and the occluders both leave the line
  * clear, and fires only when collision's `bullets` mask and the stopping occluders do.
  */
-import { PLAYER } from '../../../shared/constants';
+import { eyeHeight, stanceOf } from '../../../shared/movement';
 import type { CollisionWorld } from '../../../shared/collision';
 import type { MapData } from '../../../shared/maps/types';
 import type { Vec3 } from '../../../shared/math';
@@ -226,9 +226,12 @@ export function botCanHit(world: CollisionWorld, map: MapData, a: Vec3, b: Vec3)
 
 /** Points on a body to aim at / check sight to. */
 export function chestOf(p: PlayerState): Vec3 {
+  // Lying down: the back, behind the head (the eye is at the movement position, the body trails it).
+  if (stanceOf(p.move) === 'prone') return { x: p.move.x + Math.sin(p.yaw) * 0.45, y: p.move.y + 0.22, z: p.move.z + Math.cos(p.yaw) * 0.45 };
   return { x: p.move.x, y: p.move.y + (p.move.crouched ? 0.78 : 1.15), z: p.move.z };
 }
 export function headOf(p: PlayerState): Vec3 {
+  if (stanceOf(p.move) === 'prone') return { x: p.move.x, y: p.move.y + 0.32, z: p.move.z };
   return { x: p.move.x, y: p.move.y + (p.move.crouched ? 1.08 : 1.62), z: p.move.z };
 }
 /**
@@ -236,7 +239,7 @@ export function headOf(p: PlayerState): Vec3 {
  * (which sits above the eye), so a bot sees someone over a wall exactly when they could see it.
  */
 export function eyePointOf(p: PlayerState): Vec3 {
-  return { x: p.move.x, y: p.move.y + (p.move.crouched ? PLAYER.crouchEye : PLAYER.eye), z: p.move.z };
+  return { x: p.move.x, y: p.move.y + eyeHeight(p.move), z: p.move.z };
 }
 
 /** What a bot at `eye` can see of `q`: its body (chest), only its eyes over cover, or nothing. */

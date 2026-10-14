@@ -11,12 +11,18 @@ export interface Pose {
   z: number;
   crouched: boolean;
   alive: boolean;
+  /** Lying down (prone hitboxes along `yaw`). */
+  prone?: boolean;
+  /** Facing (prone hitboxes lie along it). */
+  yaw?: number;
 }
 
 interface Frame {
   time: number;
   poses: Map<string, Pose>;
 }
+
+const lerpAngle = (a: number, b: number, k: number) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
 
 export class HitboxHistory {
   private frames: (Frame | undefined)[];
@@ -29,7 +35,7 @@ export class HitboxHistory {
 
   record(time: number, poses: Iterable<[string, Pose]>): void {
     const frame: Frame = { time, poses: new Map() };
-    for (const [id, p] of poses) frame.poses.set(id, { x: p.x, y: p.y, z: p.z, crouched: p.crouched, alive: p.alive });
+    for (const [id, p] of poses) frame.poses.set(id, { x: p.x, y: p.y, z: p.z, crouched: p.crouched, alive: p.alive, prone: !!p.prone, yaw: p.yaw ?? 0 });
     this.frames[this.head] = frame;
     this.head = (this.head + 1) % this.frames.length;
     this.count = Math.min(this.count + 1, this.frames.length);
@@ -74,6 +80,8 @@ export class HitboxHistory {
           z: a.z + (b.z - a.z) * k,
           crouched: k < 0.5 ? a.crouched : b.crouched,
           alive: a.alive && b.alive,
+          prone: k < 0.5 ? a.prone : b.prone,
+          yaw: lerpAngle(a.yaw ?? 0, b.yaw ?? 0, k),
         };
       }
       newer = f;

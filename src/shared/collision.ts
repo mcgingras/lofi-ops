@@ -405,6 +405,12 @@ export type HitPart = 'head' | 'torso' | 'legs';
 /** Body stance for hitboxes and eye heights. */
 export type Stance = 'stand' | 'crouch' | 'prone';
 
+/** Stance of a recorded pose (`prone` = lying, as `stanceOf` in movement.ts decides it). */
+export const poseStance = (p: { crouched: boolean; prone?: boolean }): Stance => (p.prone ? 'prone' : p.crouched ? 'crouch' : 'stand');
+
+/** Hitboxes of a recorded pose (lag compensation history, killcam frames). */
+export const poseHitboxes = (p: Vec3 & { crouched: boolean; prone?: boolean; yaw?: number }): Hitboxes => playerHitboxes(p, poseStance(p), p.yaw ?? 0);
+
 export interface Hitboxes {
   /** World AABBs of each part (for a prone body: the bounds of the turned box). */
   head: AABB;

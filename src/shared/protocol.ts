@@ -64,7 +64,20 @@ export const PlayerFlags = {
   RELOADING: 32,
   FIRING: 64,
   SWITCHING: 128,
+  /** Prone (lying down, or on the way down; CROUCH is set too). Remotes ease into the pose. */
+  PRONE: 256,
+  /** Mantling (climbing onto or over something). */
+  MANTLE: 512,
 } as const;
+
+/** The stance bits of PlayerFlags for a move state (CROUCH, PRONE, MANTLE). */
+export function stanceFlags(m: Pick<MoveState, 'crouched' | 'prone' | 'mantle'>): number {
+  let f = 0;
+  if (m.crouched) f |= PlayerFlags.CROUCH;
+  if (m.prone) f |= PlayerFlags.PRONE;
+  if (m.mantle) f |= PlayerFlags.MANTLE;
+  return f;
+}
 
 /** Another player as everyone sees them (positions rounded to mm). */
 export interface PlayerSnap {

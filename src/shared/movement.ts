@@ -8,7 +8,7 @@
  * step 0.45 m, 30% air control, gravity, ramps. Mantling (jump at a ledge, sill or low wall) and
  * prone (with the dolphin dive) follow BO1: docs/features/movement.md.
  */
-import { CollisionWorld, topAt, type Solid, type Stance } from './collision';
+import { CollisionWorld, playerHitboxes, topAt, type Hitboxes, type Solid, type Stance } from './collision';
 import { MANTLE, MAX_SUBSTEP, MOVE, PLAYER, PRONE } from './constants';
 import { Buttons, has } from './input';
 import type { Vec3 } from './math';
@@ -105,6 +105,12 @@ export function eyeHeight(s: StanceState): number {
 
 /** The stance hitboxes and others see: lying once the transition is past half way. */
 export const stanceOf = (s: StanceState): Stance => ((s.proneT ?? (s.prone ? 1 : 0)) >= 0.5 ? 'prone' : s.crouched ? 'crouch' : 'stand');
+
+/** A body's hitboxes now (feet at its position, lying along `yaw` when prone). */
+export const moveHitboxes = (s: MoveState, yaw: number): Hitboxes => playerHitboxes(s, stanceOf(s), yaw);
+
+/** Pose fields for lag compensation and replays: position, stance and facing. */
+export const movePose = (s: MoveState, yaw: number) => ({ x: s.x, y: s.y, z: s.z, crouched: s.crouched, prone: stanceOf(s) === 'prone', yaw });
 
 /** Fully prone (the accuracy bonus, the crawl bob). */
 export const fullyProne = (s: StanceState) => !!s.prone && (s.proneT ?? 1) >= 1 - PRONE.fireReady;

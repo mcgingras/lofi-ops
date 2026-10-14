@@ -6,7 +6,7 @@
 import { PLAYER } from '../../../shared/constants';
 import { MELEE } from '../../../shared/defs/equipment';
 import { viewDir, type Vec3 } from '../../../shared/math';
-import { eyeHeight } from '../../../shared/movement';
+import { bodyHeight, eyeHeight } from '../../../shared/movement';
 import type { PlayerState } from '../../player';
 import type { Room } from '../../room';
 import { wext } from './state';
@@ -24,7 +24,7 @@ export function meleeTarget(room: Room, p: PlayerState): MeleeTarget | null {
   let best: MeleeTarget | null = null;
   for (const q of room.players.values()) {
     if (q === p || !q.alive || !room.canDamage(p, q)) continue;
-    const h = q.move.crouched ? PLAYER.crouchHeight : PLAYER.height;
+    const h = bodyHeight(q.move);
     // Closest point on the target's vertical axis to the eye (so looking at head or legs both count).
     const cy = Math.max(q.move.y + 0.3, Math.min(q.move.y + h - 0.1, eye.y));
     const to = { x: q.move.x - eye.x, y: cy - eye.y, z: q.move.z - eye.z };

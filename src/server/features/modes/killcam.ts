@@ -5,7 +5,7 @@
  * Core's lag-comp history only keeps 1 s of hitboxes without view angles, so this keeps its own.
  * The per-death killcam (deathcam.ts) cuts its clips from the same history.
  */
-import { PlayerFlags } from '../../../shared/protocol';
+import { PlayerFlags, stanceFlags } from '../../../shared/protocol';
 import type { DeathcamShot } from '../../../shared/defs/deathcam';
 import type { KillcamFrame, KillcamPayload } from '../../../shared/defs/modestate';
 import type { Vec3 } from '../../../shared/math';
@@ -26,7 +26,7 @@ export function poseFrame(room: Room): KillcamFrame {
     const m = q.move;
     let f = 0;
     if (q.alive) f |= PlayerFlags.ALIVE;
-    if (m.crouched) f |= PlayerFlags.CROUCH;
+    f |= stanceFlags(m);
     if (m.sprinting) f |= PlayerFlags.SPRINT;
     if (m.ads > 0.5) f |= PlayerFlags.ADS;
     if (m.onGround) f |= PlayerFlags.GROUND;
