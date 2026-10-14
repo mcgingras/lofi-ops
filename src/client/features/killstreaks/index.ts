@@ -16,6 +16,7 @@ import './hud';
 import './radar';
 import './control';
 import './marker';
+import './valkyrie';
 import './radio';
 import './tacmap';
 import './nuke';

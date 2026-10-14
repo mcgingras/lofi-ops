@@ -225,7 +225,7 @@ export function buildSam(kit: Kit): void {
   r.add(pod);
 }
 
-export function buildMissile(kit: Kit, big: boolean): THREE.Object3D {
+export function buildMissile(kit: Kit, big: boolean): { pitch: THREE.Object3D; glow: THREE.Sprite } {
   const r = kit.root;
   const pitch = new THREE.Group();
   r.add(pitch);
@@ -238,7 +238,7 @@ export function buildMissile(kit: Kit, big: boolean): THREE.Object3D {
   const glow = kit.sprite('glow', 1.1 * s, 0xffb050);
   glow.position.set(0, 0, 0.9 * s);
   pitch.add(glow);
-  return pitch;
+  return { pitch, glow };
 }
 
 export interface DogRig {
@@ -312,4 +312,54 @@ export function buildMarkerCanister(kit: Kit, parent: THREE.Object3D = kit.root)
   ring.rotation.y = 0.4;
   parent.add(g);
   return g;
+}
+
+export interface LauncherParts {
+  root: THREE.Group;
+  /** The loaded rocket's nose (hidden while empty or reloading). */
+  nose: THREE.Object3D;
+  /** The guidance unit's little screen (blinks). */
+  screen: THREE.Mesh;
+}
+
+/**
+ * Valkyrie launcher: BO1's is a Strela-3 tube with a guidance box bolted on ("a modified Strela-3
+ * with a controlling device attached", the wiki). Olive tube along -z (muzzle forward) from
+ * z = +0.42 to -0.9, ~1.3 m, with a flared muzzle and rear, the grip and trigger unit underneath,
+ * the battery unit forward of the grip, a sight frame on the left and the guidance box (screen,
+ * aerial) on the right. The origin is the shoulder rest point; y up.
+ */
+export function buildValkyrieLauncher(kit: Kit, parent: THREE.Object3D = kit.root): LauncherParts {
+  const g = new THREE.Group();
+  const olive = kit.mat('ks_olive', { rep: 0.35 });
+  const dark = kit.mat('ks_dark', { rep: 0.4 });
+  const steel = kit.mat('gunmetal', { rep: 0.3 });
+  const war = kit.mat('ks_grey', { rep: 0.4, tint: 0xd8d4c0 });
+  const screenMat = kit.mat('ks_glass', { emissive: 1, tint: 0x9fe08a });
+  // Tube, muzzle and rear flares, bands.
+  kit.cyl(g, 0.048, 0.048, 1.32, olive, 0, 0, -0.24, 'z', 8);
+  kit.cyl(g, 0.058, 0.05, 0.08, dark, 0, 0, -0.88, 'z', 8);
+  kit.cyl(g, 0.05, 0.06, 0.1, dark, 0, 0, 0.4, 'z', 8);
+  for (const z of [-0.6, -0.1, 0.22]) kit.cyl(g, 0.052, 0.052, 0.025, dark, 0, 0, z, 'z', 8);
+  // The loaded rocket's nose in the muzzle.
+  const nose = new THREE.Group();
+  kit.cyl(nose, 0.04, 0.012, 0.09, war, 0, 0, -0.95, 'z', 8);
+  g.add(nose);
+  // Grip and trigger unit under the tube, the battery unit ahead of it.
+  kit.box(g, 0.05, 0.07, 0.13, dark, 0, -0.08, -0.02);
+  const grip = kit.box(g, 0.04, 0.12, 0.05, dark, 0, -0.16, 0.02);
+  grip.rotation.x = 0.25;
+  kit.box(g, 0.012, 0.03, 0.02, steel, 0, -0.12, -0.05);
+  kit.cyl(g, 0.03, 0.03, 0.16, olive, 0, -0.085, -0.24, 'z', 6);
+  // Sight frame on the left.
+  kit.box(g, 0.012, 0.07, 0.012, steel, -0.06, 0.05, -0.3);
+  kit.box(g, 0.012, 0.05, 0.012, steel, -0.06, 0.04, 0.05);
+  kit.box(g, 0.03, 0.03, 0.006, steel, -0.06, 0.085, -0.3);
+  // Guidance box on the right: housing, screen, aerial.
+  kit.box(g, 0.07, 0.08, 0.14, olive, 0.085, 0.01, -0.12);
+  kit.box(g, 0.02, 0.02, 0.1, dark, 0.05, 0.0, -0.12);
+  const screen = kit.box(g, 0.004, 0.035, 0.06, screenMat, 0.122, 0.02, -0.12);
+  kit.cyl(g, 0.004, 0.004, 0.18, steel, 0.1, 0.13, -0.06, 'y', 4);
+  parent.add(g);
+  return { root: g, nose, screen };
 }

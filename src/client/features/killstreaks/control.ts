@@ -1,9 +1,9 @@
 /**
  * Local control of streaks: key 5 (or D-pad right / left on a controller) cycles the selected
  * ready streak; while designating the weapon
- * is lowered; while driving an RC-XD (chase cam), working a Chopper Gunner (camera in the gunner
- * seat) or steering a Valkyrie rocket (rocket cam) the camera follows the entity and mouse look
- * aims it. Input still goes out through the normal command stream (movement keys, FIRE, STREAK).
+ * is lowered; while driving an RC-XD (chase cam) or working a Chopper Gunner (camera in the gunner
+ * seat) the camera follows the entity and mouse look aims it. Input still goes out through the
+ * normal command stream (movement keys, FIRE, STREAK). The Valkyrie rocket cam is in valkyrie.ts.
  */
 import * as THREE from 'three';
 import { viewDir } from '../../../shared/math';
@@ -50,7 +50,7 @@ registerMatchHook('killstreaks.control', {
     const st = ksClient.state;
     if (st?.armed && m.alive) m.viewmodel.visible = false;
     const ctl = st?.control;
-    if (!ctl || !m.alive) {
+    if (!ctl || !m.alive || ctl.id === 'valkyrie') {
       followId = -1;
       return;
     }
@@ -71,12 +71,8 @@ registerMatchHook('killstreaks.control', {
       const f = viewDir(m.yaw, 0);
       cam.position.set(pos.x - f.x * 2.2, pos.y + 1.1, pos.z - f.z * 2.2);
       cam.rotation.set(Math.max(-0.6, Math.min(0.3, m.pitch)) - 0.18, m.yaw, 0, 'YXZ');
-    } else if (ctl.id === 'chopper_gunner') {
-      cam.position.set(pos.x, pos.y - 1.6, pos.z);
-      cam.rotation.set(m.pitch, m.yaw, 0, 'YXZ');
     } else {
-      const f = viewDir(m.yaw, m.pitch);
-      cam.position.set(pos.x - f.x * 0.6, pos.y - f.y * 0.6 + 0.15, pos.z - f.z * 0.6);
+      cam.position.set(pos.x, pos.y - 1.6, pos.z);
       cam.rotation.set(m.pitch, m.yaw, 0, 'YXZ');
     }
     m.viewmodel.visible = false;

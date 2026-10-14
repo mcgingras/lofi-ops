@@ -76,6 +76,11 @@ onFeature('killstreaks.fx', (f) => {
       m.effects.puff('dust', pos, { x: 0, y: 1, z: 0 }, 5);
       sfx.play('ks_launch', { at: pos, volume: 1.8 });
       break;
+    case 'rocket_launch':
+      // Valkyrie rocket leaving the tube: back-blast dust and the launch roar.
+      m.effects.puff('dust', pos, { x: 0, y: 1, z: 0 }, 6);
+      sfx.play('ks_launch', { at: pos, volume: 2 });
+      break;
     case 'bite':
       m.effects.puff('blood', pos, undefined, 6);
       sfx.play('ks_bite', { at: pos, volume: 1.2 });

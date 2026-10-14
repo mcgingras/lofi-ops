@@ -31,7 +31,7 @@ export interface LookOptions {
 }
 
 const QVS = /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
-const QFS = /* glsl */ `uniform sampler2D tSrc, tHud; uniform vec2 uLow; uniform float uLevels, uDither, uRed, uWhite, uSat, uGamma; uniform int uGrade, uPattern; uniform vec3 uLift, uGain; varying vec2 vUv;
+const QFS = /* glsl */ `uniform sampler2D tSrc, tHud; uniform vec2 uLow; uniform float uLevels, uDither, uRed, uWhite, uFeed, uTime, uSat, uGamma; uniform int uGrade, uPattern; uniform vec3 uLift, uGain; varying vec2 vUv;
 const float BAYER[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
 const float PATTERN[16] = float[16](0.,5.,10.,15.,7.,8.,13.,2.,10.,15.,0.,5.,13.,2.,7.,8.);
 void main(){
@@ -48,6 +48,15 @@ void main(){
   vec2 q = vUv - 0.5; c *= 1.0 - dot(q, q) * 0.5;
   // Damage: desaturate and redden towards the edges.
   if (uRed > 0.0) { float e = smoothstep(0.15, 0.75, length(q * vec2(1.6, 1.0))); c = mix(c, vec3(l * 0.6 + 0.25, l * 0.25, l * 0.2), uRed * (0.35 + 0.65 * e)); }
+  // Camera feed (Valkyrie rocket cam, BO1's grainy tow_filter_overlay): green-grey monochrome,
+  // scanlines, a slow rolling band and per-pixel grain that changes every frame.
+  if (uFeed > 0.0) {
+    float n = fract(sin(dot(px + floor(uTime * 24.0) * vec2(17.0, 41.0), vec2(12.9898, 78.233))) * 43758.5453);
+    float band = smoothstep(0.0, 0.08, abs(fract(vUv.y * 0.6 - uTime * 0.17) - 0.5));
+    vec3 mono = vec3(l * 0.82 + 0.06, l * 0.95 + 0.08, l * 0.76 + 0.05);
+    vec3 f = mono * (mod(px.y, 2.0) < 1.0 ? 0.8 : 1.0) * (0.92 + 0.08 * band) + (n - 0.5) * 0.16;
+    c = mix(c, f, uFeed);
+  }
   // White-out (Tactical Nuke flash): towards a warm white before the dither, so the fade is dithered too.
   if (uWhite > 0.0) c = mix(c, vec3(1.0, 0.98, 0.93), uWhite);
   int di = int(mod(px.x, 4.0)) + int(mod(px.y, 4.0)) * 4;
@@ -93,6 +102,8 @@ export class Renderer {
   damage = 0;
   /** 0..1 white-out of the world (under the HUD): the Tactical Nuke flash. Owners reset it to 0. */
   white = 0;
+  /** 0..1 camera-feed look (monochrome, scanlines, grain): the Valkyrie rocket cam. Owners reset it to 0. */
+  feed = 0;
 
   constructor(parent: HTMLElement) {
     this.canvas = document.createElement('canvas');
@@ -113,7 +124,7 @@ export class Renderer {
     this.hudTex.generateMipmaps = false;
     this.hudTex.colorSpace = THREE.NoColorSpace;
     this.post = new THREE.ShaderMaterial({
-      uniforms: { tSrc: { value: this.rt.texture }, tHud: { value: this.hudTex }, uLow: { value: new THREE.Vector2(640, 360) }, uLevels: { value: 256 }, uDither: { value: 0 }, uPattern: { value: 0 }, uGrade: { value: 3 }, uRed: { value: 0 }, uWhite: { value: 0 }, ...GRADE },
+      uniforms: { tSrc: { value: this.rt.texture }, tHud: { value: this.hudTex }, uLow: { value: new THREE.Vector2(640, 360) }, uLevels: { value: 256 }, uDither: { value: 0 }, uPattern: { value: 0 }, uGrade: { value: 3 }, uRed: { value: 0 }, uWhite: { value: 0 }, uFeed: { value: 0 }, uTime: { value: 0 }, ...GRADE },
       vertexShader: QVS,
       fragmentShader: QFS,
       depthTest: false,
@@ -190,6 +201,8 @@ export class Renderer {
     this.hudTex.needsUpdate = true;
     this.post.uniforms.uRed!.value = this.damage;
     this.post.uniforms.uWhite!.value = this.white;
+    this.post.uniforms.uFeed!.value = this.feed;
+    this.post.uniforms.uTime!.value = performance.now() / 1000;
     gl.setRenderTarget(null);
     gl.setClearColor(0x000000, 1);
     gl.clear();

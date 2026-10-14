@@ -67,7 +67,7 @@ registerHudWidget(
     if (st.ready.length && m.alive) {
       const sel = st.ready[st.selected] ?? st.ready[0]!;
       const flash = m.time - ksClient.earnedAt < 2 && blink(m.time, 0.3, 0.2);
-      const label = st.map ? 'RADIO' : st.marker ? 'MARKER UP' : st.armed ? 'DESIGNATING' : `${promptKey('streak', { brackets: true })} ${streakName(sel).toUpperCase()}`;
+      const label = st.map ? 'RADIO' : st.marker ? 'MARKER UP' : st.launcher ? 'LAUNCHER UP' : st.armed ? 'DESIGNATING' : `${promptKey('streak', { brackets: true })} ${streakName(sel).toUpperCase()}`;
       txt(g, label, W - 8 * u, y - 4 * u, 8, flash ? C.paper : C.hi, 'right', u);
       if (st.ready.length > 1) txt(g, `+${st.ready.length - 1}  ${promptKey('streakNext', { brackets: true })} NEXT`, W - 8 * u, y - 13 * u, 8, C.dim, 'right', u);
     }
@@ -115,7 +115,8 @@ registerHudWidget(
       txt(g, label, cx, cy + 16 * u, 8, C.hi, 'center', u);
       txt(g, `${promptKey('streak', { brackets: true })} CONFIRM  ${streakName(st.armed.id).toUpperCase()}`, cx, cy + 26 * u, 8, C.paper, 'center', u);
     }
-    if (st?.control) {
+    // (The Valkyrie rocket cam draws its own overlay: valkyrie.ts.)
+    if (st?.control && st.control.id !== 'valkyrie') {
       const left = Math.max(0, st.control.until - m.serverTime);
       const name = streakName(st.control.id).toUpperCase();
       const fire = inputDevice() === 'pad' ? promptKey('fire') : 'FIRE:';

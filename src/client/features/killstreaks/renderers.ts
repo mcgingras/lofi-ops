@@ -7,7 +7,7 @@ import type { Match } from '../../game/match';
 import { registerEntityRenderer, type EntityView } from '../../registry';
 import { iHave } from '../perks/state';
 import { buildCrate, buildDog, buildHeli, buildMissile, buildPlane, buildRcxd, buildSam, buildSentry, Kit } from './models';
-import { friendly } from './store';
+import { friendly, ksClient } from './store';
 
 const lightOf = (m: Match) => (m.map ? (x: number, y: number, z: number) => m.map!.lightAt(x, y, z) : null);
 
@@ -155,7 +155,7 @@ registerEntityRenderer(KS_ENTITY.sam, (_e, m) => {
 
 const missile = (big: boolean) => (_e: EntitySnap, m: Match): EntityView => {
   const kit = new Kit();
-  const pitch = buildMissile(kit, big);
+  const { pitch, glow } = buildMissile(kit, big);
   const hiss = looper('ks_launch', 0.7, big ? 0.8 : 0.5);
   return {
     object: kit.root,
@@ -163,9 +163,11 @@ const missile = (big: boolean) => (_e: EntitySnap, m: Match): EntityView => {
       kit.light(dt, lightOf(m), kit.root.position, true);
       const p = typeof e.s?.p === 'number' ? e.s.p : 0.3;
       pitch.rotation.x = p;
-      hiss(dt, kit.root.position);
-      // Rockets the local player steers ride the camera; hide the body so it doesn't block the view.
-      kit.root.visible = !(big && e.owner === m.myId);
+      hiss(dt, kit.root.position, big && e.s?.b === 1 ? 1.25 : 1);
+      // A boosted Valkyrie burns brighter.
+      glow.scale.setScalar((big ? 1.54 : 1.1) * (big && e.s?.b === 1 ? 1.6 + Math.random() * 0.4 : 1));
+      // The rocket the local player rides carries the camera: hide the body so it doesn't block the view.
+      kit.root.visible = !(big && m.alive && ksClient.state?.control?.entity === e.id);
     },
     dispose: () => kit.dispose(),
   };

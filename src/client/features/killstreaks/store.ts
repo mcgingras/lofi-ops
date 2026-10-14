@@ -1,5 +1,6 @@
 /** Client-side killstreak state: the pushed ladder, crate prompt, and HUD announcements. */
 import { KILLSTREAK_BY_ID } from '../../../shared/defs/killstreaks';
+import { VALKYRIE_LAUNCHER } from '../../../shared/defs/valkyrie';
 import type { KillstreakStateMsg } from '../../../shared/defs/perks-streaks-protocol';
 import { net } from '../../net';
 import { onFeature } from '../../registry';
@@ -21,7 +22,7 @@ export const ksClient = {
   earned: '',
 };
 
-export const streakName = (id: string) => (id === 'ammo' ? 'Ammo' : (KILLSTREAK_BY_ID.get(id)?.name ?? id));
+export const streakName = (id: string) => (id === 'ammo' ? 'Ammo' : id === VALKYRIE_LAUNCHER ? 'Valkyrie Launcher' : (KILLSTREAK_BY_ID.get(id)?.name ?? id));
 
 const now = () => currentMatch()?.time ?? performance.now() / 1000;
 
