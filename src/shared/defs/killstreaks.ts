@@ -7,7 +7,8 @@
  * `targeting` says how a streak is aimed:
  *   none   - just called (Spy Plane, Counter-Spy Plane, Blackbird, Attack Dogs)
  *   marker - a thrown marker (BO1 Care Package): STREAK raises the smoke canister, FIRE throws it,
- *            the drop comes where it settles (defs/care-marker.ts); bots pass a target instead
+ *            the drop comes where it settles (defs/care-marker.ts); bots pass a target instead.
+ *            Valkyrie Rockets is one too: its crate holds the launcher (defs/valkyrie.ts)
  *   point  - one designated spot where the caller aims (unused since the Care Package marker)
  *   line   - a spot plus the caller's facing as the run direction (unused since the tactical map)
  *   points - several designated spots where the caller aims (unused since the tactical map)
@@ -15,7 +16,7 @@
  *            'line' a spot plus a run direction (Napalm, Rolling Thunder), 'points' `marks` spots
  *            (Mortar Team), 'area' one patrol point (Attack Helicopter). See defs/tactical-map.ts.
  *   place  - placed on the ground in front of the caller (Sentry Gun, SAM Turret)
- *   control- the caller drives/aims it (RC-XD, Chopper Gunner, Valkyrie Rockets)
+ *   control- the caller drives/aims it (RC-XD, Chopper Gunner)
  *
  * The MW2 Tactical Nuke (25) rides on top of the BO1 set: see `defs/nuke.ts` for its timeline.
  */
@@ -66,7 +67,8 @@ export const KILLSTREAKS: KillstreakDef[] = [
   { id: 'sentry_gun', name: 'Sentry Gun', kills: 6, description: 'Placeable automated gun.', unlockLevel: 14, kind: 'called', durationSec: 90, targeting: 'place', hp: 450, icon: 'ks_sentry' },
   { id: 'mortar', name: 'Mortar Team', kills: 6, description: 'Mark three spots on the map for a mortar barrage.', unlockLevel: 1, kind: 'called', targeting: 'map', mapPick: 'points', marks: 3, icon: 'ks_mortar' },
   { id: 'attack_helicopter', name: 'Attack Helicopter', kills: 7, description: 'Pick an area on the map: a helicopter patrols it and attacks enemies.', unlockLevel: 1, kind: 'called', durationSec: 60, targeting: 'map', mapPick: 'area', air: true, hp: 1500, icon: 'ks_heli' },
-  { id: 'valkyrie', name: 'Valkyrie Rockets', kills: 7, description: 'Two guided rockets. Steer with your view, fire to detonate.', unlockLevel: 26, kind: 'controlled', targeting: 'control', icon: 'ks_valkyrie' },
+  // BO1 `m220_tow_drop_mp`: a supply drop whose crate holds the launcher (defs/valkyrie.ts).
+  { id: 'valkyrie', name: 'Valkyrie Rockets', kills: 7, description: 'Throw the marker for a launcher with two rockets you fly yourself: steer with your view, boost, fire to detonate.', unlockLevel: 26, kind: 'controlled', targeting: 'marker', icon: 'ks_valkyrie' },
   { id: 'blackbird', name: 'Blackbird', kills: 8, description: 'Shows enemy positions and facing. Cannot be shot down.', unlockLevel: 32, kind: 'called', durationSec: 30, targeting: 'none', air: true, icon: 'ks_blackbird' },
   { id: 'rolling_thunder', name: 'Rolling Thunder', kills: 8, description: 'Pick a spot and a direction on the map: a B-52 carpet-bombs along it.', unlockLevel: 36, kind: 'called', targeting: 'map', mapPick: 'line', icon: 'ks_thunder' },
   { id: 'chopper_gunner', name: 'Chopper Gunner', kills: 9, description: 'Man the explosive gun of a circling helicopter.', unlockLevel: 40, kind: 'controlled', durationSec: 40, targeting: 'control', air: true, hp: 2000, icon: 'ks_gunner' },
@@ -119,7 +121,10 @@ export const KS_ENTITY = {
   missile: 'ks_missile',
   heli: 'ks_heli',
   gunner: 'ks_gunner',
+  /** A Valkyrie rocket in flight: `s.p` pitch, `s.v` speed, `s.f` fuel left (s), `s.b` boosted, `s.w` feed white (out of bounds). */
   rocket: 'ks_rocket',
+  /** A player holding the Valkyrie launcher (others see it on their shoulder). */
+  launcher: 'ks_launcher',
   dog: 'ks_dog',
   rcxd: 'ks_rcxd',
   scavenger: 'perks_pack',

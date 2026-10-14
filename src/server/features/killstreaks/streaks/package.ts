@@ -5,9 +5,16 @@
  * killstreak or an ammo refill. Hardline Pro: the owner's first USE press rerolls the contents.
  * Hacker Pro: an enemy hacker booby-traps it instead of taking it; the next of the owner's side to
  * take it blows up (credited to the hacker). Landing on someone crushes them.
+ *
+ * The Valkyrie Rockets drop (`callValkyrieDrop`, BO1 `m220_tow_drop_mp`) is the same delivery with
+ * fixed contents: the crate holds the launcher (no Hardline reroll). Crate contents `valkyrie`
+ * always mean the launcher, as in BO1 (a Care Package rolls `m220_tow_mp`, the launcher itself), so
+ * taking one puts `VALKYRIE_LAUNCHER` in the ready list. A bot's Valkyrie crate is taken by the bot
+ * as soon as it lands (bots don't walk to crates).
  */
 import { MARKER, markerBody, markerStep, resolveDrop } from '../../../../shared/defs/care-marker';
 import { CARE_PACKAGE_WEIGHTS, CRATE_REACH, KS_ENTITY } from '../../../../shared/defs/killstreaks';
+import { VALKYRIE_LAUNCHER } from '../../../../shared/defs/valkyrie';
 import type { Body } from '../../../../shared/projectile';
 import { Buttons } from '../../../../shared/input';
 import type { Vec3 } from '../../../../shared/math';
@@ -31,6 +38,8 @@ export interface Crate {
   takers: Map<string, number>;
   rerolled: boolean;
   trap: PlayerState | null;
+  /** Contents set by the streak (the Valkyrie launcher): no reroll; a bot owner takes it on landing. */
+  fixed: boolean;
 }
 
 const crates = new WeakMap<KsRoom, Crate[]>();
@@ -52,10 +61,10 @@ export function rollContents(rand = Math.random, exclude?: string): string {
 }
 
 /** Spawn a crate falling from `from` onto x,z (also used by tests). */
-export function dropCrate(ctx: KsRoom, act: Active, owner: PlayerState, from: Vec3, contents = rollContents()): Crate {
+export function dropCrate(ctx: KsRoom, act: Active, owner: PlayerState, from: Vec3, contents = rollContents(), fixed = false): Crate {
   const ent = ctx.room.entities.add({ kind: KS_ENTITY.crate, x: from.x, y: from.y, z: from.z, yaw: Math.random() * Math.PI * 2, owner: owner.id, team: owner.team, s: { l: false } });
   act.entities.push(ent.id);
-  const c: Crate = { ent, owner, contents, landed: false, vy: 0, groundY: ctx.groundAt(from.x, from.z), expires: Infinity, takers: new Map(), rerolled: false, trap: null };
+  const c: Crate = { ent, owner, contents, landed: false, vy: 0, groundY: ctx.groundAt(from.x, from.z), expires: Infinity, takers: new Map(), rerolled: false, trap: null, fixed };
   cratesOf(ctx).push(c);
   return c;
 }
@@ -77,7 +86,7 @@ interface Canister {
  * while the canister smokes. Bots (and tests) pass a `target`: the canister appears there,
  * smoking, and the helicopter comes at once.
  */
-export function callCarePackage(ctx: KsRoom, p: PlayerState, args: CallArgs): string | null {
+export function callCarePackage(ctx: KsRoom, p: PlayerState, args: CallArgs, opts: { contents?: string } = {}): string | null {
   const room = ctx.room;
   let canister: Canister;
   let target: Vec3 | null = null;
@@ -145,7 +154,8 @@ export function callCarePackage(ctx: KsRoom, p: PlayerState, args: CallArgs): st
             h.z = target.z;
             phase = 'hover';
             hoverUntil = room.time + PACKAGE.hover;
-            dropCrate(ctx, act, p, { x: target.x, y: h.y - 2, z: target.z });
+            if (opts.contents) dropCrate(ctx, act, p, { x: target.x, y: h.y - 2, z: target.z }, opts.contents, true);
+            else dropCrate(ctx, act, p, { x: target.x, y: h.y - 2, z: target.z });
             outDir = { x: dx / Math.max(d, 1e-6), z: dz / Math.max(d, 1e-6) };
           } else {
             h.x += (dx / d) * step;
@@ -207,6 +217,10 @@ function updateCrates(ctx: KsRoom, act: Active, dt: number): void {
           if (q.alive && Math.hypot(q.move.x - c.ent.x, q.move.z - c.ent.z) < PACKAGE.crush && Math.abs(q.move.y - c.ent.y) < 1.8)
             room.damage({ victim: q, attacker: c.owner, amount: 1000, weapon: 'care_package', part: null, means: 'killstreak', from: { x: c.ent.x, y: c.ent.y + 2, z: c.ent.z }, distance: 0 });
         }
+        if (c.fixed && c.owner.isBot && room.players.get(c.owner.id) === c.owner) {
+          take(ctx, c, c.owner);
+          list.splice(i, 1);
+        }
       }
       continue;
     }
@@ -259,7 +273,7 @@ function take(ctx: KsRoom, c: Crate, q: PlayerState): void {
       w.reserve = Math.max(w.reserve, w.def.reserve);
     }
     room.sendFeature(q, 'perks.notice', { text: 'Ammo refilled' });
-  } else grant(room, q, c.contents);
+  } else grant(room, q, c.contents === 'valkyrie' ? VALKYRIE_LAUNCHER : c.contents);
 }
 
 /** Is a landed crate within taking reach of `p`? (USE belongs to the crate then: weapon pickups stand aside.) */
@@ -271,7 +285,7 @@ export function crateInReach(ctx: KsRoom, p: PlayerState): boolean {
 export function onUsePressed(ctx: KsRoom, p: PlayerState): void {
   if (!isPro(p, 'hardline')) return;
   for (const c of cratesOf(ctx)) {
-    if (c.owner !== p || !c.landed || c.rerolled) continue;
+    if (c.owner !== p || !c.landed || c.rerolled || c.fixed) continue;
     if (Math.hypot(p.move.x - c.ent.x, p.move.z - c.ent.z) > PACKAGE.radius) continue;
     c.rerolled = true;
     c.contents = rollContents(Math.random, c.contents);

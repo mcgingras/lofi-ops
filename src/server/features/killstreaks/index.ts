@@ -9,7 +9,9 @@
  * with `countsStreakKills`, the nuke); Hardline makes each a
  * kill cheaper (`streakCostOffset` modifier). Earned streaks wait in a list until called with the
  * STREAK button or the `killstreaks.call` RPC. The Care Package raises its marker canister (FIRE
- * throws it; STREAK, a weapon switch or death puts it away and keeps the streak); Napalm, Mortar Team, Rolling Thunder and the Attack Helicopter raise the
+ * throws it; STREAK, a weapon switch or death puts it away and keeps the streak); Valkyrie Rockets
+ * is a drop too, whose crate holds the launcher: STREAK raises it, FIRE launches a rocket you steer
+ * (streaks/valkyrie.ts); Napalm, Mortar Team, Rolling Thunder and the Attack Helicopter raise the
  * radio and open the tactical map (`mapmode.ts`, answered by `killstreaks.mapTarget`). Bots call
  * theirs automatically (skill `streakUse`) or through `api.ts`, picking targets server-side.
  * Everything a streak shoots at comes from `room.players`, so bots and humans are targeted alike,
@@ -30,9 +32,11 @@ import { flushState, grant, ksOf, markDirty, onKill, resetPlayer, stateMsg } fro
 import { crateInReach, onUsePressed } from './streaks/package';
 import { registerNukeModifiers } from './streaks/nuke';
 import { registerRadarModifiers } from './streaks/radar';
+import { fireLauncher, onOwnerDeath, putAwayLauncher, raiseLauncher, syncLauncherEntity } from './streaks/valkyrie';
 import { ksRoom } from './world';
+import { VALKYRIE_LAUNCHER } from '../../../shared/defs/valkyrie';
 
-export { callKillstreak, readyKillstreaks, enemyStreakTargets, suggestTarget, isDrivingStreak, isDesignating, killstreakState, botAutoStreaks } from './api';
+export { callKillstreak, readyKillstreaks, enemyStreakTargets, suggestTarget, isDrivingStreak, isDesignating, isHoldingLauncher, killstreakState, botAutoStreaks } from './api';
 
 /** Seconds a designator stays up waiting for marks. */
 const ARM_SEC = 15;
@@ -89,6 +93,7 @@ export function onStreakPressed(room: Room, p: PlayerState): void {
   if (ks.control) return; // vehicles read the press themselves (RC-XD detonates)
   if (ks.map) return closeMap(room, p); // STREAK again puts the radio away
   if (ks.marker) return cancelMarker(room, p); // STREAK again puts the canister away
+  if (ks.launcher) return putAwayLauncher(room, p); // and the Valkyrie launcher
   const ctx = ksRoom(room);
   if (ks.armed) {
     const at = ctx.aimPoint(p);
@@ -104,6 +109,11 @@ export function onStreakPressed(room: Room, p: PlayerState): void {
     return;
   }
   const id = ks.ready[ks.selected];
+  if (id === VALKYRIE_LAUNCHER) {
+    const why = raiseLauncher(room, p);
+    if (why) notify(room, p, why);
+    return;
+  }
   const def = id ? KILLSTREAK_BY_ID.get(id) : undefined;
   if (!id || !def) return;
   if (def.targeting === 'map') {
@@ -138,6 +148,7 @@ const feature: Feature = {
       const ks = ksOf(p);
       if (ks.armed) ks.armed = null;
       ks.marker = null;
+      putAwayLauncher(ctx.room, p);
       closeMap(ctx.room, p);
       ks.selected = ks.ready.length ? ((Math.floor(index) % ks.ready.length) + ks.ready.length) % ks.ready.length : 0;
       markDirty(ctx.room, p);
@@ -190,7 +201,7 @@ const feature: Feature = {
     // Driving a streak or holding the radio (tactical map): the body stands still with its weapon
     // down; designating: no sprint.
     room.modifiers.add('speedMultiplier', (p) => (p.ext.killstreaks?.control || p.ext.killstreaks?.map ? 0 : undefined), 'killstreaks.control');
-    room.modifiers.add('canSprint', (p) => (p.ext.killstreaks?.control || p.ext.killstreaks?.armed || p.ext.killstreaks?.map || p.ext.killstreaks?.marker ? false : undefined), 'killstreaks.control_sprint');
+    room.modifiers.add('canSprint', (p) => (p.ext.killstreaks?.control || p.ext.killstreaks?.armed || p.ext.killstreaks?.map || p.ext.killstreaks?.marker || p.ext.killstreaks?.launcher ? false : undefined), 'killstreaks.control_sprint');
     // USE takes a care package in reach (before any weapon pickup), and does nothing else while driving or on the radio.
     room.modifiers.add('useClaimed', (p) => (p.ext.killstreaks?.control || p.ext.killstreaks?.map || crateInReach(ctx, p) ? true : undefined), 'killstreaks.use');
 
@@ -198,6 +209,7 @@ const feature: Feature = {
       const ks = e.victim.ext.killstreaks;
       if (ks?.armed) ks.armed = null;
       cancelMarker(room, e.victim); // dying with the canister up keeps the streak
+      onOwnerDeath(room, e.victim); // the launcher is lost (a rocket in the air flies on, unguided)
       closeMap(room, e.victim); // dying with the radio up keeps the streak
       const earned = onKill(room, e.attacker, e.victim, e.weapon);
       const a = e.attacker;
@@ -220,6 +232,11 @@ const feature: Feature = {
         // A grenade or the knife instead: the canister goes away.
         else if (pressed & (Buttons.LETHAL | Buttons.TACTICAL | Buttons.MELEE)) cancelMarker(room, player);
       }
+      if (player.ext.killstreaks?.launcher) {
+        // FIRE launches (the rocket in the air reads its own FIRE: detonate); a grenade or the knife puts the launcher away.
+        if (pressed & Buttons.FIRE) fireLauncher(room, player);
+        else if (pressed & (Buttons.LETHAL | Buttons.TACTICAL | Buttons.MELEE)) putAwayLauncher(room, player);
+      }
     });
     room.bus.on('weaponSwitch', ({ player }) => {
       const ks = player.ext.killstreaks;
@@ -228,11 +245,13 @@ const feature: Feature = {
         markDirty(room, player);
       }
       cancelMarker(room, player);
+      putAwayLauncher(room, player);
     });
     room.bus.on('spawn', ({ player }) => markDirty(room, player));
     room.bus.on('playerJoin', ({ player }) => markDirty(room, player));
     room.bus.on('playerLeave', ({ player }) => {
       closeMap(room, player);
+      syncLauncherEntity(room, player);
       ctx.clearOwner(player);
     });
     room.bus.on('matchStart', () => {
@@ -247,7 +266,9 @@ const feature: Feature = {
           ks.control = null;
           ks.armed = null;
           ks.marker = null;
+          ks.launcher = null;
           closeMap(room, p);
+          syncLauncherEntity(room, p);
           markDirty(room, p);
         }
       }
@@ -263,10 +284,13 @@ const feature: Feature = {
           markDirty(room, p);
         }
         if (ks.marker && !p.alive) cancelMarker(room, p);
+        if (ks.launcher && !p.alive) onOwnerDeath(room, p);
+        syncLauncherEntity(room, p);
         // Weapon down while driving, holding the designator or the marker canister (core refuses fire while "switching").
         // The marker holds it longer: the client's view of swapEnd lags a snapshot plus latency,
         // and it must not predict a gunshot on the FIRE press that throws the canister.
-        if ((ks.control || ks.armed || ks.marker) && p.alive) p.swapEnd = Math.max(p.swapEnd, room.time + (ks.marker ? 0.6 : 0.25));
+        // The Valkyrie launcher likewise (FIRE launches a rocket, never a predicted gunshot).
+        if ((ks.control || ks.armed || ks.marker || ks.launcher) && p.alive) p.swapEnd = Math.max(p.swapEnd, room.time + (ks.marker || ks.launcher ? 0.6 : 0.25));
         if (p.isBot && tick % 15 === 0 && room.phase === 'playing') botAutoStreaks(room, p);
       }
       flushState(room);

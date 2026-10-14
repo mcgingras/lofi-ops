@@ -9,6 +9,11 @@
  *   enemyStreakTargets(room, bot)                 // enemy hardware a bot can shoot at (heli, sentry, dogs...)
  *   isDrivingStreak(bot)                          // true while its RC-XD / gunner / rockets run
  *
+ * Valkyrie Rockets are two calls: `callKillstreak(room, bot, 'valkyrie')` sends the drop (for a bot
+ * it comes down where it stands and the bot takes the crate on landing), which puts the launcher
+ * (`VALKYRIE_LAUNCHER`) in its ready list; `callKillstreak(room, bot, VALKYRIE_LAUNCHER)` raises
+ * it, and the feature aims, fires and steers both rockets for the bot.
+ *
  * The Tactical Nuke goes through the same calls (`callKillstreak(room, bot, 'nuke')`, no target);
  * skilled bots call their highest streak first, so a bot that earns one uses it.
  *
@@ -31,7 +36,9 @@ import { callCarePackage } from './streaks/package';
 import { callRadar } from './streaks/radar';
 import { callSam, callSentry } from './streaks/turrets';
 import type { CallArgs } from './streaks/types';
-import { callRcxd, callValkyrie } from './streaks/vehicles';
+import { callRcxd } from './streaks/vehicles';
+import { callValkyrieDrop, raiseLauncher } from './streaks/valkyrie';
+import { VALKYRIE_LAUNCHER } from '../../../shared/defs/valkyrie';
 import { chestOf, ksRoom, type KsRoom } from './world';
 
 export type CallResult = { ok: true } | { ok: false; reason: string };
@@ -51,7 +58,7 @@ export const STREAK_IMPLS: Record<string, Impl> = {
   attack_helicopter: callHeli,
   chopper_gunner: callGunner,
   rcxd: callRcxd,
-  valkyrie: callValkyrie,
+  valkyrie: callValkyrieDrop,
   attack_dogs: callDogs,
   nuke: callNuke,
 };
@@ -74,6 +81,9 @@ export const killstreakState = (room: Room, p: PlayerState) => stateMsg(room, p)
 /** True while the player drives / aims a streak (RC-XD, Chopper Gunner, Valkyrie). */
 export const isDrivingStreak = (p: PlayerState): boolean => !!p.ext.killstreaks?.control;
 
+/** True while holding the Valkyrie launcher (before, between and during its rockets). */
+export const isHoldingLauncher = (p: PlayerState): boolean => !!p.ext.killstreaks?.launcher;
+
 /** True while designating targets (holding the marker canister, the radio with the tactical map up, or the old designator). */
 export const isDesignating = (p: PlayerState): boolean => !!(p.ext.killstreaks?.armed || p.ext.killstreaks?.map || p.ext.killstreaks?.marker);
 
@@ -84,6 +94,12 @@ export const isDesignating = (p: PlayerState): boolean => !!(p.ext.killstreaks?.
  * `launch` of a thrown canister (humans: STREAK raises it, FIRE throws it, index.ts).
  */
 export function callKillstreak(room: Room, p: PlayerState, id: string, opts: CallOptions = {}): CallResult {
+  // The Valkyrie launcher from a crate: it comes up in hand (FIRE launches; the first shot uses it).
+  if (id === VALKYRIE_LAUNCHER) {
+    if (room.phase !== 'playing') return { ok: false, reason: 'phase' };
+    const why = raiseLauncher(room, p);
+    return why ? { ok: false, reason: why } : { ok: true };
+  }
   const def = KILLSTREAK_BY_ID.get(id);
   const impl = STREAK_IMPLS[id];
   if (!def || !impl) return { ok: false, reason: 'unknown' };
@@ -93,7 +109,7 @@ export function callKillstreak(room: Room, p: PlayerState, id: string, opts: Cal
   const ks = ksOf(p);
   const idx = ks.ready.indexOf(id);
   if (idx < 0) return { ok: false, reason: 'not_ready' };
-  if (ks.control) return { ok: false, reason: 'busy' };
+  if (ks.control || ks.launcher) return { ok: false, reason: 'busy' };
   const ctx = ksRoom(room);
   if ((id === 'attack_helicopter' || id === 'chopper_gunner') && airspaceFull(ctx)) return { ok: false, reason: 'airspace_full' };
   // Map-targeted streaks never fall back to the crosshair (humans choose on the tactical map, bots
@@ -116,7 +132,8 @@ export function callKillstreak(room: Room, p: PlayerState, id: string, opts: Cal
   markDirty(room, p);
   room.bus.emit('killstreaks.called', { player: p, id });
   room.bus.emit('progression.metric', { player: p, metric: 'streak_called', killstreak: id });
-  room.sendFeature(null, 'killstreaks.called', { id, owner: p.id, team: p.team });
+  // BO1 doesn't say a Valkyrie drop is one: it is announced as a Care Package (the rockets are announced at the first shot).
+  room.sendFeature(null, 'killstreaks.called', { id: id === 'valkyrie' ? 'care_package' : id, owner: p.id, team: p.team });
   return { ok: true };
 }
 
@@ -188,7 +205,7 @@ export function botWants(room: Room, p: PlayerState, id: string, skill: number):
   if (skill < 0.5) return true;
   if (id === 'sam_turret') return enemyStreakTargets(room, p).some((t) => t.air);
   if (id === 'counter_uav') return ctx.actives.some((a) => !a.done && (a.streak === 'uav' || a.streak === 'blackbird') && room.isEnemy(a.owner, p)) || Math.random() < 0.02;
-  if (id === 'rcxd' || id === 'chopper_gunner' || id === 'valkyrie') {
+  if (id === 'rcxd' || id === 'chopper_gunner' || id === VALKYRIE_LAUNCHER) {
     // Not with an enemy right in its face.
     const eye = { x: p.move.x, y: p.move.y + 1.5, z: p.move.z };
     return !ctx.targetsFor(p, 'bot', eye, 15).length;
@@ -199,7 +216,7 @@ export function botWants(room: Room, p: PlayerState, id: string, skill: number):
 /** Automatic streak use for bots (every few ticks from the feature). */
 export function botAutoStreaks(room: Room, p: PlayerState): void {
   const ks = p.ext.killstreaks;
-  if (!ks || ks.manual || !p.alive || !ks.ready.length || ks.control || ks.armed || ks.map || ks.marker) return;
+  if (!ks || ks.manual || !p.alive || !ks.ready.length || ks.control || ks.armed || ks.map || ks.marker || ks.launcher) return;
   const skill = botStreakSkill(p);
   ks.botNextCall ??= room.time + botCallDelay(skill);
   if (room.time < ks.botNextCall) return;

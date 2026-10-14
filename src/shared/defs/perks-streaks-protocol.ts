@@ -22,12 +22,20 @@ export interface KillstreakStateMsg {
   marker?: { id: string } | null;
   /** The tactical map is up (radio raised) for streak `id` until room time `until`. */
   map: { id: string; until: number } | null;
-  /** Driving / gunning one: the entity id the camera follows and when it ends (room time). */
-  control: { id: string; entity: number; until: number } | null;
+  /**
+   * Holding the Valkyrie launcher: rockets `left`, room time it can fire (`ready`: raised or
+   * reloaded), `fired` once the first rocket went (putting it away then loses the spare).
+   */
+  launcher?: { left: number; ready: number; fired: boolean } | null;
+  /**
+   * Driving / gunning / steering one: the entity id the camera follows and when it ends (room
+   * time). Valkyrie: `hold` once the rocket blew up (the camera stays on the blast, white, until then).
+   */
+  control: { id: string; entity: number; until: number; hold?: { until: number; x: number; y: number; z: number } } | null;
 }
 
 export interface KillstreakFx {
-  kind: 'boom' | 'bigboom' | 'shell' | 'napalm' | 'crate_land' | 'crate_open' | 'hacked' | 'destroyed' | 'sam_launch' | 'bite' | 'bark';
+  kind: 'boom' | 'bigboom' | 'shell' | 'napalm' | 'crate_land' | 'crate_open' | 'hacked' | 'destroyed' | 'sam_launch' | 'rocket_launch' | 'bite' | 'bark';
   x: number;
   y: number;
   z: number;

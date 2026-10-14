@@ -12,6 +12,20 @@ export interface KsControl {
   id: string;
   entity: number;
   until: number;
+  /** Valkyrie: the rocket blew up; the camera holds on the blast at x,y,z until room time `until`. */
+  hold?: { until: number; x: number; y: number; z: number };
+}
+
+/** The Valkyrie launcher in hand (STREAK raised it; FIRE launches a rocket). */
+export interface KsLauncher {
+  /** Rockets left in it (2, then 1). */
+  left: number;
+  /** Room time it can fire (raised, or reloaded after the first rocket). */
+  ready: number;
+  /** The first rocket went: the streak is used, and putting it away loses the rest. */
+  fired: boolean;
+  /** Bots: room time they fire (aiming). */
+  aimAt: number | null;
 }
 
 /** Holding the Care Package marker canister (STREAK raised it; FIRE throws it). */
@@ -42,6 +56,8 @@ export interface KillstreakExt {
   control: KsControl | null;
   /** The Care Package marker canister is in hand (weapon down) until thrown or put away. */
   marker?: KsMarker | null;
+  /** The Valkyrie launcher is in hand (weapon down) until both rockets are used or it is put away. */
+  launcher?: KsLauncher | null;
   /** Tactical map open (humans; bots pick targets server-side). */
   map?: KsMapMode | null;
   /** Rate limit for map RPCs. */
