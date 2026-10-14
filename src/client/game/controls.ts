@@ -262,7 +262,8 @@ export class Controls {
     const h = this.stanceHint;
     const diving = !!h && h.sprinting && h.onGround;
     if (a === 'prone') {
-      this.proneLatch = diving || !this.proneLatch;
+      // Toggle against the body: prone (or about to be) stands, anything else lies down.
+      this.proneLatch = diving || !(this.proneLatch || !!h?.prone);
       if (this.proneLatch) this.crouchToggled = false;
     } else if (a === 'crouch') {
       if (diving) {
@@ -285,18 +286,17 @@ export class Controls {
     }
   }
 
-  /** Let a refused prone toggle follow the body (see STANCE_SYNC_SEC). */
+  /** Drop a prone toggle the body refused (no room for the legs), see STANCE_SYNC_SEC. */
   private syncStance(dt: number): void {
     const h = this.stanceHint;
-    if (!h || h.prone === this.proneLatch) {
+    if (!h || !this.proneLatch || h.prone) {
       this.stanceOff = 0;
       return;
     }
     this.stanceOff += dt;
     if (this.stanceOff < STANCE_SYNC_SEC) return;
     this.stanceOff = 0;
-    this.proneLatch = h.prone;
-    if (h.prone) this.crouchToggled = false;
+    this.proneLatch = false;
   }
 
   /** Hold an action (or the trigger / ADS) for `ms`, then release it. */

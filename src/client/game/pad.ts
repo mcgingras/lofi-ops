@@ -172,7 +172,7 @@ export interface MapperContext {
   useContext: boolean;
   /** The body is sprinting on the ground: B dives to prone (BO1 dolphin dive). */
   sprinting?: boolean;
-  /** The body is prone (a refused B toggle gives way to it after STANCE_SYNC_SEC). */
+  /** The body is prone (a refused prone lets go after STANCE_SYNC). */
   prone?: boolean;
 }
 
@@ -284,10 +284,10 @@ export class PadMapper {
     }
     if (isDown(PAD.B) && this.bDownAt >= 0 && this.t - this.bDownAt >= PAD_HOLD.prone) this.crouchLatch = 'prone';
     if (!isDown(PAD.B)) this.bDownAt = -1;
-    // A refused toggle (no room for the legs, no headroom to get up) follows the body.
-    if (ctx.prone !== undefined && (this.crouchLatch === 'prone') !== ctx.prone && this.bDownAt < 0) {
+    // A refused prone (no room for the legs) lets go, so it doesn't drop you somewhere later.
+    if (ctx.prone === false && this.crouchLatch === 'prone' && this.bDownAt < 0) {
       this.stanceOff += dt;
-      if (this.stanceOff >= STANCE_SYNC) this.crouchLatch = ctx.prone ? 'prone' : 'none';
+      if (this.stanceOff >= STANCE_SYNC) this.crouchLatch = 'none';
     } else this.stanceOff = 0;
 
     // Jump: from crouch/prone, A stands up instead (and doesn't jump until released).
