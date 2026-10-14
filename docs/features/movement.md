@@ -36,7 +36,7 @@ Sources: decompiled engine code. KisakBlack is BO1 (`github.com/SwagSoftware/Kis
 3. For each top, lowest first:
    - there must be room to rise in place, up to the ledge plus `MANTLE.clearance` (1.0 m);
    - the path across the top must be free at that height for the full clearance;
-   - a top no deeper than 0.5 m along the facing is **vaulted**: the climb ends just past it, in the air, at ledge height, and you drop down the far side. A crouched body must fit there;
+   - a top no deeper than 0.5 m along the facing is **vaulted**: the climb ends just past it, in the air, at ledge height, and you drop down the far side. A crouched body must fit there. If it doesn't (a desk right under a window), you climb onto the sill instead;
    - a deeper top is **climbed onto**: the climb ends with the whole footprint on top, standing, or crouched if only a crouch fits.
 
    The swept checks are exact (the footprint swept against each box grown by the radius), so diagonal approaches into window jambs fail cleanly.
