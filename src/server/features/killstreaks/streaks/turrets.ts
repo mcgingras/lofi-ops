@@ -3,7 +3,7 @@
  * carrying lives in carry.ts, the placement rule in shared/defs/turret-place.ts).
  *
  * - Sentry (shared/defs/sentry.ts for the numbers): arms 1 s after it is put down, then sweeps its
- *   arc (60 degrees either side of the way it was placed facing). An enemy it can see inside the
+ *   arc (55 degrees either side of the way it was placed facing). An enemy it can see inside the
  *   arc and range (the bots' sight rules: drawn cover hides you; Ghost Pro hides you) becomes its
  *   target: it turns at a limited rate, and only after an acquisition delay does it fire, in
  *   bursts, one bullet per 0.112 s, with damage and accuracy falling off with distance. Losing sight
@@ -214,6 +214,7 @@ export class TurretRun implements CarriedTurret {
       t: this.target?.id ?? '',
       a: this.target && this.ctx.room.time - this.acquiredAt >= SENTRY.acquireSec ? 1 : 0,
       st: this.ctx.room.time < this.stunUntil ? 1 : 0,
+      h: this.hacked ? 1 : 0,
     };
     if (s.hp !== undefined) next.hp = s.hp;
     if (Object.keys(next).length !== Object.keys(s).length || Object.entries(next).some(([k, v]) => s[k] !== v)) this.ent.s = next;
@@ -357,7 +358,8 @@ export class TurretRun implements CarriedTurret {
     }
     const s = ent.s ?? {};
     const st = room.time < this.stunUntil ? 1 : 0;
-    if (s.st !== st || s.c !== undefined) ent.s = { b: q3(this.baseYaw), st, ...(s.hp !== undefined ? { hp: s.hp } : {}) };
+    const h = this.hacked ? 1 : 0;
+    if (s.st !== st || s.h !== h || s.c !== undefined) ent.s = { b: q3(this.baseYaw), st, h, ...(s.hp !== undefined ? { hp: s.hp } : {}) };
     return active || this.missiles.length > 0 || this.life < this.lifeMax;
   }
 

@@ -121,21 +121,61 @@ registerEntityRenderer(KS_ENTITY.crate, (_e, m) => {
   };
 });
 
-registerEntityRenderer(KS_ENTITY.sentry, (_e, m) => {
+/**
+ * A turret in someone's hands (`s.c`): green where it can go down, red where it can't (`s.v`).
+ * Hidden when it is ours (turret.ts draws our preview). Returns the tint now applied.
+ */
+function carriedLook(kit: Kit, e: EntitySnap, m: Match, tint: number): number {
+  const carried = e.s?.c === 1;
+  kit.root.visible = !(carried && e.owner === m.myId);
+  const want = carried ? (e.s?.v === 1 ? 0x70ff80 : 0xff5040) : 0xffffff;
+  if (want !== tint) for (const mat of kit.mats) mat.uniforms.uTint.value.setHex(want);
+  return want;
+}
+
+/**
+ * Sentry Gun. The root turns with the head (entity yaw); the tripod is turned back to the way it was
+ * placed (`s.b`). The red lamp lights while it tracks someone (`s.t`) and burns steady once it may
+ * fire (`s.a`); a chirp plays when it picks up a target (BO1 plays `mpl_turret_alert`). Stunned
+ * (`s.st`): sparks, no lamp. Carried (`s.c`): tinted green / red for others (BO1 swaps in its
+ * good / bad placement models); your own carried turret is drawn by turret.ts as the preview.
+ */
+/** Sentry models by entity id (turret.ts aims the tracking laser from the smoothed one). */
+export const sentryObjects = new Map<number, THREE.Object3D>();
+
+registerEntityRenderer(KS_ENTITY.sentry, (e0, m) => {
   const kit = new Kit();
-  const flash = buildSentry(kit);
+  const parts = buildSentry(kit);
+  sentryObjects.set(e0.id, kit.root);
   const mark = hackerMark(kit, 1.5);
   const gun = looper('ks_sentry', 0.12, 1.2);
+  const spark = kit.sprite('flash', 0.35, 0x9fd0ff);
+  spark.position.set(0, 1.0, 0);
+  kit.root.add(spark);
+  let lastTarget = '';
+  let tint = -1;
   return {
     object: kit.root,
     update(e, dt) {
+      tint = carriedLook(kit, e, m, tint);
       kit.light(dt, lightOf(m), kit.root.position);
+      const base = typeof e.s?.b === 'number' ? e.s.b : e.yaw;
+      parts.legs.rotation.y = base - e.yaw;
       const firing = e.s?.f === 1;
-      flash.visible = firing && Math.random() < 0.7;
+      parts.flash.visible = firing && Math.random() < 0.7;
       if (firing) gun(dt, kit.root.position);
+      const target = typeof e.s?.t === 'string' ? e.s.t : '';
+      const stunned = e.s?.st === 1;
+      if (target && target !== lastTarget) sfx.play('weapons.beep', { at: { x: e.x, y: e.y + 1, z: e.z }, volume: target === m.myId ? 1.1 : 0.6, rate: 0.8 });
+      lastTarget = target;
+      parts.lamp.visible = !!target && !stunned && (e.s?.a === 1 || Math.floor(m.time * 8) % 2 === 0);
+      spark.visible = stunned && Math.random() < 0.35;
       mark.visible = iHave('hacker') && !isFriendly(e);
     },
-    dispose: () => kit.dispose(),
+    dispose: () => {
+      sentryObjects.delete(e0.id);
+      kit.dispose();
+    },
   };
 });
 
@@ -143,9 +183,11 @@ registerEntityRenderer(KS_ENTITY.sam, (_e, m) => {
   const kit = new Kit();
   buildSam(kit);
   const mark = hackerMark(kit, 2);
+  let tint = -1;
   return {
     object: kit.root,
     update(e, dt) {
+      tint = carriedLook(kit, e, m, tint);
       kit.light(dt, lightOf(m), kit.root.position);
       mark.visible = iHave('hacker') && !isFriendly(e);
     },

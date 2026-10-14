@@ -1,8 +1,11 @@
 /**
  * Sentry Gun tuning and targeting maths (owner: perks-streaks). Sources: BO1's
  * `maps/mp/_turret_killstreak.gsc` and `maps/mp/_mgturret.gsc` (T5 script dump,
- * plutoniummod/t5-scripts) and the Call of Duty Wiki "Sentry Gun" page (Black Ops section); see
- * docs/features/perks-streaks.md for what BO1 did and why these numbers.
+ * plutoniummod/t5-scripts), the engine's turret code in the KisakBlack T5 decompile (`turret.cpp`)
+ * and the Call of Duty Wiki "Sentry Gun" page (Black Ops section). BO1's weapon file
+ * (`auto_gun_turret_mp`: arcs, turn speeds, damage, range) wasn't found; where it would decide,
+ * MW2's `sentry_minigun_mp` stands in (55 degree arcs, 60 deg/s turns, 20 damage, 1800 units) and
+ * we lean to the less oppressive side. See docs/features/perks-streaks.md for the reasoning.
  *
  * Pure and shared: the server runs the turret with it, the tests check it, and the client reads the
  * arc and the timings for its cues.
@@ -24,22 +27,22 @@ export const SENTRY = {
   acquireSec: 0.6,
   /** Lost sight of its target for this long: it lets go (seeing them again starts a new acquisition). */
   loseSec: 0.3,
-  /** Head turn rate (rad/s) while tracking. */
-  turnRate: 1.75,
+  /** Head turn rate (rad/s) while tracking: 60 deg/s (MW2 `maxHorTurnSpeed` 60; BO1's unknown). */
+  turnRate: 1.05,
   /** Idle sweep across its arc (rad/s). */
   scanRate: 0.6,
-  /** Half its firing arc either side of the way it was placed facing (rad). */
-  arcHalf: Math.PI / 3,
+  /** Half its firing arc either side of the way it was placed facing (rad): 55 degrees (MW2 `leftArc`/`rightArc` 55). */
+  arcHalf: (55 * Math.PI) / 180,
   /** Aligned enough to fire: within this of the target (rad). */
   fireCone: 0.06,
-  /** Targets beyond this aren't engaged (m). */
+  /** Targets beyond this aren't engaged (m). MW2 `maxRange` 1800 units = 46 m; shorter here. */
   range: 35,
   /** Bullets: one per 0.112 s while a burst runs (`_mgturret.gsc` `do_shoot`). */
   fireInterval: 0.112,
   /** Bursts (`burst_fire_unmanned`): fires 0.5 + rand(0..4) s, pauses 0.2 + rand(0..0.5) s. */
   burst: { min: 0.5, range: 4 },
   pause: { min: 0.2, range: 0.5 },
-  /** Damage per bullet: `near` up to `nearRange`, falling to `far` at `farRange` (m). */
+  /** Damage per bullet: `near` up to `nearRange`, falling to `far` at `farRange` (m). MW2: 20 flat. */
   damage: { near: 20, far: 12, nearRange: 8, farRange: 30 },
   /** Chance a bullet hits: `near` up to `nearRange`, falling to `far` at `range` (m). */
   hit: { near: 0.85, far: 0.2, nearRange: 6 },

@@ -193,23 +193,39 @@ export function buildCrate(kit: Kit): void {
   kit.box(kit.root, 1.2, 0.9, 1.2, m, 0, 0.45, 0);
 }
 
-/** Sentry Gun (`head` turns with the entity yaw already, so it is one piece). */
-export function buildSentry(kit: Kit): THREE.Object3D {
+export interface SentryParts {
+  /** Muzzle flash sprite. */
+  flash: THREE.Sprite;
+  /** The tripod: the root turns with the head (entity yaw), so turn this back to the base yaw. */
+  legs: THREE.Group;
+  /** Red lamp on the head: lit while it tracks someone. */
+  lamp: THREE.Sprite;
+}
+
+/** Sentry Gun: tripod, gun body with an ammo box and shield plate, the barrel, a tracking lamp. */
+export function buildSentry(kit: Kit): SentryParts {
   const r = kit.root;
   const dark = kit.mat('ks_dark');
   const grey = kit.mat('ks_olive');
+  const legs = new THREE.Group();
+  r.add(legs);
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2;
-    const leg = kit.box(r, 0.06, 0.8, 0.06, dark, Math.sin(a) * 0.3, 0.32, Math.cos(a) * 0.3);
+    const leg = kit.box(legs, 0.06, 0.8, 0.06, dark, Math.sin(a) * 0.3, 0.32, Math.cos(a) * 0.3);
     leg.rotation.set(Math.cos(a) * 0.5, 0, -Math.sin(a) * 0.5);
   }
+  kit.cyl(legs, 0.07, 0.07, 0.2, dark, 0, 0.66, 0, 'y');
   kit.box(r, 0.5, 0.36, 0.7, grey, 0, 0.82, 0);
+  kit.box(r, 0.22, 0.2, 0.3, dark, 0.32, 0.78, 0.08);
   kit.box(r, 0.56, 0.3, 0.06, grey, 0, 0.92, -0.38);
   kit.cyl(r, 0.05, 0.05, 0.8, dark, 0, 0.84, -0.7);
   const flash = kit.sprite('flash', 0.5);
   flash.position.set(0, 0.84, -1.15);
   r.add(flash);
-  return flash;
+  const lamp = kit.sprite('glow', 0.22, 0xff2a1a);
+  lamp.position.set(0.16, 1.04, -0.3);
+  r.add(lamp);
+  return { flash, legs, lamp };
 }
 
 export function buildSam(kit: Kit): void {
