@@ -97,7 +97,7 @@ describe('hijacked layout (reference: BO2 minimap, 0.19 m/px)', () => {
   });
 
   it('central deck: shower block on the centreline, hot tub bay on port, cabana bar on starboard, the catwalk outside', () => {
-    expect(floorAt(-0.6, -0.6)).toBeCloseTo(2.5, 1);
+    expect(floorAt(-0.6, -0.6, 5)).toBeCloseTo(2.5, 1); // (under the roof clip that keeps mantles off it)
     expect(floorAt(-7.0, -6.0)).toBeCloseTo(3.0, 1);
     expect(floorAt(-7.0, 3.0)).toBeCloseTo(3.0, 1);
     expect(floorAt(-6.2, -2.1)).toBeCloseTo(0.6, 1);

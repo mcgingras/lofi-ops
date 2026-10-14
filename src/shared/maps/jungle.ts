@@ -749,8 +749,11 @@ function roof(f: Frame, u0: number, v0: number, u1: number, v1: number, y: numbe
     const e = -over + Math.min(0.2 * i, over);
     const yb = y + i * th;
     const [a0, b0, a1, b1] = alongU ? [u0 + e, v0 + a, u1 - e, v1 - a] : [u0 + a, v0 + e, u1 - a, v1 - e];
-    if (i === 0) f.box(a0, b0, a1, b1, yb, yb + th, mat);
-    else f.vis(a0, b0, a1, b1, yb, yb + th, mat, { hide: ['ny'] });
+    if (i === 0) {
+      f.box(a0, b0, a1, b1, yb, yb + th, mat);
+      // The solid eaves tier is a flat slab under the drawn tiers: keep players off it (mantling).
+      f.solid(a0, b0, a1, b1, yb + th, yb + th + 3, 'clip', { bullets: false, sight: false, tag: 'roof' });
+    } else f.vis(a0, b0, a1, b1, yb, yb + th, mat, { hide: ['ny'] });
   }
   const e = -over + Math.min(0.2 * tiers, over);
   if (alongU) f.vis(u0 + e, (v0 + v1) / 2 - 0.14, u1 - e, (v0 + v1) / 2 + 0.14, y + tiers * th, y + tiers * th + 0.2, 'wood', { hide: ['ny'] });

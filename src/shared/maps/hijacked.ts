@@ -599,6 +599,9 @@ function centralDeck(k: MapKit) {
   k.aabb(7.6, 0, -5.7, 7.9, 2.7, 4.4, 'paint');
   for (const [z0, z1] of [[-5.7, -5.4], [4.1, 4.4]] as const) k.wall('x', 3.6, 7.6, (z0 + z1) / 2, 0, 2.7, 0.3, 'paint', [{ a0: 5.6, a1: 7.2, y0: 0, y1: 2.2 }]);
   k.aabb(3.4, 2.7, -5.9, 8.0, 2.95, 4.6, 'paint', { faceMats: { ny: 'teakInt' } });
+  // Cabana and shower block roofs are off limits (mantling would otherwise reach them).
+  k.clip(3.4, 2.95, -5.9, 8.0, 6, 4.6, 'roof');
+  k.clip(-2.2, 2.5, -4.2, 0.9, 6, 2.85, 'roof');
   k.box(0.6, 1.1, 6.4, 'wood', 4.9, 0, -0.6, { faceMats: { py: 'chrome' } });
   k.box(0.45, 2.0, 4.8, 'wood', 7.37, 0, -0.6);
   k.wallDecal(4.6, 1.5, 'bottles', 7.14, 0.3, -0.6, -PI / 2, { uv: 'raw' });
