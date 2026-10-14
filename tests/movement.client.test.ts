@@ -290,7 +290,7 @@ describe('stance controls against a real server', () => {
       const v = remotes.views.get(a.id)!;
       expect(v).toBeDefined();
       expect(v.prone).toBeGreaterThan(0.95);
-      expect(v.soldier.lie.rotation.x).toBeCloseTo(Math.PI / 2, 1);
+      expect(v.soldier.lie.rotation.x).toBeGreaterThan(1.4); // laid (nearly) flat
       // The lying soldier's head is near the player's position, the body trails behind it.
       expect(Math.abs(v.soldier.lie.position.z)).toBeGreaterThan(1.4);
       // Server side: the lag compensation history recorded the lying pose with its facing.

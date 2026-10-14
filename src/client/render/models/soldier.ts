@@ -214,8 +214,9 @@ export class Soldier {
     this.aim.rotation.y = s.sprint ? 0.5 : 0;
     this.head.rotation.x = -s.pitch * 0.6 * (1 - lieK) - 1.25 * lieK;
     // Lay down: tip forward about the feet, then slide back so the head sits at the origin.
-    this.lie.rotation.x = (Math.PI / 2) * lieK;
-    this.lie.position.set(0, 0.2 * lieK, -1.62 * lieK);
+    // (A few degrees short of flat: chest and head up a little, as when aiming prone, boots on the ground.)
+    this.lie.rotation.x = (Math.PI / 2 - 0.07) * lieK;
+    this.lie.position.set(0, 0.12 * lieK, -1.62 * lieK);
     this.flash.visible = s.firing && s.alive && Math.floor(s.time * 30) % 2 === 0;
     if (this.flash.visible) this.flash.rotation.z = Math.random() * 6;
     // Death: topple at the feet, knees buckle (already lying down: just go limp).
