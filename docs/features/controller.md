@@ -11,8 +11,8 @@ Tested against the Gamepad API "standard" mapping (Chrome, a USB Xbox-style pad 
 | Left stick | Move (8-way, full walk speed past the threshold) |
 | Right stick | Look |
 | LT | Aim down sights |
-| RT | Fire (analog: on at 40%, off below 30%); throws the Care Package marker while it is up |
-| LB | Tactical |
+| RT | Fire (analog: on at 40%, off below 30%); throws the Care Package marker while it is up; fires the Valkyrie launcher, and detonates its rocket in flight |
+| LB | Tactical; boosts a Valkyrie rocket while held (BO1's boost is the tactical button) |
 | RB | Lethal (hold to raise, release to throw; a frag cooks while held; like G) |
 | A | Jump; from crouch or prone, stands up instead |
 | B | Tap: crouch toggle (prone -> crouch). Hold 0.35 s: prone |
@@ -29,6 +29,8 @@ Tested against the Gamepad API "standard" mapping (Chrome, a USB Xbox-style pad 
 The same table is on Settings → Controller (`PAD_LAYOUT` in `src/client/game/pad.ts`).
 
 Tactical map (killstreak radio): left stick / D-pad move the cursor, right stick X rotates, A marks, X undoes, B cancels.
+
+Valkyrie rocket cam: right stick steers (the rocket turns at its own rate, 60 deg/s, slower when boosted; the view can't lead its nose by more than 0.45 rad), RT detonates, hold LB to boost (LT works too). While steering, the pad's LB / LT go out as the boost bit and RB / R3 do nothing, so the soldier left standing doesn't throw a grenade or knife. No aim assist while steering.
 
 ## Movement: why it stays digital
 
@@ -77,7 +79,7 @@ Debug overlay: add `?aimdebug=1` to the URL: device, strength, slowdown, rotatio
 ## Prompts and device switching
 
 - Last-used device (`inputDevice()` in `game/gamepad.ts`): any pad button or a stick past 0.3 switches to the pad; a key, mouse button, wheel or real mouse travel (6 px within 250 ms) switches back. `<body data-input>` follows it.
-- `promptKey(action)` in `game/prompts.ts` is the one place prompts get key labels: "HOLD F" → "HOLD [X]", "[4] NAPALM" → "[↑] NAPALM", "[5] NEXT" → "[→] NEXT", "PRESS [F] TO SKIP" → "PRESS [X] TO SKIP", "PRESS R TO RELOAD" → "PRESS [X] TO RELOAD", the class hint ("PRESS [Y] TO CHANGE CLASS"), the tomahawk ([RB]), scope zoom ([↓]), the streak driving hint ([RT]) and the Care Package marker ("[RT] THROW MARKER  [↑] PUT AWAY"). The HUD draws ↑ ↓ ← → as pixel glyphs.
+- `promptKey(action)` in `game/prompts.ts` is the one place prompts get key labels: "HOLD F" → "HOLD [X]", "[4] NAPALM" → "[↑] NAPALM", "[5] NEXT" → "[→] NEXT", "PRESS [F] TO SKIP" → "PRESS [X] TO SKIP", "PRESS R TO RELOAD" → "PRESS [X] TO RELOAD", the class hint ("PRESS [Y] TO CHANGE CLASS"), the tomahawk ([RB]), scope zoom ([↓]), the streak driving hint ([RT]), the Care Package marker ("[RT] THROW MARKER  [↑] PUT AWAY") and the Valkyrie ("[RT] FIRE ROCKET  [↑] PUT AWAY"; in flight "[RT] DETONATE", "[LB] BOOST"). The HUD draws ↑ ↓ ← → as pixel glyphs.
 
 ## Menus
 
