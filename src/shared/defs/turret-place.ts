@@ -24,8 +24,11 @@ import { viewDir, type Vec3 } from '../math';
 import { roofLimit, type DropMap } from './care-marker';
 
 export const TURRET_PLACE = {
-  /** How far in front of the carrier's feet the turret goes (BO1 `CarryTurret` offset 40 units). */
-  ahead: 1.1,
+  /**
+   * How far in front of the carrier's feet the turret goes. BO1's `CarryTurret` offset is 40 units
+   * (1 m); a little further here so the preview doesn't fill the view.
+   */
+  ahead: 1.5,
   /** The turret's footprint (radius) and height: that much room must be free where it stands. */
   radius: 0.38,
   height: 1.1,
@@ -41,7 +44,7 @@ export const TURRET_PLACE = {
   /** Walking with a turret in hand (no sprint, weapon away). */
   moveScale: 0.75,
   /** Pick a placed turret back up: horizontal reach and height difference (m). */
-  pickupReach: 1.4,
+  pickupReach: 1.7,
   pickupDy: 1.5,
 } as const;
 

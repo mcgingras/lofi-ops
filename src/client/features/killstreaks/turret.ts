@@ -62,7 +62,7 @@ const BAD = 0xff4a3a;
 class Ghost {
   readonly root = new THREE.Group();
   private kits = new Map<string, Kit>();
-  private mat = new THREE.MeshBasicMaterial({ color: GOOD, transparent: true, opacity: 0.55, depthWrite: false });
+  private mat = new THREE.MeshBasicMaterial({ color: GOOD, transparent: true, opacity: 0.45, depthWrite: false });
   private ringMat = new THREE.MeshBasicMaterial({ map: getTexture('ks_drop_ring'), color: GOOD, transparent: true, alphaTest: 0.4, depthWrite: false, depthTest: false, side: THREE.DoubleSide });
   private ring = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2).rotateX(-Math.PI / 2), this.ringMat);
   private arcMat = new THREE.LineBasicMaterial({ color: GOOD, transparent: true, opacity: 0.8, depthTest: false });
@@ -269,7 +269,7 @@ registerHudWidget(
     const spot = turretClient.preview;
     if (id) {
       const name = streakName(id).toUpperCase();
-      if (spot && !spot.valid) drawWaypoint(m, g, W, H, { x: spot.x, y: spot.y + 1.4, z: spot.z, label: "CAN'T PLACE", caption: PLACE_REASON_TEXT[spot.reason], color: C.warn, small: true }, placed);
+      if (spot && !spot.valid) drawWaypoint(m, g, W, H, { x: spot.x, y: spot.y + 1.4, z: spot.z, label: `CAN'T PLACE: ${PLACE_REASON_TEXT[spot.reason]}`, color: C.warn, small: true }, placed);
       const y = H - 52 * u;
       const away = turretClient.moved ? 'PUT BACK' : 'CANCEL';
       txt(g, `${promptKey('fire', { brackets: true })} PLACE ${name}   ${promptKey('streak', { brackets: true })} ${away}`, W / 2, y, 8, spot?.valid ? (blink(m.time, 1.2, 0.9) ? C.hi : C.paper) : C.dim, 'center', u);
