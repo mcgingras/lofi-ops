@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { hashString } from '../../shared/math';
 import { PlayerFlags, type RosterEntry } from '../../shared/protocol';
-import type { Team } from '../../shared/constants';
+import { PRONE, type Team } from '../../shared/constants';
 import type { SnapshotBuffer } from '../netcode/interp';
 import type { MapScene } from '../render/mapbuilder';
 import { FFA_LOOK, Soldier, TEAM_LOOKS, type SoldierLook } from '../render/models/soldier';
@@ -26,6 +26,10 @@ export interface RemoteView {
   pitch: number;
   alive: boolean;
   crouch: number;
+  /** 0 up .. 1 lying down, eased like the body's own transition (PRONE.downSec / upSec). */
+  prone: number;
+  /** Mantling (climbing onto or over something). */
+  mantle: boolean;
   flags: number;
   weapon: string;
   /** Seconds since it died (for hiding the body). */
@@ -64,7 +68,7 @@ export class Remotes {
       if (!v) {
         const soldier = new Soldier(this.lookFor(id, team), getTexture('flash'));
         this.scene.add(soldier.root);
-        v = { id, soldier, team, x: s.x, y: s.y, z: s.z, yaw: s.yaw, pitch: s.pitch, alive: true, crouch: 0, flags: s.f, weapon: s.w, deadFor: 0, stride: 0, present: true };
+        v = { id, soldier, team, x: s.x, y: s.y, z: s.z, yaw: s.yaw, pitch: s.pitch, alive: true, crouch: 0, prone: (s.f & PlayerFlags.PRONE) !== 0 ? 1 : 0, mantle: false, flags: s.f, weapon: s.w, deadFor: 0, stride: 0, present: true };
         this.views.set(id, v);
       }
       const alive = (s.f & PlayerFlags.ALIVE) !== 0;
@@ -81,6 +85,9 @@ export class Remotes {
       v.deadFor = alive ? 0 : v.deadFor + dt;
       const crouched = (s.f & PlayerFlags.CROUCH) !== 0;
       v.crouch += ((crouched ? 1 : 0) - v.crouch) * Math.min(1, dt * 12);
+      const prone = (s.f & PlayerFlags.PRONE) !== 0;
+      v.prone = alive ? (prone ? Math.min(1, v.prone + dt / PRONE.downSec) : Math.max(0, v.prone - dt / PRONE.upSec)) : v.prone;
+      v.mantle = (s.f & PlayerFlags.MANTLE) !== 0;
       const speed = Math.hypot(s.vx, s.vz);
       const fwd = -Math.sin(s.yaw) * s.vx - Math.cos(s.yaw) * s.vz;
       const sprint = (s.f & PlayerFlags.SPRINT) !== 0;
@@ -88,7 +95,7 @@ export class Remotes {
       root.position.set(s.x, s.y, s.z);
       root.rotation.y = s.yaw + Math.PI;
       root.visible = alive || v.deadFor < 4;
-      v.soldier.animate(dt, { speed: alive ? speed : 0, forward: fwd, pitch: s.pitch, crouch: v.crouch, sprint, firing: (s.f & PlayerFlags.FIRING) !== 0, alive, time });
+      v.soldier.animate(dt, { speed: alive ? speed : 0, forward: fwd, pitch: s.pitch, crouch: v.crouch, prone: v.prone, mantle: v.mantle, sprint, firing: (s.f & PlayerFlags.FIRING) !== 0, alive, time });
       if (map) v.soldier.setLight(map.lightAt(s.x, s.y + 1.2, s.z));
       // Footsteps.
       const grounded = (s.f & PlayerFlags.GROUND) !== 0;

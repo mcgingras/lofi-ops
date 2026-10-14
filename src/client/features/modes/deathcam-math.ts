@@ -1,4 +1,5 @@
 /** Pure helpers of the per-death killcam playback: timeline, camera aim and the killer card text. */
+import { PLAYER } from '../../../shared/constants';
 import type { CamTrack, KillerCard } from '../../../shared/defs/deathcam';
 import type { Pose } from './killcam-math';
 
@@ -67,8 +68,8 @@ export function trackPose(track: CamTrack, t: number, back = 4): { x: number; y:
   return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k, ...heading(i), done: false };
 }
 
-/** Eye height of a replayed pose (crouch flag). */
-export const eyeOf = (p: Pose, crouchBit: number) => (p.f & crouchBit ? 1.0 : 1.6);
+/** Eye height of a replayed pose (crouch / prone flags). */
+export const eyeOf = (p: Pose, crouchBit: number, proneBit = 0) => (p.f & proneBit ? PLAYER.proneEye : p.f & crouchBit ? PLAYER.crouchEye : PLAYER.eye);
 
 /** Killer card lines: rank, weapon with attachments, health. */
 export function cardLines(card: KillerCard, names: { weapon: (id: string) => string; attachment: (id: string) => string; rank: (level: number) => string }): { rank: string; weapon: string; attachments: string; health: string; healthFrac: number } {

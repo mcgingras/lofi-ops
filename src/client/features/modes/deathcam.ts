@@ -159,7 +159,7 @@ function frame(m: Match, dt: number): void {
   const k = poses.get(d.killer);
   let killerGun = false;
   if (d.view === 'eyes' && k) {
-    cam.position.set(k.x, k.y + eyeOf(k, PlayerFlags.CROUCH), k.z);
+    cam.position.set(k.x, k.y + eyeOf(k, PlayerFlags.CROUCH, PlayerFlags.PRONE), k.z);
     cam.rotation.set(k.pitch, k.yaw, 0, 'YXZ');
     const base = d.vm ? WEAPON_BY_ID.get(d.vm.weapon) : undefined;
     const eff = base && d.vm ? effectiveWeapon(base, d.vm.attachments) : null;

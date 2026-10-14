@@ -11,13 +11,13 @@ import { effectiveWeapon, type EffectiveWeapon } from '../../shared/defs/attachm
 import { getMapData, MAP_BY_ID } from '../../shared/defs/maps';
 import { MODE_BY_ID } from '../../shared/defs/modes';
 import { WEAPON_BY_ID } from '../../shared/defs/weapons';
-import { shotSeed, spreadDegrees, spreadDirection } from '../../shared/ballistics';
+import { shotSeed, spreadDegrees, spreadDirection, stanceSpread } from '../../shared/ballistics';
 import { playerHitboxes, rayHitboxes } from '../../shared/collision';
-import type { Team } from '../../shared/constants';
+import { PRONE, type Team } from '../../shared/constants';
 import type { MatchPhase, MatchResults } from '../../shared/events';
 import { Buttons } from '../../shared/input';
 import { hashString, viewDir, type Vec3 } from '../../shared/math';
-import { eyeHeight } from '../../shared/movement';
+import { eyeHeight, fullyProne, moveBusy, type MoveState } from '../../shared/movement';
 import type { EntitySnap, MeSnap, RosterEntry, ScoreEntry, ServerMsgOf } from '../../shared/protocol';
 import { MatchNet, net, type Net } from '../net';
 import { MapScene } from '../render/mapbuilder';
@@ -509,6 +509,9 @@ export class Match {
     // c.lookScale is last frame's mouse scale after hooks (ADS, scope zoom, stun); the pad divides
     // by the zoom for iron sights too, and undoes the mouse's scoped zoom/2.
     c.padLookScale = (c.lookScale * (this.scopedLast ? Math.max(1, r.zoom * 0.5) : 1)) / Math.max(1, r.zoom);
+    // The stance toggles (Z, C, B) follow the predicted body: dive from a sprint, refused toggles.
+    const pst = this.net.predictor.state;
+    c.stanceHint = alive && playing ? { sprinting: pst.sprinting, onGround: pst.onGround, prone: pst.prone, crouched: pst.crouched } : null;
     c.update(dt);
     this.applyPadLook(dt);
 
@@ -549,7 +552,7 @@ export class Match {
       buttons |= Buttons.RELOAD;
       this.wantReload = false;
     }
-    if (!c.locked) buttons &= Buttons.CROUCH; // paused: stand still (keep crouch)
+    if (!c.locked) buttons &= Buttons.CROUCH | Buttons.PRONE; // paused: stand still (keep crouch / prone)
     for (const [id, f] of buttonFilters) {
       try {
         buttons = f(this, buttons);
@@ -597,7 +600,7 @@ export class Match {
     this.scopedLast = scoped;
     c.lookScale = (1 + (settings.adsSensitivity - 1) * ads) / (scoped ? Math.max(1, zoom * 0.5) : 1);
     const moving = Math.hypot(st.vx, st.vz);
-    this.spread = def ? spreadDegrees(def, ads, moving > 0.5) : 0;
+    this.spread = def ? spreadDegrees(def, ads, moving > 0.5, stanceSpread(st)) : 0;
 
     // Audio listener.
     const fwd = viewDir(this.yaw, this.pitch);
@@ -615,7 +618,8 @@ export class Match {
     if (w) this.viewmodel.setWeapon(WEAPON_BY_ID.get(w.id)?.model ?? w.id, w.attachments, w.camo);
     this.viewmodel.visible = alive && !scoped && this.phase !== 'ended';
     const light = this.map ? this.map.lightAt(shown.x, shown.y + 1.3, shown.z) : [1, 1, 1];
-    this.viewmodel.update({ dt, time: this.time, ads, move: Math.min(1, moving / 5) * (st.onGround ? 1 : 0.2), sprint: st.sprinting, yaw: c.yaw, pitch: c.pitch, reload: this.reloadProgress(), raise: this.raiseProgress(), light });
+    const mantle = st.mantle ? st.mantle.t / Math.max(1e-6, st.mantle.dur) : -1;
+    this.viewmodel.update({ dt, time: this.time, ads, move: Math.min(1, moving / 5) * (st.onGround ? 1 : 0.2), sprint: st.sprinting, yaw: c.yaw, pitch: c.pitch, reload: this.reloadProgress(), raise: this.raiseProgress(), light, prone: alive ? st.proneT : 0, crawl: st.prone ? Math.min(1, moving / 1.2) : 0, mantle: alive ? mantle : -1 });
 
     // Damage overlay: from health.
     const hp = me && me.alive ? me.health / Math.max(1, me.maxHealth) : 1;
@@ -664,7 +668,7 @@ export class Match {
     if (allowed) {
       for (const v of this.remotes.views.values()) {
         const vel = this.remoteVel.get(v.id);
-        targets.push({ id: v.id, x: v.x, y: v.y, z: v.z, vx: vel?.vx ?? 0, vy: vel?.vy ?? 0, vz: vel?.vz ?? 0, crouched: v.crouch > 0.5, alive: v.alive, enemy: this.isEnemy(v.id) });
+        targets.push({ id: v.id, x: v.x, y: v.y, z: v.z, vx: vel?.vx ?? 0, vy: vel?.vy ?? 0, vz: vel?.vz ?? 0, crouched: v.crouch > 0.5, prone: v.prone > 0.5, yaw: v.yaw, alive: v.alive, enemy: this.isEnemy(v.id) });
       }
     }
     const world = this.net.world;
@@ -734,7 +738,7 @@ export class Match {
     return 1;
   }
 
-  private tryFire(def: EffectiveWeapon, dt: number, st: { sprinting: boolean; sinceSprint: number; ads: number; vx: number; vz: number; x: number; y: number; z: number; crouched: boolean }) {
+  private tryFire(def: EffectiveWeapon, dt: number, st: MoveState) {
     const c = this.controls;
     const trigger = c.triggerHeld;
     const pressed = trigger && !this.triggerWas;
@@ -750,7 +754,8 @@ export class Match {
     }
     const wantShot = def.mode === 'auto' ? trigger : def.mode === 'burst' ? this.burstLeft > 0 : pressed;
     if (!wantShot) return;
-    if (reloading || switching || sprintBlocked) {
+    // Mantling, diving, going prone or getting up: the weapon is down (the server refuses too).
+    if (reloading || switching || sprintBlocked || moveBusy(st)) {
       if (def.mode !== 'burst') return;
       return;
     }
@@ -775,14 +780,14 @@ export class Match {
     if (ammo.mag - 1 <= 0 && ammo.reserve > 0) this.wantReload = true; // the server auto-reloads an empty mag
 
     // Local feedback: kick, flash, sound, tracer and impact using the server's spread maths.
-    const adsK = (1 - st.ads * 0.35) * RECOIL_SCALE;
+    const adsK = (1 - st.ads * 0.35) * RECOIL_SCALE * (fullyProne(st) ? PRONE.recoil : 1);
     this.recoil.pitch += def.recoil.vertical * DEG * adsK;
     this.recoil.yaw += (Math.random() - 0.5) * 2 * def.recoil.horizontal * DEG * adsK;
     this.viewmodel.shoot(this.time, Math.min(1.2, 0.5 + def.recoil.vertical * 0.4));
     rumble('fire', Math.min(1, 0.5 + def.recoil.vertical * 0.3));
     sfx.gunshot(def.base.id, undefined, def.suppressed);
     const moving = Math.hypot(st.vx, st.vz) > 0.5;
-    const spread = spreadDegrees(def, st.ads, moving);
+    const spread = spreadDegrees(def, st.ads, moving, stanceSpread(st));
     const seed = hashString(this.myId);
     const o = { x: origin[0], y: origin[1], z: origin[2] };
     const pellets = def.projectile ? 0 : Math.max(1, def.pellets ?? 1);
@@ -794,7 +799,7 @@ export class Match {
       let hitPlayer = false;
       for (const v of this.remotes.views.values()) {
         if (!v.alive) continue;
-        const hb = rayHitboxes(o, d, playerHitboxes(v, v.crouch > 0.5), maxT);
+        const hb = rayHitboxes(o, d, playerHitboxes(v, v.prone > 0.5 ? 'prone' : v.crouch > 0.5, v.yaw), maxT);
         if (hb) {
           maxT = hb.t;
           hitPlayer = true;

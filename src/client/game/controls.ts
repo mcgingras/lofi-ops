@@ -72,8 +72,18 @@ const HELD_BITS: Partial<Record<Action, number>> = {
   lethal: Buttons.LETHAL,
   tactical: Buttons.TACTICAL,
   streak: Buttons.STREAK,
-  prone: Buttons.PRONE,
 };
+
+/** The predicted body's stance, which the stance toggles follow (set by the match every frame). */
+export interface StanceHint {
+  sprinting: boolean;
+  onGround: boolean;
+  prone: boolean;
+  crouched: boolean;
+}
+
+/** A toggle the body refused (no room to lie down or stand up) gives way to the real stance after this long. */
+export const STANCE_SYNC_SEC = 0.3;
 
 const DEVLOOK_MIN_HOLD_MS = 120;
 
@@ -98,6 +108,13 @@ export class Controls {
   private held = new Set<Action>();
   private pressed = new Set<Action>();
   private crouchToggled = false;
+  /** Keyboard prone toggle (Z): PRONE goes out while set. */
+  private proneLatch = false;
+  /** Jump stood us up from crouch/prone: no JUMP until the key is let go. */
+  private jumpBlocked = false;
+  private stanceOff = 0;
+  /** The predicted body's stance (set by the match each frame); toggles follow it. */
+  stanceHint: StanceHint | null = null;
   private wheel = 0;
   private lockFns = new Set<(locked: boolean) => void>();
   private offs: (() => void)[] = [];
@@ -134,10 +151,11 @@ export class Controls {
       if (!a || !this.enabled) return;
       if (a === 'scores' || a === 'jump' || e.code.startsWith('Arrow') || (a === 'crouch' && e.ctrlKey)) e.preventDefault();
       if (e.repeat) return;
-      if (!this.held.has(a)) this.pressed.add(a);
+      if (!this.held.has(a)) {
+        this.pressed.add(a);
+        this.stancePress(a);
+      }
       this.held.add(a);
-      if (a === 'crouch') this.crouchToggled = !this.crouchToggled;
-      if (a === 'sprint') this.crouchToggled = false;
     });
     on('keyup', (e) => {
       const a = KEYMAP[e.code];
@@ -229,7 +247,56 @@ export class Controls {
     this.holdUntil.delete(a);
     if (a === 'fire') this.fire = false;
     else if (a === 'ads') this.ads = false;
-    else this.held.delete(a);
+    else {
+      this.held.delete(a);
+      if (a === 'jump') this.jumpBlocked = false;
+    }
+  }
+
+  /**
+   * Stance keys, CoD style. Z toggles prone (prone again stands); C/Ctrl from prone crouches;
+   * crouch or prone while sprinting dives (BO1 dolphin dive); jump from crouch (toggle) or prone
+   * stands up instead of jumping; sprint stands up.
+   */
+  private stancePress(a: Action): void {
+    const h = this.stanceHint;
+    const diving = !!h && h.sprinting && h.onGround;
+    if (a === 'prone') {
+      this.proneLatch = diving || !this.proneLatch;
+      if (this.proneLatch) this.crouchToggled = false;
+    } else if (a === 'crouch') {
+      if (diving) {
+        this.proneLatch = true;
+        this.crouchToggled = false;
+      } else if (this.proneLatch) {
+        this.proneLatch = false;
+        this.crouchToggled = true;
+      } else this.crouchToggled = !this.crouchToggled;
+    } else if (a === 'jump') {
+      if (this.proneLatch || (settings.crouchToggle && this.crouchToggled)) {
+        this.proneLatch = false;
+        this.crouchToggled = false;
+        this.jumpBlocked = true;
+      }
+    } else if (a === 'sprint' && !this.adsHeld) {
+      // (Scoped, sprint is hold breath: it doesn't stand you up.)
+      this.crouchToggled = false;
+      this.proneLatch = false;
+    }
+  }
+
+  /** Let a refused prone toggle follow the body (see STANCE_SYNC_SEC). */
+  private syncStance(dt: number): void {
+    const h = this.stanceHint;
+    if (!h || h.prone === this.proneLatch) {
+      this.stanceOff = 0;
+      return;
+    }
+    this.stanceOff += dt;
+    if (this.stanceOff < STANCE_SYNC_SEC) return;
+    this.stanceOff = 0;
+    this.proneLatch = h.prone;
+    if (h.prone) this.crouchToggled = false;
   }
 
   /** Hold an action (or the trigger / ADS) for `ms`, then release it. */
@@ -237,9 +304,11 @@ export class Controls {
     if (a === 'fire') this.fire = true;
     else if (a === 'ads') this.ads = true;
     else {
-      if (!this.held.has(a)) this.pressed.add(a);
+      if (!this.held.has(a)) {
+        this.pressed.add(a);
+        this.stancePress(a);
+      }
       this.held.add(a);
-      if (a === 'crouch') this.crouchToggled = !this.crouchToggled;
     }
     this.holdUntil.set(a, performance.now() + ms);
     setTimeout(() => this.release(a), ms + 1);
@@ -321,6 +390,7 @@ export class Controls {
    * released before it counts again.
    */
   update(dt: number): void {
+    this.syncStance(dt);
     const s = gamepad.snapshot();
     this.padLook = null;
     this.padLookMag = this.padMove = 0;
@@ -332,7 +402,8 @@ export class Controls {
       this.padBits = 0;
       return;
     }
-    const f = this.mapper.step(s, dt, { deadzone: settings.padDeadzone, sensitivity: settings.padSensitivity, invertY: settings.padInvertY }, { lookScale: this.padLookScale, useContext: usePromptActive() });
+    const h = this.stanceHint;
+    const f = this.mapper.step(s, dt, { deadzone: settings.padDeadzone, sensitivity: settings.padSensitivity, invertY: settings.padInvertY }, { lookScale: this.padLookScale, useContext: usePromptActive(), sprinting: !!h && h.sprinting && h.onGround, prone: h?.prone });
     for (const a of f.held) if (!this.padHeld.has(a) && a !== 'fire' && a !== 'ads') this.pressed.add(a);
     this.padHeld = f.held;
     this.padBits = padButtons(f);
@@ -384,8 +455,10 @@ export class Controls {
     let b = 0;
     if (!this.enabled) return 0;
     for (const a of this.held) b |= HELD_BITS[a] ?? 0;
+    if (this.jumpBlocked) b &= ~Buttons.JUMP;
     const crouch = settings.crouchToggle ? this.crouchToggled : this.held.has('crouch');
-    if (crouch) b |= Buttons.CROUCH;
+    if (crouch && !this.proneLatch) b |= Buttons.CROUCH;
+    if (this.proneLatch) b |= Buttons.PRONE;
     b |= this.padBits;
     if (this.ads) b |= Buttons.ADS;
     if (this.fire) b |= Buttons.FIRE;
@@ -397,6 +470,9 @@ export class Controls {
     this.pressed.clear();
     this.wheel = 0;
     this.crouchToggled = false;
+    this.proneLatch = false;
+    this.jumpBlocked = false;
+    this.stanceOff = 0;
     this.mapper.resetLatches();
   }
 

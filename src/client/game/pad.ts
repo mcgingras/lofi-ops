@@ -170,7 +170,14 @@ export interface MapperContext {
   lookScale: number;
   /** A "HOLD [X]" prompt is on screen: X tap = reload on release, hold = use. */
   useContext: boolean;
+  /** The body is sprinting on the ground: B dives to prone (BO1 dolphin dive). */
+  sprinting?: boolean;
+  /** The body is prone (a refused B toggle gives way to it after STANCE_SYNC_SEC). */
+  prone?: boolean;
 }
+
+/** Seconds a refused stance toggle waits before following the body (no room to lie down / stand up). */
+const STANCE_SYNC = 0.3;
 
 const val = (s: PadSnapshot, b: number) => s.buttons[b] ?? 0;
 const down = (s: PadSnapshot, b: number) => val(s, b) >= 0.5;
@@ -205,6 +212,7 @@ export class PadMapper {
   private sprintLatch = false;
   private sprintAt = -9;
   private jumpBlocked = false;
+  private stanceOff = 0;
 
   /** Ignore buttons held now until they are released (and drop latches). */
   suppress(s: PadSnapshot | null): void {
@@ -226,6 +234,7 @@ export class PadMapper {
   resetLatches(): void {
     this.crouchLatch = 'none';
     this.sprintLatch = false;
+    this.stanceOff = 0;
   }
 
   step(s: PadSnapshot, dt: number, look: LookConfig, ctx: MapperContext): PadFrame {
@@ -262,14 +271,24 @@ export class PadMapper {
     if (side > 0) held.add('right');
     if (side < 0) held.add('left');
 
-    // Crouch: B tap toggles crouch (prone -> crouch), B held goes prone.
+    // Crouch: B tap toggles crouch (prone -> crouch), B held goes prone; B while sprinting dives.
     if (pressed(PAD.B)) {
-      this.bDownAt = this.t;
-      this.crouchLatch = this.crouchLatch === 'crouch' ? 'none' : 'crouch';
+      if (ctx.sprinting) {
+        this.crouchLatch = 'prone';
+        this.bDownAt = -1;
+      } else {
+        this.bDownAt = this.t;
+        this.crouchLatch = this.crouchLatch === 'crouch' ? 'none' : 'crouch';
+      }
       this.sprintLatch = false;
     }
     if (isDown(PAD.B) && this.bDownAt >= 0 && this.t - this.bDownAt >= PAD_HOLD.prone) this.crouchLatch = 'prone';
     if (!isDown(PAD.B)) this.bDownAt = -1;
+    // A refused toggle (no room for the legs, no headroom to get up) follows the body.
+    if (ctx.prone !== undefined && (this.crouchLatch === 'prone') !== ctx.prone && this.bDownAt < 0) {
+      this.stanceOff += dt;
+      if (this.stanceOff >= STANCE_SYNC) this.crouchLatch = ctx.prone ? 'prone' : 'none';
+    } else this.stanceOff = 0;
 
     // Jump: from crouch/prone, A stands up instead (and doesn't jump until released).
     if (pressed(PAD.A) && this.crouchLatch !== 'none') {
@@ -283,7 +302,7 @@ export class PadMapper {
     if (pressed(PAD.L3)) {
       this.sprintLatch = true;
       this.sprintAt = this.t;
-      this.crouchLatch = 'none';
+      if (!this.ads) this.crouchLatch = 'none'; // aiming, L3 is hold breath: stay down
     }
     // A click just before pushing forward still counts (SPRINT_GRACE).
     if ((f <= 0 && this.t - this.sprintAt > SPRINT_GRACE) || (this.ads && !adsWas) || (this.fire && !fireWas) || this.crouchLatch !== 'none') this.sprintLatch = false;
@@ -361,8 +380,8 @@ export const PAD_LAYOUT: [string, string][] = [
   ['RT', 'Fire (Valkyrie rocket: detonate)'],
   ['LB', 'Tactical (Valkyrie rocket: hold to boost)'],
   ['RB', 'Lethal (hold to raise, release to throw)'],
-  ['A', 'Jump (stands up from crouch)'],
-  ['B', 'Crouch (tap) · Prone (hold)'],
+  ['A', 'Jump · mantle at a ledge or window (stands up from crouch / prone)'],
+  ['B', 'Crouch (tap) · Prone (hold) · dive while sprinting'],
   ['X', 'Reload · hold: Use (crates, weapon swap, plant/defuse, revive)'],
   ['Y', 'Switch weapon · change class while dead'],
   ['L3', 'Sprint (click; stops when you stop) · hold breath when scoped'],
