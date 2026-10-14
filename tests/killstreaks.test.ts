@@ -344,11 +344,12 @@ describe('turrets', () => {
     const a = bot(room, 0);
     place(a, -1, 10);
     a.yaw = 0;
+    const v = victimAt(room, -1, -2);
     give(a, 'sentry_gun');
     expect(callKillstreak(room, a, 'sentry_gun').ok).toBe(true);
+    // A bot's turret goes down in front of it, facing the enemy it knows of.
     const sentry = room.entities.byKind(KS_ENTITY.sentry)[0]!;
-    expect(Math.hypot(sentry.x - -1, sentry.z - 8.4)).toBeLessThan(0.1);
-    const v = victimAt(room, -1, -2);
+    expect(Math.hypot(sentry.x - -1, sentry.z - 8.9)).toBeLessThan(0.1);
     const deaths = deathsOf(room);
     expect(until(room, () => !v.alive, 4)).toBeLessThan(4);
     expect(deaths[0]).toMatchObject({ attacker: a, weapon: 'sentry_gun' });
@@ -374,7 +375,7 @@ describe('turrets', () => {
     const a = bot(room, 0);
     give(a, 'sentry_gun');
     callKillstreak(room, a, 'sentry_gun');
-    steps(room, 90.5);
+    steps(room, 60.5);
     expect(room.entities.byKind(KS_ENTITY.sentry)).toHaveLength(0);
   });
 

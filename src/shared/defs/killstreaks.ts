@@ -15,12 +15,14 @@
  *   map    - chosen on the overhead tactical map (BO1: the radio). `mapPick` says how:
  *            'line' a spot plus a run direction (Napalm, Rolling Thunder), 'points' `marks` spots
  *            (Mortar Team), 'area' one patrol point (Attack Helicopter). See defs/tactical-map.ts.
- *   place  - placed on the ground in front of the caller (Sentry Gun, SAM Turret)
+ *   place  - carried and put down on the ground in front of the caller (Sentry Gun, SAM Turret):
+ *            STREAK brings it up, FIRE / USE places it where the preview shows (defs/turret-place.ts)
  *   control- the caller drives/aims it (RC-XD, Chopper Gunner)
  *
  * The MW2 Tactical Nuke (25) rides on top of the BO1 set: see `defs/nuke.ts` for its timeline.
  */
 import { indexById } from './registry';
+import { SENTRY } from './sentry';
 
 export type StreakTargeting = 'none' | 'marker' | 'point' | 'line' | 'points' | 'map' | 'place' | 'control';
 /** How a `map`-targeted streak is placed on the tactical map. */
@@ -61,10 +63,11 @@ export const KILLSTREAKS: KillstreakDef[] = [
   { id: 'uav', name: 'Spy Plane', kills: 3, description: 'Shows enemies on the minimap.', unlockLevel: 1, kind: 'called', durationSec: 30, targeting: 'none', air: true, hp: 700, icon: 'ks_uav' },
   { id: 'rcxd', name: 'RC-XD', kills: 3, description: 'Remote-control car packed with explosives. Fire to detonate.', unlockLevel: 1, kind: 'controlled', durationSec: 30, targeting: 'control', hp: 40, icon: 'ks_rcxd' },
   { id: 'counter_uav', name: 'Counter-Spy Plane', kills: 4, description: "Jams the enemy's minimap.", unlockLevel: 1, kind: 'called', durationSec: 30, targeting: 'none', air: true, hp: 700, icon: 'ks_cuav' },
-  { id: 'sam_turret', name: 'SAM Turret', kills: 4, description: 'Placeable turret that shoots down enemy aircraft.', unlockLevel: 8, kind: 'called', durationSec: 60, targeting: 'place', hp: 450, icon: 'ks_sam' },
+  { id: 'sam_turret', name: 'SAM Turret', kills: 4, description: 'Carry it into place: a turret that shoots down enemy aircraft.', unlockLevel: 8, kind: 'called', durationSec: 60, targeting: 'place', hp: 450, icon: 'ks_sam' },
   { id: 'care_package', name: 'Care Package', kills: 5, description: 'Throw the marker: a helicopter drops a crate with a random killstreak where it lands.', unlockLevel: 1, kind: 'called', targeting: 'marker', icon: 'ks_package' },
   { id: 'napalm', name: 'Napalm Strike', kills: 5, description: 'Pick a spot and a direction on the map: a jet burns a line through it.', unlockLevel: 1, kind: 'called', targeting: 'map', mapPick: 'line', icon: 'ks_napalm' },
-  { id: 'sentry_gun', name: 'Sentry Gun', kills: 6, description: 'Placeable automated gun.', unlockLevel: 14, kind: 'called', durationSec: 90, targeting: 'place', hp: 450, icon: 'ks_sentry' },
+  // Carried into place (defs/turret-place.ts); its targeting and numbers are in defs/sentry.ts.
+  { id: 'sentry_gun', name: 'Sentry Gun', kills: 6, description: 'Carry it into place: an automated gun that guards the arc in front of it for 60 s.', unlockLevel: 14, kind: 'called', durationSec: SENTRY.durationSec, targeting: 'place', hp: SENTRY.hp, icon: 'ks_sentry' },
   { id: 'mortar', name: 'Mortar Team', kills: 6, description: 'Mark three spots on the map for a mortar barrage.', unlockLevel: 1, kind: 'called', targeting: 'map', mapPick: 'points', marks: 3, icon: 'ks_mortar' },
   { id: 'attack_helicopter', name: 'Attack Helicopter', kills: 7, description: 'Pick an area on the map: a helicopter patrols it and attacks enemies.', unlockLevel: 1, kind: 'called', durationSec: 60, targeting: 'map', mapPick: 'area', air: true, hp: 1500, icon: 'ks_heli' },
   // BO1 `m220_tow_drop_mp`: a supply drop whose crate holds the launcher (defs/valkyrie.ts).
