@@ -510,15 +510,20 @@ function findMantle(world: CollisionWorld, s: MoveState, yaw: number): MantlePla
     // Room to rise in place, up past the ledge with clearance above it.
     if (!world.free(s.x, s.y + EPS, s.z, r, y0 + MANTLE.clearance - s.y - EPS)) continue;
     const depth = c.d1 - c.d0 - 2 * r;
-    const over = depth <= MANTLE.thin;
-    const k = over ? c.d1 + 0.02 : c.d0 + 2 * r + 0.02;
+    const thin = depth <= MANTLE.thin;
+    if (thin) {
+      // Vault: just past the obstacle, in the air at ledge height.
+      const ox = s.x + dx * (c.d1 + 0.02);
+      const oz = s.z + dz * (c.d1 + 0.02);
+      if (sweepFree(world, s.x, s.z, ox, oz, y0, MANTLE.clearance) && world.free(ox, y0, oz, r, PLAYER.crouchHeight)) {
+        return { to: { x: ox, y: y0, z: oz }, over: true, crouch: !world.free(ox, y0, oz, r, PLAYER.height) };
+      }
+      // The far side is blocked (a desk under the window): climb onto the sill instead.
+    }
+    const k = thin ? (c.d0 + c.d1) / 2 : c.d0 + 2 * r + 0.02;
     const tx = s.x + dx * k;
     const tz = s.z + dz * k;
     if (!sweepFree(world, s.x, s.z, tx, tz, y0, MANTLE.clearance)) continue;
-    if (over) {
-      if (!world.free(tx, y0, tz, r, PLAYER.crouchHeight)) continue;
-      return { to: { x: tx, y: y0, z: tz }, over: true, crouch: !world.free(tx, y0, tz, r, PLAYER.height) };
-    }
     const g = world.groundBelow(tx, tz, y0, 0.05, r);
     if (g === null) continue;
     const stand = world.free(tx, g + EPS, tz, r, PLAYER.height);

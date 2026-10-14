@@ -97,6 +97,14 @@ describe('mantle', () => {
     expect(s.z).toBeLessThan(-1.7 - PLAYER.radius);
   });
 
+  it('a window with a desk right behind it: climbs onto the sill instead of vaulting', () => {
+    const desk = solid({ x: -1, y: 0, z: -2.6 }, { x: 1, y: 1.1, z: -1.7 });
+    const { s, started } = walkAndJump(flatWorld([...windowWall(), desk]), grounded(), 2);
+    expect(started).toBe(true);
+    expect(s.y).toBeGreaterThan(0.99); // on the sill (or the desk), not on the floor beyond
+    expect(s.z).toBeLessThan(-1.4);
+  });
+
   it('a window lower than the climb clearance is not climbable', () => {
     const world = flatWorld(windowWall(1.0, 1.0 + MANTLE.clearance - 0.1));
     const { s, started } = walkAndJump(world);
