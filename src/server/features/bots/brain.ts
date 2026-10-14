@@ -122,6 +122,8 @@ export class Brain implements BotBrain {
   private strafeDir = 0;
   private strafeUntil = 0;
   private crouchUntil = 0;
+  /** Lying down to hold a long sightline (snipers, while standing still) until then. */
+  private proneUntil = 0;
   private burstLeft = 0;
   private pauseUntil = 0;
   private nextShotAt = 0;
@@ -470,12 +472,16 @@ export class Brain implements BotBrain {
           if (now >= this.holdUntil) {
             this.holdUntil = now + 1.5 + this.rnd() * 2.5;
             this.crouchUntil = this.rnd() < 0.35 ? this.holdUntil : 0;
+            // A sniper holding a spot sometimes lies down to watch its lane (BO1 campers did).
+            const lie = currentWeapon(self)?.def.class === 'sniper' && this.rnd() < 0.3;
+            if (lie) this.proneUntil = this.holdUntil + 0.5;
             const a = this.rnd() * Math.PI * 2;
             const r = this.rnd() * goal.radius * 0.7;
             this.strafeDir = 0;
             this.stuckAt = { ...self.move };
             const spot = { x: goal.at.x + Math.cos(a) * r, y: goal.at.y, z: goal.at.z + Math.sin(a) * r };
-            const p = nav.path(self.move, spot);
+            const p = lie ? null : nav.path(self.move, spot);
+            if (lie) this.path = null;
             if (p) {
               this.path = p;
               this.pathIdx = 0;
@@ -532,7 +538,9 @@ export class Brain implements BotBrain {
     if (r > 0.38) buttons |= Buttons.RIGHT;
     if (r < -0.38) buttons |= Buttons.LEFT;
     if (sprint && f > 0.5 && !(buttons & Buttons.ADS) && !crouch) buttons |= Buttons.SPRINT;
-    if (crouch) buttons |= Buttons.CROUCH;
+    // Prone only while it stays put (it stands to move or to jump): it keeps shooting lying down.
+    if (now < this.proneUntil && !moving && !jump) buttons = (buttons & ~(Buttons.SPRINT | Buttons.CROUCH)) | Buttons.PRONE;
+    else if (crouch) buttons |= Buttons.CROUCH;
     // Jump needs a fresh press: release for a tick after each one.
     if (jump && !this.jumpHeld && self.move.onGround) {
       buttons |= Buttons.JUMP;

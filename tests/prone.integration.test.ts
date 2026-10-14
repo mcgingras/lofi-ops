@@ -11,7 +11,9 @@ import { poseFrame } from '../src/server/features/modes/killcam';
 import { Store } from '../src/server/store';
 import { PLAYER, TICK_DT } from '../src/shared/constants';
 import { Buttons } from '../src/shared/input';
-import { createMoveState } from '../src/shared/movement';
+import { rayHitboxes } from '../src/shared/collision';
+import { createMoveState, moveHitboxes } from '../src/shared/movement';
+import { chestOf, eyePointOf, headOf } from '../src/server/features/bots/sight';
 import { PlayerFlags } from '../src/shared/protocol';
 
 let store: Store | undefined;
@@ -115,6 +117,27 @@ describe('prone through the room', () => {
     expect(room.fire(a, { dir: { x: 0, y: 0, z: -1 } })).toEqual({ ok: false, reason: 'stance' });
     steps(room, 1);
     expect(room.fire(a, { dir: { x: 0, y: 0, z: -1 } }).ok).toBe(true);
+  });
+
+  it('bots aim at a prone body: their chest and head points sit inside the lying hitboxes', () => {
+    const room = setup();
+    const { a, b } = duel(room, () => Buttons.PRONE);
+    steps(room, 1);
+    const hb = moveHitboxes(b.move, b.yaw);
+    // Straight down onto the point: the part the ray meets first is the one under it.
+    const partAt = (p: { x: number; y: number; z: number }) => rayHitboxes({ x: p.x, y: p.y + 3, z: p.z }, { x: 0, y: -1, z: 0 }, hb)?.part ?? null;
+    expect(partAt(chestOf(b))).toBe('torso');
+    expect(partAt(headOf(b))).toBe('head');
+    expect(eyePointOf(b).y - b.move.y).toBeCloseTo(PLAYER.proneEye, 3);
+    // And a bot's shot at that chest point hits.
+    a.move.ads = 1;
+    const e = { x: a.move.x, y: a.move.y + PLAYER.eye, z: a.move.z };
+    const c = chestOf(b);
+    const d = { x: c.x - e.x, y: c.y - e.y, z: c.z - e.z };
+    const l = Math.hypot(d.x, d.y, d.z);
+    const hp = b.health;
+    room.fire(a, { dir: { x: d.x / l, y: d.y / l, z: d.z / l } });
+    expect(b.health).toBeLessThan(hp);
   });
 
   it('snapshots and killcam frames carry the stance bits', () => {
