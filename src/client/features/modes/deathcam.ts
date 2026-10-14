@@ -29,7 +29,7 @@ import { net } from '../../net';
 import { onFeature, registerHudWidget, registerMatchHook } from '../../registry';
 import { currentMatch } from '../../state';
 import { badgePixels, drawPixels } from '../progression/emblems';
-import { aimAt, cardLines, deathcamClock, eyeOf, killcamTimer } from './deathcam-math';
+import { aimAt, cardLines, deathcamClock, eyeOf, killcamTimer, trackPose } from './deathcam-math';
 import { posesAt, type Pose } from './killcam-math';
 import { ReplayActors } from './replay';
 
@@ -121,6 +121,8 @@ function begin(m: Match, t: number): void {
 
 function end(): void {
   S.playing = false;
+  const m = currentMatch();
+  if (m) m.renderer.feed = 0;
   actors.dispose();
   if (rig) rig.visible = false;
   if (hiddenVm) {
@@ -178,6 +180,14 @@ function frame(m: Match, dt: number): void {
     }
     // The killer's injuries tint the screen, as in BO1's killcam.
     r.damage = Math.max(0, 0.85 - k.hp / 100) / 0.85;
+  } else if (d.cam?.track) {
+    // Valkyrie: ride the rocket's flight under the camera-feed look, then hold on the blast.
+    const p = trackPose(d.cam.track, c.t);
+    cam.position.set(p.x, p.y, p.z);
+    cam.rotation.set(p.pitch, p.yaw, 0, 'YXZ');
+    r.zoom = 1;
+    r.damage = 0;
+    r.feed = p.done ? 0.6 : 1;
   } else if (d.cam) {
     const pv = poses.get(d.victim);
     const v = pv && pv.f & PlayerFlags.ALIVE ? pv : null; // (a victim still dead from an earlier life isn't there yet)

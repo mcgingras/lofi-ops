@@ -7,10 +7,12 @@
  * victim go in, quantised and delta coded (packClip).
  *
  * No replay for suicides, falls, out of bounds or world kills (no message at all). Killstreak kills
- * are watched from the streak: the helicopter, sentry, dog or RC-XD that did it, or top-down over
- * the victim for strikes and crates.
+ * are watched from the streak: the helicopter, sentry, dog or RC-XD that did it, top-down over
+ * the victim for strikes and crates, or riding the Valkyrie rocket along its flight (BO1 replays
+ * the killer's view, which was the rocket cam).
  */
-import { DEATHCAM, deathcamWindow, NO_DEATHCAM_MEANS, packClip, TOP_DOWN_STREAKS, type DeathcamPayload, type DeathcamTuning, type KillerCard } from '../../../shared/defs/deathcam';
+import { DEATHCAM, deathcamWindow, NO_DEATHCAM_MEANS, packClip, packTrack, TOP_DOWN_STREAKS, type DeathcamPayload, type DeathcamTuning, type KillerCard } from '../../../shared/defs/deathcam';
+import { rocketTrack } from '../killstreaks/api';
 import { isStreakWeapon, KS_ENTITY } from '../../../shared/defs/killstreaks';
 import type { KillcamFrame } from '../../../shared/defs/modestate';
 import type { DeathEvent } from '../../../shared/events';
@@ -138,6 +140,13 @@ export class Deathcams {
   private streakCam(weapon: string, a: PlayerState, v: PlayerState, from: Vec3 | null): NonNullable<DeathcamPayload['cam']> {
     const top = { x: r2(v.move.x), y: r2(v.move.y + TOP_HEIGHT), z: r2(v.move.z), top: true };
     if (TOP_DOWN_STREAKS.has(weapon)) return top;
+    if (weapon === 'valkyrie') {
+      // The rocket is gone by now (it blew up to make the kill): ride its recorded flight.
+      const tr = rocketTrack(this.room, a.id);
+      const pts = tr?.points.filter((q) => q.t >= this.room.time - DEATHCAM.maxSec - 0.5) ?? [];
+      const last = pts.at(-1);
+      if (last && pts.length >= 2) return { x: r2(last.x), y: r2(last.y), z: r2(last.z), top: false, track: packTrack(pts) };
+    }
     const ent = STREAK_ENTITY[weapon];
     if (ent) {
       let best: { x: number; y: number; z: number } | null = null;

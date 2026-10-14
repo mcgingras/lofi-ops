@@ -38,6 +38,7 @@ import { callSam, callSentry } from './streaks/turrets';
 import type { CallArgs } from './streaks/types';
 import { callRcxd } from './streaks/vehicles';
 import { callValkyrieDrop, raiseLauncher } from './streaks/valkyrie';
+export { rocketTrack, type RocketTrack } from './streaks/valkyrie';
 import { VALKYRIE_LAUNCHER } from '../../../shared/defs/valkyrie';
 import { chestOf, ksRoom, type KsRoom } from './world';
 

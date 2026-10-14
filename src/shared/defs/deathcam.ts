@@ -40,8 +40,23 @@ export function deathcamWindow(at: number, respawnAt: number | null, t: Deathcam
 /** Means of death that never get a killcam (no killer to watch; the Tactical Nuke's blast neither, as in MW2). */
 export const NO_DEATHCAM_MEANS: ReadonlySet<string> = new Set(['fall', 'world', 'suicide', 'nuke']);
 
-/** Streak weapons whose kill is shown from above (strikes, falling crates). */
-export const TOP_DOWN_STREAKS: ReadonlySet<string> = new Set(['napalm', 'rolling_thunder', 'mortar', 'care_package', 'valkyrie']);
+/** Streak weapons whose kill is shown from above (strikes, falling crates). Valkyrie kills ride the rocket (`cam.track`). */
+export const TOP_DOWN_STREAKS: ReadonlySet<string> = new Set(['napalm', 'rolling_thunder', 'mortar', 'care_package']);
+
+/**
+ * A camera path for the killcam (the Valkyrie rocket's flight: BO1 replays the killer's view, which
+ * rode the rocket): `t0` room time, `p` = [ms since t0, x, y, z (cm)] per point, the last one the blast.
+ */
+export interface CamTrack {
+  t0: number;
+  p: number[][];
+}
+
+/** Pack a path (room time, metres) for the wire. */
+export function packTrack(points: readonly { t: number; x: number; y: number; z: number }[]): CamTrack {
+  const t0 = points[0]?.t ?? 0;
+  return { t0: Math.round(t0 * 1000) / 1000, p: points.map((q) => [Math.round((q.t - t0) * 1000), Math.round(q.x * 100), Math.round(q.y * 100), Math.round(q.z * 100)]) };
+}
 
 /** Killer card: who killed you and with what (BO1 playercard + weapon). */
 export interface KillerCard {
@@ -95,8 +110,8 @@ export interface DeathcamPayload {
    * the killstreak (`cam`); 'none' = no replay, only the killer card.
    */
   view: 'eyes' | 'streak' | 'none';
-  /** Streak view: camera position, or `top` for a top-down view over the victim. */
-  cam?: { x: number; y: number; z: number; top: boolean };
+  /** Streak view: camera position, or `top` for a top-down view over the victim; `track` = ride this path (Valkyrie rocket). */
+  cam?: { x: number; y: number; z: number; top: boolean; track?: CamTrack };
   /** The weapon in the killer's hands (viewmodel), when it is a gun. */
   vm?: { weapon: string; attachments: string[]; camo: string; suppressed: boolean };
   clip: PackedClip | null;

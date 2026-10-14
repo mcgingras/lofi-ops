@@ -1,5 +1,5 @@
 /** Pure helpers of the per-death killcam playback: timeline, camera aim and the killer card text. */
-import type { KillerCard } from '../../../shared/defs/deathcam';
+import type { CamTrack, KillerCard } from '../../../shared/defs/deathcam';
 import type { Pose } from './killcam-math';
 
 export interface DeathcamClock {
@@ -36,6 +36,35 @@ export function aimAt(a: { x: number; y: number; z: number }, b: { x: number; y:
   const dy = b.y - a.y;
   const dz = b.z - a.z;
   return { yaw: Math.atan2(-dx, -dz), pitch: Math.atan2(dy, Math.hypot(dx, dz)) };
+}
+
+/**
+ * Riding a camera track (the Valkyrie rocket) at room time `t`: the position between the two
+ * points around `t`, looking along the flight. Before the first point: there, looking the first
+ * way. After the last (the blast): pulled back `back` m along the last heading and up, looking at it.
+ */
+export function trackPose(track: CamTrack, t: number, back = 4): { x: number; y: number; z: number; yaw: number; pitch: number; done: boolean } {
+  const pts = track.p.map((q) => ({ t: track.t0 + q[0]! / 1000, x: q[1]! / 100, y: q[2]! / 100, z: q[3]! / 100 }));
+  const n = pts.length;
+  if (!n) return { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, done: true };
+  const heading = (i: number) => {
+    const a = pts[Math.max(0, Math.min(n - 2, i))]!;
+    const b = pts[Math.max(1, Math.min(n - 1, i + 1))] ?? a;
+    return aimAt(a, b);
+  };
+  const last = pts[n - 1]!;
+  if (n === 1 || t >= last.t) {
+    const h = heading(n - 2);
+    const d = { x: -Math.sin(h.yaw) * Math.cos(h.pitch), y: Math.sin(h.pitch), z: -Math.cos(h.yaw) * Math.cos(h.pitch) };
+    const from = { x: last.x - d.x * back, y: last.y - d.y * back + 1.2, z: last.z - d.z * back };
+    return { ...from, ...aimAt(from, last), done: true };
+  }
+  let i = 0;
+  while (i < n - 2 && pts[i + 1]!.t <= t) i++;
+  const a = pts[i]!;
+  const b = pts[i + 1]!;
+  const k = b.t > a.t ? Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t))) : 1;
+  return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k, ...heading(i), done: false };
 }
 
 /** Eye height of a replayed pose (crouch flag). */

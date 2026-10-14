@@ -7,6 +7,11 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { nearbyIds } from '../src/server/features/modes/deathcam';
 import modesFeature, { registerModeRules } from '../src/server/features/modes/index';
+import killstreaksFeature from '../src/server/features/killstreaks/index';
+import { callKillstreak } from '../src/server/features/killstreaks/api';
+import { ksOf } from '../src/server/features/killstreaks/state';
+import { VALKYRIE_LAUNCHER } from '../src/shared/defs/valkyrie';
+import { trackPose } from '../src/client/features/modes/deathcam-math';
 import { Lobby } from '../src/server/lobby';
 import type { PlayerState } from '../src/server/player';
 import type { Room, RoomOptions } from '../src/server/room';
@@ -22,9 +27,9 @@ let lobby: Lobby | undefined;
 
 beforeAll(() => registerModeRules());
 
-function setup(mode: string, opts: Partial<RoomOptions> = {}): Room {
+function setup(mode: string, opts: Partial<RoomOptions> = {}, withStreaks = false): Room {
   store = new Store(':memory:');
-  lobby = new Lobby({ store, features: [modesFeature], log: () => {}, autoTick: false });
+  lobby = new Lobby({ store, features: withStreaks ? [modesFeature, killstreaksFeature] : [modesFeature], log: () => {}, autoTick: false });
   return lobby.createRoom({ mode, map: 'yard', closeWhenEmpty: false, ...opts });
 }
 
@@ -156,6 +161,36 @@ describe('per-death killcam (server)', () => {
     expect(d.cam!.y).toBeGreaterThan(b.move.y + 10);
     expect(d.vm).toBeUndefined();
     expect(d.card.weapon).toBe('napalm');
+  });
+
+  it('a Valkyrie kill rides the rocket: the clip carries its flight, ending at the blast', () => {
+    const room = setup('tdm', {}, true);
+    const a = room.addBot({ name: 'Killer', team: 0 });
+    const b = room.addBot({ name: 'Victim', team: 1 });
+    idle(a);
+    idle(b);
+    place(a, -1, 16);
+    place(b, -1, 0);
+    const toB = listen(b);
+    steps(room, 2);
+    ksOf(a).manual = true;
+    ksOf(a).ready.push(VALKYRIE_LAUNCHER);
+    expect(callKillstreak(room, a, VALKYRIE_LAUNCHER).ok).toBe(true);
+    for (let i = 0; i < 60 * 10 && b.alive; i++) room.step();
+    expect(b.alive).toBe(false);
+    steps(room, DEATHCAM.postSec + 0.1);
+    const d = deathcams(toB)[0]!;
+    expect(d.weapon).toBe('valkyrie');
+    expect(d.view).toBe('streak');
+    const track = d.cam!.track!;
+    expect(track.p.length).toBeGreaterThan(5);
+    const end = trackPose(track, track.t0 + 99);
+    expect(end.done).toBe(true);
+    const mid = trackPose(track, track.t0 + track.p[2]![0]! / 1000);
+    expect(mid.done).toBe(false);
+    expect(Math.hypot(mid.x - track.p[2]![1]! / 100, mid.z - track.p[2]![3]! / 100)).toBeLessThan(0.05);
+    // Riding toward the victim: the flight heads down the -z side of the Yard.
+    expect(Math.abs(mid.yaw)).toBeLessThan(1.2);
   });
 
   it('keeps only players near the killer or the victim', () => {
