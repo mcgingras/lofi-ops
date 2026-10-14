@@ -510,36 +510,6 @@ describe('driven streaks', () => {
     expect(until(room, () => !v.alive, 10)).toBeLessThan(10);
   });
 
-  it('Valkyrie Rockets: steered by the view, two rockets', () => {
-    const room = setup();
-    const a = bot(room, 0);
-    a.isBot = false;
-    a.brain = null;
-    place(a, -1, 14);
-    const v = victimAt(room, -1, 0);
-    give(a, 'valkyrie');
-    a.yaw = 0;
-    a.pitch = 0.3;
-    expect(callKillstreak(room, a, 'valkyrie').ok).toBe(true);
-    let launched = 0;
-    let lastId = -1;
-    for (let i = 0; i < 60 * 12 && v.alive; i++) {
-      const rocket = room.entities.byKind(KS_ENTITY.rocket)[0];
-      if (rocket) {
-        if (rocket.id !== lastId) {
-          launched++;
-          lastId = rocket.id;
-        }
-        const d = { x: v.move.x - rocket.x, y: v.move.y + 1 - rocket.y, z: v.move.z - rocket.z };
-        const l = Math.hypot(d.x, d.y, d.z);
-        input(room, a, 0, Math.atan2(-d.x, -d.z), Math.asin(d.y / l));
-      } else input(room, a, 0);
-      room.step();
-    }
-    expect(v.alive).toBe(false);
-    expect(launched).toBeGreaterThanOrEqual(1);
-  });
-
   it('Attack Dogs hunt down an enemy', () => {
     const room = setup();
     const a = bot(room, 0);

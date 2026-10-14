@@ -32,7 +32,7 @@ import { flushState, grant, ksOf, markDirty, onKill, resetPlayer, stateMsg } fro
 import { crateInReach, onUsePressed } from './streaks/package';
 import { registerNukeModifiers } from './streaks/nuke';
 import { registerRadarModifiers } from './streaks/radar';
-import { fireLauncher, onOwnerDeath, putAwayLauncher, raiseLauncher, syncLauncherEntity } from './streaks/valkyrie';
+import { botLauncher, fireLauncher, onOwnerDeath, putAwayLauncher, raiseLauncher, syncLauncherEntity } from './streaks/valkyrie';
 import { ksRoom } from './world';
 import { VALKYRIE_LAUNCHER } from '../../../shared/defs/valkyrie';
 
@@ -285,6 +285,7 @@ const feature: Feature = {
         }
         if (ks.marker && !p.alive) cancelMarker(room, p);
         if (ks.launcher && !p.alive) onOwnerDeath(room, p);
+        if (p.isBot && ks.launcher && room.phase === 'playing') botLauncher(room, p);
         syncLauncherEntity(room, p);
         // Weapon down while driving, holding the designator or the marker canister (core refuses fire while "switching").
         // The marker holds it longer: the client's view of swapEnd lags a snapshot plus latency,

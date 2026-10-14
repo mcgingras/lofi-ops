@@ -92,8 +92,8 @@ export function fireLauncher(room: Room, p: PlayerState, aim?: { yaw: number; pi
     ks.ready.splice(idx, 1);
     ks.selected = Math.max(0, Math.min(ks.selected, ks.ready.length - 1));
     l.fired = true;
-    // BO1 `watchKillstreakWeaponUsage`: the first shot is when the streak counts as used and everyone hears it is inbound.
-    room.bus.emit('killstreaks.called', { player: p, id: 'valkyrie' });
+    // BO1 `watchKillstreakWeaponUsage`: the first shot is when everyone hears the rockets are inbound
+    // (the streak was called, `killstreaks.called` on the bus, when the drop was thrown).
     room.sendFeature(null, 'killstreaks.called', { id: 'valkyrie', owner: p.id, team: p.team });
   }
   let run = runs.get(p);
@@ -261,9 +261,7 @@ class ValkyrieRun {
       markDirty(room, p);
     }
     const l = ks.launcher;
-    if (!l || l.left <= 0) return false;
-    if (p.isBot) botFire(room, p, l);
-    return true;
+    return !!l && l.left > 0;
   }
 
   private fly(f: Flight, dt: number, pressed: number): void {
@@ -397,9 +395,11 @@ function rocketSnap(st: RocketState, white: number): Record<string, number> {
 
 const round = (v: number) => Math.round(v * 100) / 100;
 
-/** Bots: pick the nearest enemy they could hit, aim at it for a moment, then fire. */
-function botFire(room: Room, p: PlayerState, l: NonNullable<ReturnType<typeof ksOf>['launcher']>): void {
-  if (room.time < l.ready) return;
+/** Every tick, for bots holding the launcher: pick the nearest enemy, aim at it for a moment, then fire. */
+export function botLauncher(room: Room, p: PlayerState): void {
+  const ks = p.ext.killstreaks;
+  const l = ks?.launcher;
+  if (!p.isBot || !p.alive || !l || ks.control || room.time < l.ready) return;
   const ctx = ksRoom(room);
   const eye = eyeOf(p);
   const t = ctx.targetsFor(p, KS_ENTITY.rocket, eye, 120, false)[0];

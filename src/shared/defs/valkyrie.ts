@@ -136,9 +136,9 @@ export function stepRocket(s: RocketState, want: Vec3 | null, boost: boolean, dt
   };
 }
 
-/** Yaw and pitch of a direction (game convention: yaw 0 looks down -z, pitch up positive). */
+/** Yaw and pitch of a direction, any length (game convention: yaw 0 looks down -z, pitch up positive). */
 export function dirAngles(d: Vec3): { yaw: number; pitch: number } {
-  return { yaw: Math.atan2(-d.x, -d.z), pitch: Math.asin(clamp(d.y, -1, 1)) };
+  return { yaw: Math.atan2(-d.x, -d.z), pitch: Math.atan2(d.y, Math.hypot(d.x, d.z)) };
 }
 
 /** Wrap an angle to (-PI, PI]. */
