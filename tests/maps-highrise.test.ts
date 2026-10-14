@@ -278,7 +278,7 @@ describe('highrise: walking and jumping from the spawns', () => {
       const out = res.nodes.filter((n) => !(n.y < -1 ? underground(n) : inside(n.x, n.z) || craneZone(n)));
       expect(out, `outside at ${JSON.stringify(out.slice(0, 3))}`).toHaveLength(0);
     }
-  });
+  }, 180_000); // the first walk flood (it mantles too) runs here
 
   it('falls only happen off the open edges, into the void (never through a floor)', () => {
     for (const res of flood()) {

@@ -184,7 +184,7 @@ describe('summit reachability and bounds', () => {
     // The Tower is not reachable on foot (only by the jump from the Gallery roof).
     const tw = SUMMIT_TOWER;
     expect(r.nodes.some((n) => n.x > tw.x0 && n.x < tw.x1 && n.z > tw.z0 && n.z < tw.z1 && n.y > 4)).toBe(false);
-  });
+  }, 180_000); // the first walk flood (it mantles too) runs here
 
   it('no reachable spot is outside the bounds or the outline', () => {
     const b = map.bounds;

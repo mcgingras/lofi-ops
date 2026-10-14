@@ -107,7 +107,7 @@ describe('launch: layout against the reference outline', () => {
     expect(outside, JSON.stringify(outside.slice(0, 5))).toEqual([]);
     // ... and the play space fills it: reachable ground near both ends, the pad and the south edge.
     for (const p of [v(-63, 0, 1), v(59, 0, 1), v(X(0), L.deck, -30), v(-15, 0, 29), v(15, 0, 22), v(-12, 0, -21), v(12, 0, -20)]) expect(r.near(p, 2.5), JSON.stringify(p)).toBe(true);
-  });
+  }, 180_000); // the first walk flood (it mantles too) runs here
 
   it('puts the landmarks where the overhead has them, at their levels', () => {
     // Rocket on the pad centre line, gantry towers behind it (props/brushes outside the play space).

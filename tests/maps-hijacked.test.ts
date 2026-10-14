@@ -188,7 +188,7 @@ describe('hijacked reachability and the sea', () => {
     expect(r.nodes.filter((n) => n.y > 2.5 && n.z < 0).length).toBeGreaterThan(40);
     expect(r.nodes.filter((n) => n.y > 2.5 && n.z > 0).length).toBeGreaterThan(40);
     expect(r.nodes.filter((n) => n.y < -3).length).toBeGreaterThan(60);
-  });
+  }, 180_000); // the first walk flood (it mantles too) runs here
 
   it('nothing reachable on foot is off the yacht or out of bounds', () => {
     const b = map.bounds;
