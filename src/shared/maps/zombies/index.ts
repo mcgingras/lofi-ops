@@ -4,7 +4,7 @@ import { NUKETOWN_ZOMBIES } from './nuketown';
 import { YARD_ZOMBIES } from './yard';
 import type { ZombiesLayer } from './types';
 
-export type { ZombiesLayer, ZombiesWallBuy, ZombiesItemSpot, ZombiesPerkSpot, ZombiesBarrier } from './types';
+export type { ZombiesLayer, ZombiesWallBuy, ZombiesItemSpot, ZombiesPerkSpot, ZombiesBarrier, ZombiesDoor, ZombiesSpawn } from './types';
 
 const LAYERS: Record<string, ZombiesLayer> = { nuketown: NUKETOWN_ZOMBIES, firingrange: FIRINGRANGE_ZOMBIES, yard: YARD_ZOMBIES };
 

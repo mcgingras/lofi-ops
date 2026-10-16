@@ -60,6 +60,8 @@ export interface Brush {
   uv?: 'world' | 'raw';
   /** Free-form tag for features (e.g. 'spawnroom', 'breakable'). */
   tag?: string;
+  /** Switchable solid (Zombies doors, `door:<id>`): collides only while the world's `gateOn` says shut (collision.ts). */
+  gate?: string;
 }
 
 /**
@@ -220,7 +222,7 @@ export function mapSolids(map: MapData): Solid[] {
     const sight = b.sight ?? c;
     if (!players && !bullets && !sight) return;
     const clip = !!b.noRender && players && !bullets && !sight;
-    out.push({ min: { ...b.min }, max: { ...b.max }, ramp: b.ramp, players, bullets, sight, source: i, mat: b.mat, ...(clip ? { clip } : {}), ...(b.tag ? { tag: b.tag } : {}) });
+    out.push({ min: { ...b.min }, max: { ...b.max }, ramp: b.ramp, players, bullets, sight, source: i, mat: b.mat, ...(clip ? { clip } : {}), ...(b.tag ? { tag: b.tag } : {}), ...(b.gate ? { gate: b.gate } : {}) });
   });
   map.props.forEach((p, j) => {
     const source = map.brushes.length + j;
