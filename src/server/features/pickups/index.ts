@@ -59,7 +59,8 @@ function updateHumanUse(room: Room, p: PlayerState, dt: number): void {
     st.hold = 0;
   }
   st.hold += dt;
-  if (st.hold + 1e-6 >= PICKUP.holdSec) {
+  // Pack Rat: a tap (`pickupHoldMultiplier` 0).
+  if (st.hold + 1e-6 >= PICKUP.holdSec * room.modifiers.mul('pickupHoldMultiplier', p)) {
     swapFor(room, p, target);
     st.hold = 0;
     st.target = null;
