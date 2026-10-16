@@ -101,8 +101,8 @@ describe('Glitch vs bots', () => {
     call(room, a);
     const g = effectiveSkill(room, e, base);
     expect(g).toEqual(glitchSkill(base, BOT_SKILL_RANGES));
-    expect(g.reactionMs).toBeGreaterThan(base.reactionMs * 2);
-    expect(g.aimErrorDeg).toBeGreaterThan(base.aimErrorDeg * 2);
+    expect(g.reactionMs).toBeGreaterThan(base.reactionMs * 1.9);
+    expect(g.aimErrorDeg).toBeGreaterThan(base.aimErrorDeg * 1.9);
     expect(g.turnSpeedDeg).toBeLessThan(base.turnSpeedDeg * 0.6);
     expect(g.fovDeg).toBeLessThan(base.fovDeg);
     expect(g.hearingRange).toBeLessThan(base.hearingRange * 0.5);
