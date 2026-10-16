@@ -259,7 +259,9 @@ function engagedAtConcrete(difficulty: 'regular' | 'veteran' = 'veteran') {
 }
 
 describe('bots and walls: target memory', () => {
-  it('stops firing the tick the target is out of view, aims at the last point it saw, then lets go', () => {
+  it('stops firing the tick the target is out of view, aims at the last point it saw, then lets go', () => withSeed(3, () => {
+    // Seeded: footsteps behind the wall may (by chance) turn the bot toward the sound, which is
+    // allowed (hearing steers the view, never the trigger) but isn't what this test measures.
     const { r, c, player, bot, brain, shots } = engagedAtConcrete();
     const seenAt = { ...player.move };
     // Duck behind the concrete, then slide along behind it.
@@ -280,7 +282,7 @@ describe('bots and walls: target memory', () => {
     steps(r, LOST_GRACE);
     expect(brain.target).toBe(null);
     expect(shots() - before).toBe(0);
-  });
+  }));
 
   it('a target lost for less than LOST_GRACE is followed again without a new reaction', () => {
     const { r, c, player, brain } = engagedAtConcrete();
