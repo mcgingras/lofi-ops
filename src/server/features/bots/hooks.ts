@@ -93,6 +93,10 @@ export interface BotModeStyle {
   meleeHappy: boolean;
   /** Prefer rushing (gun game, sticks). */
   rush: boolean;
+  /** In a fight, never close in and back away from a target inside 4 m (Infected's Survivors). */
+  kite?: boolean;
+  /** Lob the lethal (a tomahawk) at a target in sight 6-18 m away, mid-fight (Infected). */
+  throwAtRange?: boolean;
 }
 
 const styles = new Map<string, BotModeStyle>([
@@ -109,4 +113,28 @@ export function registerBotModeStyle(modeId: string, style: Partial<BotModeStyle
 
 export function botModeStyle(modeId: string): BotModeStyle {
   return styles.get(modeId) ?? { conserveAmmo: false, meleeHappy: false, rush: false };
+}
+
+/** Per-bot flavour on top of the mode's (a mode whose players have different roles: Infected). */
+export type BotStyleFn = (room: Room, bot: PlayerState) => Partial<BotModeStyle> | null;
+const styleFns = new Map<string, BotStyleFn>();
+
+/** Register (or replace, `null` removes) the per-bot style source for a mode id. */
+export function registerBotStyle(modeId: string, fn: BotStyleFn | null): void {
+  if (fn) styleFns.set(modeId, fn);
+  else styleFns.delete(modeId);
+}
+
+/** The style a bot plays right now: its mode's, overridden by the mode's per-bot source. */
+export function botStyleFor(room: Room, bot: PlayerState): BotModeStyle {
+  const base = botModeStyle(room.mode.id);
+  const fn = styleFns.get(room.mode.id);
+  if (!fn) return base;
+  let extra: Partial<BotModeStyle> | null = null;
+  try {
+    extra = fn(room, bot);
+  } catch (err) {
+    room.log(`bot style for ${room.mode.id} failed: ${String(err)}`);
+  }
+  return extra ? { ...base, ...extra } : base;
 }

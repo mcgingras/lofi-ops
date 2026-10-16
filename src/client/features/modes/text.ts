@@ -90,6 +90,26 @@ export function eventLine(ev: ModeEventPayload, c: LineCtx): AnnouncerLine | nul
       return me ? { text: 'KILL CONFIRMED', color: 'hi', big: false, sound: 'modes.pickup', points: ev.points ?? MODE_XP.confirm } : null;
     case 'kc.deny':
       return me ? { text: 'KILL DENIED', color: 'hi', big: false, sound: 'modes.pickup', points: ev.points ?? MODE_XP.deny } : null;
+    case 'infected.first':
+      if (me) return { text: ev.reason === 'again' ? 'FIRST INFECTED AGAIN' : 'FIRST INFECTED', sub: 'INFECT A SURVIVOR', color: 'warn', big: true, sound: 'modes.alarm' };
+      return { text: `${c.nameOf(ev.player).toUpperCase()} IS INFECTED`, sub: ev.reason === 'again' ? 'FIRST INFECTED AGAIN' : 'SURVIVE', color: 'enemy', big: true, sound: 'modes.horn' };
+    case 'infected.infect': {
+      const victim = ev.reason ?? null;
+      if (victim === c.myId) return { text: 'YOU ARE INFECTED', sub: 'INFECT THE SURVIVORS', color: 'warn', big: true, sound: 'modes.bad' };
+      if (me) return { text: `INFECTED ${c.nameOf(victim).toUpperCase()}`, color: 'hi', big: false, points: ev.points };
+      return { text: `${c.nameOf(victim).toUpperCase()} WAS INFECTED`, color: c.myTeam === 1 ? 'friend' : 'enemy', big: false };
+    }
+    case 'infected.survive':
+      return me ? { text: 'SURVIVOR', color: 'hi', big: false, points: ev.points } : null;
+    case 'infected.last_alive':
+      if (me) return { text: 'LAST ONE STANDING', sub: 'RPK AND RADAR · HOLD OUT', color: 'warn', big: true, sound: 'modes.alarm', points: ev.points };
+      return { text: 'ONE SURVIVOR LEFT', sub: `FIND ${c.nameOf(ev.player).toUpperCase()}`, color: 'friend', big: true, sound: 'modes.good' };
+    case 'infected.outlast':
+      return me ? { text: 'OUTLASTED', color: 'hi', big: false, points: ev.points } : null;
+    case 'infected.final_stand':
+      return me ? { text: 'FINAL STAND', sub: 'YOU SURVIVED THE OUTBREAK', color: 'friend', big: true, sound: 'modes.good', points: ev.points } : { text: `${c.nameOf(ev.player).toUpperCase()} SURVIVED`, color: 'enemy', big: false };
+    case 'infected.countdown':
+      return { text: 'ALL INFECTED LEFT', sub: `NEW FIRST INFECTED IN ${ev.points ?? ''}`, color: 'hi', big: true, sound: 'modes.horn' };
     default:
       return null;
   }

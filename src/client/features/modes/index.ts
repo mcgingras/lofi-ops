@@ -11,6 +11,7 @@ import './sounds';
 import './store';
 import './hud';
 import './props';
+import './infected';
 import { deathcamPlaying } from './deathcam';
 import { killcamPlaying } from './killcam';
 import { summaryOpen } from './summary';

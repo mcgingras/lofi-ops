@@ -350,7 +350,9 @@ export class RoomBots {
     }
     // Fill.
     for (let i = active.length; i < want; i++) this.addBot(room.mode.teams ? this.smaller() : null);
-    if (matchStart && room.mode.teams) {
+    if (room.mode.teamsByRules) {
+      // The mode decides teams (Infected): no re-teaming.
+    } else if (matchStart && room.mode.teams) {
       // Re-team bots so sides are even (everyone is dead at this point of a match start).
       for (let guard = 0; guard < 32; guard++) {
         const [a, b] = this.teamCounts();
@@ -377,7 +379,7 @@ export class RoomBots {
 
   /** Mid-match: sides more than one apart move a bot over at its next death (dead ones now). */
   balanceTeams() {
-    if (!this.room.mode.teams) return;
+    if (!this.room.mode.teams || this.room.mode.teamsByRules) return;
     const [a, b] = this.teamCounts(new Set([...this.retiring, ...this.switching]));
     const pending = [...this.switching].map((id) => this.room.players.get(id)?.team);
     const toOne = pending.filter((t) => t === 0).length;

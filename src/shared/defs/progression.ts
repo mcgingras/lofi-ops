@@ -120,6 +120,11 @@ export const OBJECTIVE_XP: Record<string, number> = {
   humiliate: 100,
   bankrupt: 100,
   survive: 50,
+  // Infected
+  infect: 100,
+  infected_last: 100,
+  outlast: 200,
+  final_stand: 500,
 };
 
 /** Other spellings modes might use, mapped to the canonical kind. */
@@ -155,13 +160,18 @@ export const OBJECTIVE_ALIASES: Record<string, string> = {
   'hq.defend': 'hq_defend',
   'kc.confirm': 'confirm',
   'kc.deny': 'deny',
+  'infected.infect': 'infect',
+  'infected.survive': 'survive',
+  'infected.last_alive': 'infected_last',
+  'infected.outlast': 'outlast',
+  'infected.final_stand': 'final_stand',
 };
 
 /**
  * Announcements the modes feature also sends as `objective` events: they pay no XP and count for
  * nothing (a bomb pickup/drop must not be farmable for objective XP).
  */
-export const OBJECTIVE_IGNORED: ReadonlySet<string> = new Set(['sd.pickup', 'sd.drop', 'sd.explode', 'sd.round_start', 'sd.round_end', 'sd.halftime', 'hq.online', 'hq.move', 'hq.expire']);
+export const OBJECTIVE_IGNORED: ReadonlySet<string> = new Set(['sd.pickup', 'sd.drop', 'sd.explode', 'sd.round_start', 'sd.round_end', 'sd.halftime', 'hq.online', 'hq.move', 'hq.expire', 'infected.first', 'infected.countdown']);
 
 export const OBJECTIVE_LABELS: Record<string, string> = {
   capture: 'CAPTURE',
@@ -182,6 +192,10 @@ export const OBJECTIVE_LABELS: Record<string, string> = {
   humiliate: 'HUMILIATION',
   bankrupt: 'BANKRUPTED',
   survive: 'SURVIVOR',
+  infect: 'INFECTED',
+  infected_last: 'LAST ONE STANDING',
+  outlast: 'OUTLASTED',
+  final_stand: 'FINAL STAND',
 };
 
 export const canonicalObjective = (kind: string) => OBJECTIVE_ALIASES[kind] ?? kind;

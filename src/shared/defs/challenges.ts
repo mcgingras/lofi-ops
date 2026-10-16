@@ -309,6 +309,12 @@ export const MODE_CHALLENGE_TEMPLATES: Record<string, ModeTemplate[]> = {
     { key: 'confirms', name: 'Confirmed', desc: 'Confirm {n} kills by picking up enemy tags.', metric: 'obj.confirm', ladder: L([25, 100, 500, 1000], [1000, 2500, 6000, 12000], [100, 250, 600, 1200]) },
     { key: 'denies', name: 'Denied', desc: 'Deny {n} kills by picking up friendly tags.', metric: 'obj.deny', ladder: L([25, 100, 500], [1000, 2500, 6000], [100, 250, 600]) },
   ],
+  infected: [
+    { key: 'infect', name: 'Patient Zero', desc: 'Infect {n} survivors in {mode}.', metric: 'obj.infect', ladder: L([10, 50, 250, 1000], [1000, 2500, 6000, 15000], [100, 250, 600, 1500]) },
+    { key: 'last_stand', name: 'Last One Standing', desc: 'Survive to the end of {n} {mode} matches as the last one standing.', metric: 'obj.final_stand', ladder: L([1, 5, 25], [1500, 4000, 10000], [150, 400, 1000]) },
+    { key: 'outlast', name: 'Outbreak Survivor', desc: 'Still be a survivor when time runs out in {n} {mode} matches.', metric: 'obj.outlast', ladder: L([3, 15, 50], [1000, 3000, 8000], [100, 300, 800]) },
+    { key: 'knife', name: 'Contagious', desc: 'Get {n} melee kills in {mode}.', metric: 'kills', ladder: L([25, 100, 500], [1000, 2500, 6000], [100, 250, 600]), extra: { means: 'melee' } },
+  ],
   oitc: [
     { key: 'survive', name: 'Survivor', desc: 'Outlast enemies {n} times in {mode}.', metric: 'obj.survive', ladder: L([5, 25, 100], [1000, 3000, 6000], [100, 300, 600]) },
     { key: 'melee', name: 'Pistol Whipped', desc: 'Get {n} melee kills in {mode}.', metric: 'kills', ladder: L([10, 50, 150], [1000, 2500, 5000], [100, 250, 500]), extra: { means: 'melee' } },

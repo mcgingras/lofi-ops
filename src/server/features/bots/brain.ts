@@ -41,7 +41,7 @@ import { traceShot } from '../../combat';
 import { currentWeapon, type BotBrain, type PlayerState } from '../../player';
 import type { Room } from '../../room';
 import { addRecoil, angleDiff, engage, feltOffDeg, flinch, lookToward, newAimState, noticeTime, stepAim, toleranceDeg, type AimState } from './aim';
-import { botGoalFor, botModeStyle, botStreakHandler, type BotGoal } from './hooks';
+import { botGoalFor, botStreakHandler, botStyleFor, type BotGoal } from './hooks';
 import { botFrozen, effectiveSkill } from './impair';
 import { navFor, type NavCell, type NavGrid } from './nav';
 import { recentSpawns } from '../modes/spawns';
@@ -138,6 +138,11 @@ export class Brain implements BotBrain {
   private jumpHeld = false;
   private grenadeAt = 0;
   private throwing: { at: Vec3; t: number } | null = null;
+  /** A lethal lobbed mid-fight (`throwAtRange`): the view is pitched up by `lobPitch` until then. */
+  private lobUntil = 0;
+  private lobPitch = 0;
+  private lobAt = 0;
+  private pitchBias = 0;
   private streakPress: { id: string; at: number } | null = null;
   private retreatUntil = 0;
   private holdUntil = 0;
@@ -199,6 +204,8 @@ export class Brain implements BotBrain {
     this.intentAt = -1;
     this.lingerUntil = 0;
     this.grenadeAt = now + 4;
+    this.lobAt = now + 0.5;
+    this.lobUntil = 0;
   }
 
   /** Roll this life's role; take the lane fewest teammates hold (or pair up with one). */
@@ -249,7 +256,7 @@ export class Brain implements BotBrain {
     const nav = navFor(room.map);
     this.cur = effectiveSkill(room, self, this.skill);
     const sk = this.cur;
-    const style = botModeStyle(room.mode.id);
+    const style = botStyleFor(room, self);
     let buttons = 0;
     let mx = 0;
     let mz = 0;
@@ -259,6 +266,7 @@ export class Brain implements BotBrain {
     const pulse = (b: number) => {
       if (!(this.prevButtons & b)) buttons |= b;
     };
+    this.pitchBias = now < this.lobUntil ? this.lobPitch : 0;
 
     if (room.phase !== 'playing') {
       // Countdown: look around a little, frozen.
@@ -374,6 +382,19 @@ export class Brain implements BotBrain {
         this.nextMeleeAt = now + 0.75;
       }
 
+      // A tomahawk left (Infected): lob it at a target in sight at mid range. The throw leaves
+      // along the view when the wind-up ends, so the view stays pitched up until then.
+      if (style.throwAtRange && vis && d > 6 && d < 18 && now >= this.lobAt && this.aim.react <= 0 && (self.ext.weapons?.lethalN ?? 0) > 0) {
+        if (this.rnd() < 0.5) {
+          // Judging the arc by eye: off by up to ~half the bot's aim error either way.
+          const t = d / 22;
+          this.lobPitch = clamp(Math.atan2(7.5 * t * t, d) - 0.1 + (this.rnd() - 0.5) * sk.aimErrorDeg * DEG * 0.8, 0, 0.5);
+          this.lobUntil = now + 0.5;
+          this.lobAt = now + 5 + this.rnd() * 3;
+          pulse(Buttons.LETHAL);
+        } else this.lobAt = now + 1.5; // not every chance: half the time it just keeps running in
+      }
+
       // Reload with nothing in the mag and no sidearm worth swapping to.
       if (w && w.mag === 0 && w.reserve > 0 && self.reloadEnd === 0 && this.slotWanted === self.slot) pulse(Buttons.RELOAD);
 
@@ -385,7 +406,9 @@ export class Brain implements BotBrain {
       const uz = tz / td;
       const lowHealth = self.health < self.maxHealth * 0.35;
       const dry = !!w && w.mag === 0 && (this.slotWanted === self.slot || !secondary || secondary.mag === 0);
-      if (((lowHealth && (sk.aggression < 0.75 || td > 10)) || (dry && td > 6)) && now >= this.retreatUntil && this.goal?.kind !== 'cover') {
+      // A melee-happy bot with nothing to shoot (knife only) goes in instead of backing off to reload.
+      const knifeOnly = style.meleeHappy && outOfAmmo;
+      if (((lowHealth && (sk.aggression < 0.75 || td > 10) && !knifeOnly) || (dry && td > 6 && !knifeOnly)) && now >= this.retreatUntil && this.goal?.kind !== 'cover') {
         // Back off to cover (reload / heal behind it); not more often than every few seconds.
         const cover = findCover(room, nav, self, { x: tpos.x, y: tpos.y + PLAYER.eye, z: tpos.z }, this.rnd);
         if (cover) this.setGoal(nav, self, { at: { x: cover.x, y: cover.y, z: cover.z }, radius: 0.6, hold: false, holdButtons: 0, sprint: true, kind: 'cover', until: now + 3.5 });
@@ -409,7 +432,8 @@ export class Brain implements BotBrain {
           if (this.rnd() < s * 0.06 && td > 4) jump = true;
         }
         // Low-aggression bots with the upper hand hold still to shoot; others keep closing.
-        const approach = close > 0 && (sk.aggression > 0.35 || td > range * 2) ? 1 : close < 0 ? -1 : 0;
+        // Kiting (Infected's Survivors): never close in, back away from anyone inside 4 m.
+        const approach = style.kite ? (td < 4 ? -1 : 0) : close > 0 && (sk.aggression > 0.35 || td > range * 2) ? 1 : close < 0 ? -1 : 0;
         mx = ux * approach + -uz * this.strafeDir;
         mz = uz * approach + ux * this.strafeDir;
         if (now < this.crouchUntil) {
@@ -566,7 +590,7 @@ export class Brain implements BotBrain {
   private out(self: PlayerState, buttons: number): Omit<InputCmd, 'seq' | 'dt'> {
     this.prevButtons = buttons;
     const slot = this.slotWanted < self.weapons.length ? this.slotWanted : 0;
-    return { buttons, yaw: this.aim.yaw, pitch: clamp(this.aim.pitch, -1.4, 1.4), weaponSlot: slot };
+    return { buttons, yaw: this.aim.yaw, pitch: clamp(this.aim.pitch + this.pitchBias, -1.4, 1.4), weaponSlot: slot };
   }
 
   /**

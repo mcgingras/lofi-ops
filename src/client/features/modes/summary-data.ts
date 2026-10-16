@@ -6,7 +6,7 @@
  * the scoreboard (e.g. a mode from another feature).
  */
 import { TEAM_NAMES, type Team } from '../../../shared/constants';
-import { MODE_BY_ID } from '../../../shared/defs/modes';
+import { MODE_BY_ID, teamNamesFor } from '../../../shared/defs/modes';
 import { MAP_BY_ID } from '../../../shared/defs/maps';
 import type { MatchSummaryExt, XpLine } from '../../../shared/defs/modestate';
 import { matchSummaryFor, XP_SOURCES } from '../../../shared/defs/progression';
@@ -54,6 +54,8 @@ export interface SummaryView {
 }
 
 const REASONS: Record<string, string> = { score: 'Score limit reached', time: 'Time limit reached', rounds: 'Round limit reached', forfeit: 'Forfeit', aborted: 'Match aborted', nuke: 'TACTICAL NUKE' };
+/** Infected ends one of two ways: nobody left to infect, or the clock ran out on the Infected. */
+const INFECTED_REASONS: Record<string, string> = { score: 'Everyone was infected', time: 'The survivors outlasted the infection' };
 
 function fallbackXp(r: PlayerResult): XpLine[] {
   const lines: XpLine[] = [];
@@ -88,7 +90,8 @@ export function buildSummaryView(results: MatchResults, myId: string, myTeam: Te
   let teams: SummaryView['teams'] = null;
   if (results.teamScores) {
     const order: Team[] = myTeam === 1 ? [1, 0] : [0, 1];
-    teams = order.map((t) => ({ team: t, name: TEAM_NAMES[t]!, score: results.teamScores![t], rows: rows.filter((r) => r.team === t), mine: t === myTeam }));
+    const names = teamNamesFor(MODE_BY_ID.get(results.mode), TEAM_NAMES);
+    teams = order.map((t) => ({ team: t, name: names[t]!, score: results.teamScores![t], rows: rows.filter((r) => r.team === t), mine: t === myTeam }));
   }
   // The XP progression awarded wins: the modes summary is built at the same matchEnd priority and
   // may run first, so its own guess missed lines such as MATCH COMPLETE.
@@ -99,7 +102,7 @@ export function buildSummaryView(results: MatchResults, myId: string, myTeam: Te
     title,
     modeName: MODE_BY_ID.get(results.mode)?.name ?? results.mode.toUpperCase(),
     mapName: MAP_BY_ID.get(results.map)?.name ?? results.map,
-    reason: REASONS[results.reason] ?? results.reason,
+    reason: (results.mode === 'infected' ? INFECTED_REASONS[results.reason] : undefined) ?? REASONS[results.reason] ?? results.reason,
     teams,
     rows,
     statKeys,

@@ -7,6 +7,7 @@
  */
 import type { Team } from '../constants';
 import type { DeathcamPayload } from './deathcam';
+import type { InfectedStatePayload } from './infected';
 
 export const MODE_ENTITY = {
   flag: 'modes.flag',
@@ -73,6 +74,7 @@ export interface ModeStatePayload {
   sd?: SdStatePayload;
   hq?: HqStatePayload;
   kc?: { confirmed: [number, number]; denied: [number, number] };
+  infected?: InfectedStatePayload;
   me?: ActionState | null;
 }
 
@@ -100,7 +102,15 @@ export type ModeEventKind =
   | 'hq.move'
   | 'hq.defend'
   | 'kc.confirm'
-  | 'kc.deny';
+  | 'kc.deny'
+  // Infected: `player` = who it happened to / who did it (see eventLine in client/features/modes/text.ts).
+  | 'infected.countdown'
+  | 'infected.first'
+  | 'infected.infect'
+  | 'infected.survive'
+  | 'infected.last_alive'
+  | 'infected.outlast'
+  | 'infected.final_stand';
 
 export interface ModeEventPayload {
   kind: ModeEventKind;
