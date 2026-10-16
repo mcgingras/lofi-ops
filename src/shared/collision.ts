@@ -169,6 +169,44 @@ function rayRamp(o: Vec3, d: Vec3, s: Solid, maxT: number): { t: number; n: Vec3
 }
 
 /**
+ * Where a ray from `o` along `d` enters (`t0`, 0 when `o` is inside) and leaves (`t1`) a solid, or
+ * null when it misses. Bullet penetration measures a wall's thickness as `t1 - t0`.
+ */
+export function raySpan(o: Vec3, d: Vec3, s: Solid): { t0: number; t1: number } | null {
+  if (s.ramp) {
+    let t0 = 0;
+    let t1 = Infinity;
+    for (const [nx, ny, nz, off] of rampPlanes(s)) {
+      const denom = nx * d.x + ny * d.y + nz * d.z;
+      const dist = off - (nx * o.x + ny * o.y + nz * o.z);
+      if (Math.abs(denom) < 1e-12) {
+        if (dist < 0) return null;
+        continue;
+      }
+      const t = dist / denom;
+      if (denom < 0) t0 = Math.max(t0, t);
+      else t1 = Math.min(t1, t);
+      if (t0 > t1) return null;
+    }
+    return { t0, t1 };
+  }
+  let t0 = 0;
+  let t1 = Infinity;
+  for (const [oi, di, lo, hi] of [[o.x, d.x, s.min.x, s.max.x], [o.y, d.y, s.min.y, s.max.y], [o.z, d.z, s.min.z, s.max.z]] as const) {
+    if (Math.abs(di) < 1e-12) {
+      if (oi < lo || oi > hi) return null;
+      continue;
+    }
+    const a = (lo - oi) / di;
+    const b = (hi - oi) / di;
+    t0 = Math.max(t0, Math.min(a, b));
+    t1 = Math.min(t1, Math.max(a, b));
+    if (t0 > t1) return null;
+  }
+  return { t0, t1 };
+}
+
+/**
  * The collision world. Build once per map (`buildCollisionWorld(mapData)` in maps/types.ts) and
  * share it; it is immutable after construction.
  */

@@ -31,6 +31,8 @@ export interface ModifierMap {
   swapMultiplier: (p: PlayerState) => number | undefined;
   /** Sprint-out delay before firing (Steady Aim Pro). */
   sprintOutMultiplier: (p: PlayerState) => number | undefined;
+  /** How deep bullets go through walls (Hardened: 2). Human shots only (combat `traceShot`). */
+  penetrationMultiplier: (p: PlayerState) => number | undefined;
   /** Bullet spread (Steady Aim: hip fire 0.65). */
   spreadMultiplier: (p: PlayerState) => number | undefined;
   /** Delay before health regen starts. */

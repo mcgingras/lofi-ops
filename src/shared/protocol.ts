@@ -147,6 +147,8 @@ export interface ShotSnap {
   w: string;
   /** 1 if it hit a player. */
   h?: 1;
+  /** Walls it went through: entry then exit point of each, flattened [x, y, z, x, y, z, ...]. */
+  x?: number[];
 }
 
 export interface RosterEntry {
@@ -234,9 +236,9 @@ export interface ServerMessages {
     /** True when the recipient's radar is jammed. */
     jammed: boolean;
   };
-  killfeed: { attacker: string | null; victim: string; weapon: string; headshot: boolean; means: string; attackerTeam: Team | null; victimTeam: Team | null };
+  killfeed: { attacker: string | null; victim: string; weapon: string; headshot: boolean; means: string; attackerTeam: Team | null; victimTeam: Team | null; pen?: boolean };
   /** To the shooter: hitmarker. */
-  hit: { victim: string; part: string; damage: number; kill: boolean };
+  hit: { victim: string; part: string; damage: number; kill: boolean; pen?: boolean };
   /** To the victim: damage direction. */
   hurt: { attacker: string | null; amount: number; from: [number, number, number] | null; health: number };
   /** To the victim. */

@@ -51,9 +51,11 @@ export class KillcamRecorder {
     this.last = null;
   }
 
-  onShot(player: PlayerState, end: Vec3, hit: boolean): void {
+  /** `walls`: entry and exit points of the walls the bullet went through (impact puffs in the replay). */
+  onShot(player: PlayerState, end: Vec3, hit: boolean, walls: readonly Vec3[] = []): void {
     if (this.room.phase !== 'playing') return;
-    this.shots.push({ t: r3(this.room.time), id: player.id, end: [r3(end.x), r3(end.y), r3(end.z)], hit });
+    const pen = walls.map((w): [number, number, number] => [r3(w.x), r3(w.y), r3(w.z)]);
+    this.shots.push({ t: r3(this.room.time), id: player.id, end: [r3(end.x), r3(end.y), r3(end.z)], hit, ...(pen.length ? { pen } : {}) });
     const cut = this.room.time - KEEP_SEC;
     while (this.shots.length && this.shots[0]!.t < cut) this.shots.shift();
   }

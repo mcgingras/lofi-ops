@@ -16,9 +16,10 @@
  *     hearingMultiplier    (p) => number     mul   how far this player hears footsteps (Ninja Pro: 1.8).
  *     streakTargetable     (target, kind) => boolean   any   false = killstreak AI of `kind` ignores target (Ghost Pro).
  *     killstreakDamageDealt(attacker, kind) => number   mul   bullet damage to killstreak hardware (Hardened Pro: 1.5).
- * Not registered, because nothing in the game could read them: Hardened's bullet penetration (no
- * penetration model: `bullets: false` cover already passes every bullet at full damage) and Flak
- * Jacket Pro's fuse reset (no picking grenades up to throw back).
+ *   declared in core (src/server/modifiers.ts), read by combat:
+ *     penetrationMultiplier(p) => number     mul   bullet penetration depth (Hardened: 2; shared/penetration.ts).
+ * Not registered, because nothing in the game could read it: Flak Jacket Pro's fuse reset (no
+ * picking grenades up to throw back).
  */
 import type { Team } from '../../../shared/constants';
 import { PERK_BY_ID, PERK_PRO_CHALLENGES, proChallengeFor } from '../../../shared/defs/perks';

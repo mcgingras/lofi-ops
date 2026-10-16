@@ -59,6 +59,8 @@ export const PERK_TUNING = {
   scavengerMags: 1,
   /** Scavenger Pro: extra mags of reserve at spawn. */
   scavengerProMags: 2,
+  /** Hardened: bullet penetration depth (BO1 `perk_bulletPenetrationMultiplier`; shared/penetration.ts). */
+  hardenedPenetration: 2,
   /** Hardened Pro: bullet damage to killstreak hardware, and flinch. */
   hardenedProStreakDamage: 1.5,
   hardenedProFlinch: 0.5,

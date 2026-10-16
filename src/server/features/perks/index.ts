@@ -7,7 +7,8 @@
  *      from the dead; Pro extra mags + grenade resupply event), Ghost (hidden from Spy
  *      Plane/Blackbird unless firing loud; Pro ignored by air support and sentries), Hardline
  *      (streaks -1 kill; Pro care package reroll, in killstreaks).
- *   T2 Hardened (no penetration model, so no base effect; Pro x1.5 vs killstreaks, less flinch),
+ *   T2 Hardened (bullets go x2 deeper through walls and lose less damage there, via
+ *      `penetrationMultiplier`; Pro x1.5 vs killstreaks, less flinch),
  *      Scout (hold breath x2; Pro faster swap), Steady Aim (hip spread x0.65; Pro faster sprint-out
  *      and knife), Sleight of Hand (reload x0.5; Pro ADS x0.5), Warlord (a second primary
  *      attachment via `attachmentSlotsOffset`; Pro +1 lethal/tactical via `equipmentCountOffset`).
@@ -66,6 +67,7 @@ export function registerPerkModifiers(room: Room): void {
   m.add('streakTargetable', (target, kind) => (isPro(target, 'ghost') && kind !== KS_ENTITY.dog && kind !== KS_ENTITY.rcxd ? false : undefined), 'perks.ghost_pro');
   m.add('streakCostOffset', (p) => (hasPerk(p, 'hardline') ? -1 : undefined), 'perks.hardline');
   // Tier 2
+  m.add('penetrationMultiplier', (p) => (hasPerk(p, 'hardened') ? T.hardenedPenetration : undefined), 'perks.hardened');
   m.add('killstreakDamageDealt', (p) => (isPro(p, 'hardened') ? T.hardenedProStreakDamage : undefined), 'perks.hardened_pro');
   m.add('flinchMultiplier', (p) => (isPro(p, 'hardened') ? T.hardenedProFlinch : undefined), 'perks.hardened_pro_flinch');
   m.add('holdBreathMultiplier', (p) => (hasPerk(p, 'scout') ? T.scoutHoldBreath : undefined), 'perks.scout');

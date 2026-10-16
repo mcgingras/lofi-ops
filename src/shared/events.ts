@@ -36,6 +36,8 @@ export interface DamageInfo<P> {
   /** Where the damage came from (for hit direction indicators). */
   from: Vec3 | null;
   distance: number;
+  /** A bullet that went through a wall to get here (shared/penetration.ts). */
+  penetrated?: boolean;
 }
 
 export interface DeathEvent<P> {
@@ -52,6 +54,8 @@ export interface DeathEvent<P> {
   victimStreak: number;
   /** Attacker's kill streak after this kill (0 when no attacker / suicide / teamkill). */
   attackerStreak: number;
+  /** A bullet kill through a wall (every pellet that hit went through one). */
+  penetrated?: boolean;
 }
 
 export interface PlayerResult {
@@ -101,7 +105,7 @@ export interface RoomEvents<P> {
   damage: DamageInfo<P> & { health: number };
   death: DeathEvent<P>;
   /** A shot was fired (one per trigger pull; pellets share it). */
-  fire: { player: P; weapon: string; origin: Vec3; dir: Vec3; hits: { victim: P; part: HitPart; damage: number }[]; end: Vec3 };
+  fire: { player: P; weapon: string; origin: Vec3; dir: Vec3; hits: { victim: P; part: HitPart; damage: number; penetrated?: boolean }[]; end: Vec3; walls?: Vec3[] };
   reload: { player: P; weapon: string; empty: boolean };
   weaponSwitch: { player: P; slot: number; weapon: string };
   /** Edge-triggered buttons per applied input command (melee, lethal, streak use...). */

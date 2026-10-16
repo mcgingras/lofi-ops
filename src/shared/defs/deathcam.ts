@@ -82,7 +82,7 @@ export interface PackedClip {
   ids: string[];
   /** Per frame: [ms since t0, then per player: index, dx, dy, dz (cm), dyaw, dpitch (mrad), flags, dhp]. */
   f: number[][];
-  /** Shots: [ms since t0, player index, end x, y, z (cm), 1 if it hit a player]. */
+  /** Shots: [ms since t0, player index, end x, y, z (cm), 1 if it hit a player, then x, y, z (cm) per wall point]. */
   s: number[][];
 }
 
@@ -91,6 +91,8 @@ export interface DeathcamShot {
   id: string;
   end: [number, number, number];
   hit: boolean;
+  /** Walls the bullet went through: entry and exit point of each (puffs on both sides). */
+  pen?: [number, number, number][];
 }
 
 export interface DeathcamPayload {
@@ -146,7 +148,7 @@ export function packClip(frames: readonly KillcamFrame[], shots: readonly Deathc
     }
     return row;
   });
-  const s = shots.map((x) => [Math.round((x.t - t0) * 1000), idx(x.id), cm(x.end[0]), cm(x.end[1]), cm(x.end[2]), x.hit ? 1 : 0]);
+  const s = shots.map((x) => [Math.round((x.t - t0) * 1000), idx(x.id), cm(x.end[0]), cm(x.end[1]), cm(x.end[2]), x.hit ? 1 : 0, ...(x.pen ?? []).flatMap((p) => [cm(p[0]), cm(p[1]), cm(p[2])])]);
   return { t0, ids, f, s };
 }
 
@@ -164,6 +166,12 @@ export function unpackClip(c: PackedClip): { frames: KillcamFrame[]; shots: Deat
     }
     return { t: c.t0 + row[0]! / 1000, p };
   });
-  const shots = c.s.map((s) => ({ t: c.t0 + s[0]! / 1000, id: c.ids[s[1]!] ?? '?', end: [s[2]! / 100, s[3]! / 100, s[4]! / 100] as [number, number, number], hit: s[5] === 1 }));
+  const shots = c.s.map((s) => {
+    const shot: DeathcamShot = { t: c.t0 + s[0]! / 1000, id: c.ids[s[1]!] ?? '?', end: [s[2]! / 100, s[3]! / 100, s[4]! / 100], hit: s[5] === 1 };
+    const pen: [number, number, number][] = [];
+    for (let k = 6; k + 2 < s.length; k += 3) pen.push([s[k]! / 100, s[k + 1]! / 100, s[k + 2]! / 100]);
+    if (pen.length) shot.pen = pen;
+    return shot;
+  });
   return { frames, shots };
 }
