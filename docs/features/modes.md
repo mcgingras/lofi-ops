@@ -1,6 +1,6 @@
 # Modes (feature area: `modes`)
 
-Team Deathmatch and Free-for-All polish, plus Domination, Search and Destroy, Headquarters and Kill Confirmed. Each mode has objective props in the world, HUD widgets and announcer lines, an end-of-match summary screen (with a final killcam), a per-death killcam ("see who killed you"), and objective hooks bots can use.
+Team Deathmatch and Free-for-All polish, plus Domination, Search and Destroy, Headquarters, Kill Confirmed and Infected (MW3's party mode). Each mode has objective props in the world, HUD widgets and announcer lines, an end-of-match summary screen (with a final killcam), a per-death killcam ("see who killed you"), and objective hooks bots can use.
 
 ## What's in it
 
@@ -12,8 +12,72 @@ Team Deathmatch and Free-for-All polish, plus Domination, Search and Destroy, He
 | Search and Destroy | `sd` | first to 4 rounds | One life per round. A round runs 5 s prep (frozen, no damage), then 2:30 live, then a 45 s bomb timer once planted, then 5 s post. Plant: 5 s holding USE (F) in a site. Defuse: 7.5 s holding USE within 2 m of the bomb. You can't move while planting or defusing. Letting go, leaving or dying resets progress. The bomb starts on a random attacker. If the carrier dies it drops where they fell, and an attacker picks it up by walking over it. The detonation kills everyone within 10 m. Sides switch after round 3. Team 0 attacks first. Where plant/defuse is possible USE belongs to it (`useClaimed`, `SdRules.canUseObjective`): weapon pickups stand aside; dropped guns are cleared each round. |
 | Headquarters | `hq` | 250, 10 min | One HQ at a time, rotating through the map's HQ points. The first comes online 5 s after the start, later ones 5 s after the previous one goes. Capturing takes 10 s. The owners then score 1 point/s for up to 60 s, and their dead do not respawn while it stands. Enemies destroy it in 10 s by standing in it with no defenders present. When the HQ is destroyed or expires, its dead defenders respawn. An unclaimed HQ moves after 60 s. |
 | Kill Confirmed | `kc` | 65, 10 min | Every death drops the victim's dog tags. An enemy who grabs them confirms the kill (+1 team score and +150). A teammate who grabs them denies it (+100). Kills give only player score (100). Tags vanish after 60 s. |
+| Infected | `infected` | no score limit, 10 min | Everyone starts a Survivor. 9 s in, a random player becomes the First Infected. Every Survivor who dies comes back Infected. The Infected win when nobody is left to infect; the Survivors win if one of them is alive at the time limit. See "Infected" below. |
 
 All numbers live in `MODE_TUNING` and `MODE_XP` (`src/shared/defs/modes.ts`), so the HUD and the server agree. Change them there.
+
+## Infected
+
+Rules from the Call of Duty Wiki's MW3 "Infected" section (MediaWiki API, page `Infected_(gamemode)`), adapted. Data: `src/shared/defs/infected.ts` (`INFECTED`, `INFECTED_XP`, the loadouts). Rules: `src/server/features/modes/infected.ts`. Bots: `infected-bots.ts`.
+
+- **Teams by role.**
+  - Team 0 is the Survivors and team 1 the Infected (`ModeDef.teamsByRules`, `teamNames: ['Survivors', 'Infected']`).
+  - The rules own the teams. Bot and lobby balancing leave them alone, and the rules re-assert a player's team from their role at every spawn.
+  - Late joiners join the Infected once the infection has started (MW3).
+- **Start.**
+  - Everyone starts a Survivor.
+  - After `firstSec` (9 s, MW3's countdown) a random living player becomes the First Infected where they stand.
+  - The pick needs `minPlayers` (2). A lone player waits ("WAITING FOR PLAYERS").
+  - Deaths before the pick respawn as Survivors.
+- **Converting.** After the pick, any Survivor death makes them Infected at once: a kill by an Infected, a fall, leaving the map. The team switch goes out in the roster, and they respawn Infected after the normal 3 s.
+- **Loadouts.** Forced in `beforeSpawn` at priority -60, after progression's gate, the frontend's trim and the economy's check.
+  - Survivors: SPAS-12 and M1911, Scavenger and Steady Aim, no grenades or streaks, double reserve. MW3 gave a shotgun, a pistol and Scavenger.
+  - Infected: the knife alone in hand (`WeaponDef` `knife`: the melee lunge, one hit) and one retrievable tomahawk, Lightweight and Marathon, and a x1.04 speed boost. MW3 gave a tactical knife, a throwing knife, Extreme Conditioning and Lightweight/Juiced.
+  - First Infected: keeps the Survivor guns and gets the tomahawk and the Infected perks. MW3: "uses the current Survivor loadout" with the throwing knife.
+  - While they are the only Infected, the First Infected also wears body armour: half damage, like the Juggernaut suit of MW3's Striker-vs-Jugg variant.
+  - When a second player is infected, the First Infected drops to the knife where they stand.
+- **Last one standing.**
+  - The last Survivor gets "LAST ONE STANDING": an RPK with an extended magazine in place of the pistol, a full magazine, and a radar showing every Infected.
+  - The Infected see the last Survivor in a 3 s radar sweep every 30 s. This is Ghosts' last-survivor sweep; MW3's page lists no last-survivor bonus.
+- **Scoring.**
+  - Kills, headshots and assists score as usual.
+  - Infected: +100 per infection.
+  - Every living Survivor: +50 when another Survivor is infected (MW3's "Survivor" points), and +50 every 30 s alive.
+  - The last Survivor: +100.
+  - At the time limit, each living Survivor gets +200 (OUTLASTED). A lone last Survivor also gets +500 (FINAL STAND).
+  - Team scores carry the live counts `[Survivors, Infected]`.
+- **Winning.**
+  - Nobody left to infect: the Infected win (reason `score`). Everybody is Infected by then, so everybody wins, as in MW3.
+  - Time limit with a Survivor alive: the Survivors win (reason `time`). The rules decide it a tick before core's own check, so the end awards land while the match is still playing.
+  - The time limit is the room's (`room.mode.timeLimitSec`): 10 min by default. MW3 used 5.
+- **Disconnects.**
+  - Every Infected left: a new First Infected is picked after `repickSec` (4 s, "ALL INFECTED LEFT").
+  - Down to one Infected after a leave: that one is the First Infected again, guns back in hand (MW3).
+  - The last Survivor leaving ends the match for the Infected.
+- **Spawns.**
+  - Survivors spawn anywhere safe: all spawn points, ranked by `spawns.ts`.
+  - Infected get the hard rules (never within 12 m of a Survivor or in their sight) and the usual scoring. When there is a choice, they spawn no further than about 28 m from the nearest Survivor.
+- **HUD.**
+  - `modes.infected` (order 53): a role badge, "N SURVIVORS · N INFECTED", the "INFECTION IN 7" countdown, and lines for the First Infected, the last Survivor and the radar sweep.
+  - The score corner (`core.score` wrap) shows the clock and the two counts as bars.
+  - Holding the knife, `core.ammo` shows KNIFE and the lunge key, and `core.status` drops "NO AMMO".
+  - Announcer: "YOU ARE INFECTED", "FIRST INFECTED", "<NAME> IS INFECTED", "LAST ONE STANDING", "ONE SURVIVOR LEFT", "FINAL STAND", "ALL INFECTED LEFT", and "SURVIVOR +50" popups.
+  - The scoreboard and the summary say Survivors / Infected. The summary words the end as "Everyone was infected" or "The survivors outlasted the infection".
+- **Look.** Infected soldiers are tinted a sickly green: their look materials are multiplied by `(0.62, 0.95, 0.42)`. A green "INFECTED" tag floats over the ones you can see within 40 m. Your own knife viewmodel has a green glove.
+- **Bots** (`infected-bots.ts`, through `registerBotGoal('infected')` and `registerBotStyle('infected')`):
+  - Infected hunt the nearest Survivor the team knows about, sprinting, at priority 0.95. The team knows a Survivor's position when any Infected sees them (bots' sight rules), when they fire unsuppressed, and from the last-Survivor sweep. A spot reached with nobody there is forgotten.
+  - With no lead, Infected search the places the team hasn't looked at for longest, nearer ones first.
+  - Infected style: melee-happy rushers. They knife-lunge up close and never back off to "reload" a knife. They lob the tomahawk at a Survivor in sight 6-18 m away: on half the chances, every 5-8 s, with a scatter from their aim error. Out of tomahawks, they pick theirs up when it lies within 20 m.
+  - Survivors spread out before the pick. After it they group at a shared rally point and hold it; the brain's hold behaviour watches the angles. A rally point is a reachable spot with walls around it, near the other Survivors and away from the Infected.
+  - The rally point moves when an Infected gets within 8 m of it, at most every 10 s.
+  - In a fight Survivors kite: they never close in, and they back away from anyone inside 4 m.
+  - Balance from bot-only sims (8 regular bots, 6 maps, 2 seeds each): the Infected win in 40 s to 6 min, about 100 s on average. Humans hold out much longer than bots.
+- **Progression.**
+  - Objective kinds: `infected.infect` (100 XP, INFECTED), `infected.survive` (50, SURVIVOR), `infected.last_alive` (100, LAST ONE STANDING), `infected.outlast` (200, OUTLASTED), `infected.final_stand` (500, FINAL STAND). `infected.first` and `infected.countdown` pay nothing.
+  - Challenges: Patient Zero (infect 10 / 50 / 250 / 1000 Survivors), Last One Standing (survive to the end as the last one 1 / 5 / 25 times), Outbreak Survivor (still a Survivor at the end of 3 / 15 / 50 matches), Contagious (melee kills), plus the generated wins / kills / matches / MVP.
+- **Maps.** Every map with TDM or FFA spawns. The Yard and the MW2 maps list `infected` in `MapDef.modes`; the BO maps take every mode.
+- **Frontend.** The Quick Play playlist `infected` (category `party`), the private lobby's mode list, the core menu's Quick Play entry (`modes.infected`, order 34), and lobby bot fill (`DEFAULT_TARGET_PLAYERS.infected` = 12).
+
 
 **Spawns.** For their first 4 s, team modes use each team's own spawns. After that a spawn is picked from every spawn point on the map:
 - not within 10 m of a living enemy
@@ -27,14 +91,16 @@ On top of that, each mode has its own preference:
 
 ### Playing it
 
-- Main menu: **Quick Play → Domination / Search and Destroy / Headquarters / Kill Confirmed** (menu items `modes.dom|sd|hq|kc`, orders 30–33).
+- Main menu: **Quick Play → Domination / Search and Destroy / Headquarters / Kill Confirmed / Infected** (menu items `modes.dom|sd|hq|kc|infected`, orders 30–34).
 - Rooms: `api.lobby.createRoom({ mode: 'sd', map: 'yard', ... })`, or `navigate('match', { mode: 'dom' })` from the client.
-- The Yard supports all six modes. It has DOM flags, S&D sites A/B (`team: 1` = defended by team 1's spawn side) and six HQ points.
+- The Yard supports all seven modes. It has DOM flags, S&D sites A/B (`team: 1` = defended by team 1's spawn side) and six HQ points.
 
 ## Code map
 
 ```
-src/shared/defs/modes.ts        ModeDefs (dom/sd/hq/kc added), MODE_TUNING, MODE_XP, OBJECTIVE_MODE_IDS
+src/shared/defs/modes.ts        ModeDefs (dom/sd/hq/kc/infected added; teamsByRules, teamNames), MODE_TUNING, MODE_XP,
+                                OBJECTIVE_MODE_IDS, teamNamesFor
+src/shared/defs/infected.ts     Infected tuning (INFECTED, INFECTED_XP), loadouts, InfectedStatePayload
 src/shared/defs/deathcam.ts     per-death killcam: DEATHCAM timing, deathcamWindow, DeathcamPayload,
                                 packClip / unpackClip (quantised, delta-coded clip)
 src/shared/defs/modestate.ts    wire types + FeatureMessages: modes.state, modes.event, modes.killcam, modes.deathcam;
@@ -43,7 +109,8 @@ src/server/features/modes/
   index.ts      Feature: registers rules (setup), state push / killcam / summary (room)
   common.ts     controller registry, award/scoreKill/announce, spawn ranking, objective points
   zone.ts       capture-zone logic shared by DOM flags and the HQ
-  tdm.ts dom.ts sd.ts hq.ts kc.ts   rules (ModeRules + ModeController)
+  tdm.ts dom.ts sd.ts hq.ts kc.ts infected.ts   rules (ModeRules + ModeController)
+  infected-bots.ts  Infected bot goals (hunt / search / rally), per-bot style, team intel
   bots.ts       objective hooks for bots (objectivesFor / bestObjective)
   summary.ts    MVP + XP breakdown (progression adapter, else derived)
   killcam.ts    20 Hz pose history (+ health %, hitscan shots) + final kill clip
@@ -55,6 +122,8 @@ src/client/features/modes/
   text.ts       team-relative announcer wording (pure)
   hud.ts        widgets: modes.waypoints 6, modes.panel 52, modes.progress 62, modes.popups 63,
                 modes.announcer 72, modes.spectate 81
+  infected.ts   Infected HUD (modes.infected 53, modes.infected.tags 7), core.score/ammo/status wraps,
+                green soldiers, knife viewmodel, menu entry
   props.ts      entity renderers: modes.flag, modes.bomb, modes.hq, modes.tag (+ texture recipes
                 modes.white, modes.cloth, modes.bomb)
   sounds.ts     sfx: modes.good / bad / horn / alarm / pickup / beep / boom (synth fallbacks; recordings and radio cues in shared/defs/sfx-recipes.ts: good/bad/horn/alarm are short radio pips, no air horn or klaxon; pickup is a dog-tag clink)
@@ -69,6 +138,12 @@ tests/modes.client.test.ts       announcer wording, summary view model, killcam 
 tests/deathcam.test.ts           per-death killcam server side: victim only, cut to respawn, none for suicide/fall/world,
                                  S&D full clip, streak view, nearby filter; window maths and clip codec
 tests/deathcam.client.test.ts    per-death killcam timeline (beat, play, cut at respawn), timer, aim, card text
+tests/infected.test.ts           Infected rules: pick and countdown, conversion, loadouts, First Infected bonus, last
+                                 Survivor, wins, disconnects, spawns, XP/challenges, listing, quick play and private lobbies
+tests/infected.integration.test.ts  Infected over real sockets: first infected, infection, last survivor, the end
+tests/infected.bots.test.ts      Infected bots: hunting on three maps, the tomahawk lob, bot-only matches keep moving,
+                                 Survivors holding a rally point
+tests/infected.client.test.ts    Infected announcer wording, summary team names and end reasons
 ```
 
 ## Integration notes for other areas
@@ -108,6 +183,7 @@ S&D joins: a bot or human who joins during prep spawns for that round. If the ro
   - `sd.plant`, `sd.defuse`, `sd.explode`, `sd.pickup`, `sd.drop`, `sd.round_start`, `sd.round_end`, `sd.halftime`, `sd.last_alive`
   - `hq.online`, `hq.capture`, `hq.destroy`, `hq.expire`, `hq.move`, `hq.defend`
   - `kc.confirm`, `kc.deny`
+  - `infected.first`, `infected.infect` (player = the infector or null, reason = the victim), `infected.survive`, `infected.last_alive`, `infected.outlast`, `infected.final_stand`, `infected.countdown`
 - Use these events for per-mode challenges.
 - The S&D room events `modes.roundStart { round, attackers, carrier }` and `modes.roundEnd { round, winner, reason }` are declared in `src/server/features/modes/ext.ts`.
 - Per-player tallies are kept in `player.ext.modes`:
@@ -136,6 +212,18 @@ S&D joins: a bot or human who joins during prep spawns for that round. If the ro
 - `tests/modes.test.ts` checks that every authored objective point of the Yard is free standing ground. Add your map id to that loop.
 
 ### Core touch points (minimal)
+
+Infected (outside the modes folders):
+- `src/server/features/bots/hooks.ts`: `registerBotStyle(modeId, fn)` / `botStyleFor(room, bot)` (per-bot style on top of the mode's) and two optional `BotModeStyle` flags, `kite` and `throwAtRange`; `api.ts` re-exports `registerBotStyle`.
+- `src/server/features/bots/brain.ts`: reads `botStyleFor` instead of `botModeStyle`; a melee-happy bot with nothing to shoot goes in instead of backing off to cover; `kite`; `throwAtRange` (the lob, its own cooldown, `pitchBias` on the output pitch during the wind-up). Aim, perception and spawns are untouched.
+- `src/server/features/bots/roster.ts`: no team balancing when `room.mode.teamsByRules`.
+- `src/shared/defs/bots.ts`: `DEFAULT_TARGET_PLAYERS.infected = 12`.
+- `src/shared/frontend/playlists.ts`: the `infected` playlist (category `party`).
+- `src/shared/defs/maps.ts`: `infected` on the Yard and the MW2 maps.
+- `src/shared/defs/progression.ts`: Infected objective aliases, XP, labels; `src/shared/defs/challenges.ts`: `MODE_CHALLENGE_TEMPLATES.infected`.
+- `src/client/hud/widgets.ts`: the scoreboard headers use `teamNamesFor(mode)`.
+
+Earlier modes:
 
 - `src/shared/maps/yard.ts`: added `objectives.sd` and `objectives.hq`.
 - `src/shared/defs/maps.ts`: the Yard's `modes` now lists `dom`, `sd`, `hq` and `kc`.
@@ -175,4 +263,5 @@ Here:
 - **Per-death killcam.** Stand-ins carry the default rifle (remote weapon models are only dressed on live remotes); grenades, launchers and other non-hitscan kills are seen from the killer's eyes without following the projectile; no scope overlay when the killer is scoped (the gun is hidden); streak views use a fixed camera at the streak's position at the kill. Live gunfire and entities in the real match keep playing (sounds included) underneath the replay. Hardcore has no killcam in BO1; there is no hardcore playlist yet, so nothing turns it off.
 - **No bot brains here.** Bots stand still until the bots feature uses the hooks above. A solo human in S&D with an empty enemy team plays rounds that end on time (an empty team cannot be eliminated).
 - **No objective sounds for the bomb carrier on the defender side** (by design, defenders aren't told who carries).
+- **Infected.** No Tactical Insertion, death zones or Juggernaut variants. Remote Infected show no knife in their hands (the weapons feature has no third-person knife model). Bot-only matches lean to the Infected (about 100 s on average with 8 regular bots). Infected bots know where Survivors are only by sight, gunfire and the last-Survivor sweep, then search; a silent human camper can hold out until they reach the spot.
 - **Flaky core test under load.** `tests/playtest.client.test.ts`' lag-compensation control shot is timing sensitive. On a heavily loaded machine (10 parallel agents) it occasionally hits when it should miss. It passes when run alone.

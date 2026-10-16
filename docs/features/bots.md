@@ -18,7 +18,7 @@ Owner: bots. Covers DESIGN.md section 8a (hard requirement): every lobby runs wi
 | `src/server/features/modes/spawns.ts` | spawn scoring (owner: modes) and `recentSpawns`, which bots read to stay off the enemy's spawn |
 | `src/server/features/bots/skill.ts` | settings validation, per-bot variance, skill rating |
 | `src/server/features/bots/loadout.ts` | bot classes picked from the current defs, and bot callsigns |
-| `src/server/features/bots/hooks.ts` | `registerBotGoal`, `registerBotStreakHandler`, `registerBotModeStyle` |
+| `src/server/features/bots/hooks.ts` | `registerBotGoal`, `registerBotStreakHandler`, `registerBotModeStyle`, `registerBotStyle` (per-bot style for modes whose players play different roles: Infected) |
 | `src/client/features/bots/index.ts` | `botsClient` (typed RPC helpers), the `bots.setup` screen with the "Play with Bots" menu item, and the `bots.wait` HUD widget |
 
 ### Lobby rules (roster.ts)
@@ -260,6 +260,8 @@ Nothing in the server adds avoidable delay. Inputs are applied on the next tick,
   - Read `results.ext.bots.practice` (or call `roomHasBots(room)`) to pay nothing for wagers with bots.
   - Wager loadouts forced in `beforeSpawn` apply to bots too.
   - `registerBotModeStyle(id, { conserveAmmo, meleeHappy, rush })` tunes bots for new wager modes.
+  - `registerBotStyle(modeId, (room, bot) => Partial<BotModeStyle> | null)` overrides it per bot (the brain reads `botStyleFor(room, bot)`). Two optional flags: `kite` (in a fight never close in, back away from anyone inside 4 m) and `throwAtRange` (lob the lethal at a target in sight 6-18 m away, on half the chances, every 5-8 s, the arc scattered by `aimErrorDeg`). A melee-happy bot with nothing to shoot goes in instead of backing off to cover. Infected uses all of it (docs/features/modes.md).
+  - Modes with `ModeDef.teamsByRules` (Infected) own their teams: the roster never re-teams or balances bots there.
 - **killstreaks:**
   - By default a bot presses `Buttons.STREAK` once when it earns a streak.
   - For smarter use (aiming the RC-XD, choosing the care package drop spot), set `registerBotStreakHandler((room, bot, id) => handled)`.

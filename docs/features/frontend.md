@@ -6,7 +6,7 @@ Owner: frontend. Lobbies can always run: if not enough humans join, empty slots 
 
 **Main menu** (`menu` screen, replaces the core one). This is a CoD-style left nav:
 - **Multiplayer**
-  - **Quick Play** playlists: TDM, FFA, Domination, S&D, Headquarters, Kill Confirmed. A playlist whose mode isn't registered yet shows "Coming soon". Each row shows how many people are playing.
+  - **Quick Play** playlists: TDM, FFA, Domination, S&D, Headquarters, Kill Confirmed, Infected (category `party`). A playlist whose mode isn't registered yet shows "Coming soon". Each row shows how many people are playing.
   - **Wager Matches** opens the `wager` screen.
   - **Play with Bots** opens a private lobby with bots on.
   - **Private Match**.
