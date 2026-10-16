@@ -57,7 +57,6 @@ export const PERK_TUNING = {
   scavengerMags: 1,
   /** Scavenger Pro: extra mags of reserve at spawn. */
   scavengerProMags: 2,
-  hardenedPenetration: 2,
   /** Hardened Pro: bullet damage to killstreak hardware, and flinch. */
   hardenedProStreakDamage: 1.5,
   hardenedProFlinch: 0.5,
@@ -68,8 +67,9 @@ export const PERK_TUNING = {
   steadyAimProMelee: 0.7,
   sleightReload: 0.5,
   sleightProAds: 0.5,
+  /** Warlord: primary attachment slots in total (base 1). Shared by create-a-class and the spawn trim. */
   warlordAttachments: 2,
-  /** Tactical Mask: flash/stun/gas duration. */
+  /** Tactical Mask: flash/concussion strength on you (their duration scales with it). */
   maskStun: 0.35,
   /** Sprint stamina in seconds (everyone), Marathon multiplier, regain per second, seconds needed to restart. */
   sprintSec: 5,

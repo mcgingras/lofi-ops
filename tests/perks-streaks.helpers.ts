@@ -1,6 +1,7 @@
 /** Shared rig for the perks / killstreaks rule tests: a Yard TDM room driven tick by tick. */
 import perks from '../src/server/features/perks/index';
 import killstreaks from '../src/server/features/killstreaks/index';
+import type { Feature } from '../src/server/feature';
 import { Lobby } from '../src/server/lobby';
 import type { PlayerState } from '../src/server/player';
 import type { Room, RoomOptions } from '../src/server/room';
@@ -18,9 +19,10 @@ export interface Rig {
   close(): void;
 }
 
-export function rig(opts: Partial<RoomOptions> = {}): Rig {
+/** `extra` adds features to perks + killstreaks (e.g. weapons, which reads most perk modifiers). */
+export function rig(opts: Partial<RoomOptions> = {}, extra: Feature[] = []): Rig {
   const store = new Store(':memory:');
-  const lobby = new Lobby({ store, features: [perks, killstreaks], log: () => {}, autoTick: false });
+  const lobby = new Lobby({ store, features: [perks, killstreaks, ...extra], log: () => {}, autoTick: false });
   const room = lobby.createRoom({ mode: 'tdm', map: 'yard', closeWhenEmpty: false, ...opts });
   return {
     room,

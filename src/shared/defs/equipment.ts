@@ -145,7 +145,16 @@ export const NADE_ENTITY = 'weapons.nade';
 declare module '../protocol' {
   interface FeatureMessages {
     /** Your equipment for this life (on spawn and after each throw). */
-    'weapons.equip': { lethal: string | null; lethalN: number; tactical: string | null; tacticalN: number };
+    'weapons.equip': {
+      lethal: string | null;
+      lethalN: number;
+      tactical: string | null;
+      tacticalN: number;
+      /** Hold-breath time multiplier (Scout: 2), from the `holdBreathMultiplier` modifier. */
+      breath?: number;
+      /** Knife cooldown/recovery multiplier (Steady Aim Pro: 0.7), from `meleeSpeedMultiplier`. */
+      melee?: number;
+    };
     /** You were flashed (amount 0..1, seconds). */
     'weapons.flash': { amount: number; dur: number };
     /** You were concussed (amount 0..1, seconds). */

@@ -24,6 +24,7 @@ src/client/features/killstreaks/          models, renderers, textures, sounds, f
                                           valkyrie (launcher, rocket cam, overlay), rocketcam-logic (no DOM),
                                           turret (carry ghost preview, prompts, pickup prompt, tracking laser)
 tests/perks.test.ts, tests/killstreaks.test.ts, tests/perks-streaks.integration.test.ts (+ helpers),
+tests/warlord.integration.test.ts (Warlord / Pro through the real server), tests/modifier-keys.test.ts (every registered key is read),
 tests/tacmap.test.ts, tests/tacmap.integration.test.ts, tests/tacmap.client.test.ts, tests/nuke.test.ts, tests/nuke.client.test.ts,
 tests/care-marker.test.ts, tests/marker-cook.integration.test.ts (Care Package marker), tests/laststand-revive.test.ts,
 tests/valkyrie.test.ts, tests/valkyrie.integration.test.ts (Valkyrie Rockets), tests/deathcam.test.ts (its killcam),
@@ -37,16 +38,16 @@ Sounds: `killstreaks/sounds.ts` holds the synthesized `ks_*` voices; the recorde
 | tier | perk | effect | Pro |
 |---|---|---|---|
 | 1 | Lightweight | speed x1.07 | no fall damage (`damageTaken` 0 for `fall`) |
-| 1 | Flak Jacket | `explosive` damage x0.65 | `fire` damage 0 (napalm ground fire); `grenadeFuseReset` key |
-| 1 | Scavenger | every death drops a `perks_pack`; an enemy with Scavenger walking over it gets a mag of reserve per weapon (separate from the dropped guns of the pickups feature) | spawn with +2 mags; emits `perks.resupply {lethal:1, tactical:1}` |
+| 1 | Flak Jacket | `explosive` damage x0.65 | `fire` damage 0 (napalm ground fire); the fuse reset on thrown-back grenades is a description only (there is no picking grenades up) |
+| 1 | Scavenger | every death drops a `perks_pack`; an enemy with Scavenger walking over it gets a mag of reserve per weapon (separate from the dropped guns of the pickups feature) | spawn with +2 mags; emits `perks.resupply {lethal:1, tactical:1}`, which the weapons feature refills up to the carry cap |
 | 1 | Ghost | `radarVisible` false (unless firing an unsuppressed gun) vs Spy Plane / Blackbird | `streakTargetable` false for helicopters, gunner AI, sentries (dogs and RC-XD still find you) |
 | 1 | Hardline | `streakCostOffset` -1 | owner's first USE on their landed Care Package rerolls it |
-| 2 | Hardened | `penetrationMultiplier` 2 | `killstreakDamageDealt` x1.5, `flinchMultiplier` 0.5 |
-| 2 | Scout | `holdBreathMultiplier` 2 | `swapMultiplier` 0.5 |
-| 2 | Steady Aim | `spreadMultiplier` 0.65 while not ADS | `sprintOutMultiplier` 0.5, `meleeSpeedMultiplier` 0.7 |
+| 2 | Hardened | none: there is no penetration model (`bullets: false` cover passes every bullet at full damage, anything else stops them all) | `killstreakDamageDealt` x1.5, `flinchMultiplier` 0.5 |
+| 2 | Scout | `holdBreathMultiplier` 2 (weapons sends it in `weapons.equip.breath`; the scope's breath lasts twice as long) | `swapMultiplier` 0.5 |
+| 2 | Steady Aim | `spreadMultiplier` 0.65 while not ADS | `sprintOutMultiplier` 0.5, `meleeSpeedMultiplier` 0.7 (knife cooldown and recovery) |
 | 2 | Sleight of Hand | `reloadMultiplier` 0.5 | `adsMultiplier` 0.5 |
-| 2 | Warlord | `attachmentSlots` 2 (mul; base 1) | `lethalCountOffset` +1, `tacticalCountOffset` +1 |
-| 3 | Tactical Mask | `stunDurationMultiplier` 0.35 | enemies you stun (`perks.stunned` event) show on your radar for the stun |
+| 2 | Warlord | `attachmentSlotsOffset` +1 (sum; base 1): two attachments on the primary, read at `beforeSpawn` from the class being spawned | `equipmentCountOffset` +1 for both kinds: 2 lethals, 3 tacticals |
+| 3 | Tactical Mask | `tacticalMultiplier` 0.35 (flash / concussion strength, and so duration) | enemies you stun (`weapons.tactical` event) show on your radar for the stun |
 | 3 | Marathon | sprint stamina x2 | unlimited sprint |
 | 3 | Ninja | `silentFootsteps`; remote footsteps silent on clients | enemy footsteps x1.8 for you; `hearingMultiplier` 1.8 |
 | 3 | Second Chance | a lethal bullet/knife hit (not a headshot) puts you in last stand: 30 hp, pistol, crawl, no regen, 10 s, then the downer gets the kill | 15 s, and a teammate holding USE for 2 s revives you (+50 score), back on the weapon you went down with |
@@ -190,7 +191,7 @@ isCarryingTurret(p)                                // a Sentry Gun / SAM Turret 
 
 ## Integration notes for other areas
 
-- **weapons:** read `room.modifiers.mul('attachmentSlots', p)` (1 normally, 2 with Warlord) when enforcing attachment counts (the perks feature does not trim loadouts); `lethalCountOffset` / `tacticalCountOffset` (sum) for grenade counts; `penetrationMultiplier`, `holdBreathMultiplier`, `meleeSpeedMultiplier`, `flinchMultiplier`, `grenadeFuseReset`. Emit `room.bus.emit('perks.stunned', { victim, attacker, kind, duration })` when a flash/concussion/gas hits (multiply the duration by `stunDurationMultiplier` yourself); listen to `perks.resupply` to refill grenades. Explosive grenades should use `means: 'explosive'` (Flak Jacket) and fire `means: 'fire'`.
+- **weapons:** owns the keys it reads (declared in `src/server/features/weapons/state.ts`), and perks registers them under exactly those names: `attachmentSlotsOffset(p, loadout)` (Warlord +1; the spawn trim reads the class being spawned, since `p.loadout` is still the last life's at `beforeSpawn`), `equipmentCountOffset(p, kind)` (Warlord Pro +1), `tacticalMultiplier` (Tactical Mask), `meleeSpeedMultiplier` (Steady Aim Pro), `holdBreathMultiplier` (Scout). Perks listens to `weapons.tactical {player, victim, amount, duration}` for Tactical Mask Pro, and weapons listens to `perks.resupply` for Scavenger Pro. `tests/modifier-keys.test.ts` fails when a feature registers a key nobody reads. Explosive grenades use `means: 'explosive'` (Flak Jacket) and fire `means: 'fire'`.
 - **progression:** fold `PERK_PRO_CHALLENGES` into `CHALLENGES`. Their metrics (`perks.*`) are counted by the perks feature straight into `profile.challengeProgress[id]` (don't count them again); award XP when they cross `goal`. Listen to `perks.progress` if you want toasts. XP for streak kills / destroying hardware: `death.means === 'killstreak'` and `killstreaks.destroyed`.
 - **frontend:** create-a-class uses `perksOfTier(t)` and `KILLSTREAKS` (3 picks; `sanitizeLoadout` already limits). Show Pro via RPC `perks.pro`. Key bindings: STREAK is `Digit4` (core `KEYMAP`), cycling is a plain `Digit5` listener in `client/features/killstreaks/control.ts`. Core killfeed prints non-bullet weapons upper-cased (`ATTACK_HELICOPTER`); a nicer name map can use `KILLSTREAK_BY_ID.get(weapon)?.name`.
 - **modes:** streaks reset at `matchStart`; everything ends at the `ended`/`lobby` phase. Wager modes that should have no streaks can give loadouts with `killstreaks: []` in `beforeSpawn`.
@@ -220,5 +221,5 @@ isCarryingTurret(p)                                // a Sentry Gun / SAM Turret 
 - Care Packages hold streaks or ammo only (no Death Machine / Grim Reaper weapons). Crates have no collision.
 - Care Package marker: nobody else sees the canister in the thrower's hand (only once thrown); "unreachable roof" is a height rule (highest spawn + 4.5 m), not a reachability test; the canister passes through players (BO1 could kill with it); its smoke doesn't block bot sight or aim assist (`registerSightBlocker`).
 - Ghost Pro's hidden red name tag is not applied (core `core.names` widget); `perks.public.ghostPro` lists the ids for whoever replaces it.
-- No mantle in core, so Marathon Pro's faster mantle is a description only; no penetration in core yet (`penetrationMultiplier` is for the weapons area).
+- No mantle in core, so Marathon Pro's faster mantle is a description only. No penetration model, so Hardened has no base effect, and no picking grenades up, so Flak Jacket Pro's fuse reset is a description only (neither registers a modifier).
 - Dogs steer straight at targets with stuck-hops and hotspot detours (no nav graph); once the bots area has a nav graph they can use it.

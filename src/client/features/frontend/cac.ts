@@ -12,7 +12,7 @@ import { PERKS, PERK_BY_ID } from '../../../shared/defs/perks';
 import { WEAPONS, WEAPON_BY_ID, type WeaponClass } from '../../../shared/defs/weapons';
 import { WAGER_ONLY_WEAPONS } from '../../../shared/defs/wager-weapons';
 import { EQUIPMENT, EQUIPMENT_BY_ID } from '../../../shared/frontend/equipment';
-import { attachmentSlotsFor, canEditClasses, classSlotsFor, itemLock, STAT_LABELS, validateLoadout, weaponStats, type ItemKind, type WeaponStats } from '../../../shared/frontend/loadout-rules';
+import { attachmentSlotsFor, canEditClasses, classSlotsFor, itemLock, STAT_LABELS, toggleAttachment, validateLoadout, weaponStats, type ItemKind, type WeaponStats } from '../../../shared/frontend/loadout-rules';
 import { cloneLoadout, DEFAULT_LOADOUTS, type Loadout, type WeaponLoadout } from '../../../shared/loadout';
 import type { Profile } from '../../../shared/profile';
 import { net } from '../../net';
@@ -256,17 +256,7 @@ registerScreen('create-a-class', (root, params) => {
     const def = WEAPON_BY_ID.get(w.weapon);
     if (!def) return [];
     const max = slot === 'primary' ? attachmentSlotsFor(work.perks) : 1;
-    const toggle = (id: string) =>
-      edit((l) => {
-        const cur = l[slot].attachments;
-        if (cur.includes(id)) l[slot].attachments = cur.filter((a) => a !== id);
-        else {
-          const kind = ATTACHMENT_BY_ID.get(id)?.slot;
-          let next = cur.filter((a) => ATTACHMENT_BY_ID.get(a)?.slot !== kind);
-          if (next.length >= max) next = next.slice(next.length - max + 1);
-          l[slot].attachments = [...next, id];
-        }
-      });
+    const toggle = (id: string) => edit((l) => (l[slot].attachments = toggleAttachment(l[slot].attachments, id, max)));
     const items = [
       item({ label: 'None', sub: 'Clear attachments', pressed: w.attachments.length === 0, onPick: () => edit((l) => (l[slot].attachments = [])) }),
       ...def.attachments.map((id) => {
@@ -280,9 +270,7 @@ registerScreen('create-a-class', (root, params) => {
           weapon: w.weapon,
           onPick: () => toggle(id),
           onHover: () => {
-            const kind = a?.slot;
-            const base = w.attachments.filter((x) => ATTACHMENT_BY_ID.get(x)?.slot !== kind);
-            hover = { ...w, attachments: w.attachments.includes(id) ? w.attachments.filter((x) => x !== id) : [...base.slice(Math.max(0, base.length - max + 1)), id] };
+            hover = { ...w, attachments: toggleAttachment(w.attachments, id, max) };
             renderPreview();
           },
         });

@@ -33,10 +33,22 @@ export interface NadeData {
 
 const eyeOf = (p: PlayerState): Vec3 => ({ x: p.move.x, y: p.move.y + eyeHeight(p.move), z: p.move.z });
 
-/** Tell a player what they're carrying. */
+/** Tell a player what they're carrying (plus the perk timings their client animates with). */
 export function sendEquip(room: Room, p: PlayerState): void {
   const x = wext(p);
-  room.sendFeature(p, 'weapons.equip', { lethal: x.lethal, lethalN: x.lethalN, tactical: x.tactical, tacticalN: x.tacticalN });
+  room.sendFeature(p, 'weapons.equip', {
+    lethal: x.lethal,
+    lethalN: x.lethalN,
+    tactical: x.tactical,
+    tacticalN: x.tacticalN,
+    breath: room.modifiers.mul('holdBreathMultiplier', p),
+    melee: room.modifiers.mul('meleeSpeedMultiplier', p),
+  });
+}
+
+/** How many of a piece of equipment this player carries at most (its count + `equipmentCountOffset`). */
+export function equipmentMax(room: Room, p: PlayerState, equip: EquipmentDef): number {
+  return Math.max(0, equip.count + room.modifiers.sum('equipmentCountOffset', p, equip.kind));
 }
 
 /** Give a player their loadout equipment at spawn. */
@@ -46,12 +58,23 @@ export function equipAtSpawn(room: Room, p: PlayerState): void {
   const t = p.loadout?.tactical ? EQUIPMENT_BY_ID.get(p.loadout.tactical) : undefined;
   x.lethal = l && l.kind === 'lethal' ? l.id : null;
   x.tactical = t && t.kind === 'tactical' ? t.id : null;
-  x.lethalN = l && l.kind === 'lethal' ? Math.max(0, l.count + room.modifiers.sum('equipmentCountOffset', p, 'lethal')) : 0;
-  x.tacticalN = t && t.kind === 'tactical' ? Math.max(0, t.count + room.modifiers.sum('equipmentCountOffset', p, 'tactical')) : 0;
+  x.lethalN = l && l.kind === 'lethal' ? equipmentMax(room, p, l) : 0;
+  x.tacticalN = t && t.kind === 'tactical' ? equipmentMax(room, p, t) : 0;
   x.throwing = null;
   x.shells = null;
   x.flashedUntil = x.stunnedUntil = 0;
   sendEquip(room, p);
+}
+
+/** Refill grenades (Scavenger Pro's `perks.resupply`), never past the carry cap. */
+export function refillEquipment(room: Room, p: PlayerState, lethal: number, tactical: number): void {
+  const x = wext(p);
+  const l = x.lethal ? EQUIPMENT_BY_ID.get(x.lethal) : undefined;
+  const t = x.tactical ? EQUIPMENT_BY_ID.get(x.tactical) : undefined;
+  const before = x.lethalN + x.tacticalN;
+  if (l && lethal > 0) x.lethalN = Math.max(x.lethalN, Math.min(equipmentMax(room, p, l), x.lethalN + lethal));
+  if (t && tactical > 0) x.tacticalN = Math.max(x.tacticalN, Math.min(equipmentMax(room, p, t), x.tacticalN + tactical));
+  if (x.lethalN + x.tacticalN !== before) sendEquip(room, p);
 }
 
 /**
@@ -242,7 +265,7 @@ export function explode(room: Room, at: Vec3, equip: EquipmentDef, ownerId: stri
       x.stunAmount = amount;
       room.sendFeature(q, 'weapons.stun', { amount, dur });
     }
-    room.bus.emit('weapons.tactical', { player: owner, victim: q, equipment: equip.id, amount });
+    room.bus.emit('weapons.tactical', { player: owner, victim: q, equipment: equip.id, amount, duration: dur });
   }
 }
 

@@ -10,11 +10,11 @@
  *   or their `unlock` rule is met (level / prestige / challenge complete). Priced camos must be
  *   owned (bought in the store).
  */
-import { ATTACHMENT_BY_ID, effectiveWeapon, type AttachmentDef } from '../defs/attachments';
+import { ATTACHMENT_BY_ID, BASE_ATTACHMENT_SLOTS, effectiveWeapon, type AttachmentDef } from '../defs/attachments';
 import { CAMO_BY_ID, type CamoDef } from '../defs/camos';
 import { CHALLENGES } from '../defs/challenges';
 import { KILLSTREAK_BY_ID, type KillstreakDef } from '../defs/killstreaks';
-import { PERK_BY_ID, type PerkDef } from '../defs/perks';
+import { PERK_BY_ID, PERK_TUNING, type PerkDef } from '../defs/perks';
 import { attachmentKillsFor } from '../defs/progression';
 import { canUse, gateReason, keyOf, LOCK_TEXT, owns, storeItem, type ProfileLike } from '../defs/store';
 import { hasCreateAClass, usableClassCount, type UnlockProfile as ClassProfile } from '../defs/unlocks';
@@ -141,15 +141,32 @@ function requirementLock(p: UnlockProfile, kind: ItemKind, id: string, weapon: s
   }
 }
 
-/** Extra primary attachment slots from perks (Warlord). Perk defs may carry `attachmentSlots`. */
+/**
+ * Primary attachment slots for a perk list: 1, or `PERK_TUNING.warlordAttachments` (2) with
+ * Warlord. Perk defs may carry `attachmentSlots` (extra slots). The server's spawn trim gets the same
+ * number from the `attachmentSlotsOffset` modifier the perks feature registers.
+ */
 export function attachmentSlotsFor(perks: readonly string[], cat: Catalog = CATALOG): number {
-  let n = 1;
+  let n = BASE_ATTACHMENT_SLOTS;
   for (const id of perks) {
     const d = cat.perks.get(id) as (PerkDef & { attachmentSlots?: number }) | undefined;
     if (!d) continue;
-    n += typeof d.attachmentSlots === 'number' ? d.attachmentSlots : id === 'warlord' ? 1 : 0;
+    n += typeof d.attachmentSlots === 'number' ? d.attachmentSlots : id === 'warlord' ? PERK_TUNING.warlordAttachments - BASE_ATTACHMENT_SLOTS : 0;
   }
-  return Math.max(1, Math.min(2, n));
+  return Math.max(BASE_ATTACHMENT_SLOTS, Math.min(PERK_TUNING.warlordAttachments, n));
+}
+
+/**
+ * Create-a-class attachment pick (pure): clicking an equipped attachment takes it off; a new one
+ * replaces any of the same attachment slot (optic, magazine...), and when the weapon is already
+ * full (`max`: 1, or 2 with Warlord) the oldest pick makes room. Never clears the others.
+ */
+export function toggleAttachment(current: readonly string[], id: string, max: number, attachments: ReadonlyMap<string, AttachmentDef> = ATTACHMENT_BY_ID): string[] {
+  if (current.includes(id)) return current.filter((a) => a !== id);
+  const kind = attachments.get(id)?.slot;
+  const rest = current.filter((a) => attachments.get(a)?.slot !== kind);
+  const room = Math.max(1, Math.floor(max)) - 1;
+  return [...rest.slice(Math.max(0, rest.length - room)), id];
 }
 
 /** Killstreak ids sorted by kills needed (then id), unknown ids dropped. */

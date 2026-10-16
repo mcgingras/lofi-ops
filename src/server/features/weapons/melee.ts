@@ -1,7 +1,8 @@
 /**
  * The knife (melee on V/E): BO1 lunge. Picks the nearest enemy inside a cone in front of the
  * player within lunge range and line of sight, nudges the attacker towards them and kills in one
- * hit. Lowers the gun for the recovery time (core refuses to fire while "switching").
+ * hit. Lowers the gun for the recovery time (core refuses to fire while "switching"). Cooldown and
+ * recovery scale with the `meleeSpeedMultiplier` modifier (Steady Aim Pro).
  */
 import { PLAYER } from '../../../shared/constants';
 import { MELEE } from '../../../shared/defs/equipment';
@@ -46,10 +47,11 @@ export function melee(room: Room, p: PlayerState): PlayerState | null {
   if (!p.alive || room.phase !== 'playing') return null;
   const x = wext(p);
   if (room.time < x.meleeReady || x.throwing) return null;
-  x.meleeReady = room.time + MELEE.cooldownSec;
+  const speed = room.modifiers.mul('meleeSpeedMultiplier', p); // Steady Aim Pro
+  x.meleeReady = room.time + MELEE.cooldownSec * speed;
   p.reloadEnd = 0;
   x.shells = null;
-  p.swapEnd = Math.max(p.swapEnd, room.time + MELEE.recoverySec);
+  p.swapEnd = Math.max(p.swapEnd, room.time + MELEE.recoverySec * speed);
   const t = meleeTarget(room, p);
   if (t && t.distance > MELEE.range) {
     // Lunge: a short velocity impulse towards the victim (the server owns movement; the client corrects).

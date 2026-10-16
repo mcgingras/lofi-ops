@@ -186,11 +186,10 @@ describe('bots and walls: real cover spots', () => {
 // ---------------------------------------------------------------------------------------------
 
 describe('bots and walls: penetration', () => {
-  it('no weapon gets a bullet through bullet-stopping cover, even thin glass and with Hardened; thin planks (bullets: false) let them through', () => {
+  it('no weapon gets a bullet through bullet-stopping cover, even thin glass (Hardened has no penetration either); thin planks (bullets: false) let them through', () => {
     const r = room(coverMap());
     const target = addScripted(r, 1, { x: 0, y: 0, z: 0 }, still());
     const shooter = addScripted(r, 0, { x: 0, y: 0, z: 6 }, still());
-    r.modifiers.add('penetrationMultiplier', (p) => (p === shooter ? 2 : undefined), 'test.hardened');
     // Every shot straight at the chest: only the cover decides.
     r.modifiers.add('spreadMultiplier', (p) => (p === shooter ? 0 : undefined), 'test.nospread');
     r.bus.on('beforeDamage', (e) => {

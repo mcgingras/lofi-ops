@@ -24,6 +24,9 @@ export const equipState = {
   lethalN: 0,
   tactical: null as string | null,
   tacticalN: 0,
+  /** Perk timing multipliers from the server (Scout hold breath, Steady Aim Pro knife). */
+  breath: 1,
+  melee: 1,
   /** Local-time flash (start, duration, strength) and concussion. */
   flash: { at: -99, dur: 0, amount: 0 },
   stun: { at: -99, dur: 0, amount: 0 },
@@ -31,7 +34,7 @@ export const equipState = {
 };
 
 // Equipment arrives at spawn, possibly before the match hook starts (map still loading).
-onFeature('weapons.equip', (d) => Object.assign(equipState, d));
+onFeature('weapons.equip', (d) => Object.assign(equipState, { breath: 1, melee: 1 }, d));
 
 // ---------------------------------------------------------------------------------------------
 // Projectiles
@@ -285,8 +288,8 @@ registerMatchHook('weapons.equipment', {
     const held = { melee: c.isHeld('melee'), lethal: c.isHeld('lethal'), tactical: c.isHeld('tactical') };
     const ok = m.alive && m.phase === 'playing' && c.locked;
     if (ok && held.melee && !prevHeld.melee && m.time >= meleeReadyAt && m.time >= throwBusyUntil) {
-      meleeReadyAt = m.time + MELEE.cooldownSec;
-      m.viewmodel.action('melee', MELEE.recoverySec);
+      meleeReadyAt = m.time + MELEE.cooldownSec * equipState.melee;
+      m.viewmodel.action('melee', MELEE.recoverySec * equipState.melee);
       sfx.play('weapons.knife', { volume: 0.7 });
     }
     // Lethal / tactical: raise on the press and hold it up (a held viewmodel action) until release.

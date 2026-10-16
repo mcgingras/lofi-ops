@@ -146,6 +146,11 @@ export class ModifierRegistry {
       );
   }
 
+  /** Every registered modifier as `{ key, id }` (tests check each key has a reader). */
+  registered(): { key: ModifierKey; id: string }[] {
+    return [...this.map].flatMap(([key, list]) => list.map((e) => ({ key: key as ModifierKey, id: e.id })));
+  }
+
   clear(): void {
     this.map.clear();
   }

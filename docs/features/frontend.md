@@ -40,7 +40,7 @@ If a screen owned by another area (`barracks`, `store`, `wager`) isn't registere
 
 **Create a Class** (`create-a-class` screen):
 - Classes: progression's `usableClassCount` (the 3 default classes plus one slot each at levels 4, 10, 20, 30, 40 and prestige 2, 4, 6, 8, 10), the same count the spawn honours. Editing needs Create-a-Class (level 4); before that the screen is read-only and `frontend.saveLoadout` returns `locked`. You can add new classes and rename them, and **Equip** one for the next spawn (`frontend.selectClass` refuses classes the spawn would not use).
-- Primary and attachments. You get one attachment, or two with Warlord or any perk def with `attachmentSlots`. Only one attachment per attachment slot type.
+- Primary and attachments. You get one attachment, or two with Warlord or any perk def with `attachmentSlots`. Only one attachment per attachment slot type. Picking (`toggleAttachment` in `shared/frontend/loadout-rules.ts`): clicking an equipped attachment takes off only that one, a pick of the same slot type swaps it, and on a full weapon the oldest pick makes room. Taking Warlord off keeps the first attachment. The spawn honours the same count (the weapons feature's trim reads Warlord through `attachmentSlotsOffset`).
 - Camo per weapon (economy's `CAMOS`), secondary with one attachment, lethal, tactical, one perk per tier, and three killstreaks sorted by kill count.
 - Locked items are greyed out and show what unlocks them ("Level 12", "30 kills with FAMAS (4/30), then 1,000 CP in the Store", "Store: 500 CP"...). Weapons, attachments and camos the store sells must be bought (economy's `canUse`), because the economy's spawn check would otherwise swap them out.
 - Live 3D turntable of the weapon. It uses the real viewmodel builder, attachments and camo, look materials, and a low-res render upscaled with nearest filtering. Drag it to spin.
@@ -183,6 +183,7 @@ The client joins a lobby by getting a ticket and then calling `navigate('match',
   - bot settings validation and custom skill clamping
   - limits and playlists
   - loadout unlocks and validation, with an injected catalog (Warlord, tiers, locked items, killstreak order) and stat bars
+  - the attachment picker (`toggleAttachment`) and the create-a-class flow: Warlord before or after the attachments keeps two, dropping it keeps the first
 - `tests/frontend-store.test.ts`, on the store browsing model with the real catalog:
   - every sold gun appears once, under its class group, in BO1 group order, sorted by unlock level
   - every attachment appears under exactly the gun it is sold for and nowhere else, in the def's order

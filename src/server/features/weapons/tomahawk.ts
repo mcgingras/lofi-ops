@@ -13,7 +13,7 @@ import type { Vec3 } from '../../../shared/math';
 import type { Entity } from '../../entities';
 import type { PlayerState } from '../../player';
 import type { Room } from '../../room';
-import { playerOnPath, sendEquip } from './equipment';
+import { equipmentMax, playerOnPath, sendEquip } from './equipment';
 import { stepBody, type Body } from './projectile';
 import { wext } from './state';
 
@@ -46,7 +46,7 @@ export function dropTomahawk(room: Room, owner: PlayerState | null, at: Vec3): E
 /** How many tomahawks a player may carry (loadout count plus Scavenger-style offsets). */
 function carryMax(room: Room, p: PlayerState): number {
   const def = EQUIPMENT_BY_ID.get('tomahawk');
-  return Math.max(0, (def?.count ?? 1) + room.modifiers.sum('equipmentCountOffset', p, 'lethal'));
+  return def ? equipmentMax(room, p, def) : 1;
 }
 
 /** Can this player take a tomahawk back right now? */

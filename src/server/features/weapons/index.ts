@@ -2,8 +2,10 @@
  * Server side of the 'weapons' feature area. See docs/features/weapons.md.
  *
  *   setup: the underbarrel grenade launcher behaviour (weapon id `gl`).
- *   room:  attachment count (1 + `attachmentSlotsOffset`, Warlord) at `beforeSpawn`; equipment and
- *          the GL slot at `spawn`; knife on the MELEE edge; lethal / tactical raised on the press
+ *   room:  primary attachment count (1 + `attachmentSlotsOffset(p, loadout)`, Warlord) at
+ *          `beforeSpawn`; equipment (count + `equipmentCountOffset`, Warlord Pro) and the GL slot
+ *          at `spawn`; Scavenger Pro refills (`perks.resupply`); knife on the MELEE edge (timing x
+ *          `meleeSpeedMultiplier`); lethal / tactical raised on the press
  *          and thrown on release (frags cook while held); grenades, tomahawks (retrievable),
  *          and shell-by-shell reloads every tick; concussion slows movement and ADS.
  *
@@ -16,8 +18,9 @@ import { WEAPON_BY_ID } from '../../../shared/defs/weapons';
 import { Buttons } from '../../../shared/input';
 import { registerWeaponBehavior, type WeaponBehavior } from '../../combat';
 import type { Feature } from '../../feature';
+import type { Loadout } from '../../../shared/loadout';
 import { makeWeapon } from '../../player';
-import { dropCooked, equipAtSpawn, launchGrenade, startThrow, stunnedAmount, updateNades, updateThrow } from './equipment';
+import { dropCooked, equipAtSpawn, launchGrenade, refillEquipment, startThrow, stunnedAmount, updateNades, updateThrow } from './equipment';
 import { melee } from './melee';
 import { onReload, updateShells } from './reload';
 import { updateTomahawks } from './tomahawk';
@@ -27,6 +30,15 @@ export { melee, meleeTarget } from './melee';
 export { startThrow, flashedAmount, stunnedAmount, explode, spawnNade } from './equipment';
 export { canRetrieveTomahawk, dropTomahawk, spawnTomahawk } from './tomahawk';
 export type { WeaponsExt } from './state';
+
+/** In place: the primary keeps at most `primarySlots` attachments (in the order picked), the secondary one. */
+export function trimAttachments(loadout: Loadout, primarySlots: number): void {
+  for (const slot of ['primary', 'secondary'] as const) {
+    const w = loadout[slot];
+    const def = WEAPON_BY_ID.get(w?.weapon ?? '');
+    if (w && def) w.attachments = validAttachments(def, w.attachments, slot === 'primary' ? primarySlots : BASE_ATTACHMENT_SLOTS);
+  }
+}
 
 const GL_BEHAVIOR: WeaponBehavior = {
   fire(room, player, _weapon, shot) {
@@ -42,16 +54,14 @@ const feature: Feature = {
   room(room) {
     // Idempotent: also here so rooms built without the app (unit tests) get the launcher.
     registerWeaponBehavior('gl', GL_BEHAVIOR);
-    // BO1: one attachment per weapon; Warlord-style perks add slots through the modifier.
+    // BO1: one attachment per weapon; Warlord (perks) adds a primary slot through the modifier. It
+    // reads the loadout being spawned: `player.loadout` is still the previous life's here, and a
+    // class change mid-match must use the new class's perks. Low priority: after progression's
+    // unlock gate (100), which may swap the class or strip a locked Warlord.
     room.bus.on(
       'beforeSpawn',
       (ev) => {
-        const max = BASE_ATTACHMENT_SLOTS + Math.max(0, Math.round(room.modifiers.sum('attachmentSlotsOffset', ev.player)));
-        for (const slot of ['primary', 'secondary'] as const) {
-          const w = ev.loadout[slot];
-          const def = WEAPON_BY_ID.get(w?.weapon ?? '');
-          if (w && def) w.attachments = validAttachments(def, w.attachments, max);
-        }
+        trimAttachments(ev.loadout, BASE_ATTACHMENT_SLOTS + Math.max(0, Math.round(room.modifiers.sum('attachmentSlotsOffset', ev.player, ev.loadout))));
       },
       { priority: -10 },
     );
@@ -71,6 +81,10 @@ const feature: Feature = {
     });
 
     room.bus.on('reload', ({ player, empty }) => onReload(room, player, empty));
+    // Scavenger Pro: grenades back from a resupply pack, up to the carry cap.
+    room.bus.on('perks.resupply', ({ player, lethal, tactical }) => {
+      if (player.alive) refillEquipment(room, player, lethal, tactical);
+    });
 
     room.bus.on('death', ({ victim }) => {
       dropCooked(room, victim);

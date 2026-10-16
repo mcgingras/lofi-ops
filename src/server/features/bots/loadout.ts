@@ -5,6 +5,7 @@
  * like everyone else.
  */
 import { ATTACHMENT_BY_ID } from '../../../shared/defs/attachments';
+import { attachmentSlotsFor } from '../../../shared/frontend/loadout-rules';
 import { KILLSTREAKS } from '../../../shared/defs/killstreaks';
 import { PERKS } from '../../../shared/defs/perks';
 import { WEAPONS, type WeaponClass, type WeaponDef } from '../../../shared/defs/weapons';
@@ -36,13 +37,15 @@ function weighted<T>(items: T[], weight: (t: T) => number, rnd: () => number): T
   return items.at(-1);
 }
 
-function pickAttachments(def: WeaponDef, rnd: () => number): string[] {
+/** One attachment, or two with Warlord (`slots` 2), like a player's class (the spawn trims to the same). */
+function pickAttachments(def: WeaponDef, rnd: () => number, slots: number): string[] {
   const options = def.attachments.filter((a) => ATTACHMENT_BY_ID.has(a));
   if (!options.length || rnd() < 0.35) return [];
   const first = options[Math.floor(rnd() * options.length)]!;
   const slot = ATTACHMENT_BY_ID.get(first)!.slot;
   const rest = options.filter((a) => a !== first && ATTACHMENT_BY_ID.get(a)!.slot !== slot);
-  return rest.length && rnd() < 0.4 ? [first, rest[Math.floor(rnd() * rest.length)]!] : [first];
+  const second = rest.length && rnd() < 0.4 ? rest[Math.floor(rnd() * rest.length)]! : null;
+  return second && slots > 1 ? [first, second] : [first];
 }
 
 /** A random but sensible class for a bot of overall skill `rating` (0..1). */
@@ -71,7 +74,7 @@ export function chooseBotLoadout(rating: number, rnd: () => number = Math.random
   const tacticals = DEFAULT_LOADOUTS.map((l) => l.tactical).filter((x): x is string => !!x);
   return {
     name: 'Bot',
-    primary: primary ? { weapon: primary.id, attachments: pickAttachments(primary, rnd), camo: 'none' } : { ...base.primary },
+    primary: primary ? { weapon: primary.id, attachments: pickAttachments(primary, rnd, attachmentSlotsFor(perks)), camo: 'none' } : { ...base.primary },
     secondary: secondary ? { weapon: secondary.id, attachments: [], camo: 'none' } : { ...base.secondary },
     perks,
     killstreaks: chosen,

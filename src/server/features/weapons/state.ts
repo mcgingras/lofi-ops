@@ -3,6 +3,7 @@
  * custom room events. Types only plus a tiny accessor.
  */
 import type { EquipmentDef } from '../../../shared/defs/equipment';
+import type { Loadout } from '../../../shared/loadout';
 import type { PlayerState } from '../../player';
 
 export interface ThrowState {
@@ -37,17 +38,30 @@ declare module '../../player' {
   }
 }
 
+/**
+ * Modifier keys the weapons feature reads (other features, mostly perks, register them). One name
+ * per contract: a key registered under any other name is never read (tests/modifier-keys.test.ts).
+ */
 declare module '../../modifiers' {
   interface ModifierMap {
     /**
-     * Extra attachment slots on top of BO1's one (Warlord: +1). Sum. Read at spawn by the
-     * weapons feature, which trims each weapon's attachments to 1 + this.
+     * Extra PRIMARY attachment slots on top of BO1's one (Warlord: +1). Sum. Read at `beforeSpawn`
+     * with the loadout being spawned (`p.loadout` is still the previous life's, so look at
+     * `loadout.perks`, not `p`); the primary is trimmed to `BASE_ATTACHMENT_SLOTS` + this, the
+     * secondary always to one.
      */
-    attachmentSlotsOffset: (p: PlayerState) => number | undefined;
-    /** Flashbang/concussion strength on this victim (Tactical Mask: e.g. 0.3). Product. */
+    attachmentSlotsOffset: (p: PlayerState, loadout: Loadout) => number | undefined;
+    /**
+     * Strength of a flashbang/concussion on this victim (Tactical Mask: 0.35). Product. The effect's
+     * duration scales with its strength.
+     */
     tacticalMultiplier: (victim: PlayerState) => number | undefined;
-    /** Extra lethal/tactical grenades at spawn (Scavenger-like perks). Sum. */
+    /** Extra lethal/tactical grenades at spawn and the carry cap for refills (Warlord Pro: +1 each). Sum. */
     equipmentCountOffset: (p: PlayerState, kind: 'lethal' | 'tactical') => number | undefined;
+    /** Knife cooldown and recovery time (Steady Aim Pro: 0.7). Product. */
+    meleeSpeedMultiplier: (p: PlayerState) => number | undefined;
+    /** Scoped hold-breath time (Scout: 2). Product. Sent to the client in `weapons.equip.breath`. */
+    holdBreathMultiplier: (p: PlayerState) => number | undefined;
   }
 }
 
@@ -57,8 +71,8 @@ declare module '../../../shared/events' {
     'weapons.thrown': { player: P; equipment: string };
     /** Someone picked thrown equipment back up (a tomahawk). */
     'weapons.retrieved': { player: P; equipment: string };
-    /** A tactical hit someone (amount 0..1). */
-    'weapons.tactical': { player: P | null; victim: P; equipment: string; amount: number };
+    /** A tactical hit someone (amount 0..1, effect lasts `duration` seconds). */
+    'weapons.tactical': { player: P | null; victim: P; equipment: string; amount: number; duration: number };
     /** A knife swing (victim null on a miss). */
     'weapons.melee': { player: P; victim: P | null };
     /**

@@ -12,6 +12,7 @@ import { HUD_COLORS as C, rect, txt, unit } from '../../hud/draw';
 import { registerHudWidget, registerMatchHook, unregisterHudWidget } from '../../registry';
 import { settings } from '../../settings';
 import { currentMatch } from '../../state';
+import { equipState } from './equipment';
 
 const DEG = Math.PI / 180;
 
@@ -112,7 +113,7 @@ registerMatchHook('weapons.scope', {
     // Controller: D-pad down cycles the zoom while scoped (the match leaves the press to us then).
     if (scoped && def?.zoomLevels.length && m.controls.consume('equipment')) cycleZoom();
     scopeState.scoped = scoped;
-    const max = def?.breathSec ?? 4;
+    const max = (def?.breathSec ?? 4) * equipState.breath; // Scout: x2
     scopeState.breathMax = max;
 
     // Variable zoom.

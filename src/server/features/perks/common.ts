@@ -2,20 +2,23 @@
  * Perks: per-player state, Pro checks, the extra modifier keys other areas read, and the perks
  * events (owner: perks-streaks).
  *
- * Extra modifier keys (read them with `room.modifiers.mul/sum/any`, default = no perk):
- *   attachmentSlots      (p) => number     mul   primary attachment slots (Warlord: 2; base 1). Weapons reads it.
- *   lethalCountOffset    (p) => number     sum   extra lethals (Warlord Pro: +1). Weapons reads it.
- *   tacticalCountOffset  (p) => number     sum   extra tacticals (Warlord Pro: +1).
- *   penetrationMultiplier(p) => number     mul   bullet penetration (Hardened: 2).
- *   flinchMultiplier     (p) => number     mul   view flinch when shot (Hardened Pro: 0.5).
- *   holdBreathMultiplier (p) => number     mul   scoped hold-breath time (Scout: 2).
- *   meleeSpeedMultiplier (p) => number     mul   knife time (Steady Aim Pro: 0.7).
- *   stunDurationMultiplier(p) => number    mul   flash/concussion/gas duration (Tactical Mask: 0.35).
- *   grenadeFuseReset     (p) => boolean    any   thrown-back grenades get a fresh fuse (Flak Jacket Pro).
- *   silentFootsteps      (p) => boolean    any   no footstep sounds (Ninja). Bots' hearing should read it.
- *   hearingMultiplier    (p) => number     mul   how far this player hears footsteps (Ninja Pro: 1.8).
- *   streakTargetable     (target, kind) => boolean   any   false = killstreak AI of `kind` ignores target (Ghost Pro).
- *   killstreakDamageDealt(attacker, kind) => number   mul   bullet damage to killstreak hardware (Hardened Pro: 1.5).
+ * Modifier keys. Each key has ONE name, declared by the feature that reads it (a key registered
+ * under any other name is silently never read; tests/modifier-keys.test.ts fails on that):
+ *   weapons (src/server/features/weapons/state.ts) reads, perks registers:
+ *     attachmentSlotsOffset (p, loadout) sum  extra primary slots (Warlord: +1), on the loadout being spawned
+ *     equipmentCountOffset  (p, kind)    sum  extra lethals / tacticals (Warlord Pro: +1 each)
+ *     tacticalMultiplier    (victim)     mul  flash/concussion strength and duration (Tactical Mask: 0.35)
+ *     meleeSpeedMultiplier  (p)          mul  knife cooldown / recovery (Steady Aim Pro: 0.7)
+ *     holdBreathMultiplier  (p)          mul  scoped hold-breath time (Scout: 2), sent to the client
+ *   declared here, read by bots / killstreaks:
+ *     flinchMultiplier     (p) => number     mul   view flinch when shot (Hardened Pro: 0.5).
+ *     silentFootsteps      (p) => boolean    any   no footstep sounds (Ninja). Bots' hearing reads it.
+ *     hearingMultiplier    (p) => number     mul   how far this player hears footsteps (Ninja Pro: 1.8).
+ *     streakTargetable     (target, kind) => boolean   any   false = killstreak AI of `kind` ignores target (Ghost Pro).
+ *     killstreakDamageDealt(attacker, kind) => number   mul   bullet damage to killstreak hardware (Hardened Pro: 1.5).
+ * Not registered, because nothing in the game could read them: Hardened's bullet penetration (no
+ * penetration model: `bullets: false` cover already passes every bullet at full damage) and Flak
+ * Jacket Pro's fuse reset (no picking grenades up to throw back).
  */
 import type { Team } from '../../../shared/constants';
 import { PERK_BY_ID, PERK_PRO_CHALLENGES, proChallengeFor } from '../../../shared/defs/perks';
@@ -58,15 +61,7 @@ declare module '../../player' {
 
 declare module '../../modifiers' {
   interface ModifierMap {
-    attachmentSlots: (p: PlayerState) => number | undefined;
-    lethalCountOffset: (p: PlayerState) => number | undefined;
-    tacticalCountOffset: (p: PlayerState) => number | undefined;
-    penetrationMultiplier: (p: PlayerState) => number | undefined;
     flinchMultiplier: (p: PlayerState) => number | undefined;
-    holdBreathMultiplier: (p: PlayerState) => number | undefined;
-    meleeSpeedMultiplier: (p: PlayerState) => number | undefined;
-    stunDurationMultiplier: (p: PlayerState) => number | undefined;
-    grenadeFuseReset: (p: PlayerState) => boolean | undefined;
     silentFootsteps: (p: PlayerState) => boolean | undefined;
     hearingMultiplier: (p: PlayerState) => number | undefined;
     streakTargetable: (target: PlayerState, kind: string) => boolean | undefined;
@@ -76,8 +71,6 @@ declare module '../../modifiers' {
 
 declare module '../../../shared/events' {
   interface RoomEvents<P> {
-    /** Emit from tactical grenades (weapons area): `victim` was flashed/stunned/gassed by `attacker`. */
-    'perks.stunned': { victim: P; attacker: P | null; kind: 'flash' | 'concussion' | 'gas' | (string & {}); duration: number };
     /** A Scavenger pack was picked up: refill this many lethals/tacticals (Scavenger Pro). Weapons listens. */
     'perks.resupply': { player: P; lethal: number; tactical: number };
     /** Second Chance: `player` went down into last stand. */
@@ -91,7 +84,7 @@ declare module '../../../shared/events' {
 export const perksOf = (p: PlayerState): PerksExt =>
   (p.ext.perks ??= { sprintLeft: 5, exhausted: false, lastSprintAt: -999, lastReloadAt: -999, marathonM: 0, lastStand: null, stunnedBy: null, stunnedUntil: 0 });
 
-/** Has this perk equipped this life. */
+/** Has this perk equipped this life. (At `beforeSpawn` this is still the previous life: read the event's loadout.) */
 export const hasPerk = (p: PlayerState, id: string): boolean => !!p.loadout?.perks.includes(id);
 
 /** The profile has unlocked the Pro version (challenge complete, or unlocked outright). */

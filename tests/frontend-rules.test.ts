@@ -3,9 +3,9 @@ import { BOT_SKILL_RANGES, DEFAULT_LOBBY_BOTS, type LobbyBotSettings } from '../
 import type { WeaponDef } from '../src/shared/defs/weapons';
 import { WEAPON_BY_ID } from '../src/shared/defs/weapons';
 import { botsToFill, clampLimits, CODE_ALPHABET, defaultBotSettings, lobbyStatusText, makeLobbyCode, normalizeCode, RANDOM_MAP, sanitizeBotSettings, scoreLimitOptions, SKILL_KEYS, tallyVote, timeLimitOptions, voteOptions } from '../src/shared/frontend/lobby';
-import { attachmentSlotsFor, canEditClasses, CATALOG, classSlotsFor, itemLock, sortKillstreaks, validateLoadout, weaponStats, type Catalog } from '../src/shared/frontend/loadout-rules';
+import { attachmentSlotsFor, canEditClasses, CATALOG, classSlotsFor, itemLock, sortKillstreaks, toggleAttachment, validateLoadout, weaponStats, type Catalog } from '../src/shared/frontend/loadout-rules';
 import { PLAYLISTS, playlistMode } from '../src/shared/frontend/playlists';
-import { DEFAULT_LOADOUTS } from '../src/shared/loadout';
+import { DEFAULT_LOADOUTS, type Loadout } from '../src/shared/loadout';
 import { newProfile } from '../src/shared/profile';
 
 /** Deterministic rand from a list. */
@@ -229,6 +229,52 @@ describe('create-a-class validation', () => {
     expect(twoOptics.loadout.primary.attachments).toEqual(['reddot']);
     expect(attachmentSlotsFor(['warlord'], testCatalog)).toBe(2);
     expect(attachmentSlotsFor(['lightweight'], testCatalog)).toBe(1);
+  });
+
+  it('attachment picker: toggles one pick, replaces the same slot, makes room by dropping the oldest', () => {
+    const atts = testCatalog.attachments;
+    const t = (cur: string[], id: string, max: number) => toggleAttachment(cur, id, max, atts);
+    // With Warlord (2 slots).
+    expect(t([], 'reddot', 2)).toEqual(['reddot']);
+    expect(t(['reddot'], 'extmag', 2)).toEqual(['reddot', 'extmag']);
+    expect(t(['reddot', 'extmag'], 'reddot', 2)).toEqual(['extmag']); // clicking one takes off only that one
+    expect(t(['reddot', 'extmag'], 'extmag', 2)).toEqual(['reddot']);
+    expect(t(['reddot', 'extmag'], 'acog', 2)).toEqual(['extmag', 'acog']); // same slot: the optic is swapped
+    expect(t(['reddot', 'extmag'], 'suppressor', 2)).toEqual(['extmag', 'suppressor']); // full: oldest out
+    // Without Warlord (1 slot): a new pick replaces the old one.
+    expect(t(['reddot'], 'extmag', 1)).toEqual(['extmag']);
+    expect(t(['reddot'], 'acog', 1)).toEqual(['acog']);
+    expect(t(['reddot'], 'reddot', 1)).toEqual([]);
+    expect(t([], 'reddot', 0)).toEqual(['reddot']);
+    // The real catalog has the same slots.
+    expect(toggleAttachment(['reddot'], 'extmag', attachmentSlotsFor(['warlord']))).toEqual(['reddot', 'extmag']);
+  });
+
+  it('create-a-class flow: Warlord before or after the attachments keeps two; dropping Warlord keeps the first', () => {
+    const edit = (l: Loadout, fn: (l: Loadout) => void) => {
+      const next = JSON.parse(JSON.stringify(l)) as Loadout;
+      fn(next);
+      return validateLoadout(prof(), next, undefined, testCatalog).loadout; // what cac.ts does on every change
+    };
+    const pick = (id: string) => (l: Loadout) => (l.primary.attachments = toggleAttachment(l.primary.attachments, id, attachmentSlotsFor(l.perks, testCatalog), testCatalog.attachments));
+    const setPerk2 = (id: string | null) => (l: Loadout) => (l.perks = [...l.perks.filter((p) => testCatalog.perks.get(p)?.tier !== 2), ...(id ? [id] : [])]);
+    const start: Loadout = { ...DEFAULT_LOADOUTS[0]!, primary: { weapon: 'famas', attachments: [], camo: 'none' }, perks: ['lightweight'] };
+
+    let a = edit(start, setPerk2('warlord'));
+    a = edit(a, pick('reddot'));
+    a = edit(a, pick('extmag'));
+    expect(a.primary.attachments).toEqual(['reddot', 'extmag']);
+    expect(a.perks).toEqual(['lightweight', 'warlord']);
+
+    let b = edit(start, pick('reddot'));
+    b = edit(b, pick('extmag'));
+    expect(b.primary.attachments).toEqual(['extmag']); // one slot: replaced
+    b = edit(b, setPerk2('warlord'));
+    b = edit(b, pick('reddot'));
+    expect(b.primary.attachments).toEqual(['extmag', 'reddot']);
+
+    const c = edit(a, setPerk2(null));
+    expect(c.primary.attachments).toEqual(['reddot']);
   });
 
   it('default loadouts keep their lethal and tactical (ids match the weapons equipment defs)', () => {

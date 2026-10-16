@@ -2,19 +2,24 @@
  * Server side of the 'perks' feature area (owner: perks-streaks). BO1 perks with Pro versions,
  * implemented through the modifier registry and room events:
  *
- *   T1 Lightweight (speed; Pro no fall damage), Flak Jacket (explosives x0.65; Pro fire immune, fuse
- *      reset), Scavenger (resupply packs from the dead; Pro extra mags + grenade resupply event),
- *      Ghost (hidden from Spy Plane/Blackbird unless firing loud; Pro ignored by air support and
- *      sentries), Hardline (streaks -1 kill; Pro care package reroll, in killstreaks).
- *   T2 Hardened (penetration key; Pro x1.5 vs killstreaks, less flinch), Scout (hold breath key; Pro
- *      faster swap), Steady Aim (hip spread x0.65; Pro faster sprint-out and knife), Sleight of Hand
- *      (reload x0.5; Pro ADS x0.5), Warlord (attachmentSlots 2; Pro +1 lethal/tactical).
- *   T3 Tactical Mask (stun x0.35; Pro reveals stunned enemies), Marathon (sprint x2; Pro unlimited),
- *      Ninja (silent footsteps; Pro louder enemy steps), Second Chance (last stand with the pistol;
- *      Pro longer + revive), Hacker (see enemy hardware; Pro hack it, in killstreaks).
+ *   T1 Lightweight (speed; Pro no fall damage), Flak Jacket (explosives x0.65; Pro fire immune;
+ *      the fuse reset is a description only: no throwing grenades back), Scavenger (resupply packs
+ *      from the dead; Pro extra mags + grenade resupply event), Ghost (hidden from Spy
+ *      Plane/Blackbird unless firing loud; Pro ignored by air support and sentries), Hardline
+ *      (streaks -1 kill; Pro care package reroll, in killstreaks).
+ *   T2 Hardened (no penetration model, so no base effect; Pro x1.5 vs killstreaks, less flinch),
+ *      Scout (hold breath x2; Pro faster swap), Steady Aim (hip spread x0.65; Pro faster sprint-out
+ *      and knife), Sleight of Hand (reload x0.5; Pro ADS x0.5), Warlord (a second primary
+ *      attachment via `attachmentSlotsOffset`; Pro +1 lethal/tactical via `equipmentCountOffset`).
+ *   T3 Tactical Mask (flash/concussion x0.35; Pro reveals stunned enemies), Marathon (sprint x2;
+ *      Pro unlimited), Ninja (silent footsteps; Pro louder enemy steps), Second Chance (last stand
+ *      with the pistol; Pro longer + revive), Hacker (see enemy hardware; Pro hack it, in
+ *      killstreaks).
  *
  * Sprint stamina (BO1: sprint runs out) is part of Marathon's rules and applies to everyone.
+ * Modifier keys: one name per contract, declared by the reading feature (see ./common.ts).
  */
+import { BASE_ATTACHMENT_SLOTS } from '../../../shared/defs/attachments';
 import { KS_ENTITY } from '../../../shared/defs/killstreaks';
 import { PERK_TUNING as T } from '../../../shared/defs/perks';
 import { viewDir } from '../../../shared/math';
@@ -47,7 +52,6 @@ export function registerPerkModifiers(room: Room): void {
     },
     'perks.flak_jacket',
   );
-  m.add('grenadeFuseReset', (p) => (isPro(p, 'flak_jacket') ? true : undefined), 'perks.flak_jacket_pro');
   m.add(
     'radarVisible',
     (target) => {
@@ -60,7 +64,6 @@ export function registerPerkModifiers(room: Room): void {
   m.add('streakTargetable', (target, kind) => (isPro(target, 'ghost') && kind !== KS_ENTITY.dog && kind !== KS_ENTITY.rcxd ? false : undefined), 'perks.ghost_pro');
   m.add('streakCostOffset', (p) => (hasPerk(p, 'hardline') ? -1 : undefined), 'perks.hardline');
   // Tier 2
-  m.add('penetrationMultiplier', (p) => (hasPerk(p, 'hardened') ? T.hardenedPenetration : undefined), 'perks.hardened');
   m.add('killstreakDamageDealt', (p) => (isPro(p, 'hardened') ? T.hardenedProStreakDamage : undefined), 'perks.hardened_pro');
   m.add('flinchMultiplier', (p) => (isPro(p, 'hardened') ? T.hardenedProFlinch : undefined), 'perks.hardened_pro_flinch');
   m.add('holdBreathMultiplier', (p) => (hasPerk(p, 'scout') ? T.scoutHoldBreath : undefined), 'perks.scout');
@@ -70,11 +73,11 @@ export function registerPerkModifiers(room: Room): void {
   m.add('meleeSpeedMultiplier', (p) => (isPro(p, 'steady_aim') ? T.steadyAimProMelee : undefined), 'perks.steady_aim_pro_melee');
   m.add('reloadMultiplier', (p) => (hasPerk(p, 'sleight_of_hand') ? T.sleightReload : undefined), 'perks.sleight_of_hand');
   m.add('adsMultiplier', (p) => (isPro(p, 'sleight_of_hand') ? T.sleightProAds : undefined), 'perks.sleight_of_hand_pro');
-  m.add('attachmentSlots', (p) => (hasPerk(p, 'warlord') ? T.warlordAttachments : undefined), 'perks.warlord');
-  m.add('lethalCountOffset', (p) => (isPro(p, 'warlord') ? 1 : undefined), 'perks.warlord_pro_lethal');
-  m.add('tacticalCountOffset', (p) => (isPro(p, 'warlord') ? 1 : undefined), 'perks.warlord_pro_tactical');
+  // Read at beforeSpawn with the loadout being spawned (p.loadout is still the last life's).
+  m.add('attachmentSlotsOffset', (_p, l) => (l.perks.includes('warlord') ? T.warlordAttachments - BASE_ATTACHMENT_SLOTS : undefined), 'perks.warlord');
+  m.add('equipmentCountOffset', (p) => (isPro(p, 'warlord') ? 1 : undefined), 'perks.warlord_pro');
   // Tier 3
-  m.add('stunDurationMultiplier', (p) => (hasPerk(p, 'tactical_mask') ? T.maskStun : undefined), 'perks.tactical_mask');
+  m.add('tacticalMultiplier', (p) => (hasPerk(p, 'tactical_mask') ? T.maskStun : undefined), 'perks.tactical_mask');
   m.add(
     'radarVisible',
     (target, viewer) => {
@@ -196,11 +199,11 @@ function setupPublic(room: Room): void {
   });
 }
 
-/** Tactical Mask Pro: remember who stunned whom. */
+/** Tactical Mask Pro: remember who stunned whom (the weapons feature's flash / concussion hits). */
 function setupStuns(room: Room): void {
-  room.bus.on('perks.stunned', ({ victim, attacker, duration }) => {
+  room.bus.on('weapons.tactical', ({ victim, player, duration }) => {
     const st = perksOf(victim);
-    st.stunnedBy = attacker?.id ?? null;
+    st.stunnedBy = player?.id ?? null;
     st.stunnedUntil = room.time + Math.max(0, duration);
   });
 }

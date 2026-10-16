@@ -4,8 +4,8 @@
  *
  * Rules (BO1): a weapon accepts only the attachments in its `WeaponDef.attachments` list, at most
  * one per attachment slot, and only ONE attachment in total unless the player has extra slots
- * (Warlord: `room.modifiers.add('attachmentSlotsOffset', (p) => hasWarlord(p) ? 1 : undefined)`;
- * the weapons feature enforces the count at spawn). `validAttachments(def, ids, max)` is the
+ * on the primary (Warlord: the perks feature registers `attachmentSlotsOffset(p, loadout)` = 1; the
+ * weapons feature enforces the count at spawn, create-a-class uses `attachmentSlotsFor`). `validAttachments(def, ids, max)` is the
  * pure rule the server and the loadout editor share.
  *
  * `unlockKills` is the number of kills with that weapon needed to unlock the attachment (for the
