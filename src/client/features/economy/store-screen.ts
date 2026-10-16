@@ -5,14 +5,19 @@
  *   state or price / unlock level and "n/m attachments owned". Picking a gun opens its page: a live
  *   3D turntable, stats, the gun's own Buy, then its attachments (name, description, unlock state,
  *   price, Buy). Back (or B / Esc) returns to the list.
- * - Camos (global: bought once, every gun), Reticles, Emblems: card grids.
+ * - Camos: the global CoD Points camos (bought once, every gun) as cards, then the MW2 collection
+ *   under its own heading (unlocked per gun by headshots, never sold): each card says on how many
+ *   guns it's unlocked and opens the gun closest to unlocking it. Each primary's gun page lists the
+ *   eight MW2 camos with that gun's challenge progress ("12/15 ACR headshots") and previews them.
+ * - Reticles, Emblems: card grids.
  *
  * The browsing model is pure (`shared/frontend/store-browse.ts`); lock states come from the store
  * rules (defs/store.ts) and the server validates every purchase (`economy.buy`) and equip
  * (`economy.equip`). Every card and row keeps one focusable action (Buy / Owned / Locked...) under
  * a stable `data-k`, so controller focus survives a purchase.
  */
-import { CAMO_BY_ID } from '../../../shared/defs/camos';
+import { CAMO_BY_ID, camoName } from '../../../shared/defs/camos';
+import type { WeaponCamoProgress } from '../../../shared/defs/camo-unlocks';
 import { EMBLEM_BACKGROUND_BY_ID, gateReason, LOCK_TEXT, lockReason, owns, RETICLE_BY_ID, storeCatalog, type StoreItem } from '../../../shared/defs/store';
 import { WEAPON_BY_ID } from '../../../shared/defs/weapons';
 import { STAT_LABELS, weaponStats, type WeaponStats } from '../../../shared/frontend/loadout-rules';
@@ -21,6 +26,8 @@ import {
   filterGunGroups,
   groupLabel,
   gunPageFocusKey,
+  mw2CamoCountLabel,
+  mw2CamoSummary,
   storeGun,
   storeGunGroups,
   type BrowseAttachment,
@@ -44,7 +51,7 @@ type Tab = 'weapon' | 'camo' | 'reticle' | 'emblem';
 
 const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: 'weapon', label: 'Weapons', hint: 'Pick a gun to see its attachments. Guns unlock by level, then cost CoD Points; attachments are bought per gun.' },
-  { id: 'camo', label: 'Camos', hint: 'Camos are bought once and work on every gun. Pick one per weapon in Create-a-Class.' },
+  { id: 'camo', label: 'Camos', hint: 'CoD Points camos are bought once and work on every gun. MW2 camos are free and unlock per gun with headshots (MW2 Expert challenges). Pick one per weapon in Create-a-Class.' },
   { id: 'reticle', label: 'Reticles', hint: 'Reticles show in red dot, reflex and ACOG sights. Buy one, then equip it.' },
   { id: 'emblem', label: 'Emblems', hint: 'Emblem backgrounds show behind your emblem in lobbies. Buy one, then equip it.' },
 ];
@@ -138,12 +145,14 @@ registerScreen('store', (root, params) => {
   const previewBox = h('div', { class: 'ec-preview' });
   const gunInfo = h('div', { class: 'ec-gun-info' });
   const attBox = h('div', { class: 'ec-atts' });
+  const mw2Box = h('div', { class: 'ec-atts ec-mw2' });
   const gunView = h(
     'div',
     { class: 'ec-view' },
     h('div', { class: 'ec-gun-top' }, previewBox, gunInfo),
     attBox,
-    h('div', { class: 'ec-camo-note' }, h('span', {}, 'Camos are bought once and work on every gun.'), h('button', { class: 'lf-btn small', type: 'button', 'data-k': 'tab:camo', onclick: () => openTab('camo') }, 'Browse camos')),
+    mw2Box,
+    h('div', { class: 'ec-camo-note' }, h('span', {}, 'CoD Points camos are bought once and work on every gun.'), h('button', { class: 'lf-btn small', type: 'button', 'data-k': 'tab:camo', onclick: () => openTab('camo') }, 'Browse camos')),
   );
   const grid = h('div', { class: 'ec-grid' });
 
@@ -337,10 +346,11 @@ registerScreen('store', (root, params) => {
     );
 
   let statsHost: HTMLElement | null = null;
+  let previewCamo = 'none';
   const showAttachment = (gun: BrowseGun, att: BrowseAttachment | null) => {
     hoverAtt = att?.id ?? null;
     const def = WEAPON_BY_ID.get(gun.id);
-    if (preview && def) preview.show(def.model, att ? [att.id] : [], 'none');
+    if (preview && def) preview.show(def.model, att ? [att.id] : [], previewCamo);
     if (statsHost && def) statsHost.replaceChildren(statBars(weaponStats(def), att ? weaponStats(def, [att.id]) : null));
   };
 
@@ -349,6 +359,7 @@ registerScreen('store', (root, params) => {
     if (previewGun !== gun.id) {
       disposePreview();
       previewGun = gun.id;
+      previewCamo = 'none';
       preview = new WeaponPreview(previewBox, { gunOnly: true });
       if (!preview.ok) previewBox.append(h('div', { class: 'lf-center ec-dim' }, '3D preview unavailable'));
       previewBox.append(h('div', { class: 'ec-cap' }, gun.name, h('small', {}, groupLabel(gun.group))));
@@ -397,6 +408,73 @@ registerScreen('store', (root, params) => {
           })
         : [h('div', { class: 'ec-empty' }, `The ${gun.name} takes no attachments.`)]),
     );
+    renderMw2(gun);
+  };
+
+  /** The gun page's MW2 camo block: each camo's challenge on this gun, with a progress bar. */
+  const renderMw2 = (gun: BrowseGun) => {
+    mw2Box.hidden = !gun.mw2Camos.length;
+    if (!gun.mw2Camos.length) {
+      mw2Box.replaceChildren();
+      return;
+    }
+    const pick = (camo: string) => {
+      previewCamo = previewCamo === camo ? 'none' : camo;
+      showAttachment(gun, gun.attachments.find((a) => a.id === hoverAtt) ?? null);
+      renderMw2(gun);
+    };
+    mw2Box.replaceChildren(
+      h('h3', { class: 'ec-group-h' }, 'MW2 camos', h('small', {}, `${mw2CamoCountLabel(gun)} · headshots with the ${gun.name} · free once unlocked`)),
+      ...gun.mw2Camos.map((c: WeaponCamoProgress) => {
+        const pct = Math.round(100 * c.fraction);
+        const free = !c.headshots.need && !c.kills.need;
+        const state = c.unlocked
+          ? h('span', { class: 'ec-state ok' }, free ? 'Free · unlocked' : 'Unlocked')
+          : h('span', { class: 'ec-req' }, h('span', { class: 'ec-state lock' }, `${c.camo.name}: ${c.progress}`), h('span', { class: 'ec-kbar', role: 'meter', 'aria-label': `${c.camo.name} progress`, 'aria-valuenow': pct, 'aria-valuemin': 0, 'aria-valuemax': 100 }, h('i', { style: `width:${pct}%` })));
+        const shown = previewCamo === c.camo.id;
+        const row = h(
+          'div',
+          { class: `ec-att ec-mw2-row${c.unlocked ? ' owned' : ' locked'}`, 'data-camo': c.camo.id },
+          camoPreview(c.camo.id, 40),
+          h('span', { class: 'ec-att-main' }, h('span', { class: 'ec-name' }, c.camo.name), h('span', { class: 'ec-att-blurb' }, c.challenge), state),
+          h('span', { class: 'ec-att-buy' }, h('button', { type: 'button', 'data-k': `mw2:${gun.id}:${c.camo.id}`, class: `lf-btn small ec-act${shown ? ' primary' : ''}`, 'aria-pressed': String(shown), onclick: () => pick(c.camo.id) }, shown ? 'Shown' : 'Preview')),
+        );
+        return row;
+      }),
+    );
+  };
+
+  /** The Camos tab's MW2 section: a heading, then one card per camo with its progress across guns. */
+  const mw2Cards = (): HTMLElement[] => {
+    const summary = mw2CamoSummary(storeGunGroups(net.profile));
+    return [
+      h('h3', { class: 'ec-group-h ec-grid-h' }, 'MW2', h('small', {}, 'Modern Warfare 2 camos · free · unlocked per gun by headshots (primaries only)')),
+      ...summary.map((m) => {
+        const free = !m.camo.weaponChallenge?.headshots && !m.camo.weaponChallenge?.kills;
+        const closest = m.closest && m.closest.fraction > 0 ? m.closest : null;
+        const gunName = closest ? (WEAPON_BY_ID.get(closest.weapon)?.name ?? closest.weapon) : '';
+        const base = { type: 'button', 'data-k': `mw2:${m.camo.id}`, class: 'lf-btn small ec-act' } as const;
+        const action = free
+          ? h('button', { ...base, class: `${base.class} owned`, 'aria-disabled': 'true', onclick: () => say(`${camoName(m.camo)}: free on every primary weapon`) }, 'Free')
+          : closest
+            ? h('button', { ...base, onclick: () => (openTab('weapon'), openGun(closest.weapon)) }, gunName)
+            : h('button', { ...base, class: `${base.class} lock`, 'aria-disabled': 'true', onclick: () => say(`${camoName(m.camo)}: ${m.challenge} with a primary weapon`, true) }, 'Locked');
+        return h(
+          'div',
+          { class: `ec-card ec-mw2-card${m.unlocked ? ' owned' : ''}${!free && !m.unlocked ? ' locked' : ''}` },
+          camoPreview(m.camo.id, 56),
+          h(
+            'div',
+            { class: 'ec-card-body' },
+            h('div', { class: 'ec-name' }, m.camo.name),
+            h('div', { class: 'ec-meta' }, `MW2 · ${m.challenge}`),
+            h('div', { class: `ec-state ${m.unlocked ? 'ok' : 'lock'}` }, free ? 'Every primary' : `Unlocked on ${m.unlocked}/${m.guns} guns`),
+            closest ? h('div', { class: 'ec-meta' }, `Closest: ${closest.progress}`) : null,
+            action,
+          ),
+        );
+      }),
+    ];
   };
 
   const renderGrid = () => {
@@ -404,6 +482,7 @@ registerScreen('store', (root, params) => {
     const items = storeCatalog().filter((i) => i.kind === tab);
     const eq = equipped(p);
     grid.replaceChildren(
+      ...(tab === 'camo' ? [h('h3', { class: 'ec-group-h ec-grid-h' }, 'CoD Points', h('small', {}, 'bought once, every gun'))] : []),
       ...items.map((item) => {
         const owned = p ? owns(p, item) : false;
         const reason = p ? lockReason(p, item.key) : 'unknown';
@@ -436,6 +515,7 @@ registerScreen('store', (root, params) => {
           ),
         );
       }),
+      ...(tab === 'camo' ? mw2Cards() : []),
     );
   };
 

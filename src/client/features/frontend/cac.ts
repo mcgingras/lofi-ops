@@ -1,12 +1,14 @@
 /**
  * Create-a-class (screen 'create-a-class'): custom class slots, primary + attachments (one, two
  * with Warlord / an `attachmentSlots` perk), camo per weapon, secondary, lethal, tactical, one perk
- * per tier, three killstreaks sorted by kill count. Locked items show their unlock requirement.
+ * per tier, three killstreaks sorted by kill count. Camos: the CoD Points camos, then the MW2
+ * collection under its own heading with this gun's challenge progress ("Locked: 3/5 ACR headshots"). Locked items show their unlock requirement.
  * A live 3D turntable preview of the weapon and stat bars (hover an item to compare). Every
  * change is validated locally with the same rules as the server, then saved (frontend.saveLoadout).
  */
 import { ATTACHMENT_BY_ID } from '../../../shared/defs/attachments';
-import { CAMOS, CAMO_BY_ID } from '../../../shared/defs/camos';
+import { weaponCamoProgress } from '../../../shared/defs/camo-unlocks';
+import { CAMO_BY_ID, camoName, GLOBAL_CAMOS, MW2_CAMOS, type CamoDef } from '../../../shared/defs/camos';
 import { KILLSTREAKS, KILLSTREAK_BY_ID } from '../../../shared/defs/killstreaks';
 import { PERKS, PERK_BY_ID } from '../../../shared/defs/perks';
 import { WEAPONS, WEAPON_BY_ID, type WeaponClass } from '../../../shared/defs/weapons';
@@ -18,6 +20,7 @@ import type { Profile } from '../../../shared/profile';
 import { net } from '../../net';
 import { registerScreen } from '../../registry';
 import { back } from '../../router';
+import { camoPreview } from '../economy/camos';
 import { WeaponPreview } from './preview';
 import { debounce, errText, h } from './ui';
 
@@ -28,6 +31,21 @@ const wName = (id: string) => WEAPON_BY_ID.get(id)?.name ?? id;
 const camoColor = (id: string) => {
   const c = CAMO_BY_ID.get(id)?.recipe?.colors?.[0];
   return c === undefined ? 'transparent' : `#${c.toString(16).padStart(6, '0')}`;
+};
+const swatchUrls = new Map<string, string>();
+/** Swatch background: the camo's painted pattern (tiled, pixelated), over its base colour. */
+const camoSwatch = (id: string) => {
+  if (!CAMO_BY_ID.get(id)?.recipe) return camoColor(id);
+  let url = swatchUrls.get(id);
+  if (!url) {
+    try {
+      url = camoPreview(id, 32).toDataURL();
+    } catch {
+      url = '';
+    }
+    swatchUrls.set(id, url);
+  }
+  return url ? `${camoColor(id)} url(${url}) 0 0 / 32px 32px repeat;image-rendering:pixelated` : camoColor(id);
 };
 
 registerScreen('create-a-class', (root, params) => {
@@ -163,10 +181,10 @@ registerScreen('create-a-class', (root, params) => {
       head('Weapons'),
       row('primary', 'Primary', wName(work.primary.weapon)),
       row('primaryAtt', slots > 1 ? 'Attachments' : 'Attachment', attNames(work.primary)),
-      row('primaryCamo', 'Camo', CAMO_BY_ID.get(work.primary.camo)?.name ?? 'None'),
+      row('primaryCamo', 'Camo', camoName(CAMO_BY_ID.get(work.primary.camo))),
       row('secondary', 'Secondary', wName(work.secondary.weapon)),
       row('secondaryAtt', 'Attachment', attNames(work.secondary)),
-      row('secondaryCamo', 'Camo', CAMO_BY_ID.get(work.secondary.camo)?.name ?? 'None'),
+      row('secondaryCamo', 'Camo', camoName(CAMO_BY_ID.get(work.secondary.camo))),
       head('Equipment'),
       row('lethal', 'Lethal', work.lethal ? (EQUIPMENT_BY_ID.get(work.lethal)?.name ?? work.lethal) : 'None'),
       row('tactical', 'Tactical', work.tactical ? (EQUIPMENT_BY_ID.get(work.tactical)?.name ?? work.tactical) : 'None'),
@@ -283,26 +301,35 @@ registerScreen('create-a-class', (root, params) => {
 
   const camoPicker = (slot: 'primary' | 'secondary') => {
     const w = work[slot];
+    const camoItem = (c: CamoDef, sub: string) =>
+      item({
+        label: c.name,
+        sub,
+        pressed: w.camo === c.id,
+        kind: 'camo',
+        id: c.id,
+        weapon: w.weapon,
+        swatch: camoSwatch(c.id),
+        onPick: () => edit((l) => (l[slot].camo = c.id)),
+        onHover: () => {
+          hover = { ...w, camo: c.id };
+          renderPreview();
+        },
+      });
+    const mw2 = MW2_CAMOS.map((c) => ({ c, pr: weaponCamoProgress(profile ?? {}, c.id, w.weapon)! }));
+    const fits = mw2.some((m) => m.pr.fits);
+    const open = mw2.filter((m) => m.pr.unlocked).length;
     return [
       grid(
         `${wName(w.weapon)} camo`,
-        CAMOS.map((c) =>
-          item({
-            label: c.name,
-            sub: c.price ? `${c.price} CP` : c.unlock ? 'Unlock' : '',
-            pressed: w.camo === c.id,
-            kind: 'camo',
-            id: c.id,
-            weapon: w.weapon,
-            swatch: camoColor(c.id),
-            onPick: () => edit((l) => (l[slot].camo = c.id)),
-            onHover: () => {
-              hover = { ...w, camo: c.id };
-              renderPreview();
-            },
-          }),
-        ),
+        GLOBAL_CAMOS.map((c) => camoItem(c, c.price ? `${c.price} CP` : c.unlock ? 'Unlock' : '')),
       ),
+      fits
+        ? grid(
+            `MW2 · ${open}/${mw2.length} unlocked · headshots with the ${wName(w.weapon)}`,
+            mw2.map(({ c, pr }) => camoItem(c, pr.challenge)),
+          )
+        : h('div', {}, h('h3', { class: 'fe-h' }, 'MW2'), h('div', { class: 'fe-small fe-dim' }, 'MW2 camos go on primary weapons only (as in Modern Warfare 2).')),
     ];
   };
 
