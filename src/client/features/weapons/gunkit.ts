@@ -44,7 +44,8 @@ export class Kit {
   readonly M: Record<'metal' | 'wood' | 'poly' | 'olive' | 'tan' | 'steel' | 'lens' | 'red' | 'brass' | 'shell' | 'body' | 'furn', THREE.Material>;
   constructor(
     readonly root: THREE.Object3D,
-    mat: MatFn,
+    /** The material maker (builders with their own textures use it: the wonder weapons). */
+    readonly mat: MatFn,
     camo: string | null,
     furniture: 'wood' | 'poly' | 'olive' | 'tan' = 'poly',
   ) {

@@ -5,6 +5,8 @@
  * clears them too).
  */
 import { canDropWeapon, dropScore, PICKUP, PICKUP_ENTITY, type DropSnapState } from '../../../shared/defs/pickups';
+import { isWonderWeapon } from '../../../shared/defs/weapons';
+import { WONDER_DROP_LIFE_SEC } from '../../../shared/defs/wonder';
 import type { Vec3 } from '../../../shared/math';
 import { eyeOf } from '../../combat';
 import type { Entity } from '../../entities';
@@ -81,7 +83,8 @@ export function spawnDrop(room: Room, w: WeaponState, at: Vec3, vel: Vec3, from:
     vz: vel.z,
     landed: false,
     born: room.time,
-    expires: room.time + PICKUP.lifeSec,
+    // A dropped wonder weapon (Mystery Box) is gone sooner.
+    expires: room.time + (isWonderWeapon(id) ? WONDER_DROP_LIFE_SEC : PICKUP.lifeSec),
     from: from?.id ?? null,
     reason,
   };

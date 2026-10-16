@@ -1,7 +1,8 @@
 /**
  * Server side of the 'weapons' feature area. See docs/features/weapons.md.
  *
- *   setup: the underbarrel grenade launcher behaviour (weapon id `gl`).
+ *   setup: the underbarrel grenade launcher behaviour (weapon id `gl`) and the Mystery Box's wonder
+ *          weapons (`wonder/`: Ray Gun, Thundergun, Wunderwaffe DG-2, Winter's Howl).
  *   room:  primary attachment count (1 + `attachmentSlotsOffset(p, loadout)`, Warlord) at
  *          `beforeSpawn`; equipment (count + `equipmentCountOffset`, Warlord Pro) and the GL slot
  *          at `spawn`; Scavenger Pro refills (`perks.resupply`); knife on the MELEE edge (timing x
@@ -25,6 +26,7 @@ import { melee } from './melee';
 import { onReload, updateShells } from './reload';
 import { updateTomahawks } from './tomahawk';
 import { wext } from './state';
+import { registerWonderBehaviors, wireWonder } from './wonder/index';
 
 export { melee, meleeTarget } from './melee';
 export { startThrow, flashedAmount, stunnedAmount, explode, spawnNade } from './equipment';
@@ -50,10 +52,14 @@ const feature: Feature = {
   id: 'weapons',
   setup(api) {
     api.registerWeaponBehavior('gl', GL_BEHAVIOR);
+    registerWonderBehaviors(api.registerWeaponBehavior);
   },
   room(room) {
     // Idempotent: also here so rooms built without the app (unit tests) get the launcher.
     registerWeaponBehavior('gl', GL_BEHAVIOR);
+    // Mystery Box wonder weapons: Ray Gun bolts, Thundergun, Wunderwaffe arcs, Winter's Howl frost.
+    registerWonderBehaviors(registerWeaponBehavior);
+    wireWonder(room);
     // BO1: one attachment per weapon; Warlord (perks) adds a primary slot through the modifier. It
     // reads the loadout being spawned: `player.loadout` is still the previous life's here, and a
     // class change mid-match must use the new class's perks. Low priority: after progression's

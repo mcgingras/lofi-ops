@@ -4,10 +4,12 @@
  * (src/shared/defs/bots.ts), walks to it through a bots goal (registerBotGoal) and, once in reach,
  * "holds USE" for `PICKUP.botHoldSec` and swaps its emptiest gun for it. A copy of a gun it carries
  * is fine too: walking over it takes the ammo. Unless both its guns are empty it only goes when no
- * enemy has eyes on it.
+ * enemy has eyes on it. A dropped wonder weapon (Mystery Box) nearby is worth a detour even with
+ * full guns.
  */
 import { DEFAULT_LOBBY_BOTS, skillFor } from '../../../shared/defs/bots';
 import { PICKUP } from '../../../shared/defs/pickups';
+import { isWonderWeapon } from '../../../shared/defs/weapons';
 import { hashString } from '../../../shared/math';
 import { eyeOf } from '../../combat';
 import type { PlayerState, WeaponState } from '../../player';
@@ -23,6 +25,8 @@ const THINK_TICKS = 30;
 const RANGE = { base: 4, extra: 22 };
 /** Enemies closer than this with line of sight make it unsafe (m). */
 const DANGER_M = 30;
+/** A dropped wonder weapon within this x (0.5 + skill) is worth a detour with full guns (m). */
+const WONDER_RANGE = 14;
 
 export function botPickupSkill(p: PlayerState): number {
   const v = p.ext.bots?.skill?.weaponPickup;
@@ -76,6 +80,22 @@ export function chooseDrop(room: Room, p: PlayerState, need: 1 | 2, range: numbe
   return best;
 }
 
+/** The nearest landed wonder weapon with ammo within `range` that the bot doesn't carry, or null. */
+export function chooseWonderDrop(room: Room, p: PlayerState, range: number): DropEntity | null {
+  let best: DropEntity | null = null;
+  let bestD = range;
+  for (const e of dropsOf(room)) {
+    if (!e.data.landed || e.data.mag + e.data.reserve <= 0 || !isWonderWeapon(e.data.weapon) || carriesWeapon(p, e.data.weapon)) continue;
+    if (Math.abs(e.y - p.move.y) > 3) continue;
+    const d = Math.hypot(e.x - p.move.x, e.z - p.move.z);
+    if (d < bestD) {
+      best = e;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
 /** Per tick for every bot: pick a target now and then, take it once in reach. */
 export function updateBotPickups(room: Room, dt: number): void {
   if (!dropsEnabled(room)) return;
@@ -92,6 +112,7 @@ export function updateBotPickups(room: Room, dt: number): void {
       const need = ammoNeed(p);
       st.botTarget = null;
       if (k > 0 && need !== 0 && (need === 2 || safe(room, p))) st.botTarget = chooseDrop(room, p, need, RANGE.base + RANGE.extra * k)?.id ?? null;
+      else if (k > 0 && need === 0 && safe(room, p)) st.botTarget = chooseWonderDrop(room, p, WONDER_RANGE * (0.5 + k))?.id ?? null;
     }
     const target = st.botTarget === null ? undefined : room.entities.get(st.botTarget);
     if (!isDrop(target)) {
@@ -132,6 +153,7 @@ export function wireBotGoal(): void {
     if (id === null || id === undefined || !dropsEnabled(room)) return null;
     const e = room.entities.get(id);
     if (!isDrop(e)) return null;
-    return { at: { x: e.x, y: e.y, z: e.z }, radius: 0.8, priority: ammoNeed(bot) === 2 ? 0.95 : 0.7, sprint: true, label: `pickup ${e.data.weapon}` };
+    const need = ammoNeed(bot);
+    return { at: { x: e.x, y: e.y, z: e.z }, radius: 0.8, priority: need === 2 ? 0.95 : need === 1 ? 0.7 : 0.6, sprint: true, label: `pickup ${e.data.weapon}` };
   });
 }

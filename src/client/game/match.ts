@@ -25,7 +25,7 @@ import { MatchNet, net, type Net } from '../net';
 import { MapScene } from '../render/mapbuilder';
 import type { Renderer } from '../render/renderer';
 import { develop, prioritize } from '../render/textures';
-import { aimAssistGates, buttonFilters, entityRenderers, matchHooks, onFeature, sightBlockers, type EntityView } from '../registry';
+import { aimAssistGates, buttonFilters, entityRenderers, matchHooks, onFeature, shotFxs, sightBlockers, type EntityView } from '../registry';
 import { settings } from '../settings';
 import { client } from '../state';
 import { drawHud } from '../hud/hud';
@@ -798,6 +798,8 @@ export class Match {
     this.viewmodel.shoot(this.time, Math.min(1.2, 0.5 + def.recoil.vertical * 0.4));
     rumble('fire', Math.min(1, 0.5 + def.recoil.vertical * 0.3));
     sfx.gunshot(def.base.id, undefined, def.suppressed);
+    // Weapons with their own look (the wonder weapons) draw it on the pull.
+    shotFxs.get(def.base.id)?.local?.(this, { x: origin[0], y: origin[1], z: origin[2] }, dir);
     const moving = Math.hypot(st.vx, st.vz) > 0.5;
     const spread = spreadDegrees(def, st.ads, moving, stanceSpread(st));
     const seed = hashString(this.myId);

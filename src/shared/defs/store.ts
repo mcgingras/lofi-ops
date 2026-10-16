@@ -139,7 +139,8 @@ export function storeCatalog(): StoreItem[] {
   const items: StoreItem[] = [];
   for (const w of WEAPONS) {
     // Only classable guns: the knife (melee) and the underbarrel GL are WeaponDefs too, never sold.
-    if (WAGER_ONLY_WEAPONS.has(w.id) || (w.slot !== 'primary' && w.slot !== 'secondary')) continue;
+    // Mystery Box wonder weapons are never sold either.
+    if (WAGER_ONLY_WEAPONS.has(w.id) || w.wonder || (w.slot !== 'primary' && w.slot !== 'secondary')) continue;
     const key = keyOf.weapon(w.id);
     const price = w.price ?? DEFAULT_PRICES.weapon;
     items.push({ key, kind: 'weapon', id: w.id, name: w.name, price, unlock: { level: w.unlockLevel }, starter: free.has(key), free: free.has(key) || price === 0 });
@@ -254,7 +255,7 @@ export function enforceLoadout(p: ProfileLike, loadout: Loadout): { loadout: Loa
   const fallback = DEFAULT_LOADOUTS[0]!;
   const fix = (w: WeaponLoadout, fb: WeaponLoadout): WeaponLoadout => {
     const weapon = w.weapon;
-    if (!WEAPON_BY_ID.has(weapon) || WAGER_ONLY_WEAPONS.has(weapon) || !canUse(p, keyOf.weapon(weapon))) {
+    if (!WEAPON_BY_ID.has(weapon) || WAGER_ONLY_WEAPONS.has(weapon) || WEAPON_BY_ID.get(weapon)!.wonder || !canUse(p, keyOf.weapon(weapon))) {
       changed.push(keyOf.weapon(weapon));
       return { weapon: fb.weapon, attachments: fb.attachments.filter((a) => canUse(p, keyOf.attachment(fb.weapon, a))), camo: canUse(p, keyOf.camo(w.camo)) ? w.camo : 'none' };
     }

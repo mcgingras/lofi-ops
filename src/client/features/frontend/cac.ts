@@ -229,8 +229,9 @@ registerScreen('create-a-class', (root, params) => {
 
   const weaponPicker = (slot: 'primary' | 'secondary') => {
     const byClass = new Map<WeaponClass, HTMLElement[]>();
-    // Wager-only weapons (crossbow, ballistic knife) are appended to WEAPONS but never allowed in classes.
-    for (const d of WEAPONS.filter((w) => w.slot === slot && !WAGER_ONLY_WEAPONS.has(w.id))) {
+    // Wager-only weapons (crossbow, ballistic knife) are appended to WEAPONS but never allowed in
+    // classes, nor are the Mystery Box's wonder weapons.
+    for (const d of WEAPONS.filter((w) => w.slot === slot && !w.wonder && !WAGER_ONLY_WEAPONS.has(w.id))) {
       const list = byClass.get(d.class) ?? [];
       list.push(
         item({

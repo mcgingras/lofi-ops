@@ -50,7 +50,8 @@ export function sanitizeLoadout(input: unknown, fallback: Loadout = DEFAULT_LOAD
     const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
     const id = str(o.weapon);
     const def = id ? WEAPON_BY_ID.get(id) : undefined;
-    if (!def || def.slot !== slot) return { ...fb, attachments: [...fb.attachments] };
+    // Wonder weapons only come from the Mystery Box, never from a class.
+    if (!def || def.slot !== slot || def.wonder) return { ...fb, attachments: [...fb.attachments] };
     const atts = Array.isArray(o.attachments) ? o.attachments.filter((a): a is string => typeof a === 'string' && def.attachments.includes(a)).slice(0, 2) : [];
     const camo = str(o.camo);
     return { weapon: def.id, attachments: [...new Set(atts)], camo: camo && CAMO_BY_ID.has(camo) ? camo : 'none' };

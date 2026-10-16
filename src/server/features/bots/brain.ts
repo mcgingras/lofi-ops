@@ -48,6 +48,7 @@ import { recentSpawns } from '../modes/spawns';
 import { hasObjectives } from '../modes/bots';
 import { chasersNear, crowdPenalty, depthOf, laneOf, mapAxis, pickLane, rollRole, type BotRole, type GoalClaim, type PathUsage } from './roles';
 import { botCanHit, chestOf, eyePointOf, headOf, occludersFor, visiblePart } from './sight';
+import { wonderBotDecision, wonderBotStyle } from '../weapons/wonder/index';
 
 const DEG = Math.PI / 180;
 
@@ -305,7 +306,8 @@ export class Brain implements BotBrain {
 
     const w = currentWeapon(self);
     const def = w?.def;
-    const cls = CLASS_STYLE[def?.class ?? 'ar'] ?? CLASS_STYLE.ar;
+    // Mystery Box wonder weapons bring their own ranges (weapons/wonder/bots.ts).
+    const cls = wonderBotStyle(def?.base.id) ?? CLASS_STYLE[def?.class ?? 'ar'] ?? CLASS_STYLE.ar;
     const primary = self.weapons[0];
     const secondary = self.weapons[1];
 
@@ -330,6 +332,15 @@ export class Brain implements BotBrain {
       if (w && w.mag === 0 && this.slotWanted === 0 && secondary && secondary.mag > 0 && (d < 12 || (primary?.reserve ?? 0) === 0)) this.slotWanted = 1;
       if (this.slotWanted === 1 && secondary && secondary.mag === 0 && secondary.reserve === 0 && primary && primary.mag + primary.reserve > 0) this.slotWanted = 0;
 
+      // A short-range wonder weapon holds fire outside its blast and swaps to the other gun far
+      // off; holding the other gun with such a wonder weapon in the bag, it swaps back up close.
+      const wonderCall = def?.wonder ? wonderBotDecision(self, def.base.id, d) : null;
+      if (wonderCall === 'switch' && self.slot === this.slotWanted && self.slot < 2) this.slotWanted = self.slot === 0 ? 1 : 0;
+      else if (def && !def.wonder && self.slot === this.slotWanted && self.slot < 2) {
+        const other = self.weapons[self.slot === 0 ? 1 : 0];
+        if (other?.def.wonder && other.mag > 0 && wonderBotStyle(other.def.base.id)?.switchBeyond !== undefined && wonderBotDecision(self, other.def.base.id, d) === 'fire') this.slotWanted = self.slot === 0 ? 1 : 0;
+      }
+
       const wantAds = !!def && d > cls.ads && !(cls.rush && style.rush && d < 8);
       if (wantAds) buttons |= Buttons.ADS;
       const ready = !!w && w.mag > 0 && self.reloadEnd === 0 && now >= self.swapEnd && !self.move.sprinting && self.slot === this.slotWanted;
@@ -341,7 +352,7 @@ export class Brain implements BotBrain {
       // at a last-known position, or through bullet-proof glass.
       const lineOfFire = !!vis && botCanHit(room.world, room.map, eye, aimPt);
 
-      if (ready && onTarget && steadyOk && lineOfFire && def) {
+      if (ready && onTarget && steadyOk && lineOfFire && def && (wonderCall === null || wonderCall === 'fire')) {
         const auto = def.mode === 'auto' || def.mode === 'burst';
         if (auto) {
           if (now >= this.pauseUntil) {

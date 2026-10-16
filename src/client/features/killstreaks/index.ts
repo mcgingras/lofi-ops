@@ -5,7 +5,8 @@
  * napalm fire, mortar marks), explosions and sounds, the streak ladder / ready prompt /
  * designator / announcements HUD, the radar minimap, camera control for driven streaks, and the
  * tactical map (radio + overhead map) for Napalm, Mortar Team, Rolling Thunder and the Attack Helicopter,
- * and the Tactical Nuke (laptop, countdown, flash, mushroom cloud: nuke.ts).
+ * the Tactical Nuke (laptop, countdown, flash, mushroom cloud: nuke.ts), and the Mystery Box
+ * (beam, lightning, the box, its weapon cycle and prompts: mysterybox.ts).
  */
 import './textures';
 import './sounds';
@@ -24,6 +25,8 @@ import './nuke';
 import './valkyrie';
 // After the renderers: it wraps the hardware renderers to show the Glitch's knocked-out look.
 import './glitch';
+// After those too: the Mystery Box's sky flicker uses `renderer.white` only when nobody else does.
+import './mysterybox';
 
 export { ksClient, streakName } from './store';
 export { tacmapOpen } from './tacmap';

@@ -22,6 +22,7 @@ import { useKey } from '../../hud/waypoints';
 import { onFeature, registerEntityRenderer, registerHudWidget, registerMatchHook } from '../../registry';
 import { currentMatch } from '../../state';
 import { ksClient } from '../killstreaks/store';
+import { boxClaimsUseLocally } from '../killstreaks/mysterybox';
 import { modes, myAction } from '../modes/store';
 import { iHave, perkState } from '../perks/state';
 import { PACK_RAT } from '../../../shared/defs/pack-rat';
@@ -40,6 +41,7 @@ export function useClaimedLocally(m: Match): boolean {
   const ks = ksClient.state;
   if (ks?.control || ks?.map) return true;
   if (ksClient.crate && m.time - ksClient.crate.at < 1) return true;
+  if (boxClaimsUseLocally(m)) return true;
   const pos = m.net.predictor.shown();
   for (const e of m.net.lastSnap?.ents ?? []) {
     if (e.kind === KS_ENTITY.crate && e.s?.l === true && Math.hypot(pos.x - e.x, pos.z - e.z) <= CRATE_REACH.r && Math.abs(pos.y - e.y) < CRATE_REACH.dy) return true;
