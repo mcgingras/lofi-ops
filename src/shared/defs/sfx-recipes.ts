@@ -344,6 +344,22 @@ export const SFX_SYNTH_ONLY: Record<string, string> = {
   'weapons.beep': 'stuck crossbow bolt beep: a synthesized chirp, like the semtex blink',
   'weapons.cook': 'frag cook tick: a short synthesized fuse tick, no fitting recording',
   ks_smoke: 'Care Package marker smoke hiss: synthesized noise, no smoke recording in the manifest',
+  // Mystery Box wonder weapons and the box itself: sci-fi / music-box sounds, no recordings approved.
+  'shot.raygun': 'Ray Gun: a synthesized sci-fi zap (no recording fits)',
+  'shot.thundergun': 'Thundergun: a synthesized air-cannon whoomph',
+  'shot.wunderwaffe': 'Wunderwaffe DG-2: a synthesized electric discharge',
+  'shot.wintershowl': "Winter's Howl: a synthesized icy hiss and whistle",
+  'weapons.wonder.splash': 'Ray Gun bolt bursting: synthesized pop and fizz',
+  'weapons.wonder.zap': 'Wunderwaffe arc hopping: synthesized crackle',
+  'weapons.wonder.shatter': 'a frozen body shattering: synthesized glassy cracks',
+  'weapons.wonder.chill': "Winter's Howl frost landing on you: synthesized hiss",
+  ks_mbox_jingle: 'Mystery Box music box: an original synthesized melody (not the Zombies jingle)',
+  ks_mbox_tick: 'Mystery Box weapon cycle tick: synthesized click and chime',
+  ks_mbox_thunder: 'Mystery Box lightning strike: synthesized crack and rumble',
+  ks_mbox_land: 'Mystery Box crashing in: synthesized thump and shimmer',
+  ks_mbox_beam: 'Mystery Box light beam: synthesized rising hum',
+  ks_mbox_open: 'Mystery Box lid: synthesized creak and shimmer',
+  ks_mbox_whoosh: 'Mystery Box flying away: synthesized rising whoosh',
 };
 
 /** Recorded-only ids with no synthesized fallback on purpose: extra layers that may simply be absent until loaded. */

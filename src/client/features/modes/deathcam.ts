@@ -26,7 +26,7 @@ import { HUD_COLORS as C, rect, textWidth, txt, unit } from '../../hud/draw';
 import { PAD, PadEdges } from '../../game/gamepad';
 import { promptKey } from '../../game/prompts';
 import { net } from '../../net';
-import { onFeature, registerHudWidget, registerMatchHook } from '../../registry';
+import { onFeature, registerHudWidget, registerMatchHook, shotFxs } from '../../registry';
 import { currentMatch } from '../../state';
 import { badgePixels, drawPixels } from '../progression/emblems';
 import { aimAt, cardLines, deathcamClock, eyeOf, killcamTimer, trackPose } from './deathcam-math';
@@ -213,6 +213,16 @@ function frame(m: Match, dt: number): void {
   for (const s of S.shots) {
     if (s.t <= S.lastT || s.t > c.t) continue;
     const to = { x: s.end[0], y: s.end[1], z: s.end[2] };
+    // A weapon with its own look (wonder weapons): its replay draws the bolt / blast / arc / frost.
+    const fx = s.id === d.killer ? shotFxs.get(d.vm?.weapon ?? d.weapon)?.replay : undefined;
+    if (fx) {
+      const eyesView = d.view === 'eyes';
+      const from = eyesView ? new THREE.Vector3(0.1, -0.12, -0.6).applyQuaternion(cam.quaternion).add(cam.position) : actors.muzzle(s.id);
+      if (eyesView) rig?.shoot(m.time, 0.8);
+      sfx.gunshot(d.vm?.weapon ?? d.weapon, eyesView ? undefined : to, false);
+      if (from) fx(m, s.id, from, to, s.hit, s.t);
+      continue;
+    }
     if (s.id === d.killer && d.view === 'eyes') {
       rig?.shoot(m.time, 0.8);
       sfx.gunshot(d.vm?.weapon ?? d.weapon, undefined, d.vm?.suppressed ?? false);

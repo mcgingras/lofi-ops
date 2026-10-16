@@ -16,7 +16,7 @@ import { WEAPON_BY_ID } from '../../shared/defs/weapons';
 import { TEAM_NAMES } from '../../shared/constants';
 import { inputDevice } from '../game/gamepad';
 import { promptKey } from '../game/prompts';
-import { registerHudWidget } from '../registry';
+import { killfeedIcons, registerHudWidget } from '../registry';
 import { settings } from '../settings';
 import { currentMatch } from '../state';
 import { ammoHint, ammoWarn } from './ammo-hint';
@@ -288,6 +288,8 @@ registerHudWidget(
       const wtxt = `[${weaponName(f.weapon).toUpperCase()}${f.headshot ? ' HS' : ''}]`;
       const ww = txt(g, wtxt, x, y, 8, C.paper, 'right', u);
       x -= ww + 4 * u;
+      const icon = killfeedIcons.get(f.weapon);
+      if (icon) x -= icon(g, x, y, u) + 3 * u;
       if (f.attacker && f.attacker !== f.victim) txt(g, m.nameOf(f.attacker), x, y, 8, attCol, 'right', u);
       y += 9 * u;
     }

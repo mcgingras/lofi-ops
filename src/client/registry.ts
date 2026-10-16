@@ -196,3 +196,30 @@ export const sightBlockers = new Map<string, SightBlocker>();
 export function registerSightBlocker(id: string, fn: SightBlocker): void {
   sightBlockers.set(id, fn);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Weapon shot effects (weapons with their own look instead of a tracer: the wonder weapons)
+// ---------------------------------------------------------------------------------------------
+
+export interface ShotFx {
+  /** The local player fired (on the trigger pull, before the server answers): `origin` the eye, `dir` the aim. */
+  local?(match: Match, origin: Vec3, dir: Vec3): void;
+  /**
+   * A recorded shot replayed in a killcam: `from` the shooter's muzzle, `to` where it ended,
+   * `t` its room time. Drawn instead of the tracer and impact puff.
+   */
+  replay?(match: Match, shooter: string, from: Vec3, to: Vec3, hit: boolean, t: number): void;
+}
+export const shotFxs = new Map<string, ShotFx>();
+/** Give a weapon id its own shot effect (match.ts calls `local`; the deathcam calls `replay`). */
+export function registerShotFx(weaponId: string, fx: ShotFx): void {
+  shotFxs.set(weaponId, fx);
+}
+
+/** Draws a small icon ending at `x` (right edge) of a killfeed entry; returns the width it used. */
+export type KillfeedIcon = (g: CanvasRenderingContext2D, x: number, y: number, u: number) => number;
+export const killfeedIcons = new Map<string, KillfeedIcon>();
+/** A pixel icon drawn beside a weapon's name in the killfeed. */
+export function registerKillfeedIcon(weaponId: string, draw: KillfeedIcon): void {
+  killfeedIcons.set(weaponId, draw);
+}
