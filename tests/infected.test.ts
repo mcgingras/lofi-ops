@@ -10,6 +10,7 @@ import perksFeature from '../src/server/features/perks/index';
 import progressionFeature from '../src/server/features/progression/index';
 import weaponsFeature from '../src/server/features/weapons/index';
 import { controllerOf } from '../src/server/features/modes/common';
+import { createFrontendFeature, LobbyManager } from '../src/server/features/frontend/index';
 import type { InfectedRules } from '../src/server/features/modes/infected';
 import { Lobby } from '../src/server/lobby';
 import type { PlayerState } from '../src/server/player';
@@ -21,7 +22,7 @@ import { TICK_DT } from '../src/shared/constants';
 import { CHALLENGES } from '../src/shared/defs/challenges';
 import { INFECTED, INFECTED_XP } from '../src/shared/defs/infected';
 import { MAPS, mapsForMode } from '../src/shared/defs/maps';
-import { DEFAULT_TARGET_PLAYERS } from '../src/shared/defs/bots';
+import { DEFAULT_TARGET_PLAYERS, MATCHMAKING_WAIT_SEC } from '../src/shared/defs/bots';
 import { MODE_BY_ID, MODES } from '../src/shared/defs/modes';
 import type { ModeEventPayload } from '../src/shared/defs/modestate';
 import type { MatchResults } from '../src/shared/events';
@@ -369,5 +370,47 @@ describe('Infected: listing', () => {
     const withSpawns = MAPS.filter((m) => m.modes.includes('tdm') || m.modes.includes('ffa')).map((m) => m.id);
     expect(mapsForMode('infected').map((m) => m.id).sort()).toEqual(withSpawns.sort());
     expect(CHALLENGES.map((c) => c.id)).toEqual(expect.arrayContaining(['infected_infect', 'infected_last_stand', 'infected_outlast', 'infected_wins']));
+  });
+});
+
+describe('Infected: lobbies', () => {
+  const lobbyWithFrontend = () => {
+    store = new Store(':memory:');
+    lobby = new Lobby({ store, features: [weaponsFeature, perksFeature, createFrontendFeature(), modesFeature], log: () => {}, autoTick: false });
+    return lobby;
+  };
+
+  it('quick play: the matchmade lobby fills with bots, everyone a Survivor, then the infection starts', () => {
+    const lb = lobbyWithFrontend();
+    const m = new LobbyManager({ lobby: lb, rand: () => 0 });
+    const s = new Session('s-inf', null, newProfile('prof-inf', 'Solo'), 'tok-inf');
+    const l = m.matchmake(s, 'infected');
+    lb.join(s, l.room.id);
+    const room = l.room;
+    expect(room.mode.id).toBe('infected');
+    expect(m.state(l).botsToFill).toBe(11);
+    steps(room, MATCHMAKING_WAIT_SEC + 1);
+    expect(room.phase).toBe('countdown');
+    expect(room.players.size).toBe(12);
+    expect([...room.players.values()].every((p) => p.team === 0)).toBe(true);
+    const rules = controllerOf(room) as unknown as InfectedRules;
+    for (const p of room.players.values()) if (!p.session) idle(p);
+    steps(room, 6 + INFECTED.firstSec);
+    expect(rules.counts()).toEqual({ survivors: 11, infected: 1 });
+  });
+
+  it('private lobby: the host picks Infected and starts with bots', () => {
+    const lb = lobbyWithFrontend();
+    const m = new LobbyManager({ lobby: lb, rand: () => 0 }, { soloCountdownSec: 1 });
+    const host = new Session('s-host', null, newProfile('prof-host', 'Host'), 'tok-host');
+    const l = m.createPrivate(host, { mode: 'tdm', bots: true });
+    lb.join(host, l.room.id);
+    const st = m.configure(l.room, host.player, { mode: 'infected', bots: { targetPlayers: 8 } });
+    expect(st.mode).toBe('infected');
+    m.start(l.room, host.player);
+    steps(l.room, 1.2);
+    expect(l.room.mode.id).toBe('infected');
+    expect(l.room.players.size).toBe(8);
+    expect([...l.room.players.values()].every((p) => p.team === 0)).toBe(true);
   });
 });
