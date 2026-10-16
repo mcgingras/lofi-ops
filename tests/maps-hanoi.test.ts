@@ -45,7 +45,8 @@ describe('hanoi registry and time of day', () => {
     expect(def.inspiredBy).toMatch(/Black Ops/);
     expect(def.inspiredBy).toMatch(/Hanoi/);
     expect(def.size).toBe('medium');
-    for (const mode of MODES) expect(def.modes).toContain(mode.id);
+    // Zombies is only on maps with a Zombies layer (src/shared/maps/zombies/).
+    for (const mode of MODES) if (mode.id !== 'zombies') expect(def.modes).toContain(mode.id);
     for (const mode of ['tdm', 'ffa', 'dom', 'sd', 'hq']) expect(mapsForMode(mode).map((m) => m.id)).toContain('hanoi');
   });
 

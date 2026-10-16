@@ -125,7 +125,7 @@ describe('limits', () => {
 
 describe('playlists', () => {
   it('core playlists exist and unregistered modes are unavailable', () => {
-    expect(PLAYLISTS.map((p) => p.id)).toEqual(['tdm', 'ffa', 'dom', 'sd', 'hq', 'kc', 'infected']);
+    expect(PLAYLISTS.map((p) => p.id)).toEqual(['tdm', 'ffa', 'dom', 'sd', 'hq', 'kc', 'infected', 'zombies']);
     expect(playlistMode(PLAYLISTS[0]!)).toBe('tdm');
   });
 });

@@ -57,7 +57,8 @@ describe('launch: registry, materials, textures', () => {
     const def = MAP_BY_ID.get('launch')!;
     expect(def.inspiredBy).toMatch(/Black Ops \(2010\), Launch/);
     expect(def.size).toBe('large');
-    for (const mode of MODES) expect(def.modes).toContain(mode.id);
+    // Zombies is only on maps with a Zombies layer (src/shared/maps/zombies/).
+    for (const mode of MODES) if (mode.id !== 'zombies') expect(def.modes).toContain(mode.id);
   });
 
   it('every material texture has a client recipe, the recipes only use photos that exist', () => {
