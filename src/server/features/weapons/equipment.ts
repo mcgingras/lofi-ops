@@ -225,7 +225,7 @@ export function updateNades(room: Room, dt: number): void {
 function explodeAt(room: Room, e: Entity, n: NadeData, at: Vec3) {
   room.entities.remove(e.id);
   const equip = n.equip === 'gl' ? null : (EQUIPMENT_BY_ID.get(n.equip) ?? null);
-  if (equip) explode(room, at, equip, n.owner);
+  if (equip) explode(room, at, equip, n.owner, n.stuckTo);
   else {
     const owner = n.owner ? (room.players.get(n.owner) ?? null) : null;
     const c = { x: at.x, y: at.y + 0.1, z: at.z };
@@ -235,14 +235,18 @@ function explodeAt(room: Room, e: Entity, n: NadeData, at: Vec3) {
   }
 }
 
-/** Detonate a piece of equipment at a point. */
-export function explode(room: Room, at: Vec3, equip: EquipmentDef, ownerId: string | null): void {
+/**
+ * Detonate a piece of equipment at a point. `stuckTo`: the player a semtex is stuck to, who dies
+ * whatever the falloff, Flak Jacket or armour (BO1 / MW2: a stick is a kill).
+ */
+export function explode(room: Room, at: Vec3, equip: EquipmentDef, ownerId: string | null, stuckTo: string | null = null): void {
   const owner = ownerId ? (room.players.get(ownerId) ?? null) : null;
   const c = { x: at.x, y: at.y + 0.1, z: at.z };
   room.sendFeature(null, 'weapons.boom', { x: c.x, y: c.y, z: c.z, e: equip.id, owner: ownerId });
   room.bus.emit('weapons.detonated', { player: owner, equipment: equip.id, effect: equip.effect, ...c, radius: equip.radius, max: equip.max, min: equip.min });
   if (equip.effect === 'frag' || equip.effect === 'semtex') {
-    room.radiusDamage(c, equip.radius, equip.max, equip.min, { attacker: owner, weapon: equip.id, means: 'explosive', hitSelf: true });
+    const stuck = stuckTo ? (room.players.get(stuckTo) ?? null) : null;
+    room.radiusDamage(c, equip.radius, equip.max, equip.min, { attacker: owner, weapon: equip.id, means: 'explosive', hitSelf: true, ensureKill: stuck });
     return;
   }
   // Tacticals: everyone who can see it (enemies and the thrower; teammates are spared).
