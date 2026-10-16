@@ -7,6 +7,7 @@
  */
 import type { Team } from '../constants';
 import type { DeathcamPayload } from './deathcam';
+import type { FinalKillcamPayload } from './killcam';
 import type { InfectedStatePayload } from './infected';
 
 export const MODE_ENTITY = {
@@ -124,21 +125,23 @@ export interface ModeEventPayload {
   points?: number;
 }
 
-/** Replay frame: every player's pose at a room time. `f` = PlayerFlags bits, `hp` = health % (0..100). */
+/**
+ * Replay frame: every player's pose at a room time. `f` = PlayerFlags bits, `hp` = health % (0..100),
+ * `gear` = the weapon in their hands (`weaponId|camo|attachment,attachment`, see gearKey in
+ * defs/deathcam.ts), `frost` = Winter's Howl frost % (0..100). `e` = projectiles in flight
+ * (grenades, launcher rounds, tomahawks, bolts, missiles), so a replay can draw and follow them.
+ */
 export interface KillcamFrame {
   t: number;
-  p: [id: string, x: number, y: number, z: number, yaw: number, pitch: number, f: number, hp?: number][];
+  p: [id: string, x: number, y: number, z: number, yaw: number, pitch: number, f: number, hp?: number, gear?: string, frost?: number][];
+  e?: ProjectileSample[];
 }
 
-export interface KillcamPayload {
-  killer: string;
-  victim: string;
-  weapon: string;
-  headshot: boolean;
-  /** Room time of the kill. */
-  at: number;
-  frames: KillcamFrame[];
-}
+/** A projectile at a frame: entity id, kind, owner id ('' = none), position (m), sub-kind (grenade type). */
+export type ProjectileSample = [id: number, kind: string, owner: string, x: number, y: number, z: number, sub: string];
+
+/** The final killcam (`modes.killcam`): see FinalKillcamPayload in defs/killcam.ts. */
+export type KillcamPayload = FinalKillcamPayload;
 
 export interface XpLine {
   label: string;

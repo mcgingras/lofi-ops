@@ -176,38 +176,7 @@ registerHudWidget(
   (g, W, H) => {
     const m = currentMatch();
     if (!m || !scopeState.scoped) return;
-    const u = unit(H);
-    const r = Math.floor(H * 0.44);
-    const cx = Math.floor(W / 2);
-    const cy = Math.floor(H / 2);
-    g.fillStyle = C.ink;
-    g.beginPath();
-    g.rect(0, 0, W, H);
-    g.arc(cx, cy, r, 0, Math.PI * 2, true);
-    g.fill('evenodd');
-    // Lens ring (stepped pixels).
-    g.fillStyle = '#1c1c1a';
-    for (let a = 0; a < Math.PI * 2; a += 1 / r) {
-      const x = Math.round(cx + Math.cos(a) * (r - u));
-      const y = Math.round(cy + Math.sin(a) * (r - u));
-      g.fillRect(x, y, u * 2, u * 2);
-    }
-    // Reticle: thick outer posts, thin centre cross with a gap, mil-dots.
-    const gap = 4 * u;
-    rect(g, cx - r, cy - u, r - r * 0.55, 2 * u, C.ink);
-    rect(g, cx + r * 0.55, cy - u, r - r * 0.55, 2 * u, C.ink);
-    rect(g, cx - u, cy + r * 0.55, 2 * u, r - r * 0.55, C.ink);
-    rect(g, cx - r * 0.55, cy, r * 0.55 - gap, u, C.ink);
-    rect(g, cx + gap, cy, r * 0.55 - gap, u, C.ink);
-    rect(g, cx, cy - r, u, r - gap, C.ink);
-    rect(g, cx, cy + gap, u, r * 0.55 - gap, C.ink);
-    for (let i = 1; i <= 4; i++) {
-      const s = Math.round((r * 0.55 * i) / 5);
-      rect(g, cx + s - u, cy - u, 2 * u + 1, 2 * u + 1, C.ink);
-      rect(g, cx - s - u, cy - u, 2 * u + 1, 2 * u + 1, C.ink);
-      rect(g, cx - u, cy + s - u, 2 * u + 1, 2 * u + 1, C.ink);
-    }
-    rect(g, cx, cy, u, u, '#c02018');
+    const { u, r, cx, cy } = drawScopeMask(g, W, H);
     // Breath meter and hints (inside the black, bottom).
     const bw = 60 * u;
     const by = H - 18 * u;
@@ -221,3 +190,40 @@ registerHudWidget(
   },
   15,
 );
+
+/** The scope itself (black mask, lens ring, reticle with mil-dots); killcams draw it through the killer's scope too. */
+export function drawScopeMask(g: CanvasRenderingContext2D, W: number, H: number): { u: number; r: number; cx: number; cy: number } {
+  const u = unit(H);
+  const r = Math.floor(H * 0.44);
+  const cx = Math.floor(W / 2);
+  const cy = Math.floor(H / 2);
+  g.fillStyle = C.ink;
+  g.beginPath();
+  g.rect(0, 0, W, H);
+  g.arc(cx, cy, r, 0, Math.PI * 2, true);
+  g.fill('evenodd');
+  // Lens ring (stepped pixels).
+  g.fillStyle = '#1c1c1a';
+  for (let a = 0; a < Math.PI * 2; a += 1 / r) {
+    const x = Math.round(cx + Math.cos(a) * (r - u));
+    const y = Math.round(cy + Math.sin(a) * (r - u));
+    g.fillRect(x, y, u * 2, u * 2);
+  }
+  // Reticle: thick outer posts, thin centre cross with a gap, mil-dots.
+  const gap = 4 * u;
+  rect(g, cx - r, cy - u, r - r * 0.55, 2 * u, C.ink);
+  rect(g, cx + r * 0.55, cy - u, r - r * 0.55, 2 * u, C.ink);
+  rect(g, cx - u, cy + r * 0.55, 2 * u, r - r * 0.55, C.ink);
+  rect(g, cx - r * 0.55, cy, r * 0.55 - gap, u, C.ink);
+  rect(g, cx + gap, cy, r * 0.55 - gap, u, C.ink);
+  rect(g, cx, cy - r, u, r - gap, C.ink);
+  rect(g, cx, cy + gap, u, r * 0.55 - gap, C.ink);
+  for (let i = 1; i <= 4; i++) {
+    const s = Math.round((r * 0.55 * i) / 5);
+    rect(g, cx + s - u, cy - u, 2 * u + 1, 2 * u + 1, C.ink);
+    rect(g, cx - s - u, cy - u, 2 * u + 1, 2 * u + 1, C.ink);
+    rect(g, cx - u, cy + s - u, 2 * u + 1, 2 * u + 1, C.ink);
+  }
+  rect(g, cx, cy, u, u, '#c02018');
+  return { u, r, cx, cy };
+}

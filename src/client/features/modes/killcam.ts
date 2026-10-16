@@ -1,62 +1,89 @@
 /**
- * Final killcam playback: when the match ends on a recent kill the server sends the clip
- * (`modes.killcam`: every player's pose at 20 Hz for 3.5 s up to the kill). After `matchEnd` we
- * replay it through the killer's eyes with stand-in soldiers (the live remotes are hidden), slow
- * motion for the last moment, then hand over to the summary screen.
+ * Final killcam playback (BO1, see defs/killcam.ts). When the match ends on (or within 2 s of) a
+ * kill the server sends the clip (`modes.killcam`): 5 s before the kill to 2 s after it, every
+ * nearby player's pose, weapon, shots and projectiles, the killer card. After `matchEnd` it plays
+ * through the shared replay renderer (replay-view.ts: the killer's eyes with their real gun, ADS
+ * and scope, tracers and gunshots, the projectile for grenade kills, the streak's camera for
+ * streak kills), at 1x then BO1's 0.25x slow motion around the kill, fading in from and out to
+ * black, with the live game muted underneath. HUD: "FINAL KILLCAM", who won, a timer and the
+ * killer's card. Not skippable (BO1's finalKillcam has no skip thread). Then the summary.
  */
-import { PLAYER } from '../../../shared/constants';
-import { WEAPON_BY_ID } from '../../../shared/defs/weapons';
-import { PlayerFlags } from '../../../shared/protocol';
+import { unpackClip, type UnpackedClip } from '../../../shared/defs/deathcam';
+import { finalClock, finalTimeline, type FinalKillcamPayload, type FinalTimeline } from '../../../shared/defs/killcam';
 import type { Match } from '../../game/match';
-import { blink, HUD_COLORS as C, rect, txt, unit } from '../../hud/draw';
+import { HUD_COLORS as C, txt, unit } from '../../hud/draw';
 import { registerHudWidget, registerMatchHook } from '../../registry';
 import { currentMatch } from '../../state';
-import { clipTime, playSeconds, posesAt, SLOW_RATE, SLOW_SEC } from './killcam-math';
-import { ReplayActors } from './replay';
+import { drawScopeMask } from '../weapons/scope';
+import { band, drawCard } from './deathcam';
+import { killcamTimer } from './deathcam-math';
+import { ReplayView } from './replay-view';
 import { modes, now } from './store';
+import { winnerLine } from './summary-data';
 
-const actors = new ReplayActors();
+/** Seconds the screen comes back from black after the killcam, under the opening summary. */
+const AFTER_FADE = 0.6;
 
-function stop(): void {
-  actors.dispose();
-}
+const view = new ReplayView();
+const S = {
+  payload: null as FinalKillcamPayload | null,
+  clip: null as UnpackedClip | null,
+  tl: null as FinalTimeline | null,
+  from: 0,
+  /** Local time the killcam ended (the black fades out under the summary). */
+  endedAt: -Infinity,
+};
 
 /** True while the final killcam is on screen. */
 export const killcamPlaying = () => modes.killcamStart !== null;
 
+function stop(): void {
+  view.end(currentMatch());
+}
+
+/** Unpack a newly arrived clip and build its timeline. */
+function load(d: FinalKillcamPayload): void {
+  S.payload = d;
+  S.clip = unpackClip(d.clip);
+  S.from = S.clip.frames[0]?.t ?? d.at;
+  S.tl = finalTimeline(S.from, d.to, d.at);
+}
+
 function frame(m: Match, dt: number): void {
-  const clip = modes.killcam;
-  if (!clip || !modes.results || modes.killcamDone || m.phase !== 'ended' || !m.map) {
-    if (actors.size) stop();
+  const d = modes.killcam;
+  if (!d || modes.killcamDone || !m.map || !(d.round === undefined ? !!modes.results && m.phase === 'ended' : m.phase === 'playing' && (d.endsAt === null || m.serverTime < d.endsAt))) {
+    if (view.active) stop();
     if (modes.killcamStart !== null) modes.killcamStart = null;
     return;
   }
-  const first = clip.frames[0]!;
-  const span = clip.frames.at(-1)!.t - first.t;
-  if (modes.killcamStart === null) modes.killcamStart = now();
-  const elapsed = now() - modes.killcamStart;
-  if (elapsed > playSeconds(span)) {
+  if (S.payload !== d) load(d);
+  const clip = S.clip!;
+  const tl = S.tl!;
+  if (modes.killcamStart === null) {
+    if (clip.frames.length < 2) {
+      modes.killcamDone = true;
+      return;
+    }
+    modes.killcamStart = now();
+    view.begin(m, { killer: d.killer, victim: d.victim, weapon: d.weapon, means: d.means, at: d.at, view: d.view, cam: d.cam, vm: d.vm, clip }, S.from, 0);
+  }
+  const c = finalClock(tl, now() - modes.killcamStart);
+  if (c.done) {
     modes.killcamDone = true;
     modes.killcamStart = null;
+    S.endedAt = now();
     stop();
     return;
   }
-  const t = first.t + clipTime(elapsed, span);
-  const poses = posesAt(clip.frames, t);
-  const slow = elapsed > Math.max(0, span - SLOW_SEC);
-  actors.update(m, poses, clip.killer, dt, slow ? SLOW_RATE : 1);
-  const k = poses.get(clip.killer);
-  if (k) {
-    const eye = k.f & PlayerFlags.PRONE ? PLAYER.proneEye : k.f & PlayerFlags.CROUCH ? PLAYER.crouchEye : PLAYER.eye;
-    m.renderer.cam.position.set(k.x, k.y + eye, k.z);
-    m.renderer.cam.rotation.set(k.pitch, k.yaw, 0, 'YXZ');
-    m.renderer.zoom = k.f & PlayerFlags.ADS ? 1.3 : 1;
-    m.renderer.updateFov();
-  }
+  view.frame(m, c.t, dt, c.rate);
 }
 
 registerMatchHook('modes.killcam', {
-  start: () => () => stop(),
+  start: () => () => {
+    view.dispose();
+    S.payload = null;
+    S.clip = null;
+  },
   frame,
 });
 
@@ -64,20 +91,45 @@ registerHudWidget(
   'modes.killcam',
   (g, W, H) => {
     const m = currentMatch();
-    const clip = modes.killcam;
-    if (!m || !clip || modes.killcamStart === null) return;
+    const d = modes.killcam;
+    if (!m) return;
+    // After the killcam: the black lifts under the summary as it opens.
+    const after = now() - S.endedAt;
+    if (modes.killcamStart === null) {
+      if (after >= 0 && after < AFTER_FADE) {
+        g.fillStyle = `rgba(0,0,0,${1 - after / AFTER_FADE})`;
+        g.fillRect(0, 0, W, H);
+      }
+      return;
+    }
+    if (!d || !S.tl) return;
     const u = unit(H);
-    const bar = Math.round(H * 0.1);
-    rect(g, 0, 0, W, bar, C.ink);
-    rect(g, 0, H - bar, W, bar, C.ink);
-    txt(g, 'FINAL KILLCAM', 8 * u, Math.max(2 * u, bar / 2 - 5 * u), 8, blink(m.time, 1, 0.7) ? C.warn : C.paper, 'left', u);
-    const weapon = WEAPON_BY_ID.get(clip.weapon)?.name ?? clip.weapon.toUpperCase();
-    const killer = m.nameOf(clip.killer).toUpperCase();
-    const victim = m.nameOf(clip.victim).toUpperCase();
-    const y = H - bar + Math.max(2 * u, bar / 2 - 8 * u);
-    txt(g, killer, W / 2 - 6 * u, y, 8, m.isEnemy(clip.killer) ? C.enemy : C.friend, 'right', u);
-    txt(g, `[${weapon.toUpperCase()}${clip.headshot ? ' HS' : ''}]`, W / 2, y + 9 * u, 6, C.paper, 'center', u);
-    txt(g, victim, W / 2 + 6 * u, y, 8, m.isEnemy(clip.victim) ? C.enemy : C.friend, 'left', u);
+    const elapsed = now() - modes.killcamStart;
+    const c = finalClock(S.tl, elapsed);
+    if (view.scoped) drawScopeMask(g, W, H);
+    const top = Math.round(H * 0.13);
+    band(g, 0, W, top);
+    txt(g, d.round === undefined ? 'FINAL KILLCAM' : 'ROUND KILLCAM', W / 2, Math.max(2 * u, top / 2 - 13 * u), 16, C.paper, 'center', u);
+    const res = modes.results;
+    const sd = modes.state?.sd;
+    if (d.round !== undefined && sd?.lastRound) {
+      const mine = m.myTeam === null ? null : sd.lastRound.winner === m.myTeam;
+      txt(g, `ROUND ${d.round} · ${mine === null ? 'OVER' : mine ? 'WON' : 'LOST'}`, W / 2, top / 2 + 5 * u, 8, mine === null ? C.paper : mine ? C.hi : C.warn, 'center', u);
+    } else if (res) {
+      const w = winnerLine(res, m.myId);
+      const outcome = w.mine === null ? '' : w.mine ? ' · VICTORY' : ' · DEFEAT';
+      txt(g, w.text + outcome, W / 2, top / 2 + 5 * u, 8, w.mine === null ? C.paper : w.mine ? C.hi : C.warn, 'center', u);
+    }
+    txt(g, killcamTimer(Math.max(0, S.tl.realSec - elapsed)), W - 8 * u, Math.max(2 * u, top / 2 - 4 * u), 8, C.paper, 'right', u);
+    const bottom = 66 * u;
+    band(g, H - bottom, W, bottom);
+    const team = S.clip?.teams.get(d.killer);
+    const friendly = team !== null && team !== undefined ? team === m.myTeam && m.myTeam !== null : d.killer === m.myId;
+    drawCard(g, m, { card: d.card, killer: d.killer, headshot: d.headshot, label: `KILLED ${(d.vname || m.nameOf(d.victim)).toUpperCase()}`, nameColor: friendly ? C.friend : C.enemy }, W, H - bottom + 18 * u, u);
+    if (c.fade > 0) {
+      g.fillStyle = `rgba(0,0,0,${c.fade})`;
+      g.fillRect(0, 0, W, H);
+    }
   },
   95,
 );

@@ -12,6 +12,7 @@
  * the killer's view, which was the rocket cam).
  */
 import { DEATHCAM, deathcamWindow, NO_DEATHCAM_MEANS, packClip, packTrack, TOP_DOWN_STREAKS, type DeathcamPayload, type DeathcamTuning, type KillerCard } from '../../../shared/defs/deathcam';
+import { FINAL_KILLCAM } from '../../../shared/defs/killcam';
 import { rocketTrack } from '../killstreaks/api';
 import { isStreakWeapon, KS_ENTITY } from '../../../shared/defs/killstreaks';
 import type { KillcamFrame } from '../../../shared/defs/modestate';
@@ -34,13 +35,47 @@ const TOP_HEIGHT = 16;
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
+/** How a kill replays: the killer card, the gun in their hands (vm) or the streak camera. Used by both killcams. */
+export interface KillView {
+  card: KillerCard;
+  streak: boolean;
+  cam?: DeathcamPayload['cam'];
+  vm?: DeathcamPayload['vm'];
+}
+
+/** Killer card at the kill (BO1 playercard + weapon). */
+export function killerCard(a: PlayerState, weapon: string): KillerCard {
+  const held = a.weapons.find((w) => w.def.base.id === weapon);
+  return {
+    name: a.name,
+    bot: a.isBot,
+    level: a.profile?.level ?? 1,
+    prestige: a.profile?.prestige ?? 0,
+    weapon,
+    attachments: held ? [...held.def.attachmentIds] : [],
+    health: a.alive ? Math.max(1, Math.ceil(a.health)) : 0,
+    maxHealth: Math.round(a.maxHealth),
+    streak: a.stats.streak,
+  };
+}
+
+/** Frames with only the players in `keep`. */
+export const keepPlayers = (frames: readonly KillcamFrame[], keep: ReadonlySet<string>): KillcamFrame[] => frames.map((f) => ({ ...f, p: f.p.filter((p) => keep.has(p[0])) }));
+
+/** Each player's team right now (null = none, or they left). */
+export function teamsOf(room: Room, ids: Iterable<string>): Map<string, number | null> {
+  const out = new Map<string, number | null>();
+  for (const id of ids) out.set(id, room.players.get(id)?.team ?? null);
+  return out;
+}
+
 /** Does this death get a killcam? Humans killed by an enemy player, not by the world or themselves. */
 export function wantsDeathcam(room: Room, e: DeathEvent<PlayerState>): e is DeathEvent<PlayerState> & { attacker: PlayerState } {
   return !!e.victim.session && !!e.attacker && e.attacker !== e.victim && room.isEnemy(e.attacker, e.victim) && !NO_DEATHCAM_MEANS.has(e.means);
 }
 
 /** Keep the killer, the victim and whoever was within `nearM` of either at the kill (closest first). */
-export function nearbyIds(frames: readonly KillcamFrame[], killer: string, victim: string, at: number, t: DeathcamTuning = DEATHCAM): Set<string> {
+export function nearbyIds(frames: readonly KillcamFrame[], killer: string, victim: string, at: number, t: Pick<DeathcamTuning, 'nearM' | 'maxPlayers'> = DEATHCAM): Set<string> {
   let ref = frames[0];
   for (const f of frames) if (f.t <= at + 1e-6) ref = f;
   const keep = new Set([killer, victim]);
@@ -78,29 +113,32 @@ export class Deathcams {
     if (from) this.lastFrom.set(victim.id, { x: from.x, y: from.y, z: from.z });
   }
 
-  onDeath(e: DeathEvent<PlayerState>): void {
+  /**
+   * What a replay of this kill shows (killer card, the gun in the killer's hands or the streak
+   * camera), for any kill by an enemy player; null otherwise. Consumes where the victim's last
+   * damage came from, so call it once per death, at the kill (before the match may end).
+   */
+  describe(e: DeathEvent<PlayerState>): KillView | null {
     const from = this.lastFrom.get(e.victim.id) ?? null;
     this.lastFrom.delete(e.victim.id);
-    if (!wantsDeathcam(this.room, e)) return;
+    const a = e.attacker;
+    if (!a || a === e.victim || !this.room.isEnemy(a, e.victim) || NO_DEATHCAM_MEANS.has(e.means)) return null;
+    const streak = isStreakWeapon(e.weapon);
+    const cur = currentWeapon(a);
+    const view: KillView = { card: killerCard(a, e.weapon), streak };
+    if (streak) view.cam = this.streakCam(e.weapon, a, e.victim, from);
+    else if (cur) view.vm = { weapon: cur.def.base.id, attachments: [...cur.def.attachmentIds], camo: cur.camo, suppressed: cur.def.suppressed };
+    return view;
+  }
+
+  /** The victim's per-death killcam (`kill` from describe). */
+  onDeath(e: DeathEvent<PlayerState>, kill: KillView | null = this.describe(e)): void {
+    if (!kill || !wantsDeathcam(this.room, e)) return;
     const room = this.room;
     const a = e.attacker;
     const v = e.victim;
     const at = room.time;
     const win = deathcamWindow(at, v.respawnAt);
-    const streak = isStreakWeapon(e.weapon);
-    const held = a.weapons.find((w) => w.def.base.id === e.weapon);
-    const cur = currentWeapon(a);
-    const card: KillerCard = {
-      name: a.name,
-      bot: a.isBot,
-      level: a.profile?.level ?? 1,
-      prestige: a.profile?.prestige ?? 0,
-      weapon: e.weapon,
-      attachments: held ? [...held.def.attachmentIds] : [],
-      health: a.alive ? Math.max(1, Math.ceil(a.health)) : 0,
-      maxHealth: Math.round(a.maxHealth),
-      streak: a.stats.streak,
-    };
     const base: DeathcamPayload = {
       killer: a.id,
       victim: v.id,
@@ -110,12 +148,12 @@ export class Deathcams {
       at: r2(at),
       playAt: r2(at + DEATHCAM.beatSec),
       respawnAt: v.respawnAt,
-      card,
+      card: kill.card,
       view: 'none',
       clip: null,
     };
-    if (streak) base.cam = this.streakCam(e.weapon, a, v, from);
-    else if (cur) base.vm = { weapon: cur.def.base.id, attachments: [...cur.def.attachmentIds], camo: cur.camo, suppressed: cur.def.suppressed };
+    if (kill.cam) base.cam = kill.cam;
+    if (kill.vm) base.vm = kill.vm;
 
     const send = () => {
       this.pending.delete(cancel);
@@ -125,9 +163,8 @@ export class Deathcams {
         const got = this.rec.between(win.from, win.to);
         if (got.frames.length >= 4) {
           const keep = nearbyIds(got.frames, a.id, v.id, at);
-          const frames = got.frames.map((f) => ({ t: f.t, p: f.p.filter((p) => keep.has(p[0])) }));
-          msg.clip = packClip(frames, got.shots.filter((s) => keep.has(s.id)));
-          msg.view = streak ? 'streak' : 'eyes';
+          msg.clip = packClip(keepPlayers(got.frames, keep), got.shots.filter((s) => keep.has(s.id)), teamsOf(room, keep));
+          msg.view = kill.streak ? 'streak' : 'eyes';
         }
       }
       room.sendFeature(v, 'modes.deathcam', msg);
@@ -143,7 +180,8 @@ export class Deathcams {
     if (weapon === 'valkyrie') {
       // The rocket is gone by now (it blew up to make the kill): ride its recorded flight.
       const tr = rocketTrack(this.room, a.id);
-      const pts = tr?.points.filter((q) => q.t >= this.room.time - DEATHCAM.maxSec - 0.5) ?? [];
+      // As far back as the longer (final) killcam reaches.
+      const pts = tr?.points.filter((q) => q.t >= this.room.time - Math.max(DEATHCAM.maxSec, FINAL_KILLCAM.beforeSec) - 0.5) ?? [];
       const last = pts.at(-1);
       if (last && pts.length >= 2) return { x: r2(last.x), y: r2(last.y), z: r2(last.z), top: false, track: packTrack(pts) };
     }

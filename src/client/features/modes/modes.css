@@ -1,5 +1,7 @@
 /* End-of-match summary (modes feature). Uses the menu tokens from menus.css. */
-.lfm-summary { gap: 14px; max-width: 980px; margin: 0 auto; }
+.lfm-summary { gap: 14px; max-width: 980px; margin: 0 auto; animation: lfm-fade-in 0.5s ease-out both; }
+/* The summary comes up out of the final killcam's fade to black. */
+@keyframes lfm-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .lfm-head { display: flex; flex-direction: column; gap: 6px; }
 .lfm-title { font-size: clamp(32px, 7vw, 60px); margin: 0; line-height: 1; letter-spacing: 0.05em; color: var(--paper); text-shadow: 4px 4px 0 #000; }
 .lfm-title.lfm-win { color: var(--hi); }

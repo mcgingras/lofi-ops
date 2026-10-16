@@ -34,7 +34,7 @@ export function infectedState(): { m: Match; st: InfectedStatePayload } | null {
   return { m, st: st.infected };
 }
 
-const isInfectedMatch = (m: Match | null): m is Match => !!m && m.joined.mode === 'infected';
+export const isInfectedMatch = (m: Match | null): m is Match => !!m && m.joined.mode === 'infected';
 const holdingKnife = (m: Match) => m.alive && m.weapon()?.base.id === INFECTED_WEAPON;
 
 // ---------------------------------------------------------------------------------------------
@@ -191,13 +191,18 @@ registerMatchHook('modes.infected', {
     if (!isInfectedMatch(m)) return;
     for (const v of m.remotes.views.values()) {
       // The soldier is rebuilt when its team changes, so a new one starts untinted.
-      if (v.team !== 1 || tinted.has(v.soldier)) continue;
-      tinted.add(v.soldier);
-      // The body only: the gun or knife in their hands keeps its colours.
-      for (const mat of v.soldier.mats) if (!isWornMaterial(mat)) mat.uniforms.uTint.value.multiply(SKIN);
+      if (v.team === 1) infectSoldier(v.soldier);
     }
   },
 });
+
+/** Give a soldier the Infected's sickly green, once (live remotes and killcam stand-ins). */
+export function infectSoldier(s: Soldier): void {
+  if (tinted.has(s)) return;
+  tinted.add(s);
+  // The body only: the gun or knife in their hands keeps its colours.
+  for (const mat of s.mats) if (!isWornMaterial(mat)) mat.uniforms.uTint.value.multiply(SKIN);
+}
 
 // ---------------------------------------------------------------------------------------------
 // Viewmodel: the Infected's knife (WeaponDef 'knife'), in a green glove

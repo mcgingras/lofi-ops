@@ -45,8 +45,15 @@ function wrapCoreWidgets(): void {
       if (killcamPlaying() || summaryOpen()) return;
       orig(g, W, H, dt);
     });
+  // A final or round killcam is the killer's screen, not yours (you may still be alive in S&D's post-round).
+  // (Plus the match-end XP and CoD Points popups, which would sit over the replay.)
+  for (const id of ['core.names', 'core.damage', 'core.crosshair', 'core.hitmarker', 'core.compass', 'core.health', 'core.ammo', 'core.score', 'core.killfeed', 'core.status', 'core.title', 'progression.ticker', 'progression.popups', 'economy.award'])
+    wrap(id, (orig) => (g, W, H, dt) => {
+      if (killcamPlaying()) return;
+      orig(g, W, H, dt);
+    });
   wrap('core.death', (orig) => (g, W, H, dt) => {
-    if (deathcamPlaying()) return;
+    if (deathcamPlaying() || killcamPlaying()) return;
     const m = currentMatch();
     if (!m || m.joined.mode !== 'hq' || m.alive || !m.death || m.phase === 'ended' || (m.me?.respawnAt ?? null) !== null) return orig(g, W, H, dt);
     const u = unit(H);
