@@ -13,6 +13,7 @@
 import { HEALTH, type Team } from '../../../shared/constants';
 import { DOGS, POINTS, dogHealth, dogSpawnWait, dogsForRound, downedLoss, firstDogRound, killPoints, newDropTracker, nextDogRound, PERK_COLA_BY_ID, PERK_EFFECTS, rollGait, roundUpToTen, roundXp, scaledPoints, spawnDelay, STARTING_WEAPON, ZOMBIE_SPEED, zombieDamageMult, zombieHealth, ZOMBIES, ZOMBIES_LOADOUT, ZOMBIES_TEAMS, zombiesForRound, type DropTracker, type PerkColaId, type ZombiesEventPayload, type ZombiesPhase, type ZombiesPlayerInfo, type ZombiesStatePayload } from '../../../shared/defs/zombies';
 import { MOVE } from '../../../shared/constants';
+import { EQUIPMENT_BY_ID } from '../../../shared/defs/equipment';
 import { cloneLoadout, type Loadout } from '../../../shared/loadout';
 import type { MatchResults } from '../../../shared/events';
 import type { SpawnPoint } from '../../../shared/maps/types';
@@ -151,7 +152,12 @@ export class ZombiesGame {
     m.add('fireRateMultiplier', (p) => (this.hasPerk(p, 'doubletap') ? PERK_EFFECTS.doubleTapRate : undefined), 'zombies.doubletap');
     m.add('useClaimed', (p) => (this.buy.claimsUse(p) ? true : undefined), 'zombies.use');
     // Grenades: carry up to four (BO1), refilled each round.
-    m.add('equipmentCountOffset', (p, kind) => (survivorOf(p) && kind === 'lethal' ? ZOMBIES.maxGrenades - 2 : undefined), 'zombies.grenades');
+    m.add('equipmentCountOffset', (p, kind) => {
+      if (!survivorOf(p) || kind !== 'lethal') return undefined;
+      const id = p.ext.weapons?.lethal ?? p.loadout?.lethal;
+      const base = id ? (EQUIPMENT_BY_ID.get(id)?.count ?? 1) : 1;
+      return ZOMBIES.maxGrenades - base;
+    }, 'zombies.grenades');
   }
 
   // -------------------------------------------------------------------------------------------
@@ -376,7 +382,7 @@ export class ZombiesGame {
       s.boardPoints = 0;
       if (!p.alive || s.dead) {
         if (room.phase === 'playing') room.spawn(p);
-      } else this.topUpGrenades(p);
+      } else if (r > 1) this.topUpGrenades(p);
       if (p.isBot && p.alive) this.armAlly(p);
     }
     this.event({ kind: this.dogRound ? 'dog_round' : 'round_start', round: r });

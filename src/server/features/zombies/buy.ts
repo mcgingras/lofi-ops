@@ -246,6 +246,7 @@ export class Buyables {
     const g = this.game;
     const s = survivorOf(p)!;
     if (s.perks.includes(m.id)) return this.nope(p, 'ALREADY HAVE IT');
+    if (s.drinkingUntil > g.room.time) return false;
     const solo = g.solo;
     if (m.id === 'revive' && solo && g.soloLives <= 0) return this.nope(p, 'SOLD OUT');
     const price = perkPrice(m.id, solo);

@@ -23,7 +23,7 @@ export const NUKETOWN_ZOMBIES: ZombiesLayer = {
   playerSpawns: [
     { x: -1.5, y: 0, z: -11.5, yaw: S },
     { x: 1.5, y: 0, z: -11, yaw: S },
-    { x: -4.5, y: 0, z: -11, yaw: S },
+    { x: -3.25, y: 0, z: -12.25, yaw: S },
     { x: 6.5, y: 0, z: -11.5, yaw: S },
   ],
   wallBuys: [
@@ -37,7 +37,7 @@ export const NUKETOWN_ZOMBIES: ZombiesLayer = {
   boxSpots: [
     { x: 1.75, y: 0, z: -14.25, yaw: S },
     { x: -32.25, y: 0, z: -6.25, yaw: E },
-    { x: 38.25, y: 0, z: -4.25, yaw: W },
+    { x: 38.25, y: 0, z: -4.25, yaw: N },
     { x: 1.75, y: 0, z: 11.75, yaw: N },
   ],
   perks: [
