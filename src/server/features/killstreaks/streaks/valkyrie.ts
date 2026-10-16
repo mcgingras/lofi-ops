@@ -298,7 +298,8 @@ class ValkyrieRun {
     }
     let want: Vec3 | null = null;
     let boost = false;
-    if (f.guided && p.alive) {
+    // Glitched: no guidance (it flies on straight, unboosted).
+    if (f.guided && p.alive && !this.ctx.hardwareStunned(p)) {
       if (p.isBot) {
         want = botSteer(this.ctx, p, f);
         // Skilled bots boost on the long straight run in, and let go to turn in at the end.

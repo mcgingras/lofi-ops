@@ -34,12 +34,14 @@ export const PERKS: PerkDef[] = [
   { id: 'steady_aim', name: 'Steady Aim', tier: 2, description: 'Increased hip fire accuracy.', pro: { description: 'Faster recovery from sprinting. Faster knifing.', challenge: 'steady_aim_pro' }, unlockLevel: 1, icon: 'perk_steady', price: 2000 },
   { id: 'sleight_of_hand', name: 'Sleight of Hand', tier: 2, description: 'Faster reloading.', pro: { description: 'Faster aiming down sights.', challenge: 'sleight_of_hand_pro' }, unlockLevel: 1, icon: 'perk_sleight', price: 2000 },
   { id: 'warlord', name: 'Warlord', tier: 2, description: 'Two attachments on your primary weapon.', pro: { description: 'One extra lethal and one extra tactical grenade.', challenge: 'warlord_pro' }, unlockLevel: 12, icon: 'perk_warlord', price: 2000 },
+  { id: 'pack_rat', name: 'Pack Rat', tier: 2, description: 'Pick up guns with a tap, switch weapons faster, and picked-up guns wear your camo.', pro: { description: 'Picked-up guns come with a full magazine and full ammo.', challenge: 'pack_rat_pro' }, unlockLevel: 10, icon: 'perk_packrat', price: 2000 },
   // Tier 3
   { id: 'tactical_mask', name: 'Tactical Mask', tier: 3, description: 'Reduced effect of flashbangs, concussions and Nova Gas.', pro: { description: 'Enemies hit by your flash or concussion show on your minimap.', challenge: 'tactical_mask_pro' }, unlockLevel: 1, icon: 'perk_mask', price: 2000 },
   { id: 'marathon', name: 'Marathon', tier: 3, description: 'Sprint for twice as long.', pro: { description: 'Unlimited sprint. Mantle faster.', challenge: 'marathon_pro' }, unlockLevel: 1, icon: 'perk_marathon', price: 2000 },
   { id: 'ninja', name: 'Ninja', tier: 3, description: 'Silent footsteps.', pro: { description: 'Enemy footsteps are louder to you.', challenge: 'ninja_pro' }, unlockLevel: 15, icon: 'perk_ninja', price: 2000 },
   { id: 'second_chance', name: 'Second Chance', tier: 3, description: 'Pull out your pistol before dying.', pro: { description: 'Last stand lasts longer and teammates can revive you.', challenge: 'second_chance_pro' }, unlockLevel: 18, icon: 'perk_second', price: 2000 },
   { id: 'hacker', name: 'Hacker', tier: 3, description: 'Detect enemy equipment and killstreak hardware.', pro: { description: 'Hack enemy sentries, SAMs and Care Packages (booby trap).', challenge: 'hacker_pro' }, unlockLevel: 21, icon: 'perk_hacker', price: 2000 },
+  { id: 'tracker', name: 'Tracker', tier: 3, description: 'See the glowing footprints of nearby enemies for a few seconds.', pro: { description: 'Also see the footprints of enemies near your teammates.', challenge: 'tracker_pro' }, unlockLevel: 24, icon: 'perk_tracker', price: 2000 },
 ];
 
 export const PERK_BY_ID = indexById(PERKS);
@@ -110,6 +112,8 @@ export const PERK_PRO_CHALLENGES: ChallengeDef[] = [
   { id: 'marathon_pro', name: 'Marathon Pro', description: 'Sprint 20 km with Marathon.', metric: 'perks.marathon_sprint_m', goal: 20000, xp: 2500 },
   { id: 'ninja_pro', name: 'Ninja Pro', description: 'Kill 50 enemies from behind with Ninja.', metric: 'perks.ninja_back_kills', goal: 50, xp: 2500 },
   { id: 'second_chance_pro', name: 'Second Chance Pro', description: 'Kill 10 enemies while in last stand.', metric: 'perks.last_stand_kills', goal: 10, xp: 2500 },
+  { id: 'pack_rat_pro', name: 'Pack Rat Pro', description: 'Get 25 kills with guns picked up off the ground, with Pack Rat.', metric: 'perks.packrat_pickup_kills', goal: 25, xp: 2500 },
+  { id: 'tracker_pro', name: 'Tracker Pro', description: 'Kill 30 enemies whose footprints you were following, with Tracker.', metric: 'perks.tracker_kills', goal: 30, xp: 2500 },
   { id: 'hacker_pro', name: 'Hacker Pro', description: 'Destroy 15 enemy killstreaks or pieces of equipment with Hacker.', metric: 'perks.hacker_destroyed', goal: 15, xp: 2500 },
 ];
 

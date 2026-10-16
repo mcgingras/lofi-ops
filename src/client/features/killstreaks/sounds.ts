@@ -4,6 +4,7 @@
  */
 import { sfx } from '../../game/audio';
 import { renderCue } from '../../../shared/defs/sfx-cues';
+import { glitchHash } from '../../../shared/defs/glitch';
 
 function cueBuffer(ctx: AudioContext, name: string, gain = 0.35): AudioBuffer {
   const a = renderCue(name, ctx.sampleRate);
@@ -51,5 +52,21 @@ sfx.register('ks_fire', (ctx) => noise(ctx, 0.5, 5, () => 0.25));
 sfx.register('ks_static', (ctx) => noise(ctx, 0.35, 1, (k) => (k < 0.1 ? k * 10 : 1 - k) * 0.35));
 sfx.register('ks_mark', (ctx) => tone(ctx, 0.08, (t) => Math.sin(t * 2 * Math.PI * 2000) * 0.12 * Math.min(1, t / 0.004, (0.08 - t) / 0.01)));
 sfx.register('ks_confirm', (ctx) => tone(ctx, 0.1, (t) => Math.sin(t * 2 * Math.PI * 2000) * 0.15 * Math.min(1, t / 0.004, (0.1 - t) / 0.01)));
+// Glitch call-in: a digital power-down. A stepped square-wave arpeggio falls three octaves, cut by
+// sample-and-hold noise stutters, over a dying sub sweep.
+sfx.register('ks_glitch', (ctx) => {
+  const dur = 1.6;
+  let h = 0;
+  return tone(ctx, dur, (t, i) => {
+    const k = t / dur;
+    const step = Math.floor(t * 16);
+    const hz = 880 * Math.pow(0.5, k * 3) * (glitchHash(step) > 0.55 ? 1.5 : 1);
+    const stutter = glitchHash(Math.floor(t * 11), 3) < 0.3;
+    if (i % (5 + (step % 4) * 7) === 0) h = Math.random() * 2 - 1;
+    const env = Math.min(1, t * 60) * Math.pow(1 - k, 1.3);
+    const sub = Math.sin(t * 2 * Math.PI * (120 - 85 * k)) * 0.28;
+    return ((stutter ? h * 0.32 : sq(t, hz) * 0.2) + sub) * env;
+  });
+});
 // Care Package marker: the canister's smoke pouring out (a soft hiss, re-triggered while it smokes).
 sfx.register('ks_smoke', (ctx) => noise(ctx, 0.9, 1, (k) => Math.min(1, k * 8) * Math.min(1, (1 - k) * 4) * 0.16));

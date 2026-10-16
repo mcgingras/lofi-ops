@@ -22,8 +22,8 @@ const setup = () => (r = rig()).room;
 describe('perk defs', () => {
   it('has the BO1 tiers with Pro challenges', () => {
     expect(perksOfTier(1).map((p) => p.id)).toEqual(['lightweight', 'flak_jacket', 'scavenger', 'ghost', 'hardline']);
-    expect(perksOfTier(2).map((p) => p.id)).toEqual(['hardened', 'scout', 'steady_aim', 'sleight_of_hand', 'warlord']);
-    expect(perksOfTier(3).map((p) => p.id)).toEqual(['tactical_mask', 'marathon', 'ninja', 'second_chance', 'hacker']);
+    expect(perksOfTier(2).map((p) => p.id)).toEqual(['hardened', 'scout', 'steady_aim', 'sleight_of_hand', 'warlord', 'pack_rat']);
+    expect(perksOfTier(3).map((p) => p.id)).toEqual(['tactical_mask', 'marathon', 'ninja', 'second_chance', 'hacker', 'tracker']);
     expect(PERK_PRO_CHALLENGES).toHaveLength(PERKS.length);
     for (const p of PERKS) {
       const ch = proChallengeFor(p.id);

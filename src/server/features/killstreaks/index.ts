@@ -34,6 +34,7 @@ import { flushState, grant, ksOf, markDirty, onKill, resetPlayer, stateMsg } fro
 import { crateInReach, onUsePressed } from './streaks/package';
 import { registerNukeModifiers } from './streaks/nuke';
 import { registerRadarModifiers } from './streaks/radar';
+import { pushGlitch, registerGlitchModifiers } from './streaks/glitch';
 import { botLauncher, fireLauncher, onOwnerDeath, putAwayLauncher, raiseLauncher, syncLauncherEntity } from './streaks/valkyrie';
 import { cancelCarry, ownTurretInReach, placeCarried, startCarry, tickCarry, tryPickUp } from './streaks/carry';
 import { onTurretMelee, onWeaponDetonated } from './streaks/turret-damage';
@@ -55,6 +56,7 @@ const REASONS: Record<string, string> = {
   not_ready: 'Not ready',
   nuke_active: 'A Tactical Nuke is already inbound',
   disabled: 'Not in wager matches',
+  glitched: 'Systems corrupted',
 };
 
 function notify(room: Room, p: PlayerState, reason: string) {
@@ -211,6 +213,7 @@ const feature: Feature = {
     const ctx = ksRoom(room);
     registerRadarModifiers(room, ctx);
     registerNukeModifiers(room, ctx);
+    registerGlitchModifiers(room, ctx);
     // Driving a streak or holding the radio (tactical map): the body stands still with its weapon
     // down; designating: no sprint.
     room.modifiers.add('speedMultiplier', (p) => (p.ext.killstreaks?.control || p.ext.killstreaks?.map ? 0 : undefined), 'killstreaks.control');
@@ -278,7 +281,10 @@ const feature: Feature = {
       cancelCarry(room, player);
     });
     room.bus.on('spawn', ({ player }) => markDirty(room, player));
-    room.bus.on('playerJoin', ({ player }) => markDirty(room, player));
+    room.bus.on('playerJoin', ({ player }) => {
+      markDirty(room, player);
+      pushGlitch(ctx, player);
+    });
     room.bus.on('playerLeave', ({ player }) => {
       cancelCarry(room, player);
       closeMap(room, player);

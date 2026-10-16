@@ -31,12 +31,28 @@ export interface LookOptions {
 }
 
 const QVS = /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
-const QFS = /* glsl */ `uniform sampler2D tSrc, tHud; uniform vec2 uLow; uniform float uLevels, uDither, uRed, uWhite, uFeed, uTime, uSat, uGamma; uniform int uGrade, uPattern; uniform vec3 uLift, uGain; varying vec2 vUv;
+const QFS = /* glsl */ `uniform sampler2D tSrc, tHud; uniform vec2 uLow; uniform float uLevels, uDither, uRed, uWhite, uFeed, uTime, uSat, uGamma, uGlitch, uBurst; uniform int uGrade, uPattern; uniform vec3 uLift, uGain; varying vec2 vUv;
 const float BAYER[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
 const float PATTERN[16] = float[16](0.,5.,10.,15.,7.,8.,13.,2.,10.,15.,0.,5.,13.,2.,7.,8.);
+float h21(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 void main(){
-  vec2 px = floor(vUv * uLow), uv = (px + 0.5) / uLow;
+  vec2 px = floor(vUv * uLow), hpx = px;
+  float lv = uLevels, dth = uDither; bool bayer = uPattern != 1;
+  // Glitch (killstreak): bands of rows torn sideways (HUD too), the world at half the internal
+  // resolution, colour bursts split the channels, banding to a few levels with a Bayer dither.
+  if (uGlitch > 0.0) {
+    float ft = floor(uTime * 14.0);
+    float band = floor(px.y / 6.0);
+    float r = h21(vec2(band, ft));
+    if (r < 0.08 * uGlitch + 0.3 * uBurst) { px.x += floor((fract(r * 91.7) - 0.5) * 56.0 * uGlitch); hpx.x = px.x; }
+    px = floor(px / 2.0) * 2.0;
+    lv = min(lv, mix(32.0, 7.0, uGlitch));
+    dth = max(dth, 0.9 * uGlitch);
+    bayer = true;
+  }
+  vec2 uv = (px + 0.5) / uLow;
   vec3 c = texture2D(tSrc, uv).rgb;
+  if (uBurst > 0.0) { vec2 o = vec2((2.0 + 6.0 * uBurst) / uLow.x, 0.0); c.r = texture2D(tSrc, uv + o).r; c.b = texture2D(tSrc, uv - o).b; }
   float l = dot(c, vec3(0.299, 0.587, 0.114));
   if (uGrade == 3) {
     // Map grade: rein in only the loudest colours, lift shadows towards the fog, tint highlights.
@@ -61,11 +77,19 @@ void main(){
     vec3 f = mono * (mod(px.y, 2.0) < 1.0 ? 0.8 : 1.0) * (0.92 + 0.08 * band) + (n - 0.5) * 0.16;
     c = mix(c, f, uFeed);
   }
+  if (uGlitch > 0.0) {
+    // Static: grain all the time, noisy scanlines and dropout lines in the bursts.
+    float n = h21(px + floor(uTime * 30.0) * vec2(17.0, 41.0));
+    float line = h21(vec2(px.y, floor(uTime * 20.0)));
+    c += (n - 0.5) * 0.12 * uGlitch;
+    if (line < 0.35 * uBurst) c = mix(c, vec3(n), 0.75);
+    if (line > 1.0 - 0.012 * uGlitch) c = mod(px.x + floor(uTime * 60.0), 9.0) < 4.5 ? vec3(1.0, 0.1, 0.9) : vec3(0.1, 1.0, 0.9);
+  }
   int di = int(mod(px.x, 4.0)) + int(mod(px.y, 4.0)) * 4;
-  float d = uDither > 0.0 ? ((uPattern == 1 ? PATTERN[di] : BAYER[di]) + 0.5) / 16.0 - 0.5 : 0.0;
-  d *= uDither;
-  c = floor(clamp(c, 0.0, 1.0) * (uLevels - 1.0) + 0.5 + d) / (uLevels - 1.0);
-  vec4 h = texture2D(tHud, uv);
+  float d = dth > 0.0 ? ((bayer ? BAYER[di] : PATTERN[di]) + 0.5) / 16.0 - 0.5 : 0.0;
+  d *= dth;
+  c = floor(clamp(c, 0.0, 1.0) * (lv - 1.0) + 0.5 + d) / (lv - 1.0);
+  vec4 h = texture2D(tHud, (hpx + 0.5) / uLow);
   if (h.a > 0.5) c = h.rgb;
   gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 }`;
@@ -106,6 +130,17 @@ export class Renderer {
   white = 0;
   /** 0..1 camera-feed look (monochrome, scanlines, grain): the Valkyrie rocket cam. Owners reset it to 0. */
   feed = 0;
+  /**
+   * Glitch killstreak (killstreaks/glitch.ts drives these and resets them): `glitch` 0..1 corrupts
+   * the post pass (torn rows, half resolution, banding, static), `glitchBurst` 0..1 adds channel
+   * split and noise lines, `snapBoost` / `warpBoost` raise vertex snap (internal px) and affine warp
+   * above the player's own setting, and `holdFrame` keeps last frame's world (a dropped frame).
+   */
+  glitch = 0;
+  glitchBurst = 0;
+  snapBoost = 0;
+  warpBoost = 0;
+  holdFrame = false;
 
   constructor(parent: HTMLElement) {
     this.canvas = document.createElement('canvas');
@@ -126,7 +161,7 @@ export class Renderer {
     this.hudTex.generateMipmaps = false;
     this.hudTex.colorSpace = THREE.NoColorSpace;
     this.post = new THREE.ShaderMaterial({
-      uniforms: { tSrc: { value: this.rt.texture }, tHud: { value: this.hudTex }, uLow: { value: new THREE.Vector2(640, 360) }, uLevels: { value: 256 }, uDither: { value: 0 }, uPattern: { value: 0 }, uGrade: { value: 3 }, uRed: { value: 0 }, uWhite: { value: 0 }, uFeed: { value: 0 }, uTime: { value: 0 }, ...GRADE },
+      uniforms: { tSrc: { value: this.rt.texture }, tHud: { value: this.hudTex }, uLow: { value: new THREE.Vector2(640, 360) }, uLevels: { value: 256 }, uDither: { value: 0 }, uPattern: { value: 0 }, uGrade: { value: 3 }, uRed: { value: 0 }, uWhite: { value: 0 }, uFeed: { value: 0 }, uTime: { value: 0 }, uGlitch: { value: 0 }, uBurst: { value: 0 }, ...GRADE },
       vertexShader: QVS,
       fragmentShader: QFS,
       depthTest: false,
@@ -189,13 +224,19 @@ export class Renderer {
   /** Render one frame: world, viewmodel, then the post pass with the HUD drawn by `drawHud`. */
   render(drawHud: (g: CanvasRenderingContext2D, w: number, h: number) => void, showViewmodel = true): void {
     const gl = this.gl;
-    gl.setRenderTarget(this.rt);
-    gl.setClearColor(G.uFogColor.value, 1);
-    gl.clear();
-    gl.render(this.scene, this.cam);
-    if (showViewmodel) {
-      gl.clearDepth();
-      gl.render(this.vmScene, this.vmCam);
+    const snap = Math.max(this.opts.vertexSnap, this.snapBoost);
+    G.uJitter.value = snap;
+    setSnapDepth(snap > 0);
+    G.uAffine.value = Math.max(this.opts.affineWarp, this.warpBoost);
+    if (!this.holdFrame) {
+      gl.setRenderTarget(this.rt);
+      gl.setClearColor(G.uFogColor.value, 1);
+      gl.clear();
+      gl.render(this.scene, this.cam);
+      if (showViewmodel) {
+        gl.clearDepth();
+        gl.render(this.vmScene, this.vmCam);
+      }
     }
     this.hudCtx.setTransform(1, 0, 0, 1, 0, 0);
     this.hudCtx.clearRect(0, 0, this.width, this.height);
@@ -204,6 +245,8 @@ export class Renderer {
     this.post.uniforms.uRed!.value = this.damage;
     this.post.uniforms.uWhite!.value = this.white;
     this.post.uniforms.uFeed!.value = this.feed;
+    this.post.uniforms.uGlitch!.value = this.glitch;
+    this.post.uniforms.uBurst!.value = this.glitchBurst;
     this.post.uniforms.uTime!.value = performance.now() / 1000;
     gl.setRenderTarget(null);
     gl.setClearColor(0x000000, 1);

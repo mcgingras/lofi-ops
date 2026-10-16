@@ -42,6 +42,7 @@ import { currentWeapon, type BotBrain, type PlayerState } from '../../player';
 import type { Room } from '../../room';
 import { addRecoil, angleDiff, engage, feltOffDeg, flinch, lookToward, newAimState, noticeTime, stepAim, toleranceDeg, type AimState } from './aim';
 import { botGoalFor, botModeStyle, botStreakHandler, type BotGoal } from './hooks';
+import { botFrozen, effectiveSkill } from './impair';
 import { navFor, type NavCell, type NavGrid } from './nav';
 import { recentSpawns } from '../modes/spawns';
 import { hasObjectives } from '../modes/bots';
@@ -90,7 +91,10 @@ export { chestOf, headOf } from './sight';
 export const eyeOf = (p: PlayerState): Vec3 => ({ x: p.move.x, y: p.move.y + eyeHeight(p.move), z: p.move.z });
 
 export class Brain implements BotBrain {
+  /** Its own skill (the lobby's, with per-bot variance). */
   skill: BotSkill;
+  /** The skill it plays with this tick: `skill` through the skill modifiers (impair.ts; the Glitch killstreak degrades it). */
+  cur: BotSkill;
   readonly aim: AimState = newAimState();
   target: PlayerState | null = null;
   /** What it can see of the target. */
@@ -159,6 +163,7 @@ export class Brain implements BotBrain {
     readonly rnd: () => number = Math.random,
   ) {
     this.skill = { ...skill };
+    this.cur = this.skill;
     this.stagger = Math.floor(rnd() * 3);
   }
 
@@ -242,7 +247,8 @@ export class Brain implements BotBrain {
     }
     const now = room.time;
     const nav = navFor(room.map);
-    const sk = this.skill;
+    this.cur = effectiveSkill(room, self, this.skill);
+    const sk = this.cur;
     const style = botModeStyle(room.mode.id);
     let buttons = 0;
     let mx = 0;
@@ -256,7 +262,15 @@ export class Brain implements BotBrain {
 
     if (room.phase !== 'playing') {
       // Countdown: look around a little, frozen.
-      lookToward(this.aim, this.skill, self.yaw + Math.sin(now * 0.7 + this.stagger) * 0.4, 0, dt, 0.4);
+      lookToward(this.aim, sk, self.yaw + Math.sin(now * 0.7 + this.stagger) * 0.4, 0, dt, 0.4);
+      return this.out(self, 0);
+    }
+
+    // Frozen by a skill modifier (the Glitch's stutter): stands still, aim held, no fire.
+    if (botFrozen(room, self)) {
+      this.burstLeft = 0;
+      this.aim.vYaw = 0;
+      this.aim.vPitch = 0;
       return this.out(self, 0);
     }
 
@@ -603,7 +617,7 @@ export class Brain implements BotBrain {
    * LOST_GRACE after it leaves it.
    */
   private perceive(room: Room, self: PlayerState, now: number) {
-    const sk = this.skill;
+    const sk = this.cur;
     const eye = eyeOf(self);
     const halfFov = (sk.fovDeg / 2) * DEG;
     const dtp = this.noticeAt < 0 ? 0.05 : clamp(now - this.noticeAt, 0, 0.25);
@@ -699,7 +713,7 @@ export class Brain implements BotBrain {
   // -------------------------------------------------------------------------------------------
 
   private chooseGoal(room: Room, nav: NavGrid, self: PlayerState, now: number): Goal | null {
-    const sk = this.skill;
+    const sk = this.cur;
     if (this.pathPending && this.goal) {
       this.setGoal(nav, self, this.goal, room);
       return this.pathPending ? null : this.goal;

@@ -30,6 +30,8 @@ import type { Room } from '../../room';
 import { hasPerk, inLastStand, isPro, perksOf, progress, proPerks } from './common';
 import { setupLastStand } from './laststand';
 import { setupScavenger } from './scavenger';
+import { setupTracker } from './tracker';
+import { setupPackRat } from './packrat';
 import { PERK_PRO_CHALLENGES } from '../../../shared/defs/perks';
 
 export { hasPerk, isPro, inLastStand, perksOf, proUnlocked, proPerks } from './common';
@@ -226,6 +228,8 @@ const feature: Feature = {
     setupChallenges(room);
     setupPublic(room);
     setupStuns(room);
+    setupTracker(room);
+    setupPackRat(room);
   },
 };
 

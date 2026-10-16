@@ -11,6 +11,7 @@ import { onFeature, registerEntityRenderer, registerFootstepFilter, registerHudW
 import { currentMatch } from '../../state';
 import { buildPack, Kit } from '../killstreaks/models';
 import { iHave, iHavePro, perkState, refreshPro } from './state';
+import './tracker';
 
 export { myPerks, iHave, iHavePro, perkState } from './state';
 

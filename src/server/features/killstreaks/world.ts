@@ -32,6 +32,8 @@ export interface Active {
   destroyed?: boolean;
   /** Keeps running when the owner leaves the room (the Tactical Nuke). */
   keepOnLeave?: boolean;
+  /** Knocks out the hardware of players it returns true for (the Glitch: everyone its owner fights). */
+  stuns?(owner: PlayerState): boolean;
 }
 
 export interface Damageable {
@@ -120,6 +122,15 @@ export class KsRoom {
 
   activeOf(owner: PlayerState, streak?: string): Active[] {
     return this.actives.filter((a) => !a.done && a.owner === owner && (!streak || a.streak === streak));
+  }
+
+  /**
+   * Is `owner`'s killstreak hardware knocked out (a running Glitch against them)? Sentries and SAMs
+   * are stunned, helicopters hold fire, RC-XDs and dogs stall, rockets lose guidance, and they can't
+   * call streaks.
+   */
+  hardwareStunned(owner: PlayerState): boolean {
+    return this.actives.some((a) => !a.done && !!a.stuns?.(owner));
   }
 
   activeKind(streak: string): Active[] {

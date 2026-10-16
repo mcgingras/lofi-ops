@@ -113,7 +113,7 @@ export function updateBotPickups(room: Room, dt: number): void {
       continue;
     }
     st.botHold += dt;
-    if (st.botHold >= PICKUP.botHoldSec) {
+    if (st.botHold >= PICKUP.botHoldSec * room.modifiers.mul('pickupHoldMultiplier', p)) {
       swapFor(room, p, target, slot);
       st.botTarget = null;
       st.botHold = 0;

@@ -5,8 +5,11 @@ BO1-faithful perks (three tiers, Pro versions) and killstreaks (pick three, Hard
 Code lives in the pre-made feature folders (`perks` and `killstreaks`, already listed in `src/server/features/index.ts` and auto-imported on the client):
 
 ```
-src/shared/defs/perks.ts                  PerkDef x15, PERK_TUNING, PERK_PRO_CHALLENGES (ChallengeDef[])
-src/shared/defs/killstreaks.ts            KillstreakDef x15 (+targeting/mapPick/air/hp/countsStreakKills/noWager), CARE_PACKAGE_WEIGHTS, KS_ENTITY kinds
+src/shared/defs/perks.ts                  PerkDef x17, PERK_TUNING, PERK_PRO_CHALLENGES (ChallengeDef[])
+src/shared/defs/killstreaks.ts            KillstreakDef x16 (+targeting/mapPick/air/hp/countsStreakKills/noWager), CARE_PACKAGE_WEIGHTS, KS_ENTITY kinds
+src/shared/defs/glitch.ts                 Glitch: GLITCH tuning (duration, bot skill changes, stutter, screen fx), glitchHits / glitchStrength / glitchSkill, `killstreaks.glitch` wire type
+src/shared/defs/tracker.ts                Tracker: TRACKER tuning, packTracks / unpackTracks (quantised prints), printAlpha, `perks.tracks` wire type
+src/shared/defs/pack-rat.ts               Pack Rat: PACK_RAT tuning (hold, swap, raise)
 src/shared/defs/nuke.ts                   Tactical Nuke timeline (NUKE) and pure maths: phases, countdown number, shockAt, white-out, slow motion, cloud growth
 src/shared/defs/care-marker.ts            Care Package marker: MARKER tuning, markerLaunch / simulateMarker / resolveDrop (shared with the client preview)
 src/shared/defs/sentry.ts                 Sentry Gun: SENTRY tuning, arc / turn / damage / accuracy maths (angleDiff, inSentryArc, sentryTurn, sentryDamage, sentryHitChance)
@@ -14,21 +17,24 @@ src/shared/defs/turret-place.ts           carry-to-place for Sentry Gun and SAM 
 src/shared/defs/valkyrie.ts               Valkyrie Rockets: VALKYRIE tuning, VALKYRIE_LAUNCHER, rocketLaunch / stepRocket / steerToward / clampLead / bankRoll (shared with the rocket cam)
 src/shared/defs/tactical-map.ts           tactical map: STRIKE footprints/timings, validateMapTarget, yawFromDrag, strikeFootprint, rate-limit bucket
 src/shared/defs/perks-streaks-protocol.ts RPC + feature message types (declaration-merged into protocol.ts)
-src/server/features/perks/                index (modifiers, stamina, challenges, public lists), laststand, scavenger, common
+src/server/features/perks/                index (modifiers, stamina, challenges, public lists), laststand, scavenger, common, tracker, packrat
 src/server/features/killstreaks/          index (buttons, RPCs, wiring), api (bot API), state (ladder), world (per-room ctx),
-                                          mapmode (radio / tactical map), skill, streaks/{radar,airstrike,mortar,package,turrets,carry,turret-damage,heli,vehicles,valkyrie,dogs,nuke}
-src/client/features/perks/                footstep filter, last stand, scavenger packs, perk list, state (my loadout/pro)
+                                          mapmode (radio / tactical map), skill, streaks/{radar,airstrike,mortar,package,turrets,carry,turret-damage,heli,vehicles,valkyrie,dogs,nuke,glitch}
+src/server/features/bots/impair.ts        skill modifiers (botSkillMultiplier / botSkillOffset / botFrozen) and effectiveSkill, read by the brain every tick
+src/client/features/perks/                footstep filter, last stand, scavenger packs, perk list, state (my loadout/pro), tracker (footprints)
 src/client/features/killstreaks/          models, renderers, textures, sounds, fx, hud, radar, control, store, marker (held canister, throw preview, smoke),
                                           tacmap (map mode), tacmap-logic (placement, no DOM), overhead (satellite picture), radio,
                                           nuke (laptop, countdown HUD, flash, cloud), nuke-logic (no DOM),
                                           valkyrie (launcher, rocket cam, overlay), rocketcam-logic (no DOM),
-                                          turret (carry ghost preview, prompts, pickup prompt, tracking laser)
+                                          turret (carry ghost preview, prompts, pickup prompt, tracking laser),
+                                          glitch + glitch-state (glitched screen / HUD / minimap, glitched enemies and hardware, banners)
 tests/perks.test.ts, tests/killstreaks.test.ts, tests/perks-streaks.integration.test.ts (+ helpers),
 tests/warlord.integration.test.ts (Warlord / Pro through the real server), tests/modifier-keys.test.ts (every registered key is read),
 tests/tacmap.test.ts, tests/tacmap.integration.test.ts, tests/tacmap.client.test.ts, tests/nuke.test.ts, tests/nuke.client.test.ts,
 tests/care-marker.test.ts, tests/marker-cook.integration.test.ts (Care Package marker), tests/laststand-revive.test.ts,
 tests/valkyrie.test.ts, tests/valkyrie.integration.test.ts (Valkyrie Rockets), tests/deathcam.test.ts (its killcam),
-tests/sentry.test.ts, tests/sentry.integration.test.ts (Sentry Gun, SAM Turret carry-to-place)
+tests/sentry.test.ts, tests/sentry.integration.test.ts (Sentry Gun, SAM Turret carry-to-place),
+tests/glitch.test.ts, tests/glitch.client.test.ts (Glitch), tests/tracker-packrat.test.ts (Tracker, Pack Rat, registered modifier keys are read)
 ```
 
 Sounds: `killstreaks/sounds.ts` holds the synthesized `ks_*` voices; the recorded versions (radio static, squelch and roger beep, jet / prop / rotor, sentry fire (the chopper gunner `ks_gunner` borrows it), rocket launch, incoming-mortar rush, explosions, dog bark / bite) are bindings in `src/shared/defs/sfx-recipes.ts`; streak ready (`ks_ready`) and enemy streak inbound (`ks_alarm`) are restrained synthesized radio cues (`sfx-cues.ts`), not the old walkie chirp and klaxon. `ks_buzz` (RC-XD motor) and `ks_fire` (napalm crackle) stay synthesized (no recording in the manifest).
@@ -47,11 +53,13 @@ Sounds: `killstreaks/sounds.ts` holds the synthesized `ks_*` voices; the recorde
 | 2 | Steady Aim | `spreadMultiplier` 0.65 while not ADS | `sprintOutMultiplier` 0.5, `meleeSpeedMultiplier` 0.7 (knife cooldown and recovery) |
 | 2 | Sleight of Hand | `reloadMultiplier` 0.5 | `adsMultiplier` 0.5 |
 | 2 | Warlord | `attachmentSlotsOffset` +1 (sum; base 1): two attachments on the primary, read at `beforeSpawn` from the class being spawned | `equipmentCountOffset` +1 for both kinds: 2 lethals, 3 tacticals |
+| 2 | Pack Rat | a tap of USE swaps for a dropped gun (`pickupHoldMultiplier` 0), the picked-up gun comes up in 30% of its raise and wears your camo for that slot; every switch x0.6 (`swapMultiplier`) | the picked-up gun comes with a full magazine and full reserve |
 | 3 | Tactical Mask | `tacticalMultiplier` 0.35 (flash / concussion strength, and so duration) | enemies you stun (`weapons.tactical` event) show on your radar for the stun |
 | 3 | Marathon | sprint stamina x2 | unlimited sprint |
 | 3 | Ninja | `silentFootsteps`; remote footsteps silent on clients | enemy footsteps x1.8 for you; `hearingMultiplier` 1.8 |
 | 3 | Second Chance | a lethal bullet/knife hit (not a headshot) puts you in last stand: 30 hp, pistol, crawl, no regen, 10 s, then the downer gets the kill | 15 s, and a teammate holding USE for 2 s revives you (+50 score), back on the weapon you went down with |
 | 3 | Hacker | enemy hardware (sentry, SAM, crate, RC-XD) marked red in the world and on your radar | hold USE 2 s next to an enemy sentry/SAM to take it over; taking an enemy Care Package booby-traps it instead |
+| 3 | Tracker | glowing footprints of enemies within 25 m for 3.5 s, only for you (no line of sight needed); Ninja Pro leaves none | also the footprints of enemies within 25 m of your teammates |
 
 **Sprint stamina (everyone).** BO1 sprint runs out: 5 s (Marathon 10 s, Pro unlimited), regains 1 s/s, needs 1.2 s before sprinting again. Enforced through the new core `canSprint` modifier, so client prediction follows (`me.params.canSprint`). Tune in `PERK_TUNING`.
 
@@ -74,10 +82,84 @@ Sounds: `killstreaks/sounds.ts` holds the synthesized `ks_*` voices; the recorde
 | blackbird | Blackbird | 8 | like the Spy Plane but live with facing arrows on the radar; cannot be shot down |
 | rolling_thunder | Rolling Thunder | 8 | tactical map: spot + direction; B-52 carpet-bombs 14 bombs (4 m apart) through the spot, ~7 s out |
 | chopper_gunner | Chopper Gunner | 9 | you work its explosive cannon from the air (camera in the seat, FIRE shoots); your body stays put and dying ends it; 2000 hp |
+| glitch | Glitch (original) | 10 | EMP-like, 20 s: the enemy side's screens and minimaps corrupt, their radar goes dark, their bots react late, miss and stutter (below); their hardware is knocked out and they can't call streaks; can't be shot down; unlock level 42 |
 | attack_dogs | Attack Dogs | 11 | 8 dogs, 3 at a time, from your spawn side, hunt the nearest enemy and bite (55); 60 s; 80 hp each |
 | nuke | Tactical Nuke (MW2) | 25 | laptop, 10 s countdown for everyone, then everyone dies and the match ends as a win for your side (below); killstreak kills count toward it; not in wagers; unlock level 25 |
 
 Rules: kills toward streaks reset on death; streak kills don't count (`isStreakWeapon`) except toward streaks with `countsStreakKills` (the nuke reads `countAll`, every kill this life); each picked streak is earned once per life at its cost (Hardline: -1); earned streaks wait in `ready` until called and survive deaths until match end. Calling needs you alive and not already driving one. Streaks with `noWager` (the nuke) are dropped from the ladder in wager modes and `callKillstreak` answers `disabled` there (`streakAllowedIn`).
+
+## Glitch (original killstreak, 10 kills)
+
+Not a BO1 or MW2 streak: an EMP-like corruption that leans on the retro render system. Tuning, wire type and pure maths in `shared/defs/glitch.ts`; server `streaks/glitch.ts`; client `glitch.ts` and `glitch-state.ts`.
+
+- **Who.** Calling it (STREAK, `targeting: 'none'`) glitches every enemy of the caller for 20 s (FFA: everyone else). Several can run at once. It can't be shot down.
+- **Cost and unlock.** 10 kills (between the Chopper Gunner's 9 and the dogs' 11), unlock level 42 (between theirs, 40 and 44), in Create-a-Class with the rest. Bots pick it in their classes like any streak. They call it when the enemy has something running to knock out, and otherwise now and then.
+- **Glitched bots** (what matters when you play against bots). The bots feature has new skill modifiers (`bots/impair.ts`: `botSkillMultiplier`, `botSkillOffset`, `botFrozen`), and the brain reads `effectiveSkill` once per tick. While the Glitch runs they degrade its bots, clamped to the slider ranges:
+  - reaction x1.6 + 200 ms (noticing time follows, since it comes from reaction and view);
+  - aim error x1.5 + 3.5 deg (the start error, and the sway that grows with it);
+  - turn speed x0.55, field of view x0.7, hearing x0.4, headshot bias x0.3, burst control x0.5.
+  - Every 1.6 to 3.6 s a glitched bot freezes for 0.35 to 0.8 s: no movement, no fire, aim held.
+  - Their radar knowledge goes too (below). Everything comes back the moment the Glitch ends.
+- **Duel harness.** `tests/bots-sim.ts` `duel`: 30 trials, a 3 s window, and the target never shoots back. `DuelOpts.setup` keeps a Glitch on the shooter. Each cell is first shot / kills / hit rate, clean, then glitched:
+
+  | difficulty | 10 m still | 10 m strafing | 25 m still | 25 m strafing |
+  |---|---|---|---|---|
+  | recruit | 1.45 s 80% 45% / 2.49 s 0% 17% | 1.50 s 47% 31% / 2.42 s 3% 17% | 1.62 s 37% 18% / 2.78 s 0% 0% | 1.78 s 20% 21% / 2.68 s 0% 0% |
+  | regular | 1.02 s 77% 68% / 2.15 s 20% 27% | 1.07 s 67% 31% / 2.33 s 7% 19% | 1.18 s 90% 37% / 2.22 s 3% 9% | 1.10 s 67% 28% / 2.41 s 0% 6% |
+  | hardened | 0.87 s 90% 75% / 1.37 s 73% 37% | 0.67 s 100% 42% / 1.57 s 27% 28% | 0.72 s 90% 55% / 1.64 s 37% 24% | 0.82 s 93% 41% / 1.67 s 13% 15% |
+  | veteran | 0.66 s 90% 85% / 1.20 s 80% 61% | 0.43 s 100% 49% / 1.28 s 63% 38% | 0.52 s 97% 71% / 1.16 s 67% 30% | 0.64 s 93% 54% / 1.43 s 37% 25% |
+
+  A first try (aim error x1.6 + 5) left regular bots killing in only 0-7% of trials. This tuning keeps glitched bots dangerous up close and the best ones still a threat.
+- **Glitched humans: radar.** The server votes `radarVisible` false and `radarJammed` true for them. Their minimap fills with static, reads NO SIGNAL and shows no blips, so a Spy Plane or Blackbird on their side stops helping them. Bots' radar awareness and `knownEnemies` go dark the same way.
+- **Glitched humans: screen.** The client degrades the screen into corrupted Full-PS1 static through the renderer's new glitch fields:
+  - rows torn sideways in bands, the world at half the internal resolution, colour banded to as few as 7 levels with a Bayer dither, and grain;
+  - heavy vertex snap (2.6 internal px on top of the player's own setting) whose grid jumps a few times a second, and full affine warp;
+  - bursts, about one a second for 0.25 s: the colour channels split, rows fill with noise, and radio static crackles;
+  - held frames, about one every 1.4 s for 0.06 to 0.22 s: the world freezes;
+  - the HUD tears, flickers out now and then and sprouts garbage glyphs, over a corrupting "SYSTEMS CORRUPTED".
+  - It ramps in over 0.6 s and out over 1.2 s, and only while you're alive.
+- **Hardware.** For the duration `KsRoom.hardwareStunned(owner)` is true for the glitched side (through `Active.stuns`):
+  - Sentry Guns and SAM Turrets are stunned (sparks, no lamp);
+  - Attack Helicopters keep patrolling but hold fire, and the Chopper Gunner's cannon is dead;
+  - RC-XDs stall and won't detonate (the fuse keeps running), and Attack Dogs stand dazed;
+  - Valkyrie rockets lose guidance, and Counter-Spy Planes stop jamming;
+  - new streaks are refused (`glitched`, "Systems corrupted").
+  - Their hardware entities carry `s.st = 1`, and the caller's side sees them jitter and blink.
+- **The caller's side** sees glitched enemy soldiers jitter, flicker and trail three colour-shifted (magenta and cyan) ghosts, so it's obvious it's working.
+- **Presentation.**
+  - A synthesized call-in for everyone (`ks_glitch`): a stepped square-wave arpeggio falls three octaves, cut by sample-and-hold noise stutters, over a dying sub sweep. No recording.
+  - Banners: "GLITCH DEPLOYED" on the caller's side, and "ENEMY GLITCH — SYSTEMS CORRUPTED" on the glitched side (itself corrupting), plus a line in the announcements.
+- **Wire.** `killstreaks.glitch { active: [{ owner, team, until }] }` goes to everyone on every change and to each joiner. The client effect is on while an entry hits you and its `until` hasn't passed.
+
+## Tracker (tier 3)
+
+BO3's Tracker idea in our BO1 frame. Tuning, the wire format and the pure maths are in `shared/defs/tracker.ts`; the server in `perks/tracker.ts`; the client in `perks/tracker.ts`.
+
+- **What you see.** Glowing orange boot prints on the ground where enemies walked, left and right in turn, fading over 3.5 s (full for the first 40%). Only the Tracker player is sent them.
+- **Who leaves prints.** Every 0.4 s, for each living Tracker player, the server looks at enemies:
+  - within 25 m of them (Pro: or within 25 m of a living teammate), nearest first;
+  - on the ground, and moved 0.5 m since their last print for this player.
+  - There is no line of sight check: following them round corners is the point.
+- **What it sends.**
+  - Each enemy lays prints every 0.7 m back along the way it walked since the last sample (at most 4), and a message holds at most 24 prints.
+  - Positions are in 0.1 m units and the yaw in 256 steps: `perks.tracks { f: [x, y, z, yaw, ...] }`.
+  - That's about 1 KB/s at worst, and nothing when nobody moves.
+- **Counter.** Ninja Pro leaves no footprints; base Ninja does. Ninja is about sound and Tracker is the answer to it, while the Pro is the stealth you earn. It works through the new `trackerVisible(target, viewer)` modifier (false wins), so other features can hide someone too.
+- **Pro.** Also the footprints of enemies near your teammates. Challenge (`tracker_pro`): kill 30 enemies whose prints you were sent in the last 4 s.
+- **Unlock.** Level 24 (after Hacker's 21), 2000 CoD Points. Tier 3 (BO3's slot), so it competes with Ninja, Hacker and Tactical Mask.
+- **Bots.** Their footprints show like anyone's. Bots can carry Tracker (bot classes pick from every perk), but their brains don't read prints.
+
+## Pack Rat (tier 2)
+
+Weapon pickups made fast and yours. Tuning is in `shared/defs/pack-rat.ts`; the server in `perks/packrat.ts`, which the pickups feature reads; the client prompt in `client/features/pickups`.
+
+- **Base.**
+  - A tap of USE swaps for a dropped gun (`pickupHoldMultiplier` 0 on `PICKUP.holdSec`, and on the bots' hold too).
+  - The picked-up gun comes up in 30% of its raise time, and every weapon switch is x0.6 (`swapMultiplier`).
+  - A picked-up gun wears the camo you equipped for that slot; a slot without camo keeps the gun's own.
+  - The prompt reads "PRESS F TO SWAP FOR ..." with no hold bar. On a pad it still reads HOLD, because X is tap-to-reload there.
+- **Pro: full ammo.** The picked-up gun comes with a full magazine and full reserve. I chose this over keeping both guns' attachments: a refill is what you want off a dead bot's gun, and it needs no attachment-merging rules. Challenge (`pack_rat_pro`): 25 kills with guns picked up off the ground.
+- **Unlock.** Level 10, 2000 CoD Points. Tier 2, with the other handling perks (Scout Pro's x0.5 switch, Sleight of Hand), so it doesn't stack with them.
 
 ## Tactical Nuke (MW2)
 
@@ -211,6 +293,9 @@ isCarryingTurret(p)                                // a Sentry Gun / SAM Turret 
 - Valkyrie Rockets: `src/client/registry.ts` `registerButtonFilter` + `src/client/game/match.ts` (rewrite outgoing button bits: boost on the tactical button without throwing a grenade); `src/client/render/renderer.ts` `feed` (camera-feed post effect, its grain also over `white`); `src/shared/defs/deathcam.ts` (`cam.track`, `packTrack`; `valkyrie` out of `TOP_DOWN_STREAKS`), `src/server/features/modes/deathcam.ts` and `src/client/features/modes/deathcam*.ts` (ride the rocket's path).
 - Tactical Nuke: `src/server/room.ts` `endLock` (scores freeze, only `endMatch(endLock)` ends the match; cleared at match start); `src/client/render/renderer.ts` `white` (post-pass white-out uniform); `src/shared/defs/deathcam.ts` (`'nuke'` in `NO_DEATHCAM_MEANS`); `src/server/features/modes/index.ts` (no final killcam on reason `nuke`); `src/client/features/modes/summary-data.ts` (reason label); `src/shared/defs/challenges.ts` (`ks_nuke_called`).
 
+- Glitch: `src/server/features/bots/impair.ts` (new skill modifier keys) + `bots/brain.ts` (reads `effectiveSkill` each tick, `botFrozen` early out) + `bots/roster.ts` (hearing from the effective skill); `src/client/render/renderer.ts` (`glitch`, `glitchBurst`, `snapBoost`, `warpBoost`, `holdFrame`: post-pass corruption, vertex snap / affine boosts, held frames); `src/shared/defs/challenges.ts` (`glitch` in `NON_LETHAL_STREAKS`); `src/shared/defs/sfx-recipes.ts` (`ks_glitch` synth-only) and `src/client/features/frontend/sound-test-data.ts` (its volume); `tests/bots-sim.ts` (`DuelOpts.setup`).
+- Tracker / Pack Rat: `src/server/features/pickups/index.ts` and `pickups/bots.ts` read `pickupHoldMultiplier`; `src/client/features/pickups/index.ts` (PRESS / HOLD prompt).
+
 ## Not done / simplified
 
 - Tactical map: the picture is the whole `map.bounds` (BO1 cut out just the playable area with a white outline); BO1's translucent panel is a 3-in-4 screen-door over the world here; planes start far outside the map (to match BO1's release times) so they only show on the map once over it; no announcer voice lines (HUD text as before).
@@ -222,4 +307,7 @@ isCarryingTurret(p)                                // a Sentry Gun / SAM Turret 
 - Care Package marker: nobody else sees the canister in the thrower's hand (only once thrown); "unreachable roof" is a height rule (highest spawn + 4.5 m), not a reachability test; the canister passes through players (BO1 could kill with it); its smoke doesn't block bot sight or aim assist (`registerSightBlocker`).
 - Ghost Pro's hidden red name tag is not applied (core `core.names` widget); `perks.public.ghostPro` lists the ids for whoever replaces it.
 - No mantle in core, so Marathon Pro's faster mantle is a description only. No penetration model, so Hardened has no base effect, and no picking grenades up, so Flak Jacket Pro's fuse reset is a description only (neither registers a modifier).
+- Glitch: no Care Package weight (the crate list is left alone while the Mystery Box work is in flight); the glitched look of enemy soldiers is for the caller's side only (in FFA only the caller sees it); the screen effect stops while you're dead (the killcam and death screen stay readable); the client predicts weapon switches at the raw swap time, so Pack Rat's faster switch (like Scout Pro's) shows after the server's next snapshot.
+- Tracker: bots carry it but their brains don't use the prints; each print is a flat quad at one height (stairs step).
+- Pack Rat: no attachment keeping (the Pro is the ammo refill).
 - Dogs steer straight at targets with stuck-hops and hotspot detours (no nav graph); once the bots area has a nav graph they can use it.

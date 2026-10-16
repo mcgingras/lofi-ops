@@ -52,6 +52,7 @@ onFeature('killstreaks.earned', (d) => {
 });
 
 onFeature('killstreaks.called', (d) => {
+  if (d.id === 'glitch') return; // glitch.ts announces it (by side) when the glitch state arrives
   const mine = d.owner === currentMatch()?.myId;
   const f = friendly(d.owner, d.team);
   const name = streakName(d.id);

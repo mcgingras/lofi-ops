@@ -75,6 +75,8 @@ export const KILLSTREAKS: KillstreakDef[] = [
   { id: 'blackbird', name: 'Blackbird', kills: 8, description: 'Shows enemy positions and facing. Cannot be shot down.', unlockLevel: 32, kind: 'called', durationSec: 30, targeting: 'none', air: true, icon: 'ks_blackbird' },
   { id: 'rolling_thunder', name: 'Rolling Thunder', kills: 8, description: 'Pick a spot and a direction on the map: a B-52 carpet-bombs along it.', unlockLevel: 36, kind: 'called', targeting: 'map', mapPick: 'line', icon: 'ks_thunder' },
   { id: 'chopper_gunner', name: 'Chopper Gunner', kills: 9, description: 'Man the explosive gun of a circling helicopter.', unlockLevel: 40, kind: 'controlled', durationSec: 40, targeting: 'control', air: true, hp: 2000, icon: 'ks_gunner' },
+  // Original EMP-like streak: corrupts the enemy side for 20 s (screens, minimaps, bots, hardware). defs/glitch.ts.
+  { id: 'glitch', name: 'Glitch', kills: 10, description: 'Corrupts enemy systems for 20 s: static on their screens and minimaps, their radar and hardware go down, and bots lose track of you.', unlockLevel: 42, kind: 'called', durationSec: 20, targeting: 'none', icon: 'ks_glitch' },
   { id: 'attack_dogs', name: 'Attack Dogs', kills: 11, description: 'A pack of dogs hunts down the enemy.', unlockLevel: 44, kind: 'called', durationSec: 60, targeting: 'none', icon: 'ks_dogs' },
   // MW2's Tactical Nuke. Killstreak kills count toward it as they did in MW2 (25 gun kills in a
   // row against bots is a very long ask); set `countsStreakKills: false` for the strict BO1 rule.

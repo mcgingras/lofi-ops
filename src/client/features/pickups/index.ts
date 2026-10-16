@@ -23,7 +23,9 @@ import { onFeature, registerEntityRenderer, registerHudWidget, registerMatchHook
 import { currentMatch } from '../../state';
 import { ksClient } from '../killstreaks/store';
 import { modes, myAction } from '../modes/store';
-import { perkState } from '../perks/state';
+import { iHave, perkState } from '../perks/state';
+import { PACK_RAT } from '../../../shared/defs/pack-rat';
+import { inputDevice } from '../../game/gamepad';
 import { dropRenderer, dropState } from './model';
 
 export { buildDroppedGun } from './model';
@@ -101,13 +103,16 @@ registerHudWidget(
     const cx = W / 2;
     const y = H / 2 + 34 * u;
     const s = target.s;
-    txt(g, `HOLD ${useKey()} TO SWAP FOR ${weaponName(s.w)}`, cx, y, 8, blink(m.time, 1, 0.7) || held ? C.hi : C.paper, 'center', u);
+    // Pack Rat: a tap swaps (on a pad X stays tap-to-reload, so it still reads HOLD there).
+    const tap = iHave('pack_rat') && inputDevice() !== 'pad';
+    const holdSec = PICKUP.holdSec * (iHave('pack_rat') ? PACK_RAT.holdMul : 1);
+    txt(g, `${tap ? 'PRESS' : 'HOLD'} ${useKey()} TO SWAP FOR ${weaponName(s.w)}`, cx, y, 8, blink(m.time, 1, 0.7) || held ? C.hi : C.paper, 'center', u);
     const atts = dropAttachments(s).map((a) => (ATTACHMENT_BY_ID.get(a)?.name ?? a).toUpperCase());
     txt(g, [...atts, `${s.m}/${s.r}`].join('  ·  '), cx, y + 10 * u, 6, C.dim, 'center', u);
-    if (held && ui.holdT > 0) {
+    if (held && ui.holdT > 0 && holdSec > 0) {
       const bw = 60 * u;
       box(g, cx - bw / 2, y + 18 * u, bw, 3 * u, C.empty, u);
-      rect(g, cx - bw / 2, y + 18 * u, Math.min(1, ui.holdT / PICKUP.holdSec) * bw, 3 * u, C.hi);
+      rect(g, cx - bw / 2, y + 18 * u, Math.min(1, ui.holdT / holdSec) * bw, 3 * u, C.hi);
     }
   },
   8,

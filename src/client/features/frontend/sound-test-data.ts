@@ -75,6 +75,7 @@ export const IN_GAME_VOLUME: Record<string, number> = {
   ks_buzz: 0.7,
   ks_fire: 0.8,
   ks_smoke: 0.9,
+  ks_glitch: 0.6,
   'modes.good': 0.55,
   'modes.bad': 0.55,
   'modes.horn': 0.55,
