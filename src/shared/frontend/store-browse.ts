@@ -9,6 +9,8 @@
  * `economy.buy`.
  */
 import { ATTACHMENT_BY_ID, type AttachmentDef, type AttachmentSlot } from '../defs/attachments';
+import { camoFitsWeapon, mw2CamoProgress, type WeaponCamoProgress } from '../defs/camo-unlocks';
+import { MW2_CAMOS } from '../defs/camos';
 import { attachmentKillsFor } from '../defs/progression';
 import { gateReason, lockReason, owns, storeCatalog, type LockReason, type ProfileLike, type StoreItem } from '../defs/store';
 import { WEAPON_BY_ID, type WeaponClass, type WeaponDef } from '../defs/weapons';
@@ -69,6 +71,12 @@ export interface BrowseGun extends BrowseItem {
   unlockLevel: number;
   attachments: BrowseAttachment[];
   attachmentsOwned: number;
+  /**
+   * The MW2 camo collection on this gun (its per-weapon challenges with progress), in MW2's order;
+   * empty for guns that take no MW2 camo (secondaries).
+   */
+  mw2Camos: WeaponCamoProgress[];
+  mw2CamosUnlocked: number;
 }
 
 export interface BrowseGroup {
@@ -147,6 +155,7 @@ export function storeGunGroups(profile: ProfileLike | null, catalog: readonly St
     const def = weapons.get(it.id);
     if (!def) continue;
     const attachments = (attsByGun.get(it.id) ?? []).map((a) => browseAttachment(profile, a, def));
+    const mw2Camos = MW2_CAMOS.some((c) => camoFitsWeapon(c, def)) ? mw2CamoProgress(profile ?? {}, def.id, weapons) : [];
     guns.push({
       ...browseItem(profile, it, def.name),
       id: def.id,
@@ -158,6 +167,8 @@ export function storeGunGroups(profile: ProfileLike | null, catalog: readonly St
       unlockLevel: def.unlockLevel,
       attachments,
       attachmentsOwned: attachments.filter((a) => a.owned).length,
+      mw2Camos,
+      mw2CamosUnlocked: mw2Camos.filter((c) => c.unlocked).length,
     });
   }
   return GUN_GROUPS.map((g) => ({
@@ -203,6 +214,33 @@ export function filterGunGroups(groups: readonly BrowseGroup[], query: string): 
 /** "3/6 attachments owned" (or "No attachments"). */
 export function attachmentCountLabel(gun: Pick<BrowseGun, 'attachments' | 'attachmentsOwned'>): string {
   return gun.attachments.length ? `${gun.attachmentsOwned}/${gun.attachments.length} attachments owned` : 'No attachments';
+}
+
+/** "3/8 MW2 camos" (or '' for a gun that takes none). */
+export function mw2CamoCountLabel(gun: Pick<BrowseGun, 'mw2Camos' | 'mw2CamosUnlocked'>): string {
+  return gun.mw2Camos.length ? `${gun.mw2CamosUnlocked}/${gun.mw2Camos.length} MW2 camos` : '';
+}
+
+/**
+ * The MW2 collection across every gun the store sells (Camos tab): per camo, on how many of the
+ * guns that take it it is unlocked, and the closest locked gun (most progress) as a hint.
+ */
+export interface Mw2CamoSummary {
+  camo: WeaponCamoProgress['camo'];
+  challenge: string;
+  guns: number;
+  unlocked: number;
+  /** The locked gun nearest to unlocking it ("12/15 ACR headshots"), or null. */
+  closest: WeaponCamoProgress | null;
+}
+
+export function mw2CamoSummary(groups: readonly BrowseGroup[]): Mw2CamoSummary[] {
+  const guns = groups.flatMap((g) => g.guns).filter((g) => g.mw2Camos.length);
+  return MW2_CAMOS.map((camo, i) => {
+    const rows = guns.map((g) => g.mw2Camos[i]!).filter(Boolean);
+    const locked = rows.filter((r) => !r.unlocked).sort((a, b) => b.fraction - a.fraction);
+    return { camo, challenge: rows[0]?.challenge ?? '', guns: rows.length, unlocked: rows.length - locked.length, closest: locked[0] ?? null };
+  });
 }
 
 /**

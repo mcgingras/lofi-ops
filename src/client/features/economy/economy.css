@@ -96,6 +96,11 @@
 .ec-kbar { width: 80px; height: 5px; background: #000; border: 1px solid var(--line); position: relative; }
 .ec-kbar i { position: absolute; inset: 0 auto 0 0; background: var(--hi); }
 .ec-att-buy { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.ec-grid-h { grid-column: 1 / -1; margin-top: 6px; }
+.ec-mw2 { margin-top: 10px; }
+.ec-mw2-row { grid-template-columns: 40px minmax(0, 1fr) auto; }
+.ec-mw2-row > canvas { width: 40px; height: 40px; image-rendering: pixelated; border: 1px solid var(--line); }
+.ec-mw2-row.locked > canvas { opacity: 0.6; }
 .ec-camo-note { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dim); }
 
 /* One action button per card/row; non-buy states stay focusable (controller) but look inert. */

@@ -8,10 +8,12 @@
  *   also as `<weapon>:<id>`), or its own requirement is met: weapons/perks/killstreaks/equipment by
  *   level, attachments by kills with that weapon (`stats['weapon.<id>.kills']`), camos when free,
  *   or their `unlock` rule is met (level / prestige / challenge complete). Priced camos must be
- *   owned (bought in the store).
+ *   owned (bought in the store). MW2 camos (`weaponChallenge`) follow their per-weapon challenge
+ *   only (`camo-unlocks.ts`: headshots with that gun, primaries only), never a grant or a price.
  */
 import { ATTACHMENT_BY_ID, BASE_ATTACHMENT_SLOTS, effectiveWeapon, type AttachmentDef } from '../defs/attachments';
-import { CAMO_BY_ID, type CamoDef } from '../defs/camos';
+import { CAMO_BY_ID, camoName, type CamoDef } from '../defs/camos';
+import { weaponCamoProgress } from '../defs/camo-unlocks';
 import { CHALLENGES } from '../defs/challenges';
 import { KILLSTREAK_BY_ID, type KillstreakDef } from '../defs/killstreaks';
 import { PERK_BY_ID, PERK_TUNING, type PerkDef } from '../defs/perks';
@@ -63,6 +65,11 @@ const orPriceText = (price: number | undefined) => (price ? ` or ${price.toLocal
  * equipment are not sold, so their requirement is the level alone.
  */
 export function itemLock(p: UnlockProfile, kind: ItemKind, id: string, weapon: string | null = null, cat: Catalog = CATALOG): ItemLock {
+  if (kind === 'camo' && cat.camos.get(id)?.weaponChallenge) {
+    // MW2 collection: the same rule as the store's `canUseCamo` (per-weapon challenge).
+    const pr = weapon ? weaponCamoProgress(p, id, weapon, cat.weapons) : null;
+    return pr?.unlocked ? OPEN : locked(pr?.progress ?? 'Pick a weapon first');
+  }
   const storeAware = cat === CATALOG;
   const base = requirementLock(p, kind, id, weapon, cat, storeAware);
   if (!storeAware || (kind !== 'weapon' && kind !== 'attachment' && kind !== 'camo')) return base;
@@ -271,7 +278,7 @@ export function validateLoadout(p: UnlockProfile, input: unknown, fallback: Load
       const cd = cat.camos.get(camo);
       const l = cd ? itemLock(p, 'camo', camo, id, cat) : locked('Unknown');
       if (!cd || !l.unlocked) {
-        problems.push(cd ? `${cd.name} camo is locked (${l.requirement})` : `unknown camo ${camo}`);
+        problems.push(cd ? `${camoName(cd)} camo is locked (${l.requirement})` : `unknown camo ${camo}`);
         camo = 'none';
       }
     }

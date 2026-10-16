@@ -11,6 +11,8 @@
  * progression in Blockyard (MIT, see NOTICE).
  */
 import { currentGoal, progressMetric, tierCp, tierGoals, tierName, tiersDone, tierXp, type ChallengeAdvance, type MetricContext } from '../../../shared/defs/challenges';
+import { camoName } from '../../../shared/defs/camos';
+import { mw2CamosUnlockedBetween, weaponHeadshotCount, weaponKillCount } from '../../../shared/defs/camo-unlocks';
 import { KILLSTREAK_BY_ID } from '../../../shared/defs/killstreaks';
 import {
   addXp,
@@ -271,8 +273,12 @@ export function attachProgression(room: Room): ProgressionRoom {
 
     // Combat record + attachment progress (weapon kills only, not killstreak kills).
     if (WEAPON_BY_ID.has(e.weapon) && e.means !== 'killstreak') {
+      const was = { kills: weaponKillCount(prof, e.weapon), headshots: weaponHeadshotCount(prof, e.weapon) };
       bumpStat(prof, `weapon.${e.weapon}.kills`);
       if (e.headshot) bumpStat(prof, `weapon.${e.weapon}.headshots`);
+      // MW2 camos unlock per gun on this record (Expert challenges: headshots with that gun).
+      const camos = mw2CamosUnlockedBetween(e.weapon, was, { kills: weaponKillCount(prof, e.weapon), headshots: weaponHeadshotCount(prof, e.weapon) });
+      if (camos.length) pushUnlocked(attacker, camos.map((c) => ({ level: 0, kind: 'feature' as const, id: `camo:${e.weapon}:${c.id}`, name: `${WEAPON_BY_ID.get(e.weapon)!.name} ${camoName(c)}`, detail: c.weaponChallenge?.title ?? 'Camo' })));
       const ext = progressionExt(prof);
       const before = ext.weaponKills[e.weapon] ?? 0;
       ext.weaponKills[e.weapon] = before + 1;
