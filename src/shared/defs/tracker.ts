@@ -2,10 +2,12 @@
  * Tracker perk (owner: perks-streaks; tier 3): see enemy footprints for a few seconds.
  *
  * The server samples enemies within `radius` of each Tracker player every `sampleSec` (no line of
- * sight needed: that's the point) and sends a footprint for each one that moved at least `stepM`
- * since its last print, to the Tracker player only (`perks.tracks`). Positions are quantised to
- * `quantM` and the yaw to 256 steps; at most `maxPerMsg` prints go out per sample (nearest first),
- * so the stream stays under ~1 KB/s. The client draws glowing boot prints that fade over `fadeSec`.
+ * sight needed: that's the point) and, for each one that moved at least `stepM` since its last
+ * print, lays prints every `strideM` along the way it walked (at most `maxPerEnemy`), sent to the
+ * Tracker player only (`perks.tracks`). Positions are quantised to `quantM` and the yaw to 256
+ * steps; at most `maxPerMsg` prints go out per sample (nearest enemies first), so the stream stays
+ * around 1 KB/s at worst (24 prints x 4 small ints, 2.5 times a second). The client draws glowing
+ * boot prints that fade over `fadeSec`.
  *
  * Pro: also the footprints of enemies within `radius` of your teammates.
  * Counter: Ninja Pro leaves no footprints (base Ninja does). Other features can hide a target with
@@ -21,10 +23,14 @@ export const TRACKER = {
   sampleSec: 0.4,
   /** A new print only after the enemy moved this far since their last one (m). */
   stepM: 0.5,
+  /** Prints are laid every `strideM` along the way walked since the last sample (a trail, not dots 2 m apart)... */
+  strideM: 0.7,
+  /** ...at most this many per enemy per sample. */
+  maxPerEnemy: 4,
   /** Position quantisation (m). */
   quantM: 0.1,
-  /** Max prints per message (nearest first). */
-  maxPerMsg: 12,
+  /** Max prints per message (nearest enemies first). */
+  maxPerMsg: 24,
   /** Seconds a print stays visible (fading out over the last part). */
   fadeSec: 3.5,
   /** Kills of an enemy whose prints you were shown this recently count toward Tracker Pro (s). */

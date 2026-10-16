@@ -2,8 +2,9 @@
  * Tracker (tier 3; numbers and the wire format in shared/defs/tracker.ts): every `sampleSec` each
  * living Tracker player gets the fresh footprints of enemies within `radius` of them (Pro: or of a
  * living teammate), no line of sight needed, nearest first, at most `maxPerMsg`, quantised. Only
- * the Tracker player is sent them. An enemy leaves a print once they moved `stepM` on the ground
- * since their last one for this tracker. Ninja Pro leaves none (`trackerVisible` false).
+ * the Tracker player is sent them. An enemy who moved `stepM` on the ground since their last print
+ * for this tracker leaves a trail every `strideM` back along the way (at most `maxPerEnemy`).
+ * Ninja Pro leaves none (`trackerVisible` false).
  *
  * Tracker Pro challenge: killing an enemy whose prints you were sent in the last `proKillWindow` s.
  */
@@ -56,14 +57,20 @@ export function sampleTracks(room: Room, viewer: PlayerState): Footprint[] {
   }
   found.sort((a, b) => a.d - b.d);
   const out: Footprint[] = [];
-  for (const { p: q } of found.slice(0, TRACKER.maxPerMsg)) {
+  for (const { p: q } of found) {
+    if (out.length >= TRACKER.maxPerMsg) break;
     const prev = st.last.get(q.id);
-    // Facing the way they walked (their velocity, else from the last print, else their view).
-    const vx = q.move.vx;
-    const vz = q.move.vz;
-    const yaw = Math.hypot(vx, vz) > 0.3 ? Math.atan2(-vx, -vz) : prev ? Math.atan2(-(q.move.x - prev.x), -(q.move.z - prev.z)) : q.yaw;
-    out.push({ x: q.move.x, y: q.move.y, z: q.move.z, yaw });
-    st.last.set(q.id, { x: q.move.x, z: q.move.z });
+    const m = q.move;
+    // Facing the way they walked (from the last print, else their velocity, else their view).
+    const walked = prev ? Math.hypot(m.x - prev.x, m.z - prev.z) : 0;
+    const yaw = walked > 0.05 ? Math.atan2(-(m.x - prev!.x), -(m.z - prev!.z)) : Math.hypot(m.vx, m.vz) > 0.3 ? Math.atan2(-m.vx, -m.vz) : q.yaw;
+    // A trail every strideM back along the way they came since the last print (the newest last).
+    const n = prev && walked <= TRACKER.radius ? Math.max(1, Math.min(TRACKER.maxPerEnemy, Math.floor(walked / TRACKER.strideM))) : 1;
+    for (let i = n - 1; i >= 0 && out.length < TRACKER.maxPerMsg; i--) {
+      const k = prev ? (i * TRACKER.strideM) / Math.max(walked, 1e-6) : 0;
+      out.push({ x: m.x - (m.x - (prev?.x ?? m.x)) * k, y: m.y, z: m.z - (m.z - (prev?.z ?? m.z)) * k, yaw });
+    }
+    st.last.set(q.id, { x: m.x, z: m.z });
     st.sent.set(q.id, room.time);
   }
   return out;

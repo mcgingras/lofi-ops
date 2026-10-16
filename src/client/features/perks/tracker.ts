@@ -8,31 +8,39 @@ import { printAlpha, unpackTracks } from '../../../shared/defs/tracker';
 import { onFeature, registerMatchHook } from '../../registry';
 import { currentMatch } from '../../state';
 
-const POOL = 96;
-const SIZE = { w: 0.13, l: 0.3 };
+/** Enough for a full stream (24 prints, 2.5 times a second, 3.5 s). */
+const POOL = 224;
+/** The quad (the boot plus its glow). */
+const SIZE = { w: 0.34, l: 0.56 };
 /** Feet are this far either side of the walking line (m). */
 const STANCE = 0.11;
 
 let tex: THREE.CanvasTexture | null = null;
-/** A boot sole and heel, drawn once (white; the material tints it). */
+/** A boot sole and heel with a soft glow round it, drawn once (white; the material tints it). */
 function bootTexture(): THREE.CanvasTexture {
   if (tex) return tex;
   const c = document.createElement('canvas');
-  c.width = 16;
-  c.height = 32;
+  c.width = 32;
+  c.height = 52;
   const g = c.getContext('2d')!;
-  g.fillStyle = '#fff';
-  g.beginPath();
-  g.ellipse(8, 9, 6, 8, 0, 0, Math.PI * 2);
-  g.fill();
-  g.fillRect(4, 18, 8, 3);
-  g.beginPath();
-  g.ellipse(8, 25, 5, 5, 0, 0, Math.PI * 2);
-  g.fill();
-  // Tread gaps.
-  g.clearRect(2, 6, 12, 1);
-  g.clearRect(2, 11, 12, 1);
-  g.clearRect(3, 25, 10, 1);
+  const boot = (alpha: number) => {
+    g.fillStyle = `rgba(255,255,255,${alpha})`;
+    g.beginPath();
+    g.ellipse(16, 17, 6.5, 8.5, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillRect(12, 25, 8, 4);
+    g.beginPath();
+    g.ellipse(16, 34, 5.5, 5.5, 0, 0, Math.PI * 2);
+    g.fill();
+  };
+  // Glow: the boot blurred out, faint; then the boot itself, solid, with tread gaps.
+  g.filter = 'blur(4px)';
+  boot(0.55);
+  g.filter = 'none';
+  boot(1);
+  g.clearRect(9, 14, 14, 1);
+  g.clearRect(9, 19, 14, 1);
+  g.clearRect(10, 34, 12, 1);
   tex = new THREE.CanvasTexture(c);
   tex.magFilter = tex.minFilter = THREE.NearestFilter;
   tex.generateMipmaps = false;
@@ -58,7 +66,7 @@ function ensurePool(scene: THREE.Scene): void {
   const geo = new THREE.PlaneGeometry(SIZE.w, SIZE.l);
   geo.rotateX(-Math.PI / 2);
   for (let i = 0; i < POOL; i++) {
-    const mat = new THREE.MeshBasicMaterial({ map: bootTexture(), color: 0xff8a2a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, alphaTest: 0.01 });
+    const mat = new THREE.MeshBasicMaterial({ map: bootTexture(), color: 0xff7a1a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, alphaTest: 0.01 });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.visible = false;
     mesh.renderOrder = 2;

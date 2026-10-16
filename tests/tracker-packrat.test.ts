@@ -176,16 +176,33 @@ describe('Tracker', () => {
     const room = setup();
     const t = actor(room, 0, loadout(['tracker']));
     place(t, 0, 0);
-    const enemies = Array.from({ length: 16 }, (_, i) => {
+    const enemies = Array.from({ length: 30 }, (_, i) => {
       const e = actor(room, 1);
-      place(e, -20 + i * 2.5, 18);
+      place(e, -12 + (i % 6) * 4, -6 - Math.floor(i / 6) * 3);
       return e;
     });
     const prints = sampleTracks(room, t);
     expect(prints).toHaveLength(TRACKER.maxPerMsg);
     const d = (p: { x: number; z: number }) => Math.hypot(p.x, p.z);
     for (let i = 1; i < prints.length; i++) expect(d(prints[i]!)).toBeGreaterThanOrEqual(d(prints[i - 1]!) - 1e-9);
-    expect(enemies.length).toBe(16);
+    expect(enemies.length).toBe(30);
+  });
+
+  it('lays a trail every strideM back along the way an enemy walked (at most maxPerEnemy)', () => {
+    const room = setup();
+    const t = actor(room, 0, loadout(['tracker']));
+    const e = actor(room, 1);
+    place(t, 0, 0);
+    place(e, 0, -10);
+    expect(sampleTracks(room, t)).toHaveLength(1);
+    e.move.x = 2.2;
+    const trail = sampleTracks(room, t);
+    expect(trail).toHaveLength(Math.floor(2.2 / TRACKER.strideM));
+    for (let i = 1; i < trail.length; i++) expect(trail[i]!.x - trail[i - 1]!.x).toBeCloseTo(TRACKER.strideM, 5);
+    expect(trail.at(-1)!.x).toBeCloseTo(2.2);
+    for (const p of trail) expect(p.yaw).toBeCloseTo(-Math.PI / 2); // walking +x
+    e.move.x = 12;
+    expect(sampleTracks(room, t)).toHaveLength(TRACKER.maxPerEnemy);
   });
 
   it('Ninja Pro leaves no footprints (base Ninja does)', () => {

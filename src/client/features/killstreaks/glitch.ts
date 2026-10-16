@@ -191,7 +191,7 @@ function soldiers(m: Match, dt: number): void {
     for (const s of t.slots) {
       if (!s.obj) continue;
       const age = now - s.born;
-      s.mat.opacity = Math.max(0, 0.55 * (1 - age / GHOST_LIFE));
+      s.mat.opacity = Math.max(0, 0.45 * (1 - age / GHOST_LIFE));
       s.obj.visible = age < GHOST_LIFE && root.visible;
     }
   }
