@@ -475,7 +475,7 @@ export function rollBoxWeapon(carried: readonly string[], rnd: number, pool = bo
  */
 export const ZOMBIE_DAMAGE = {
   byClass: { ar: 2.6, smg: 2.5, lmg: 2.6, sniper: 4, shotgun: 3, pistol: 2.2, launcher: 3, special: 6 } as Record<string, number>,
-  byWeapon: { m1911: 0.6, raygun: 6, thundergun: 40, wunderwaffe: 40, wintershowl: 30, gl: 3 } as Record<string, number>,
+  byWeapon: { m1911: 0.5, raygun: 6, thundergun: 40, wunderwaffe: 40, wintershowl: 30, gl: 3 } as Record<string, number>,
   explosive: 2.5,
 } as const;
 
@@ -486,6 +486,143 @@ export function zombieDamageMult(weapon: string, means: string): number {
   if (byW !== undefined) return byW;
   if (w) return ZOMBIE_DAMAGE.byClass[w.class] ?? 2.5;
   return means === 'explosive' ? ZOMBIE_DAMAGE.explosive : 1;
+}
+
+/**
+ * Hit-part multipliers against zombies (BO1's `_zm` weapon files, as the Call of Duty Wiki lists
+ * them per weapon: "Upgraded Weapons/Black Ops", `regmultiplier`). Our guns carry multiplayer
+ * multipliers (heads x1.4, shotguns x1) which made a headshot on a zombie barely count; BO1
+ * Zombies hits the head x3-x10. `head` and `torso` replace the weapon's own (`torso` only where
+ * BO1 lists a chest multiplier above 1); limbs keep theirs.
+ *   ARs and SMGs (M16, Famas, Commando, Galil, AUG, AK-74u, MP5K, MPL, Spectre...) head x4;
+ *   RPK / HK21 x3; M1911 x3.5, chest x1.25; CZ75 x3.5; Python head and chest x1.5;
+ *   Dragunov x10, chest x1.5; L96A1 x10; shotguns none (N/A); the wonder weapons none.
+ */
+export const ZOMBIE_PARTS = {
+  byClass: {
+    ar: { head: 4 },
+    smg: { head: 4 },
+    lmg: { head: 3 },
+    sniper: { head: 10 },
+    pistol: { head: 3.5 },
+    shotgun: { head: 1 },
+    launcher: { head: 1 },
+    special: { head: 1 },
+  } as Record<string, { head: number; torso?: number }>,
+  byWeapon: {
+    m1911: { head: 3.5, torso: 1.25 },
+    python: { head: 1.5, torso: 1.5 },
+    dragunov: { head: 10, torso: 1.5 },
+    rpk: { head: 3 },
+  } as Record<string, { head: number; torso?: number }>,
+} as const;
+
+/**
+ * Factor on a gun's damage against a zombie for the part it hit: BO1's zombie multiplier over the
+ * weapon's own (which `fire()` already applied). 1 for anything but bullets.
+ */
+export function zombiePartMult(weapon: string, part: 'head' | 'torso' | 'legs' | null | undefined, means: string): number {
+  if (means !== 'bullet' || !part || part === 'legs') return 1;
+  const w = WEAPON_BY_ID.get(weapon);
+  if (!w) return 1;
+  const zm = ZOMBIE_PARTS.byWeapon[weapon] ?? ZOMBIE_PARTS.byClass[w.class];
+  if (!zm) return 1;
+  const own = part === 'head' ? w.multipliers.head : w.multipliers.torso;
+  const want = part === 'head' ? zm.head : (zm.torso ?? own);
+  return own > 0 ? want / own : 1;
+}
+
+/** Damage one bullet of `weapon` does to a zombie at point blank on `part` (tests, docs). */
+export function zombieBulletDamage(weapon: string, part: 'head' | 'torso' | 'legs'): number {
+  const w = WEAPON_BY_ID.get(weapon);
+  if (!w) return 0;
+  const own = part === 'head' ? w.multipliers.head : part === 'torso' ? w.multipliers.torso : w.multipliers.limb;
+  return w.damage.near * own * zombieDamageMult(weapon, 'bullet') * zombiePartMult(weapon, part, 'bullet');
+}
+
+// ---------------------------------------------------------------------------------------------
+// The zombie's pose (client look.ts) kept inside its hitboxes
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Hitboxes are the standing player's (`playerHitboxes`: the head is a 0.3 m box on top of the
+ * feet, 1.44-1.8 m). The old shamble leaned the whole soldier up to 0.37 rad about the feet, which
+ * drew the head 0.3-0.65 m in front of its hitbox: aimed at the drawn head from anywhere but dead
+ * ahead, a shot passed beside the head box (a miss or a torso hit). The pose now leans about the
+ * hips, a little, with the head nodding and lolling, so the drawn head stays inside the head box
+ * at every speed and phase (tests/zombies.headshots.test.ts).
+ *
+ * Soldier geometry (src/client/render/models/soldier.ts): hips at 0.96, the neck pivot at 1.58,
+ * the head box centred 0.19 above it and 0.01 forward.
+ */
+export const ZOMBIE_POSE = {
+  hip: 0.96,
+  neck: 1.58,
+  headUp: 0.19,
+  headFwd: 0.01,
+  /** Forward lean (rad): base + per m/s, capped. */
+  leanBase: 0.05,
+  leanPerMs: 0.01,
+  leanMax: 0.09,
+  /** Side-to-side lurch (rad) and the head's loll (rad) and nod (rad, + = chin down). */
+  lurch: 0.04,
+  headRoll: 0.18,
+  headNod: 0.12,
+  /** Climbing out of the ground: seconds, and the part of it spent crouched (the server crouches the body). */
+  riseSec: 1.1,
+  riseCrouchSec: 0.55,
+  /** How far below the ground the climb starts (on top of the crouch). */
+  riseDrop: 0.9,
+} as const;
+
+export interface ZombiePoseAngles {
+  /** Body lean forward (rad, about the hips) and roll (rad, + leans to its left). */
+  lean: number;
+  roll: number;
+  /** Head nod (rad, + = chin down) and roll (rad). */
+  nod: number;
+  headRoll: number;
+}
+
+/** The shamble at `speed` m/s and walk-cycle `phase` (radians). */
+export function zombiePose(speed: number, phase: number): ZombiePoseAngles {
+  const P = ZOMBIE_POSE;
+  return {
+    lean: Math.min(P.leanMax, P.leanBase + speed * P.leanPerMs),
+    roll: Math.sin(phase) * P.lurch,
+    nod: P.headNod,
+    headRoll: Math.sin(phase * 0.5) * P.headRoll,
+  };
+}
+
+/**
+ * Centre of the drawn head relative to the feet, in the body's frame: `x` to its right, `y` up,
+ * `z` ahead (Three.js Euler XYZ, as look.ts sets it: the body turns about the hips, the head about
+ * the neck).
+ */
+export function zombieHeadCenter(a: ZombiePoseAngles): { x: number; y: number; z: number } {
+  const P = ZOMBIE_POSE;
+  // Head frame: nod about x, then roll about z (Euler XYZ applies z first, then x).
+  let x = 0;
+  let y: number = P.headUp;
+  let z: number = P.headFwd;
+  [x, y] = [x * Math.cos(a.headRoll) - y * Math.sin(a.headRoll), x * Math.sin(a.headRoll) + y * Math.cos(a.headRoll)];
+  [y, z] = [y * Math.cos(a.nod) - z * Math.sin(a.nod), y * Math.sin(a.nod) + z * Math.cos(a.nod)];
+  // Body frame, relative to the hip pivot.
+  y += P.neck - P.hip;
+  [x, y] = [x * Math.cos(a.roll) - y * Math.sin(a.roll), x * Math.sin(a.roll) + y * Math.cos(a.roll)];
+  [y, z] = [y * Math.cos(a.lean) - z * Math.sin(a.lean), y * Math.sin(a.lean) + z * Math.cos(a.lean)];
+  // Model space faces +z with +x on its left (the soldier is turned by yaw + PI): report x as "right".
+  return { x: -x, y: y + P.hip, z };
+}
+
+/** The old shamble (before the fix), for the test that shows why head shots missed. */
+export function legacyZombieHeadCenter(speed: number): { x: number; y: number; z: number } {
+  const lean = 0.12 + Math.min(0.25, speed * 0.04);
+  // Lean about the feet, head tilted back 0.2.
+  const y0 = ZOMBIE_POSE.neck + 0.19 * Math.cos(-0.2);
+  const z0 = 0.01 + 0.19 * Math.sin(-0.2);
+  return { x: 0, y: y0 * Math.cos(lean) - z0 * Math.sin(lean), z: y0 * Math.sin(lean) + z0 * Math.cos(lean) };
 }
 
 // ---------------------------------------------------------------------------------------------

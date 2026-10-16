@@ -27,6 +27,7 @@ import { isZombiesMatch, myInfo, now, zm } from './store';
 
 const CHALK_RED = '#c02a1a';
 const CHALK_HI = '#ff4a2a';
+const HEADSHOT_GOLD = '#ffc83a';
 const PLAYER_COLORS = ['#ece2ce', '#7ab0ff', '#ffd84a', '#7cff6a'];
 const v3 = new THREE.Vector3();
 
@@ -376,6 +377,18 @@ function wrapWidgets(): void {
     if (!isZombiesMatch(currentMatch())) orig(g, W, H, dt);
   };
   for (const id of ['core.killfeed', 'core.compass', 'core.title', 'killstreaks.radar', 'killstreaks.ladder', 'progression.popups', 'progression.ticker', 'frontend.classHint', 'perks.laststand', 'perks.list']) wrap(id, hideInZombies);
+  // Headshots: a bigger gold hitmarker (red with a gold centre on a head kill), so the x4 head
+  // multiplier reads at a glance. The server's `hit` carries the part it registered.
+  wrap('core.hitmarker', (orig) => (g, W, H, dt) => {
+    const m = currentMatch();
+    if (!isZombiesMatch(m) || !m.hitHead || m.time - m.hitAt > 0.3) return orig(g, W, H, dt);
+    const u = unit(H);
+    const mx = Math.floor(W / 2);
+    const my = Math.floor(H / 2);
+    const col = m.hitKill ? '#ff4a3a' : HEADSHOT_GOLD;
+    for (let i = 3; i < 9; i++) for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]] as const) rect(g, mx + sx * i * u, my + sy * i * u, u * (i < 5 ? 2 : 1), u * (i < 5 ? 2 : 1), col);
+    for (const [sx, sy] of [[0, -1], [1, 0], [0, 1], [-1, 0]] as const) rect(g, mx + sx * 2 * u, my + sy * 2 * u, u, u, HEADSHOT_GOLD);
+  });
   wrap('core.score', (orig) => (g, W, H, dt) => {
     const m = currentMatch();
     if (!isZombiesMatch(m)) return orig(g, W, H, dt);

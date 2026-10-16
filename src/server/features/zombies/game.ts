@@ -11,7 +11,7 @@
  * room's bot count is not managed in Zombies); `ZombieBrain` does.
  */
 import { HEALTH, type Team } from '../../../shared/constants';
-import { DOGS, POINTS, dogHealth, dogSpawnWait, dogsForRound, downedLoss, firstDogRound, killPoints, newDropTracker, nextDogRound, PERK_COLA_BY_ID, PERK_EFFECTS, rollGait, roundUpToTen, roundXp, scaledPoints, spawnDelay, STARTING_WEAPON, ZOMBIE_SPEED, zombieDamageMult, zombieHealth, ZOMBIES, ZOMBIES_LOADOUT, ZOMBIES_TEAMS, zombiesForRound, type DropTracker, type PerkColaId, type ZombiesEventPayload, type ZombiesPhase, type ZombiesPlayerInfo, type ZombiesStatePayload } from '../../../shared/defs/zombies';
+import { DOGS, POINTS, dogHealth, dogSpawnWait, dogsForRound, downedLoss, firstDogRound, killPoints, newDropTracker, nextDogRound, PERK_COLA_BY_ID, PERK_EFFECTS, rollGait, roundUpToTen, roundXp, scaledPoints, spawnDelay, STARTING_WEAPON, ZOMBIE_SPEED, zombieDamageMult, zombieHealth, zombiePartMult, ZOMBIES, ZOMBIES_LOADOUT, ZOMBIES_TEAMS, zombiesForRound, type DropTracker, type PerkColaId, type ZombiesEventPayload, type ZombiesPhase, type ZombiesPlayerInfo, type ZombiesStatePayload } from '../../../shared/defs/zombies';
 import { MOVE } from '../../../shared/constants';
 import { EQUIPMENT_BY_ID } from '../../../shared/defs/equipment';
 import { cloneLoadout, type Loadout } from '../../../shared/loadout';
@@ -148,7 +148,8 @@ export class ZombiesGame {
     }, 'zombies.speed');
     m.add('canSprint', (p) => (undeadOf(p) ? false : undefined), 'zombies.sprint');
     m.add('regenDelayMultiplier', (p) => (undeadOf(p) ? 1e6 : undefined), 'zombies.regen');
-    m.add('damageDealt', (a, info) => (survivorOf(a) && undeadOf(info.victim) ? zombieDamageMult(info.weapon, info.means) : undefined), 'zombies.damage');
+    // BO1 zombie weapon damage, and BO1's hit-part multipliers (heads x3-x10) in place of the gun's multiplayer ones.
+    m.add('damageDealt', (a, info) => (survivorOf(a) && undeadOf(info.victim) ? zombieDamageMult(info.weapon, info.means) * zombiePartMult(info.weapon, info.part, info.means) : undefined), 'zombies.damage');
     m.add('reloadMultiplier', (p) => (this.hasPerk(p, 'speed') ? PERK_EFFECTS.speedReload : undefined), 'zombies.speedcola');
     m.add('fireRateMultiplier', (p) => (this.hasPerk(p, 'doubletap') ? PERK_EFFECTS.doubleTapRate : undefined), 'zombies.doubletap');
     m.add('useClaimed', (p) => (this.buy.claimsUse(p) ? true : undefined), 'zombies.use');
