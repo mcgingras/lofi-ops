@@ -232,7 +232,7 @@ const CLASS_NAMES: Record<string, string> = {
 };
 
 /** Killstreaks that never kill anyone directly: no "kills with" challenge for them. */
-const NON_LETHAL_STREAKS = new Set(['uav', 'spy_plane', 'counter_uav', 'cuav', 'counteruav', 'blackbird', 'sr71', 'care_package', 'carepackage', 'supply_drop', 'sam', 'sam_turret']);
+const NON_LETHAL_STREAKS = new Set(['uav', 'spy_plane', 'counter_uav', 'cuav', 'counteruav', 'blackbird', 'sr71', 'care_package', 'carepackage', 'supply_drop', 'sam', 'sam_turret', 'glitch']);
 
 // ---------------------------------------------------------------------------------------------
 // Career

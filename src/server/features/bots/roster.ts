@@ -248,7 +248,7 @@ export class RoomBots {
           const b = this.room.players.get(id);
           if (!b || b === player || !b.alive || !this.room.isEnemy(b, player)) continue;
           const d = Math.hypot(b.move.x - player.move.x, b.move.y - player.move.y, b.move.z - player.move.z);
-          if (d <= brain.skill.hearingRange) brain.onHeard(player.move, now);
+          if (d <= brain.cur.hearingRange) brain.onHeard(player.move, now);
         }
       }),
       bus.on('damage', ({ victim, attacker }) => {

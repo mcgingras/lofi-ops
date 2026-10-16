@@ -67,6 +67,11 @@ export function callRcxd(ctx: KsRoom, p: PlayerState, _args: CallArgs): string |
         if (pressed & (Buttons.FIRE | Buttons.STREAK)) detonate = true;
       }
       prevButtons = p.buttons;
+      // Glitched: the car stalls and won't detonate (the fuse keeps running).
+      if (ctx.hardwareStunned(p)) {
+        buttons = 0;
+        detonate = false;
+      }
       stepMove(room.world, car, buttons, yaw, dt, params);
       ent.x = car.x;
       ent.y = car.y;

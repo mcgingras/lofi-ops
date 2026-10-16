@@ -48,5 +48,5 @@ export function callRadar(ctx: KsRoom, p: PlayerState, streak: string, _args: Ca
 export function registerRadarModifiers(room: Room, ctx: KsRoom): void {
   const spying = (viewer: PlayerState) => ctx.actives.some((a) => !a.done && (a.streak === 'uav' || a.streak === 'blackbird') && ctx.sameSide(a.owner, viewer));
   room.modifiers.add('radarVisible', (target, viewer) => (target.alive && room.isEnemy(viewer, target) && spying(viewer) ? true : undefined), 'killstreaks.uav');
-  room.modifiers.add('radarJammed', (viewer) => (ctx.actives.some((a) => !a.done && a.streak === 'counter_uav' && room.isEnemy(a.owner, viewer)) ? true : undefined), 'killstreaks.counter_uav');
+  room.modifiers.add('radarJammed', (viewer) => (ctx.actives.some((a) => !a.done && a.streak === 'counter_uav' && room.isEnemy(a.owner, viewer) && !ctx.hardwareStunned(a.owner)) ? true : undefined), 'killstreaks.counter_uav');
 }

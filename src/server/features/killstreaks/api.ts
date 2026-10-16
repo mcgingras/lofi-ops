@@ -30,6 +30,7 @@ import { botStreakSkill } from './skill';
 import { ksOf, markDirty, stateMsg } from './state';
 import { callNapalm, callThunder } from './streaks/airstrike';
 import { callDogs } from './streaks/dogs';
+import { callGlitch } from './streaks/glitch';
 import { airspaceFull, callGunner, callHeli } from './streaks/heli';
 import { callMortar } from './streaks/mortar';
 import { callNuke } from './streaks/nuke';
@@ -63,6 +64,7 @@ export const STREAK_IMPLS: Record<string, Impl> = {
   valkyrie: callValkyrieDrop,
   attack_dogs: callDogs,
   nuke: callNuke,
+  glitch: callGlitch,
 };
 
 export interface CallOptions {
@@ -119,6 +121,8 @@ export function callKillstreak(room: Room, p: PlayerState, id: string, opts: Cal
   if (idx < 0) return { ok: false, reason: 'not_ready' };
   if (ks.control || ks.launcher || ks.carry) return { ok: false, reason: 'busy' };
   const ctx = ksRoom(room);
+  // Glitched (an enemy Glitch is running): no streaks until it ends.
+  if (ctx.hardwareStunned(p)) return { ok: false, reason: 'glitched' };
   if ((id === 'attack_helicopter' || id === 'chopper_gunner') && airspaceFull(ctx)) return { ok: false, reason: 'airspace_full' };
   // Map-targeted streaks never fall back to the crosshair (humans choose on the tactical map, bots
   // pass `suggestTarget`); a patrol area defaults to the middle of the map.
@@ -213,6 +217,8 @@ export function botWants(room: Room, p: PlayerState, id: string, skill: number):
   if (skill < 0.5) return true;
   if (id === 'sam_turret') return enemyStreakTargets(room, p).some((t) => t.air);
   if (id === 'counter_uav') return ctx.actives.some((a) => !a.done && (a.streak === 'uav' || a.streak === 'blackbird') && room.isEnemy(a.owner, p)) || Math.random() < 0.02;
+  // Glitch: when the enemy has something running to knock out, else now and then.
+  if (id === 'glitch') return ctx.actives.some((a) => !a.done && room.isEnemy(a.owner, p)) || Math.random() < 0.15;
   if (id === 'rcxd' || id === 'chopper_gunner' || id === VALKYRIE_LAUNCHER) {
     // Not with an enemy right in its face.
     const eye = { x: p.move.x, y: p.move.y + 1.5, z: p.move.z };

@@ -113,9 +113,11 @@ function stepDog(ctx: KsRoom, owner: PlayerState, dog: Dog, dt: number, params: 
   if (!dog.target || !dog.target.alive || !room.players.has(dog.target.id)) {
     dog.target = ctx.targetsFor(owner, KS_ENTITY.dog, { x: m.x, y: m.y + 0.5, z: m.z }, 500, false)[0] ?? null;
   }
-  const t = dog.target;
+  // Glitched: the dogs stand confused (no chasing, no biting).
+  const dazed = ctx.hardwareStunned(owner);
+  const t = dazed ? null : dog.target;
   let goal: Vec3 | null = t ? t.move : null;
-  if (dog.roam && room.time < dog.roamUntil) goal = dog.roam;
+  if (dog.roam && room.time < dog.roamUntil && !dazed) goal = dog.roam;
   let buttons = 0;
   let yaw = dog.ent.yaw;
   let biting = 0;

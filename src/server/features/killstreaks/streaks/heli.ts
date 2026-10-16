@@ -79,7 +79,8 @@ export function callHeli(ctx: KsRoom, p: PlayerState, args: CallArgs): string | 
         }
       }
       let firing = false;
-      if (target) {
+      // Glitched: it keeps flying its patrol but holds fire.
+      if (target && !ctx.hardwareStunned(act.owner)) {
         const tc = chestOf(target);
         ent.yaw = turnToward(ent.yaw, Math.atan2(-(tc.x - ent.x), -(tc.z - ent.z)), 2.5 * dt);
         const since = room.time - acquired - HELI.acquire;
@@ -146,7 +147,7 @@ export function callGunner(ctx: KsRoom, p: PlayerState, _args: CallArgs): string
         }
       } else if (p.buttons & Buttons.FIRE) dir = viewDir(p.yaw, p.pitch);
       let firing = false;
-      if (dir && room.time >= nextShot) {
+      if (dir && room.time >= nextShot && !ctx.hardwareStunned(p)) {
         nextShot = room.time + 1 / GUNNER.rate;
         firing = true;
         const hit = room.world.raycast(gun, dir, 250, 'bullets');
