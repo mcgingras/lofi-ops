@@ -32,6 +32,7 @@ import { botStreakSkill } from './skill';
 import { closeMap, openMap, submitMapTarget, tickMap } from './mapmode';
 import { flushState, grant, ksOf, markDirty, onKill, resetPlayer, stateMsg } from './state';
 import { crateInReach, onUsePressed } from './streaks/package';
+import { wireMysteryBox } from './streaks/mysterybox';
 import { registerNukeModifiers } from './streaks/nuke';
 import { registerRadarModifiers } from './streaks/radar';
 import { botLauncher, fireLauncher, onOwnerDeath, putAwayLauncher, raiseLauncher, syncLauncherEntity } from './streaks/valkyrie';
@@ -211,6 +212,7 @@ const feature: Feature = {
     const ctx = ksRoom(room);
     registerRadarModifiers(room, ctx);
     registerNukeModifiers(room, ctx);
+    wireMysteryBox(room, ctx);
     // Driving a streak or holding the radio (tactical map): the body stands still with its weapon
     // down; designating: no sprint.
     room.modifiers.add('speedMultiplier', (p) => (p.ext.killstreaks?.control || p.ext.killstreaks?.map ? 0 : undefined), 'killstreaks.control');

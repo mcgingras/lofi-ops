@@ -34,6 +34,7 @@ import { airspaceFull, callGunner, callHeli } from './streaks/heli';
 import { callMortar } from './streaks/mortar';
 import { callNuke } from './streaks/nuke';
 import { callCarePackage } from './streaks/package';
+import { callMysteryBox } from './streaks/mysterybox';
 import { callRadar } from './streaks/radar';
 import { callSam, callSentry } from './streaks/turrets';
 import type { CallArgs } from './streaks/types';
@@ -61,6 +62,7 @@ export const STREAK_IMPLS: Record<string, Impl> = {
   chopper_gunner: callGunner,
   rcxd: callRcxd,
   valkyrie: callValkyrieDrop,
+  mystery_box: callMysteryBox,
   attack_dogs: callDogs,
   nuke: callNuke,
 };
