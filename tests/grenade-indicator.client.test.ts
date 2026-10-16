@@ -15,8 +15,11 @@ const nade = (o: Partial<DangerNade>): DangerNade => ({ x: 0, y: 0.1, z: -3, equ
 
 describe('grenade indicator', () => {
   it('range is the kill radius plus the margin, for lethal explosives only', () => {
-    expect(indicatorRange('frag')).toBeCloseTo(killRadius(FRAG) + GRENADE_INDICATOR.margin, 9);
-    expect(indicatorRange('semtex')).toBeCloseTo(killRadius(SEMTEX) + GRENADE_INDICATOR.margin, 9);
+    // BO1's cg_hudGrenadeIconMaxRangeFrag 250 units, or the kill radius plus the margin if further.
+    expect(GRENADE_INDICATOR.range).toBeCloseTo(6.35, 9);
+    expect(indicatorRange('frag')).toBeCloseTo(Math.max(6.35, killRadius(FRAG) + GRENADE_INDICATOR.margin), 9);
+    expect(indicatorRange('semtex')).toBeCloseTo(Math.max(6.35, killRadius(SEMTEX) + GRENADE_INDICATOR.margin), 9);
+    expect(indicatorRange('frag')).toBeGreaterThan(killRadius(FRAG));
     for (const id of ['flashbang', 'concussion', 'tomahawk', 'gl', 'bogus']) expect(indicatorRange(id), id).toBe(0);
     expect(killRadius(FRAG)).toBeGreaterThan(3);
   });
@@ -41,8 +44,9 @@ describe('grenade indicator', () => {
 
   it('red inside the kill radius, yellow in the margin; nearest first', () => {
     const kr = killRadius(FRAG);
-    const marks = grenadeDangers([nade({ y: 1.6, z: -(kr + GRENADE_INDICATOR.margin * 0.5) }), nade({ y: 1.6, x: kr * 0.5, z: 0 })], me());
+    const marks = grenadeDangers([nade({ y: 1.6, z: -(kr + (indicatorRange('frag') - kr) * 0.5) }), nade({ y: 1.6, x: kr * 0.5, z: 0 })], me());
     expect(marks.map((m) => m.lethal)).toEqual([true, false]);
+    expect(marks[1]!.dist).toBeGreaterThan(kr);
     expect(marks[0]!.dist).toBeLessThan(marks[1]!.dist);
   });
 

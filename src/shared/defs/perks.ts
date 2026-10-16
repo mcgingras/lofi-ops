@@ -51,8 +51,11 @@ export const perksOfTier = (tier: 1 | 2 | 3) => PERKS.filter((p) => p.tier === t
 /** Numbers the perk rules use (server) and the HUD shows (client). */
 export const PERK_TUNING = {
   lightweightSpeed: 1.07,
-  /** Damage taken from `explosive` means with Flak Jacket. */
-  flakExplosive: 0.65,
+  /**
+   * Damage taken from `explosive` means with Flak Jacket: BO1's `perk_flakJacket` 35 ("explosive
+   * damage is this % of original", `_class.gsc` `cac_modified_damage`). Not for a semtex stuck to you.
+   */
+  flakExplosive: 0.35,
   /**
    * Flak Jacket Pro, "Shockproof": explosions don't rattle you. Blast screen shake and ringing ears
    * x0, explosive flinch x0, knockback (Thundergun) x0, concussion x0.5, Winter's Howl frost x0.5.

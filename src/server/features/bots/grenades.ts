@@ -1,14 +1,15 @@
 /**
  * Bots' lethal grenades (pure, unit-tested): when to throw one, where it should land and how far
  * off the bot's arm is. Bots throw only after a fight, at the spot they last saw an enemy (to flush
- * them out of cover), never while trading shots, and a BO1-strength frag kills inside a few metres,
- * so the tuning keeps them from spamming the player: a cooldown of 20-30 s, at most a third of the
- * chances taken, a scatter of 2-6 m by skill, and never at a spot so close the thrower would be in
- * the blast.
+ * them out of cover), never while trading shots. A BO1-strength frag kills inside 5 m, so the
+ * tuning keeps them from spamming the player: a cooldown of 16-30 s, at most about a third of the
+ * chances taken, a landing scatter of 3-6 m by skill, never at a spot so close the thrower would be
+ * in the blast, and Recruit bots don't throw lethals at all.
  *
- * BO1's own bots (Combat Training, `maps/mp/bots/_bot_combat.gsc`) throw lethals at a remembered
- * enemy position with a per-difficulty chance; these numbers aim for the same feel: a grenade
- * every so often that makes you move, not one at every corner.
+ * BO1's Combat Training bots (`maps/mp/gametypes/_bot.gsc` in the T5 dump): grenades are allowed
+ * on every difficulty but Easy (`sv_botAllowGrenades` 0 there, 1 on Normal / Hard / Fu), with the
+ * engine's `sv_botMinGrenadeTime` / `sv_botMaxGrenadeTime` (1.5-4 s) for the throw itself; the
+ * decision of when to throw lives in the engine, so the frequency here is our own.
  */
 import type { BotSkill } from '../../../shared/defs/bots';
 import { EQUIPMENT_BY_ID, killRadius, NADE_PHYSICS } from '../../../shared/defs/equipment';
@@ -32,10 +33,19 @@ export const BOT_GRENADE = {
   cooldownBase: 22,
   cooldownSpread: 8,
   cooldownAggression: 6,
-  /** Landing scatter (m) = base + aimErrorDeg * perDeg (recruit ~6 m, veteran ~2.3 m). */
-  scatterBase: 1.8,
-  scatterPerDeg: 0.45,
+  /**
+   * Landing scatter (m) = base + aimErrorDeg * perDeg: regular ~5.8 m, hardened ~4.1, veteran
+   * ~3.1. Against the frag's 5.2 m kill radius a regular bot's grenade at a spot you stand still
+   * on misses the kill about a fifth of the time, and you rarely stand still.
+   */
+  scatterBase: 2.5,
+  scatterPerDeg: 0.5,
 } as const;
+
+/** Does a bot of this skill throw lethals? (BO1: not on Easy; here: Recruit-level aim, 8 degrees of error or more.) */
+export function throwsLethals(skill: Pick<BotSkill, 'aimErrorDeg'>): boolean {
+  return skill.aimErrorDeg < 8;
+}
 
 /** The closest a bot throws its lethal (so it is never inside its own blast). */
 export function minThrowDistance(lethal: string | null | undefined): number {

@@ -5,14 +5,15 @@
  * scatter, aim).
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { BOT_GRENADE, grenadeAimPoint, grenadeChance, grenadeCooldown, grenadePitch, grenadeScatter, minThrowDistance } from '../src/server/features/bots/grenades';
+import { BOT_GRENADE, grenadeAimPoint, grenadeChance, grenadeCooldown, grenadePitch, grenadeScatter, minThrowDistance, throwsLethals } from '../src/server/features/bots/grenades';
 import perksFeature from '../src/server/features/perks/index';
 import weaponsFeature, { explode, startThrow } from '../src/server/features/weapons/index';
+import { wext } from '../src/server/features/weapons/state';
 import { Lobby } from '../src/server/lobby';
 import type { PlayerState } from '../src/server/player';
 import type { Room } from '../src/server/room';
 import { Store } from '../src/server/store';
-import { BLAST, blastDistance, blastReaches, type BlastBody } from '../src/shared/blast';
+import { BLAST, blastDistance, blastExposure, type BlastBody } from '../src/shared/blast';
 import { PLAYER, TICK_DT } from '../src/shared/constants';
 import { BOT_DIFFICULTIES } from '../src/shared/defs/bots';
 import { blastDamage, EQUIPMENT_BY_ID, killRadius, NADE_ENTITY, NADE_PHYSICS } from '../src/shared/defs/equipment';
@@ -27,8 +28,8 @@ const SEMTEX = EQUIPMENT_BY_ID.get('semtex')!;
 
 /** The chosen BO1-derived numbers (docs/features/weapons.md, "Lethal grenades"). */
 const CHOSEN = {
-  frag: { radius: 6.5, max: 200, min: 50, fuse: 3.5, killRadius: 4.33 },
-  semtex: { radius: 6.5, max: 200, min: 50, fuse: 2.5, killRadius: 4.33 },
+  frag: { radius: 6.5, max: 200, min: 75, fuse: 3.5, killRadius: 5.2 },
+  semtex: { radius: 6.5, max: 200, min: 55, fuse: 2, killRadius: 4.483 },
 };
 
 let store: Store | undefined;
@@ -56,9 +57,8 @@ function body(room: Room, team: 0 | 1, x: number, z: number, perks: string[] = [
   p.brain = { think: (_r, self) => ({ buttons: 0, yaw: self.yaw, pitch: 0, weaponSlot: 0 }) };
   return p;
 }
-const boxOf = (p: PlayerState): BlastBody => ({ x: p.move.x, y: p.move.y, z: p.move.z, radius: PLAYER.radius, height: PLAYER.height });
-/** A blast `d` metres from the side of a standing body's box, at the floor (a grenade lying there). */
-const beside = (p: PlayerState, d: number) => ({ x: p.move.x + PLAYER.radius + d, y: 0.1, z: p.move.z });
+/** A grenade lying on the floor `d` metres from a body's feet (the blast goes off 0.1 m up). */
+const beside = (p: PlayerState, d: number) => ({ x: p.move.x + Math.sqrt(Math.max(0, d * d - 0.01)), y: 0, z: p.move.z });
 
 describe('BO1 numbers', () => {
   it('frag and semtex use the chosen profile, fuse and kill radius', () => {
@@ -85,37 +85,44 @@ describe('BO1 numbers', () => {
   });
 });
 
-describe('blast reach (shared/blast.ts)', () => {
-  const b: BlastBody = { x: 0, y: 0, z: 0, radius: 0.3, height: 1.8 };
-  it('distance is to the nearest point of the box', () => {
-    expect(blastDistance({ x: 0, y: 0.1, z: 0 }, b)).toBe(0);
-    expect(blastDistance({ x: 2.3, y: 0.1, z: 0 }, b)).toBeCloseTo(2, 9);
-    expect(blastDistance({ x: 0, y: 3.8, z: 0 }, b)).toBeCloseTo(2, 9);
-    expect(blastDistance({ x: 3.3, y: 0.1, z: 4.3 }, b)).toBeCloseTo(5, 9);
+describe('blast reach (shared/blast.ts, BO1 CanDamage)', () => {
+  const b: BlastBody = { x: 0, y: 0, z: 0, eye: PLAYER.eye };
+  const c = { x: 3, y: 0.1, z: 0 };
+  it('distance is to the feet', () => {
+    expect(blastDistance({ x: 0, y: 0, z: 0 }, b)).toBe(0);
+    expect(blastDistance({ x: 3, y: 0, z: 4 }, b)).toBeCloseTo(5, 9);
+    expect(blastDistance({ x: 0, y: 2, z: 0 }, b)).toBeCloseTo(2, 9);
   });
 
-  it('a wall stops it; a post, a thin pillar or a fence does not', () => {
-    const c = { x: 3, y: 0.1, z: 0 };
-    expect(blastReaches(flatWorld(), c, b)).toBe(true);
+  it('in the open the whole blast lands; a wall stops all of it', () => {
+    expect(blastExposure(flatWorld(), c, b)).toBe(1);
     const wall = solid({ x: 1.4, y: 0, z: -3 }, { x: 1.6, y: 3, z: 3 });
-    expect(blastReaches(flatWorld([wall]), c, b)).toBe(false);
-    // A 15 cm post right on the line to the middle of the body.
+    expect(blastExposure(flatWorld([wall]), c, b)).toBe(0);
+  });
+
+  it('a post hiding the middle of you takes nothing off; a fence neither', () => {
     const post = solid({ x: 1.42, y: 0, z: -0.075 }, { x: 1.58, y: 3, z: 0.075 });
-    expect(blastReaches(flatWorld([post]), c, b)).toBe(true);
-    // A chain-link fence (bullets pass through it).
+    expect(blastExposure(flatWorld([post]), c, b)).toBe(1);
     const fence = solid({ x: 1.45, y: 0, z: -3 }, { x: 1.5, y: 2.5, z: 3 }, { bullets: false, sight: false });
-    expect(blastReaches(flatWorld([fence]), c, b)).toBe(true);
-    // Waist-high cover: the head still shows, so the blast reaches it (BO1 crouch behind it instead).
-    const low = solid({ x: 1.4, y: 0, z: -3 }, { x: 1.6, y: 1.0, z: 3 });
-    expect(blastReaches(flatWorld([low]), { x: 3, y: 0.1, z: 0 }, b)).toBe(true);
-    expect(blastReaches(flatWorld([low]), { x: 3, y: 0.1, z: 0 }, { ...b, height: PLAYER.crouchHeight * 0.75 })).toBe(false);
+    expect(blastExposure(flatWorld([fence]), c, b)).toBe(1);
+  });
+
+  it('partial cover takes part of it: hits / 3', () => {
+    // Waist-high cover: the middle and the feet corners are hidden, the two eye-level corners show.
+    const low = solid({ x: 0.6, y: 0, z: -3 }, { x: 0.8, y: 1.0, z: 3 });
+    expect(blastExposure(flatWorld([low]), c, b)).toBeCloseTo(2 / 3, 9);
+    // A wall end covering one side and the middle: the other side's two corners.
+    const end = solid({ x: 1.4, y: 0, z: -3 }, { x: 1.6, y: 3, z: 0.05 });
+    expect(blastExposure(flatWorld([end]), c, b)).toBeCloseTo(2 / 3, 9);
+    // Crouched behind the low wall: nothing reaches.
+    expect(blastExposure(flatWorld([low]), c, { ...b, eye: 1.0 })).toBe(0);
   });
 
   it('a thin wall you stand against never lets a blast round it', () => {
-    // A 5 cm plywood wall 0.32 m from the body's middle: the side points poke past it.
-    const ply = solid({ x: 0.32, y: 0, z: -3 }, { x: 0.37, y: 3, z: 3 });
-    expect(BLAST.spread).toBeGreaterThan(0.37);
-    expect(blastReaches(flatWorld([ply]), { x: 2, y: 0.1, z: 0 }, b)).toBe(false);
+    // A 5 cm plywood wall 0.3 m from the body: the corner points poke past it.
+    const ply = solid({ x: 0.3, y: 0, z: -3 }, { x: 0.35, y: 3, z: 3 });
+    expect(BLAST.spread).toBeGreaterThan(0.35);
+    expect(blastExposure(flatWorld([ply]), { x: 2, y: 0.1, z: 0.2 }, b)).toBe(0);
   });
 });
 
@@ -127,8 +134,8 @@ describe('grenades in a room', () => {
     for (const [d, dies] of [[0, true], [kr - 0.2, true], [kr + 0.25, false], [FRAG.radius - 0.1, false]] as const) {
       const v = body(room, 1, 0, 0);
       explode(room, beside(v, d), FRAG, a.id);
-      expect(v.alive, `d=${d}`).toBe(dies);
-      if (!dies) expect(v.health).toBeCloseTo(100 - blastDamage(FRAG, blastDistance({ ...beside(v, d), y: 0.2 }, boxOf(v))), 0);
+      expect(!v.alive, `d=${d}`).toBe(dies);
+      if (!dies) expect(v.health).toBeCloseTo(100 - blastDamage(FRAG, d), 0);
       room.removePlayer(v.id);
     }
     const far = body(room, 1, 0, 0);
@@ -141,28 +148,25 @@ describe('grenades in a room', () => {
     const a = body(room, 0, -10, 0);
     const v = body(room, 1, 0, 0);
     room.world = flatWorld([solid({ x: 0.9, y: 0, z: -3 }, { x: 1.1, y: 3, z: 3 })]);
-    explode(room, beside(v, 1.2), FRAG, a.id);
+    explode(room, beside(v, 1.5), FRAG, a.id);
     expect(v.health).toBe(100);
     room.world = flatWorld([solid({ x: 0.92, y: 0, z: -0.08 }, { x: 1.08, y: 3, z: 0.08 })]);
-    explode(room, beside(v, 1.2), FRAG, a.id);
+    explode(room, beside(v, 1.5), FRAG, a.id);
     expect(v.alive).toBe(false);
   });
 
-  it('Flak Jacket (x0.65) survives a frag a few metres off that kills without it', () => {
+  it('Flak Jacket (BO1 x0.35) survives a frag at their feet at full health, not two', () => {
     const room = setup();
     const a = body(room, 0, -10, 0);
-    expect(PERK_TUNING.flakExplosive).toBe(0.65);
-    // Between the plain and the Flak Jacket kill radius.
-    const flakKr = killRadius({ ...FRAG, max: FRAG.max * PERK_TUNING.flakExplosive, min: FRAG.min * PERK_TUNING.flakExplosive });
-    const d = (killRadius(FRAG) + flakKr) / 2;
+    expect(PERK_TUNING.flakExplosive).toBe(0.35);
     const plain = body(room, 1, 0, 0);
-    explode(room, beside(plain, d), FRAG, a.id);
+    explode(room, beside(plain, 2), FRAG, a.id);
     expect(plain.alive).toBe(false);
     const flak = body(room, 1, 0, 0, ['flak_jacket']);
-    explode(room, beside(flak, d), FRAG, a.id);
+    explode(room, beside(flak, 0.2), FRAG, a.id);
     expect(flak.alive).toBe(true);
-    // Point blank still kills through Flak Jacket.
-    explode(room, beside(flak, 0), FRAG, a.id);
+    expect(flak.health).toBeCloseTo(100 - blastDamage(FRAG, 0.2) * 0.35, 0);
+    explode(room, beside(flak, 0.2), FRAG, a.id);
     expect(flak.alive).toBe(false);
   });
 
@@ -185,9 +189,7 @@ describe('grenades in a room', () => {
     const room = setup();
     const a = body(room, 0, 0, 4);
     const v = body(room, 1, 0, 0, ['flak_jacket']);
-    a.loadout = { ...a.loadout!, lethal: 'semtex' };
-    room.spawn(a);
-    a.move = { ...createMoveState(0, 0, 4), onGround: true };
+    Object.assign(wext(a), { lethal: 'semtex', lethalN: 1 });
     a.brain = { think: () => ({ buttons: 0, yaw: 0, pitch: Math.atan2(-0.5, 4), weaponSlot: 0 }) };
     room.step();
     expect(startThrow(room, a, 'lethal')).toBe(true);
@@ -203,7 +205,7 @@ describe('grenades in a room', () => {
     const a = body(room, 0, 0, 0);
     const mate = body(room, 0, 0, 2);
     const foe = body(room, 1, 0, -2);
-    explode(room, { x: 0.6, y: 0.1, z: 0 }, FRAG, a.id);
+    explode(room, { x: 0.6, y: 0, z: 0 }, FRAG, a.id);
     expect(a.alive).toBe(false);
     expect(mate.health).toBe(100);
     expect(foe.alive).toBe(false);
@@ -211,6 +213,10 @@ describe('grenades in a room', () => {
 });
 
 describe('bots and grenades', () => {
+  it('Recruits never throw lethals (BO1 Easy); the others do', () => {
+    expect(BOT_DIFFICULTIES.map((d) => [d.id, throwsLethals(d.skill)])).toEqual([['recruit', false], ['regular', true], ['hardened', true], ['veteran', true]]);
+  });
+
   it('never throw where they would stand in their own blast', () => {
     expect(minThrowDistance('frag')).toBeGreaterThanOrEqual(killRadius(FRAG) + BOT_GRENADE.safety - 1e-9);
     expect(minThrowDistance('semtex')).toBeGreaterThanOrEqual(killRadius(SEMTEX) + BOT_GRENADE.safety - 1e-9);
@@ -231,13 +237,13 @@ describe('bots and grenades', () => {
     expect(BOT_GRENADE.spawnDelay).toBeGreaterThanOrEqual(5);
   });
 
-  it('miss by more the worse they are: 2-6 m of scatter, never a sure kill from range', () => {
+  it('miss by more the worse they are: 3-6 m of scatter, never a sure kill from range', () => {
     const by = Object.fromEntries(BOT_DIFFICULTIES.map((d) => [d.id, grenadeScatter(d.skill)]));
     expect(by.recruit!).toBeGreaterThan(by.regular!);
     expect(by.regular!).toBeGreaterThan(by.hardened!);
     expect(by.hardened!).toBeGreaterThan(by.veteran!);
     expect(by.veteran!).toBeGreaterThanOrEqual(2);
-    expect(by.recruit!).toBeLessThanOrEqual(6.5);
+    expect(by.regular!).toBeLessThanOrEqual(6);
     // The aim point stays inside the scatter disc.
     let seed = 1;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;

@@ -2,8 +2,9 @@
  * The grenade indicator (pure, unit-tested): which live lethals get a HUD marker and where it
  * points. BO1 draws a grenade icon on a ring around the crosshair with a pointer aimed at the
  * grenade (top = ahead, bottom = behind) for a live grenade close enough to hurt you
- * (`cg_hudGrenadeIconMaxRangeFrag`, `cg_hudGrenadeIconMaxHeight`). Here the range is each lethal's
- * kill radius plus `GRENADE_INDICATOR.margin`, so a marker means "move or die". Your own grenades
+ * (`cg_hudGrenadeIconMaxRangeFrag` 250 units = 6.35 m, `cg_hudGrenadeIconMaxHeight`). The range is
+ * that, or a lethal's kill radius plus `GRENADE_INDICATOR.margin` if further, so a marker always
+ * means "you are inside or just outside the kill radius: move". Your own grenades
  * count (they hurt you); teammates' don't (friendly fire is off). A semtex stuck to you always
  * shows.
  */
@@ -45,7 +46,7 @@ export interface DangerMark {
 export function indicatorRange(equip: string): number {
   const def = EQUIPMENT_BY_ID.get(equip);
   if (!def || def.kind !== 'lethal' || (def.effect !== 'frag' && def.effect !== 'semtex')) return 0;
-  return killRadius(def) + GRENADE_INDICATOR.margin;
+  return Math.max(GRENADE_INDICATOR.range, killRadius(def) + GRENADE_INDICATOR.margin);
 }
 
 /** Markers for the live grenades that threaten the viewer, nearest first. */

@@ -43,7 +43,7 @@ import { currentWeapon, type BotBrain, type PlayerState } from '../../player';
 import type { Room } from '../../room';
 import { addRecoil, angleDiff, engage, feltOffDeg, flinch, lookToward, newAimState, noticeTime, stepAim, toleranceDeg, type AimState } from './aim';
 import { botGoalFor, botStreakHandler, botStyleFor, type BotGoal } from './hooks';
-import { BOT_GRENADE, grenadeAimPoint, grenadeChance, grenadeCooldown, grenadePitch, minThrowDistance } from './grenades';
+import { BOT_GRENADE, grenadeAimPoint, grenadeChance, grenadeCooldown, grenadePitch, minThrowDistance, throwsLethals } from './grenades';
 import { botFrozen, effectiveSkill } from './impair';
 import { navFor, type NavCell, type NavGrid } from './nav';
 import { recentSpawns } from '../modes/spawns';
@@ -1033,7 +1033,7 @@ export class Brain implements BotBrain {
   /** After a fight: maybe flush the enemy out of cover with the lethal (tuning in grenades.ts). */
   private considerGrenade(room: Room, self: PlayerState, now: number) {
     const lethal = self.loadout?.lethal;
-    if (this.throwing || !lethal || lethal === 'tomahawk' || now < this.grenadeAt || !this.lastSeen) return;
+    if (this.throwing || !lethal || lethal === 'tomahawk' || now < this.grenadeAt || !this.lastSeen || !throwsLethals(this.skill)) return;
     if ((self.ext.weapons?.lethalN ?? 1) <= 0) return;
     const age = now - this.lastSeen.t;
     if (age < BOT_GRENADE.minAge || age > BOT_GRENADE.maxAge) return;

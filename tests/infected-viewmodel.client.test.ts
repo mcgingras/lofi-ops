@@ -51,7 +51,7 @@ function human(room: Room): { p: PlayerState; me: () => MeSnap } {
     me: () => {
       for (let i = msgs.length - 1; i >= 0; i--) {
         const m = msgs[i]!;
-        if (m.t === 'snap') return m.me;
+        if (m.t === 'snap' && m.me) return m.me;
       }
       throw new Error('no snapshot yet');
     },
