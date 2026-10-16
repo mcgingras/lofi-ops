@@ -36,7 +36,7 @@ import type { Room } from '../../room';
 import { equipAtSpawn } from '../weapons/equipment';
 import type { BotObjective } from './bots';
 import { allSpawns, award, isEnemyKill, modeExt, qt, rankSpawns, resetModeExt, setController, type ModeController } from './common';
-import { InfectedIntel, registerInfectedBots } from './infected-bots';
+import { InfectedIntel, markSearched, registerInfectedBots } from './infected-bots';
 
 const S: Team = INFECTED_TEAMS.survivors;
 const I: Team = INFECTED_TEAMS.infected;
@@ -90,6 +90,7 @@ export class InfectedRules implements ModeRules, ModeController {
     });
     room.bus.on('tick', ({ dt }) => this.tick(dt));
     room.modifiers.add('speedMultiplier', (p) => (room.phase === 'playing' && this.roleOf(p) === 'infected' ? INFECTED.infectedSpeed : undefined), 'modes.infected.speed');
+    room.modifiers.add('damageTaken', (p) => (p.id === this.firstId && this.counts().infected === 1 ? INFECTED.firstArmor : undefined), 'modes.infected.armor');
     room.modifiers.add(
       'radarVisible',
       (target, viewer) => {
@@ -281,7 +282,10 @@ export class InfectedRules implements ModeRules, ModeController {
         this.dirty = true;
       }
     }
-    if (room.tick % 15 === 0) this.intel.update(room, this);
+    if (room.tick % 15 === 0) {
+      this.intel.update(room, this);
+      if (this.started) for (const p of room.players.values()) if (p.alive && this.roleOf(p) === 'infected') markSearched(room, p);
+    }
     if (room.tick % 30 === 0) this.syncCounts();
     // Time limit: decide it here, a tick before core's own check would, so the Survivors'
     // OUTLASTED / FINAL STAND awards land while the match is still playing.

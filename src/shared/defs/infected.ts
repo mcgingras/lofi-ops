@@ -25,8 +25,13 @@ export const INFECTED = {
   surviveEverySec: 30,
   /** MW3: each Survivor gets 50 ("Survivor") whenever another Survivor is infected. */
   survivePoints: 50,
+  /**
+   * Damage the First Infected takes while they are the only Infected ("body armor", like the
+   * Juggernaut suit MW3's Striker-vs-Jugg First Infected wore): one player against everyone.
+   */
+  firstArmor: 0.5,
   /** Infected movement on top of their perks (MW3's Juiced-like boost). */
-  infectedSpeed: 1.08,
+  infectedSpeed: 1.04,
   /** Survivors start with this many times the normal reserve (Scavenger Pro-like spare mags). */
   survivorReserveMul: 2,
   /** The last Survivor's radar shows every Infected; Infected see the last Survivor in sweeps. */

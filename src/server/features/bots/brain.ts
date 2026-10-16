@@ -368,14 +368,17 @@ export class Brain implements BotBrain {
         this.nextMeleeAt = now + 0.75;
       }
 
-      // Knife-only with a tomahawk left (Infected): lob it at a target in sight at mid range. The
-      // throw leaves along the view when the wind-up ends, so the view stays pitched up until then.
-      if (style.throwAtRange && outOfAmmo && vis && d > 6 && d < 18 && now >= this.lobAt && this.aim.react <= 0 && (self.ext.weapons?.lethalN ?? 0) > 0) {
-        const t = d / 22;
-        this.lobPitch = clamp(Math.atan2(7.5 * t * t, d) - 0.1, 0, 0.5);
-        this.lobUntil = now + 0.5;
-        this.lobAt = now + 3 + this.rnd() * 2;
-        pulse(Buttons.LETHAL);
+      // A tomahawk left (Infected): lob it at a target in sight at mid range. The throw leaves
+      // along the view when the wind-up ends, so the view stays pitched up until then.
+      if (style.throwAtRange && vis && d > 6 && d < 18 && now >= this.lobAt && this.aim.react <= 0 && (self.ext.weapons?.lethalN ?? 0) > 0) {
+        if (this.rnd() < 0.5) {
+          // Judging the arc by eye: off by up to ~half the bot's aim error either way.
+          const t = d / 22;
+          this.lobPitch = clamp(Math.atan2(7.5 * t * t, d) - 0.1 + (this.rnd() - 0.5) * sk.aimErrorDeg * DEG * 0.8, 0, 0.5);
+          this.lobUntil = now + 0.5;
+          this.lobAt = now + 5 + this.rnd() * 3;
+          pulse(Buttons.LETHAL);
+        } else this.lobAt = now + 1.5; // not every chance: half the time it just keeps running in
       }
 
       // Reload with nothing in the mag and no sidearm worth swapping to.
@@ -415,8 +418,8 @@ export class Brain implements BotBrain {
           if (this.rnd() < s * 0.06 && td > 4) jump = true;
         }
         // Low-aggression bots with the upper hand hold still to shoot; others keep closing.
-        // Kiting (Infected's Survivors): never close in, back away from anyone inside ~7 m.
-        const approach = style.kite ? (td < 7 ? -1 : 0) : close > 0 && (sk.aggression > 0.35 || td > range * 2) ? 1 : close < 0 ? -1 : 0;
+        // Kiting (Infected's Survivors): never close in, back away from anyone inside 4 m.
+        const approach = style.kite ? (td < 4 ? -1 : 0) : close > 0 && (sk.aggression > 0.35 || td > range * 2) ? 1 : close < 0 ? -1 : 0;
         mx = ux * approach + -uz * this.strafeDir;
         mz = uz * approach + ux * this.strafeDir;
         if (now < this.crouchUntil) {

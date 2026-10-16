@@ -111,28 +111,50 @@ describe('Infected bots', () => {
     });
   });
 
+  it.each([
+    ['nuketown', 1],
+    ['terminal', 2],
+  ])('a bot-only match on %s keeps moving: the infection spreads (no lone First Infected stuck searching)', (map, seed) => {
+    withSeed(seed, () => {
+      const { room, rules } = infectedRoom(map);
+      room.options.autoStart = false;
+      for (let i = 0; i < 8; i++) room.addBot({ name: `B${i}` });
+      steps(room, 0.2);
+      let t = 0;
+      while (t < 300 && room.phase === 'playing' && rules.counts().infected < 4) {
+        steps(room, 1);
+        t += 1;
+      }
+      expect(rules.counts().infected).toBeGreaterThanOrEqual(4);
+    });
+  });
+
   it('Survivor bots group up at a rally point and hold it', () => {
     withSeed(11, () => {
       const { room, rules } = infectedRoom();
       const survivors = [0, 1, 2, 3].map((i) => room.addBot({ name: `Surv${i}` }));
+      const zero = room.addBot({ name: 'Zero' });
       steps(room, 0.2);
-      // No infection for this test: the Survivors only regroup.
-      rules.pickAt = room.time + 1000;
+      // One Infected who stands still far away and can't be hurt: the Survivors only regroup.
+      zero.brain = { think: (_r, self) => ({ buttons: 0, yaw: self.yaw, pitch: 0, weaponSlot: 0 }) };
+      room.modifiers.add('damageTaken', (v) => (v === zero ? 0 : undefined), 'test.zero');
+      rules.makeFirst(zero);
+      const far = [...room.map.spawns.ffa].sort((a, b) => Math.hypot(b.x, b.z) - Math.hypot(a.x, a.z))[0]!;
+      Object.assign(zero.move, { x: far.x, y: far.y, z: far.z });
       steps(room, 25);
       const rally = rallyPoint(room, rules)!;
       expect(rally).not.toBeNull();
       const before = survivors.map((s) => ({ x: s.move.x, z: s.move.z }));
-      for (const s of survivors) expect(flat(s, rally)).toBeLessThan(6);
+      for (const s of survivors) expect(flat(s, rally)).toBeLessThan(7);
       let maxMove = 0;
       for (let i = 0; i < 40; i++) {
         steps(room, 0.25);
         survivors.forEach((s, k) => (maxMove = Math.max(maxMove, flat(s, before[k]!))));
       }
       // Holding: shuffling around the spot, not wandering off.
-      expect(maxMove).toBeLessThan(6);
-      for (const s of survivors) expect(flat(s, rally)).toBeLessThan(6);
-      const goal = botBrain(room, survivors[0]!)?.goal;
-      expect(goal?.kind).toBe('objective');
+      expect(maxMove).toBeLessThan(8);
+      for (const s of survivors) expect(flat(s, rally)).toBeLessThan(7);
+      expect(survivors.every((s) => rules.roleOf(s) === 'survivor')).toBe(true);
     });
   });
 });

@@ -95,7 +95,7 @@ export interface BotModeStyle {
   rush: boolean;
   /** In a fight, never close in and back away from a target inside ~7 m (Infected's Survivors). */
   kite?: boolean;
-  /** Out of ammo with a lethal (a tomahawk) in reserve: lob it at a target in sight 6-18 m away (Infected). */
+  /** Lob the lethal (a tomahawk) at a target in sight 6-18 m away, mid-fight (Infected). */
   throwAtRange?: boolean;
 }
 

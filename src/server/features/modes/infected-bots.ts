@@ -5,8 +5,8 @@
  *     know about. Knowledge (`InfectedIntel`) is what the team could call out: a Survivor any
  *     Infected sees (bots' sight rules: collision plus drawn cover), unsuppressed gunfire (the
  *     default radar ping), and the last Survivor's radar sweep. A spot reached with nobody there
- *     is forgotten. With no knowledge they roam like hunters. Out of tomahawks, they go and pick
- *     theirs back up when it lies close.
+ *     is forgotten. Out of tomahawks, they go and pick theirs back up when it lies close. With
+ *     no lead they search: the places the team has not looked at for longest, nearer first.
  *   - Their style (`registerBotStyle`): melee-happy rushers that lob the tomahawk at a Survivor
  *     in sight 6-18 m away, knife-lunging when close, and never back off to "reload" a knife.
  *   - Survivor bots group up and hold a rally point: a reachable spot with walls around it (few
@@ -33,8 +33,8 @@ const INTEL_SIGHT = 55;
  * Survivors keep their rally point until an Infected comes within RALLY_DANGER of it (then they
  * fall back to another, at most every RALLY_MIN_SEC), and score candidates under 10 m from one low.
  */
-const RALLY_DANGER = 18;
-const RALLY_MIN_SEC = 3;
+const RALLY_DANGER = 8;
+const RALLY_MIN_SEC = 10;
 
 const rulesOf = (room: Room): InfectedRules | null => {
   const c = controllerOf(room);
@@ -106,7 +106,49 @@ export function infectedGoal(room: Room, rules: InfectedRules, bot: PlayerState)
     }
     if (hawk) return { at: hawk, radius: 0.6, priority: 0.6, sprint: true, label: 'retrieve tomahawk' };
   }
-  return null;
+  return searchGoal(room, rules, bot);
+}
+
+/** Room-wide memory of where the Infected have already looked (4 m tiles -> room time). */
+const searched = new WeakMap<Room, { map: string; at: Map<string, number> }>();
+const SEARCH_TILE = 4;
+const tileKey = (x: number, z: number) => `${Math.floor(x / SEARCH_TILE)},${Math.floor(z / SEARCH_TILE)}`;
+
+/** Note that `p` has looked around where it stands (everything within ~8 m it can see). */
+export function markSearched(room: Room, p: PlayerState): void {
+  let m = searched.get(room);
+  if (!m || m.map !== room.mapId) searched.set(room, (m = { map: room.mapId, at: new Map() }));
+  for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) m.at.set(tileKey(p.move.x + dx * SEARCH_TILE, p.move.z + dz * SEARCH_TILE), room.time);
+}
+
+/**
+ * No lead on anyone: search the map like a person would, going to the places (hotspots and
+ * random reachable spots) the Infected have not looked at for longest, nearer ones first.
+ */
+export function searchGoal(room: Room, rules: InfectedRules, bot: PlayerState, rnd: () => number = Math.random): BotGoal | null {
+  if (!rules.started) return null;
+  const nav = navFor(room.map);
+  const mem = searched.get(room);
+  const seen = (x: number, z: number) => (mem && mem.map === room.mapId ? mem.at.get(tileKey(x, z)) : undefined);
+  const cands: Vec3[] = [...(room.map.hotspots ?? []).map((h) => ({ ...h }))];
+  for (let i = 0; i < 12; i++) {
+    const c = nav.random(rnd);
+    if (c) cands.push({ x: c.x, y: c.y, z: c.z });
+  }
+  let best: Vec3 | null = null;
+  let bs = -Infinity;
+  for (const c of cands) {
+    const d = flat(bot.move, c);
+    if (d < 6) continue;
+    const t = seen(c.x, c.z);
+    const stale = t === undefined ? 90 : Math.min(90, room.time - t);
+    const s = stale - d * 0.5 + rnd() * 6;
+    if (s > bs) {
+      bs = s;
+      best = c;
+    }
+  }
+  return best ? { at: best, radius: 2, priority: 0.85, sprint: true, label: 'infected search' } : null;
 }
 
 interface Rally {
@@ -198,7 +240,10 @@ export function registerInfectedBots(): void {
   registerBotGoal('infected', (room, bot) => {
     const rules = rulesOf(room);
     if (!rules || room.phase !== 'playing' || !bot.alive) return null;
-    return rules.roleOf(bot) === 'infected' ? infectedGoal(room, rules, bot) : survivorGoal(room, rules, bot);
+    if (rules.roleOf(bot) === 'infected') return infectedGoal(room, rules, bot);
+    // Before the first infection Survivors spread out and roam (as from MW3's spawns); a pack at
+    // one spot would hand the First Infected a crowd to start in.
+    return rules.started ? survivorGoal(room, rules, bot) : null;
   });
   registerBotStyle('infected', (room, bot) => {
     const rules = rulesOf(room);
