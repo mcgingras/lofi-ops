@@ -176,6 +176,10 @@ The mantle height (1.5 m) was kept at the BO1 limit: no map needed it lower.
   - killstreaks: `dogs.ts` and `vehicles.ts` (one params line each).
 - **Maps:** `firingrange.ts`, `hijacked.ts`, `jungle.ts`, `highrise.ts` (clips).
 
+## Knockback
+
+`MoveState.knock` and `applyKnock(move, impulse, sec)` (shared `movement.ts`): a velocity impulse from the server (the Thundergun's launch, docs/features/weapons.md) that takes control away for `sec`. While knocked the body keeps its velocity (no input acceleration, no jump, sprint or mantle; gravity as usual); once grounded it slides to a stop at `KNOCK.slide` (16 m/s²) and control comes back early when it is slower than `KNOCK.settle` (1.2 m/s), or when the time runs out. A knock cancels a mantle or a dive. The snapshot carries `knock` and the velocities, so the owner's `Predictor` replays the same flight: the first snapshot that carries a launch corrects the prediction (the client couldn't know), later ones agree (`tests/knockback.test.ts`, also over real sockets).
+
 ## Gaps
 
 - **No prone yaw cap:** BO1 caps prone yaw at 45° with a 55°/s body turn. Turning in place while prone can swing the legs through a wall; crawling into one is stopped.
