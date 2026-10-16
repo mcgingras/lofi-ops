@@ -69,10 +69,10 @@ describe('Infected over real sockets', () => {
     expect(last.player).toBe(wa.sessionId);
     const sp = await b.waitFor('spawned', (m) => m.loadout.lethal === 'tomahawk', 6000);
     expect(sp.loadout.lethal).toBe('tomahawk');
-    const snap = await b.waitFor('snap', (s) => s.me.alive && s.me.weapons.length === 1);
-    expect(snap.me.weapons[0]!.id).toBe('knife');
-    const asnap = await a.waitFor('snap', (s) => s.me.weapons[1]?.id === 'rpk');
-    expect(asnap.me.weapons.map((w) => w.id)).toEqual(['spas12', 'rpk']);
+    const snap = await b.waitFor('snap', (s) => !!s.me?.alive && s.me.weapons.length === 1);
+    expect(snap.me!.weapons[0]!.id).toBe('knife');
+    const asnap = await a.waitFor('snap', (s) => s.me?.weapons[1]?.id === 'rpk');
+    expect(asnap.me!.weapons.map((w) => w.id)).toEqual(['spas12', 'rpk']);
 
     // Charlie gets Alpha: the Infected win.
     room.kill(room.players.get(wa.sessionId)!, pc, { weapon: 'knife', means: 'melee', part: 'torso' });
