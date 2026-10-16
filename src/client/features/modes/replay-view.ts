@@ -30,8 +30,8 @@ import { ViewmodelRig } from '../../game/viewmodel';
 import { entityRenderers, shotFxs, type EntityView } from '../../registry';
 import { getTexture } from '../../render/textures';
 import { aimAt, eyeOf, trackPose } from './deathcam-math';
-import { killProjectile, posesAt, projectileAt, replayGun, type Pose } from './killcam-math';
-import { ReplayActors, type DeathFx } from './replay';
+import { deathEffects, killProjectile, posesAt, projectileAt, replayGun, type DeathFx, type Pose } from './killcam-math';
+import { ReplayActors } from './replay';
 
 /** What to replay (the per-death and the final killcam payloads both carry this). */
 export interface ReplaySource {
@@ -49,33 +49,6 @@ export interface ReplaySource {
 /** How far behind and above a followed projectile the camera rides (m). */
 const CHASE_BACK = 2.2;
 const CHASE_UP = 0.55;
-
-/** Deaths in a clip that throw (Thundergun) or break (frozen, Winter's Howl) the body. */
-export function deathEffects(src: ReplaySource): Map<string, DeathFx> {
-  const out = new Map<string, DeathFx>();
-  const { frames, shots } = src.clip;
-  const wasAlive = new Map<string, Pose | null>();
-  for (const f of frames)
-    for (const p of f.p) {
-      const alive = (p[6] & PlayerFlags.ALIVE) !== 0;
-      const prev = wasAlive.get(p[0]);
-      if (prev && !alive) {
-        // Who hit them last, with what.
-        const hit = [...shots].reverse().find((s) => s.hit && s.t <= f.t + 1e-6 && s.t >= f.t - 0.3 && Math.hypot(s.end[0] - p[1], s.end[2] - p[3]) < 2.5);
-        const shooter = hit?.id ?? (p[0] === src.victim ? src.killer : null);
-        const weapon = hit ? (parseGear(valueAt(src.clip.gear.get(hit.id), hit.t)?.gear)?.weapon ?? '') : p[0] === src.victim ? src.weapon : '';
-        const sp = shooter ? (posesAt(frames, f.t).get(shooter) ?? null) : null;
-        if (weapon === 'thundergun' && sp) {
-          const dx = p[1] - sp.x;
-          const dz = p[3] - sp.z;
-          const n = Math.hypot(dx, dz) || 1;
-          out.set(p[0], { kind: 'fling', t: f.t, dx: dx / n, dz: dz / n });
-        } else if (weapon === 'wintershowl' && prev.frost >= 99) out.set(p[0], { kind: 'shatter', t: f.t, dx: 0, dz: 0 });
-      }
-      wasAlive.set(p[0], alive ? { x: p[1], y: p[2], z: p[3], yaw: p[4], pitch: p[5], f: p[6], hp: p[7] ?? 100, frost: p[9] ?? 0 } : null);
-    }
-  return out;
-}
 
 interface Proj {
   track: ProjectileTrack;

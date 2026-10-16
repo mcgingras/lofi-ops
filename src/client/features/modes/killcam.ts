@@ -9,7 +9,7 @@
  * killer's card. Not skippable (BO1's finalKillcam has no skip thread). Then the summary.
  */
 import { unpackClip, type UnpackedClip } from '../../../shared/defs/deathcam';
-import { FINAL_KILLCAM, finalTimeline, type FinalKillcamPayload, type FinalTimeline } from '../../../shared/defs/killcam';
+import { finalClock, finalTimeline, type FinalKillcamPayload, type FinalTimeline } from '../../../shared/defs/killcam';
 import type { Match } from '../../game/match';
 import { HUD_COLORS as C, txt, unit } from '../../hud/draw';
 import { registerHudWidget, registerMatchHook } from '../../registry';
@@ -47,18 +47,6 @@ function load(d: FinalKillcamPayload): void {
   S.clip = unpackClip(d.clip);
   S.from = S.clip.frames[0]?.t ?? d.at;
   S.tl = finalTimeline(S.from, d.to, d.at);
-}
-
-/** Where the final killcam is, `elapsed` real seconds in: clip time, speed, fade (0 clear .. 1 black), done. */
-export function finalClock(tl: FinalTimeline, elapsed: number, k = FINAL_KILLCAM): { t: number; rate: number; fade: number; done: boolean } {
-  const real = tl.realSec;
-  const t = tl.clipAt(Math.min(elapsed, real));
-  const rate = elapsed < real ? tl.rateAt(elapsed) : 1;
-  let fade = 0;
-  if (elapsed < k.fadeInSec) fade = 1 - elapsed / k.fadeInSec;
-  else if (elapsed >= real) fade = 1;
-  else if (elapsed > real - k.fadeOutSec) fade = (elapsed - (real - k.fadeOutSec)) / k.fadeOutSec;
-  return { t, rate, fade: Math.max(0, Math.min(1, fade)), done: elapsed >= real + k.holdSec };
 }
 
 function frame(m: Match, dt: number): void {

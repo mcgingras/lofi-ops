@@ -14,20 +14,10 @@ import { FFA_LOOK, Soldier, TEAM_LOOKS } from '../../render/models/soldier';
 import { getTexture } from '../../render/textures';
 import { dressSoldier, isWornMaterial } from '../weapons/worldmodels';
 import { infectSoldier, isInfectedMatch } from './infected';
-import type { Pose } from './killcam-math';
+import type { DeathFx, Pose } from './killcam-math';
 
 function lookFor(team: Team | null) {
   return team === 0 || team === 1 ? TEAM_LOOKS[team]! : FFA_LOOK;
-}
-
-/** What happens to a body at its death: thrown back (Thundergun) or shattered (frozen, Winter's Howl). */
-export interface DeathFx {
-  kind: 'fling' | 'shatter';
-  /** Clip time of the death. */
-  t: number;
-  /** Fling direction (ground plane, unit). */
-  dx: number;
-  dz: number;
 }
 
 const ICE = new THREE.Color(0.7, 0.88, 1.25);

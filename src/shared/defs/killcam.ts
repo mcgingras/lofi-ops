@@ -167,3 +167,15 @@ export function finalTimeline(from: number, to: number, at: number, k: FinalKill
 
 /** Real seconds the whole final killcam takes on screen (replay + the black hold before the summary). */
 export const finalKillcamSeconds = (from: number, to: number, at: number, k: FinalKillcamTuning = FINAL_KILLCAM) => finalTimeline(from, to, at, k).realSec + k.holdSec;
+
+/** Where the final killcam is, `elapsed` real seconds in: clip time, speed, fade (0 clear .. 1 black), done. */
+export function finalClock(tl: FinalTimeline, elapsed: number, k: FinalKillcamTuning = FINAL_KILLCAM): { t: number; rate: number; fade: number; done: boolean } {
+  const real = tl.realSec;
+  const t = tl.clipAt(Math.min(elapsed, real));
+  const rate = elapsed < real ? tl.rateAt(elapsed) : 1;
+  let fade = 0;
+  if (elapsed < k.fadeInSec) fade = 1 - elapsed / k.fadeInSec;
+  else if (elapsed >= real) fade = 1;
+  else if (elapsed > real - k.fadeOutSec) fade = (elapsed - (real - k.fadeOutSec)) / k.fadeOutSec;
+  return { t, rate, fade: Math.max(0, Math.min(1, fade)), done: elapsed >= real + k.holdSec };
+}
