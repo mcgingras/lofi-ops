@@ -119,7 +119,7 @@ export const CAMOS: CamoDef[] = [
  */
 export const MW2_CAMOS: CamoDef[] = [
   { id: 'mw2_desert', name: 'Desert', collection: 'mw2', price: 0, weaponChallenge: {}, recipe: { photo: JERSEY, filter: 'sepia(.7) saturate(.8) brightness(1.08)', pattern: 'erdl', colors: [0xcdb68a, 0xa98d5e, 0x7c6142, 0xe2d4b0], scale: 1.25 } },
-  { id: 'mw2_arctic', name: 'Arctic', collection: 'mw2', price: 0, weaponChallenge: {}, recipe: { photo: LINEN, filter: 'grayscale(1) brightness(1.35)', pattern: 'splinter', colors: [0xe4e8ea, 0xb8bec2, 0x8a9296, 0x3a3f42] } },
+  { id: 'mw2_arctic', name: 'Arctic', collection: 'mw2', price: 0, weaponChallenge: {}, recipe: { photo: LINEN, filter: 'grayscale(1) brightness(1.35)', pattern: 'splinter', colors: [0xdfe3e4, 0xaab1b5, 0x767e83, 0x2e3336] } },
   { id: 'mw2_woodland', name: 'Woodland', collection: 'mw2', price: 0, weaponChallenge: { headshots: 5, title: 'Expert I' }, recipe: { photo: LINEN, filter: 'hue-rotate(-150deg) saturate(.55) brightness(.85)', pattern: 'erdl', colors: [0x7d8a52, 0x3e5230, 0xa89468, 0x1c1d16] } },
   { id: 'mw2_digital', name: 'Digital', collection: 'mw2', price: 0, weaponChallenge: { headshots: 15, title: 'Expert II' }, recipe: { photo: JERSEY, filter: 'grayscale(.85) brightness(.8)', pattern: 'marpat', colors: [0x6a6f72, 0x8e9497, 0x41464a, 0x1e2124] } },
   { id: 'mw2_urban', name: 'Urban', collection: 'mw2', price: 0, weaponChallenge: { headshots: 30, title: 'Expert III' }, recipe: { photo: JERSEY, filter: 'grayscale(.7) brightness(.95)', pattern: 'erdl', colors: [0xa4a29e, 0x9a5a50, 0xdcd9d2, 0x262626] } },

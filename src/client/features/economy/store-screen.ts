@@ -458,7 +458,9 @@ registerScreen('store', (root, params) => {
           ? h('button', { ...base, class: `${base.class} owned`, 'aria-disabled': 'true', onclick: () => say(`${camoName(m.camo)}: free on every primary weapon`) }, 'Free')
           : closest
             ? h('button', { ...base, onclick: () => (openTab('weapon'), openGun(closest.weapon)) }, gunName)
-            : h('button', { ...base, class: `${base.class} lock`, 'aria-disabled': 'true', onclick: () => say(`${camoName(m.camo)}: ${m.challenge} with a primary weapon`, true) }, 'Locked');
+            : m.unlocked
+              ? h('button', { ...base, class: `${base.class} owned`, 'aria-disabled': 'true', onclick: () => say(`${camoName(m.camo)}: unlocked on ${m.unlocked} of ${m.guns} guns (${m.challenge} with each gun)`) }, 'Unlocked')
+              : h('button', { ...base, class: `${base.class} lock`, 'aria-disabled': 'true', onclick: () => say(`${camoName(m.camo)}: ${m.challenge} with a primary weapon`, true) }, 'Locked');
         return h(
           'div',
           { class: `ec-card ec-mw2-card${m.unlocked ? ' owned' : ''}${!free && !m.unlocked ? ' locked' : ''}` },

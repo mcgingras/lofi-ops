@@ -280,9 +280,9 @@ export function paintCamo(g: CanvasRenderingContext2D, w: number, h: number, rec
       // MW2 Woodland / Urban / Desert: ERDL leaf pattern. Big interlocking leaves of the first
       // layer colour, smaller ones of the second, then thin dark "branch" strokes (third).
       const plan = [
-        { n: 11, len: [5.5, 10], wid: [2.8, 4.8] },
-        { n: 10, len: [3.5, 7], wid: [1.8, 3.2] },
-        { n: 9, len: [4, 8], wid: [0.7, 1.3] },
+        { n: 16, len: [6, 11], wid: [3, 5.2] },
+        { n: 15, len: [4, 8], wid: [2, 3.6] },
+        { n: 11, len: [4, 8.5], wid: [0.8, 1.4] },
       ];
       for (const [li, c] of layers.entries()) {
         const pl = plan[Math.min(li, plan.length - 1)]!;
@@ -300,9 +300,9 @@ export function paintCamo(g: CanvasRenderingContext2D, w: number, h: number, rec
       // smaller darker ones, then a few dark flecks.
       const slant = R.rr(-0.5, -0.3);
       const plan = [
-        { n: 13, len: [7, 15], wid: [2.5, 5] },
-        { n: 11, len: [4, 10], wid: [1.5, 3.5] },
-        { n: 9, len: [1.5, 4], wid: [0.8, 1.6] },
+        { n: 22, len: [10, 20], wid: [3, 6.5] },
+        { n: 17, len: [6, 13], wid: [2, 4.5] },
+        { n: 12, len: [2, 5], wid: [0.9, 1.8] },
       ];
       for (const [li, c] of layers.entries()) {
         const pl = plan[Math.min(li, plan.length - 1)]!;
@@ -394,14 +394,14 @@ export function paintCamo(g: CanvasRenderingContext2D, w: number, h: number, rec
           g.stroke();
         });
       }
-      const leaves: [number, number][] = [[black, 7], [orange, 22], [yellow, 11], [rust, 9], [orange, 8]];
+      const leaves: [number, number][] = [[black, 14], [orange, 30], [rust, 12], [yellow, 14], [orange, 12], [black, 5]];
       for (const [c, n] of leaves) {
         g.fillStyle = css(c);
         for (let i = 0; i < n; i++) {
           const x = R.rr(0, w);
           const y = R.rr(0, h);
           const a = R.rr(0, 6.28);
-          const len = R.rr(3, 6.5) * s;
+          const len = R.rr(3.5, 7.5) * s;
           const wid = len * R.rr(0.3, 0.45);
           wrap(w, h, (ox, oy) => leafPath(g, x + ox, y + oy, a, len, wid));
         }
