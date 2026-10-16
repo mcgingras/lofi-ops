@@ -278,7 +278,7 @@ registerEntityRenderer(ZM_ENTITY.perk, (e, m) => {
   // A lit sign on top in the perk's colour.
   const sign = kit.box(r, W * 0.9, 0.2, 0.06, kit.mat('zm_machine', { tint: hex(def.color), emissive: 0.85 }), 0, H + 0.24, -0.1);
   void sign;
-  const glow = kit.sprite('zm_glow', 2.4, hex(def.color));
+  const glow = kit.sprite('wonder.glow', 1.8, hex(def.color));
   const gm = glow.material as THREE.SpriteMaterial;
   gm.blending = THREE.AdditiveBlending;
   gm.transparent = true;
@@ -546,9 +546,9 @@ registerEntityRenderer(ZM_ENTITY.powerup, (e, m) => {
   spin.position.y = 0.9;
   kit.root.add(spin);
   const model = buildPowerup(kit, id);
-  model.scale.setScalar(1.35);
+  model.scale.setScalar(2.1);
   spin.add(model);
-  const glow = kit.sprite('zm_glow', 1.6, 0x6aff5a);
+  const glow = kit.sprite('wonder.glow', 1.7, 0x6aff5a);
   const gm = glow.material as THREE.SpriteMaterial;
   gm.blending = THREE.AdditiveBlending;
   gm.transparent = true;

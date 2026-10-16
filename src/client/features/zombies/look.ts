@@ -22,7 +22,7 @@ import { fxEmit } from '../weapons/wonder/index';
 import { isZombiesMatch, zm } from './store';
 
 /** Skin and cloth multiplier: desaturated green-grey. */
-const ZOMBIE_TINT = new THREE.Color(0.55, 0.66, 0.5);
+const ZOMBIE_TINT = new THREE.Color(0.74, 0.86, 0.64);
 const EYE = 0xffb030;
 
 interface Dressed {
@@ -31,6 +31,8 @@ interface Dressed {
   mats: LookMaterial[];
   eyes: THREE.Object3D[];
   dog: { kit: Kit; legs: THREE.Object3D[]; head: THREE.Object3D; group: THREE.Group } | null;
+  /** Zombie arms (the soldier's rifle arms are hidden): a pivot at the shoulders, arms reaching forward. */
+  arms: THREE.Group | null;
   wasAlive: boolean;
   riseAt: number;
   firingWas: boolean;
@@ -46,12 +48,22 @@ const dressed = new Map<string, Dressed>();
 
 function dress(v: RemoteView, dog: boolean, now: number): Dressed {
   const s = v.soldier;
-  const d: Dressed = { soldier: s, extras: [], mats: [], eyes: [], dog: null, wasAlive: v.alive, riseAt: v.alive ? now : -99, firingWas: false, swipeAt: -99, phase: Math.random() * 6, groanIn: 2 + Math.random() * 6, headless: false, lastX: v.x, lastZ: v.z };
+  const d: Dressed = { soldier: s, extras: [], mats: [], eyes: [], dog: null, arms: null, wasAlive: v.alive, riseAt: v.alive ? now : -99, firingWas: false, swipeAt: -99, phase: Math.random() * 6, groanIn: 2 + Math.random() * 6, headless: false, lastX: v.x, lastZ: v.z };
   if (dog) {
     s.lie.visible = false;
     const kit = new Kit();
     const rig = buildDog(kit);
-    for (const m of kit.mats) m.uniforms.uTint.value.multiply(new THREE.Color(0.45, 0.32, 0.26));
+    for (const m of kit.mats) m.uniforms.uTint.value.multiply(new THREE.Color(0.75, 0.52, 0.42));
+    // A burning halo (BO1 hellhounds come wreathed in fire).
+    const halo = kit.sprite('wonder.glow', 1.3, 0xff6a20);
+    const hm = halo.material as THREE.SpriteMaterial;
+    hm.blending = THREE.AdditiveBlending;
+    hm.transparent = true;
+    hm.alphaTest = 0;
+    hm.depthWrite = false;
+    hm.color.setHex(0xff6a20).multiplyScalar(0.35);
+    halo.position.set(0, 0.65, 0);
+    kit.root.add(halo);
     const eye = kit.mat('ks_dark', { emissive: 1, tint: 0xff6020 });
     for (const sx of [-1, 1]) {
       const e = kit.box(rig.head, 0.05, 0.04, 0.02, eye, 0.07 * sx, 0.04, -0.135);
@@ -66,12 +78,31 @@ function dress(v: RemoteView, dog: boolean, now: number): Dressed {
   } else {
     for (const m of s.mats) m.uniforms.uTint.value.multiply(ZOMBIE_TINT);
     s.gun.visible = false;
+    // Arms out: hide the soldier's rifle arms, add straight arms reaching forward from the shoulders.
+    s.aim.visible = false;
+    const sleeve = makeLookMaterial({ texture: 'camo', dyn: true, rep: 0.45, tint: 0x8a9a74 });
+    const skin = makeLookMaterial({ texture: 'glove', dyn: true, rep: 0.25, tint: 0x9ab088 });
+    d.mats.push(sleeve, skin);
+    const arms = new THREE.Group();
+    arms.position.set(0, 1.45, 0);
+    for (const sx of [-1, 1]) {
+      const upper = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.34), sleeve);
+      upper.position.set(0.22 * sx, 0, 0.15);
+      const fore = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.085, 0.32), sleeve);
+      fore.position.set(0.2 * sx, -0.02, 0.45);
+      const hand = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.05, 0.12), skin);
+      hand.position.set(0.19 * sx, -0.03, 0.66);
+      arms.add(upper, fore, hand);
+    }
+    s.body.add(arms);
+    d.arms = arms;
+    d.extras.push(arms);
     // Glowing eyes on the mask.
     const eyeMat = makeLookMaterial({ texture: 'ks_dark', dyn: true, emissive: 1, tint: EYE });
     d.mats.push(eyeMat);
     for (const sx of [-1, 1]) {
-      const e = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.025, 0.02), eyeMat);
-      e.position.set(0.045 * sx, 0.2, 0.135);
+      const e = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.02), eyeMat);
+      e.position.set(0.048 * sx, 0.2, 0.135);
       s.head.add(e);
       d.eyes.push(e);
       d.extras.push(e);
@@ -200,16 +231,20 @@ registerMatchHook('zombies.look', {
           s.head.rotation.z = Math.sin(d.phase * 0.5) * 0.25;
           s.head.rotation.x = -0.2;
           const swipe = now - d.swipeAt;
+          let ax: number;
           if (swipe < 0.55) {
             // Up, then a slash down.
             const k = swipe / 0.55;
-            s.aim.rotation.x = k < 0.5 ? -0.25 - 1.0 * (k / 0.5) : -1.25 + 1.9 * ((k - 0.5) / 0.5);
-          } else s.aim.rotation.x = -0.25 + Math.sin(d.phase * 0.7) * 0.08;
-          s.aim.rotation.y = 0;
+            ax = k < 0.5 ? -0.1 - 1.1 * (k / 0.5) : -1.2 + 1.8 * ((k - 0.5) / 0.5);
+          } else ax = -0.12 + Math.sin(d.phase * 0.7) * 0.07;
           // Climbing out: up from below the ground, arms raised.
           if (rise < 1) {
             s.root.position.y -= 1.7 * (1 - rise) * (1 - rise);
-            s.aim.rotation.x = -1.2 * (1 - rise) + s.aim.rotation.x * rise;
+            ax = -1.3 * (1 - rise) + ax * rise;
+          }
+          if (d.arms) {
+            d.arms.rotation.x = ax - s.body.rotation.x;
+            d.arms.rotation.z = Math.sin(d.phase) * 0.06;
           }
         }
         for (const e of d.eyes) e.visible = v.alive && !d.headless;

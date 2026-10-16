@@ -22,7 +22,7 @@ import './hud';
 import './screen';
 import { isZombiesMatch, zm } from './store';
 
-const DOG_FOG: [number, number, number] = [0.62, 0.2, 0.08];
+const DOG_FOG: [number, number, number] = [0.46, 0.1, 0.04];
 let dogK = 0;
 let applied = -1;
 let base: TimePreset | null = null;
@@ -32,10 +32,11 @@ const mix = (a: number, b: number, k: number) => a + (b - a) * k;
 function tinted(T: TimePreset, k: number): TimePreset {
   return {
     ...T,
-    fog: [mix(T.fog[0], DOG_FOG[0], k * 0.85), mix(T.fog[1], DOG_FOG[1], k * 0.85), mix(T.fog[2], DOG_FOG[2], k * 0.85)],
-    fogNear: mix(T.fogNear, 6, k),
-    fogFar: mix(T.fogFar, Math.min(T.fogFar, 60), k),
-    amb: [mix(T.amb[0], T.amb[0] * 1.25, k), mix(T.amb[1], T.amb[1] * 0.7, k), mix(T.amb[2], T.amb[2] * 0.6, k)],
+    fog: [mix(T.fog[0], DOG_FOG[0], k), mix(T.fog[1], DOG_FOG[1], k), mix(T.fog[2], DOG_FOG[2], k)],
+    fogNear: mix(T.fogNear, 2, k),
+    fogFar: mix(T.fogFar, Math.min(T.fogFar, 38), k),
+    amb: [mix(T.amb[0], T.amb[0] * 1.2, k), mix(T.amb[1], T.amb[1] * 0.55, k), mix(T.amb[2], T.amb[2] * 0.45, k)],
+    sun: [mix(T.sun[0], T.sun[0] * 0.9, k), mix(T.sun[1], T.sun[1] * 0.5, k), mix(T.sun[2], T.sun[2] * 0.35, k)],
   };
 }
 

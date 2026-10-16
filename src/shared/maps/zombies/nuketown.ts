@@ -19,11 +19,12 @@ const W = Math.PI / 2;
 export const NUKETOWN_ZOMBIES: ZombiesLayer = {
   map: 'nuketown',
   time: 'dusk',
+  // The north end of the turning circle, by the box, looking down the street.
   playerSpawns: [
-    { x: -4.5, y: 0, z: -4.5, yaw: E },
-    { x: 7.5, y: 0, z: -12.5, yaw: W },
-    { x: 6.5, y: 0, z: 6.5, yaw: N },
-    { x: -6.5, y: 0, z: -9.5, yaw: E },
+    { x: -1.5, y: 0, z: -11.5, yaw: S },
+    { x: 1.5, y: 0, z: -11, yaw: S },
+    { x: -4.5, y: 0, z: -11, yaw: S },
+    { x: 6.5, y: 0, z: -11.5, yaw: S },
   ],
   wallBuys: [
     { weapon: 'olympia', x: -15.75, y: 0, z: 3.73, yaw: N },

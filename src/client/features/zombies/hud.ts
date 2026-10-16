@@ -47,11 +47,11 @@ function stroke(g: CanvasRenderingContext2D, x0: number, y0: number, x1: number,
 /** BO1's chalk tally: up to four strokes and a slash across them. */
 export function drawTally(g: CanvasRenderingContext2D, n: number, x: number, y: number, h: number, color: string, u: number): number {
   const gap = h * 0.32;
-  for (let i = 0; i < Math.min(4, n); i++) stroke(g, x + i * gap, y, x + i * gap + h * 0.06, y + h, 3, CHALK_RED === color ? '#3a0a06' : C.ink, u);
-  for (let i = 0; i < Math.min(4, n); i++) stroke(g, x + i * gap, y, x + i * gap + h * 0.06, y + h, 2, color, u);
+  for (let i = 0; i < Math.min(4, n); i++) stroke(g, x + i * gap, y, x + i * gap + h * 0.06, y + h, 6, C.ink, u);
+  for (let i = 0; i < Math.min(4, n); i++) stroke(g, x + i * gap, y, x + i * gap + h * 0.06, y + h, 4, color, u);
   if (n >= 5) {
-    stroke(g, x - gap * 0.4, y + h * 0.75, x + gap * 3.6, y + h * 0.2, 3, C.ink, u);
-    stroke(g, x - gap * 0.4, y + h * 0.75, x + gap * 3.6, y + h * 0.2, 2, color, u);
+    stroke(g, x - gap * 0.4, y + h * 0.75, x + gap * 3.6, y + h * 0.2, 6, C.ink, u);
+    stroke(g, x - gap * 0.4, y + h * 0.75, x + gap * 3.6, y + h * 0.2, 4, color, u);
   }
   return gap * 4;
 }
@@ -67,10 +67,11 @@ registerHudWidget(
     // Flash white as the round changes and while the break runs (BO1's chalk pulse).
     const breakFlash = st.phase === 'break' && blink(m.time, 1, 0.5);
     const color = t < 1.5 ? (blink(m.time, 0.25, 0.5) ? '#ffffff' : CHALK_HI) : breakFlash ? '#f0e0d0' : st.dogRound ? '#ff7a2a' : CHALK_RED;
-    const x = 10 * u;
-    const y = H - 44 * u;
-    if (st.round <= 5) drawTally(g, st.round, x, y, 30 * u, color, u);
-    else txt(g, String(st.round), x, y - 4 * u, 32, color, 'left', u);
+    // Above the health readout (bottom left), big like BO1's chalk.
+    const x = 14 * u;
+    const y = H - 84 * u;
+    if (st.round <= 5) drawTally(g, st.round, x, y, 34 * u, color, u);
+    else txt(g, String(st.round), x - 4 * u, y - 4 * u, 40, color, 'left', u);
   },
   51,
 );
@@ -118,7 +119,7 @@ registerHudWidget(
     if (!isZombiesMatch(m) || !me || !me.perks.length) return;
     const u = unit(H);
     let x = 10 * u;
-    const y = H - 62 * u;
+    const y = H - 40 * u;
     for (const id of me.perks) {
       const d = PERK_COLA_BY_ID.get(id);
       if (!d) continue;
@@ -374,7 +375,7 @@ function wrapWidgets(): void {
   const hideInZombies = (orig: HudDraw): HudDraw => (g, W, H, dt) => {
     if (!isZombiesMatch(currentMatch())) orig(g, W, H, dt);
   };
-  for (const id of ['core.killfeed', 'core.compass', 'killstreaks.radar', 'killstreaks.ladder', 'progression.popups', 'progression.ticker', 'frontend.classHint', 'perks.laststand', 'perks.list']) wrap(id, hideInZombies);
+  for (const id of ['core.killfeed', 'core.compass', 'core.title', 'killstreaks.radar', 'killstreaks.ladder', 'progression.popups', 'progression.ticker', 'frontend.classHint', 'perks.laststand', 'perks.list']) wrap(id, hideInZombies);
   wrap('core.score', (orig) => (g, W, H, dt) => {
     const m = currentMatch();
     if (!isZombiesMatch(m)) return orig(g, W, H, dt);
