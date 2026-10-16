@@ -10,10 +10,12 @@
  *
  * BO1 model: weapons unlock by level and are then bought; attachments are bought per weapon once
  * that weapon is usable (some also need weapon kills); camos/reticles/backgrounds have a level or
- * prestige gate and a price.
+ * prestige gate and a price. The MW2 camo collection is not sold: it unlocks per weapon through
+ * challenges (`camo-unlocks.ts`), so it is not in the catalog; use `canUseCamo` for any camo check.
  */
 import { ATTACHMENT_BY_ID, ATTACHMENTS } from './attachments';
-import { CAMO_BY_ID, CAMOS } from './camos';
+import { CAMO_BY_ID, GLOBAL_CAMOS } from './camos';
+import { weaponCamoUnlocked } from './camo-unlocks';
 import { CHALLENGE_BY_ID } from './challenges';
 import { DEFAULT_PRICES } from './economy';
 import { attachmentKillsFor } from './progression';
@@ -152,7 +154,7 @@ export function storeCatalog(): StoreItem[] {
       items.push({ key: akey, kind: 'attachment', id: aid, weapon: w.id, name: `${a.name} (${w.name})`, price: aprice, unlock: a.unlockKills ? { weaponKills: a.unlockKills } : {}, starter: free.has(akey), free: free.has(akey) || aprice === 0 });
     }
   }
-  for (const c of CAMOS) {
+  for (const c of GLOBAL_CAMOS) {
     const key = keyOf.camo(c.id);
     const price = c.price ?? DEFAULT_PRICES.camo;
     items.push({ key, kind: 'camo', id: c.id, name: c.name, price, unlock: { ...c.unlock }, starter: free.has(key), free: free.has(key) || price === 0 });
@@ -232,6 +234,17 @@ export function canUse(p: ProfileLike, key: string): boolean {
   return owns(p, item) && !gateReason(p, item);
 }
 
+/**
+ * Can this camo go on this weapon? Global camos: `canUse` (bought / free and the gate is open).
+ * MW2 camos: the gun's own challenge (`weaponCamoUnlocked`; primaries only). 'none' always.
+ */
+export function canUseCamo(p: ProfileLike, camoId: string, weaponId: string): boolean {
+  const def = CAMO_BY_ID.get(camoId);
+  if (!def) return false;
+  if (def.weaponChallenge) return weaponCamoUnlocked(p, camoId, weaponId);
+  return canUse(p, keyOf.camo(camoId));
+}
+
 export type PurchaseResult = { ok: true; item: StoreItem; codPoints: number } | { ok: false; reason: LockReason };
 
 /** Buy `key`: checks gates and funds at the moment of spending, then mutates the profile. */
@@ -257,7 +270,7 @@ export function enforceLoadout(p: ProfileLike, loadout: Loadout): { loadout: Loa
     const weapon = w.weapon;
     if (!WEAPON_BY_ID.has(weapon) || WAGER_ONLY_WEAPONS.has(weapon) || WEAPON_BY_ID.get(weapon)!.wonder || !canUse(p, keyOf.weapon(weapon))) {
       changed.push(keyOf.weapon(weapon));
-      return { weapon: fb.weapon, attachments: fb.attachments.filter((a) => canUse(p, keyOf.attachment(fb.weapon, a))), camo: canUse(p, keyOf.camo(w.camo)) ? w.camo : 'none' };
+      return { weapon: fb.weapon, attachments: fb.attachments.filter((a) => canUse(p, keyOf.attachment(fb.weapon, a))), camo: canUseCamo(p, w.camo, fb.weapon) ? w.camo : 'none' };
     }
     const attachments = w.attachments.filter((a) => {
       const ok = canUse(p, keyOf.attachment(weapon, a));
@@ -265,7 +278,7 @@ export function enforceLoadout(p: ProfileLike, loadout: Loadout): { loadout: Loa
       return ok;
     });
     let camo = w.camo;
-    if (!CAMO_BY_ID.has(camo) || !canUse(p, keyOf.camo(camo))) {
+    if (!CAMO_BY_ID.has(camo) || !canUseCamo(p, camo, weapon)) {
       changed.push(keyOf.camo(camo));
       camo = 'none';
     }

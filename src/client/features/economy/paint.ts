@@ -29,6 +29,73 @@ function blob(g: CanvasRenderingContext2D, R: Rand, x: number, y: number, r: num
   };
 }
 
+/** Fill a closed polygon of local points rotated by `a` around (x, y), at the 9 wrapped offsets. */
+function poly(g: CanvasRenderingContext2D, w: number, h: number, x: number, y: number, a: number, pts: readonly (readonly [number, number])[]): void {
+  const c = Math.cos(a);
+  const sn = Math.sin(a);
+  const world = pts.map(([px, py]) => [x + px * c - py * sn, y + px * sn + py * c] as const);
+  wrap(w, h, (ox, oy) => {
+    g.beginPath();
+    world.forEach(([px, py], i) => (i ? g.lineTo(px + ox, py + oy) : g.moveTo(px + ox, py + oy)));
+    g.closePath();
+    g.fill();
+  });
+}
+
+/**
+ * An ERDL "leaf": an elongated, lobed brush-stroke shape (half length `len`, half width `wid`).
+ * The lobes (two harmonics plus jitter) give the interlocking edges of ERDL / woodland patterns.
+ */
+function erdlLeaf(R: Rand, len: number, wid: number, k = 14): [number, number][] {
+  const ph1 = R.rr(0, 6.28);
+  const ph2 = R.rr(0, 6.28);
+  const pts: [number, number][] = [];
+  for (let i = 0; i < k; i++) {
+    const u = (i / k) * Math.PI * 2;
+    const lobe = 1 + 0.28 * Math.sin(u * 3 + ph1) + 0.16 * Math.sin(u * 5 + ph2) + R.rr(-0.12, 0.12);
+    pts.push([Math.cos(u) * len * lobe, Math.sin(u) * wid * lobe]);
+  }
+  return pts;
+}
+
+/** One tigerstripe stroke along +x: a wavy band with brushy, ragged edges, tapered at both ends. */
+function tigerStroke(R: Rand, len: number, thick: number, amp: number): [number, number][] {
+  const k = 22;
+  const ph = R.rr(0, 6.28);
+  const freq = R.rr(1.2, 2.6);
+  const top: [number, number][] = [];
+  const bot: [number, number][] = [];
+  for (let i = 0; i <= k; i++) {
+    const t = i / k;
+    const x = (t - 0.5) * len;
+    const cy = Math.sin(t * Math.PI * freq + ph) * amp;
+    const taper = Math.pow(Math.sin(Math.PI * t), 0.55);
+    // Ragged brush edge: occasional "fingers" poking out, more on the top edge.
+    const fUp = R.rnd() < 0.18 ? R.rr(0.6, 1.4) : 0;
+    const fDn = R.rnd() < 0.12 ? R.rr(0.5, 1.1) : 0;
+    top.push([x + R.rr(-0.3, 0.3) * thick, cy - thick * taper * (R.rr(0.6, 1.05) + fUp)]);
+    bot.push([x + R.rr(-0.3, 0.3) * thick, cy + thick * taper * (R.rr(0.6, 1.05) + fDn)]);
+  }
+  return [...top, ...bot.reverse()];
+}
+
+/** A pointed leaf outline (two curved sides) from (0,0) to (len,0), `wid` across. */
+function leafPath(g: CanvasRenderingContext2D, x: number, y: number, a: number, len: number, wid: number): void {
+  const c = Math.cos(a);
+  const sn = Math.sin(a);
+  const P = (px: number, py: number): [number, number] => [x + px * c - py * sn, y + px * sn + py * c];
+  const [x0, y0] = P(0, 0);
+  const [x1, y1] = P(len, 0);
+  const [ux, uy] = P(len * 0.45, -wid);
+  const [dx, dy] = P(len * 0.45, wid);
+  g.beginPath();
+  g.moveTo(x0, y0);
+  g.quadraticCurveTo(ux, uy, x1, y1);
+  g.quadraticCurveTo(dx, dy, x0, y0);
+  g.closePath();
+  g.fill();
+}
+
 /** Paint a camo pattern over the whole canvas (opaque). */
 export function paintCamo(g: CanvasRenderingContext2D, w: number, h: number, recipe: CamoRecipe, R: Rand): void {
   const cols = recipe.colors?.length ? recipe.colors : [0x5a6b3a, 0x3d4a28, 0x7a6a45, 0x2e2b22];
@@ -207,6 +274,138 @@ export function paintCamo(g: CanvasRenderingContext2D, w: number, h: number, rec
           g.lineWidth = Math.max(1, s * 0.5);
           g.stroke();
         }
+      break;
+    }
+    case 'erdl': {
+      // MW2 Woodland / Urban / Desert: ERDL leaf pattern. Big interlocking leaves of the first
+      // layer colour, smaller ones of the second, then thin dark "branch" strokes (third).
+      const plan = [
+        { n: 11, len: [5.5, 10], wid: [2.8, 4.8] },
+        { n: 10, len: [3.5, 7], wid: [1.8, 3.2] },
+        { n: 9, len: [4, 8], wid: [0.7, 1.3] },
+      ];
+      for (const [li, c] of layers.entries()) {
+        const pl = plan[Math.min(li, plan.length - 1)]!;
+        g.fillStyle = css(c);
+        for (let i = 0; i < pl.n; i++) {
+          const a = R.rr(-0.55, 0.55) + (R.rnd() < 0.25 ? Math.PI / 2 : 0);
+          const pts = erdlLeaf(R, R.rr(pl.len[0]!, pl.len[1]!) * s, R.rr(pl.wid[0]!, pl.wid[1]!) * s, li === 2 ? 8 : 14);
+          poly(g, w, h, R.rr(0, w), R.rr(0, h), a, pts);
+        }
+      }
+      break;
+    }
+    case 'splinter': {
+      // MW2 Arctic: angular shards with a shared slant (splinter camo), big pale ones first, then
+      // smaller darker ones, then a few dark flecks.
+      const slant = R.rr(-0.5, -0.3);
+      const plan = [
+        { n: 13, len: [7, 15], wid: [2.5, 5] },
+        { n: 11, len: [4, 10], wid: [1.5, 3.5] },
+        { n: 9, len: [1.5, 4], wid: [0.8, 1.6] },
+      ];
+      for (const [li, c] of layers.entries()) {
+        const pl = plan[Math.min(li, plan.length - 1)]!;
+        g.fillStyle = css(c);
+        for (let i = 0; i < pl.n; i++) {
+          const L = R.rr(pl.len[0]!, pl.len[1]!) * s;
+          const W = R.rr(pl.wid[0]!, pl.wid[1]!) * s;
+          const pts: [number, number][] = [
+            [-L / 2, R.rr(-0.4, 0.4) * W],
+            [R.rr(-0.3, 0.1) * L, -W],
+            [L / 2, R.rr(-0.3, 0.3) * W],
+            [R.rr(-0.1, 0.3) * L, W * R.rr(0.4, 1)],
+          ];
+          poly(g, w, h, R.rr(0, w), R.rr(0, h), slant + R.rr(-0.25, 0.25), pts);
+        }
+      }
+      break;
+    }
+    case 'marpat': {
+      // MW2 Digital: MARPAT-style pixel clusters on a grid that wraps (so it tiles exactly).
+      const cell = Math.max(1, Math.round(2 * s));
+      const nx = Math.max(1, Math.round(w / cell));
+      const ny = Math.max(1, Math.round(h / cell));
+      for (const [li, c] of layers.entries()) {
+        g.fillStyle = css(c);
+        const clusters = [10, 9, 6][li] ?? 5;
+        for (let i = 0; i < clusters; i++) {
+          const cx = Math.floor(R.rr(0, nx));
+          const cy = Math.floor(R.rr(0, ny));
+          const r = R.rr(2, li === 2 ? 3.5 : 5.5);
+          const stretch = R.rr(1, 1.8);
+          const R0 = Math.ceil(r * stretch) + 1;
+          for (let dy = -R0; dy <= R0; dy++)
+            for (let dx = -R0; dx <= R0; dx++) {
+              const d = Math.hypot(dx / stretch, dy);
+              if (d > r * R.rr(0.55, 1.15)) continue;
+              const gx = (((cx + dx) % nx) + nx) % nx;
+              const gy = (((cy + dy) % ny) + ny) % ny;
+              g.fillRect(gx * cell, gy * cell, cell, cell);
+            }
+        }
+      }
+      break;
+    }
+    case 'tigerstripe': {
+      // MW2 Red / Blue Tiger: Vietnam tigerstripe. A few broad strokes of the accent tone (third
+      // colour) under bold, ragged dark stripes running across (second colour), in rows.
+      const dark = layers[0] ?? 0x111111;
+      const accent = layers[1];
+      if (accent !== undefined) {
+        g.fillStyle = css(accent);
+        for (let i = 0; i < 7; i++) poly(g, w, h, R.rr(0, w), R.rr(0, h), R.rr(-0.25, 0.25), tigerStroke(R, R.rr(16, 30) * s, R.rr(2.5, 4.5) * s, R.rr(1, 2.5) * s));
+      }
+      g.fillStyle = css(dark);
+      const rows = Math.max(4, Math.round(7 / (recipe.scale ?? 1)));
+      for (let r = 0; r < rows; r++) {
+        const y = ((r + R.rr(-0.25, 0.25)) / rows) * h;
+        let x = R.rr(0, w);
+        const segs = 2 + Math.floor(R.rr(0, 2));
+        for (let k = 0; k < segs; k++) {
+          const len = R.rr(14, 30) * s;
+          poly(g, w, h, x + len / 2, y + R.rr(-1.5, 1.5) * s, R.rr(-0.22, 0.22), tigerStroke(R, len, R.rr(1.6, 3.4) * s, R.rr(0.8, 2.2) * s));
+          x += len + R.rr(1, 8) * s;
+        }
+      }
+      break;
+    }
+    case 'fall': {
+      // MW2 Fall: autumn foliage (hunting camo). Red-brown patches on brown, black twigs, then
+      // pointed leaves: orange (most), yellow, red-brown, and a few black leaf shadows.
+      const [orange = 0xd4661c, yellow = 0xe0a82a, rust = 0x8a3416, black = 0x120e0a] = layers;
+      g.fillStyle = css(rust);
+      for (let i = 0; i < 7; i++) poly(g, w, h, R.rr(0, w), R.rr(0, h), R.rr(0, 3.14), erdlLeaf(R, R.rr(5, 9) * s, R.rr(3, 5) * s));
+      g.strokeStyle = css(black);
+      g.lineWidth = Math.max(1, 0.9 * s);
+      g.lineCap = 'round';
+      for (let i = 0; i < 7; i++) {
+        const pts: [number, number][] = [[R.rr(0, w), R.rr(0, h)]];
+        let a = R.rr(0, 6.28);
+        for (let k = 0; k < 4; k++) {
+          a += R.rr(-0.6, 0.6);
+          const [px, py] = pts[pts.length - 1]!;
+          const step = R.rr(3, 6) * s;
+          pts.push([px + Math.cos(a) * step, py + Math.sin(a) * step]);
+        }
+        wrap(w, h, (ox, oy) => {
+          g.beginPath();
+          pts.forEach(([px, py], j) => (j ? g.lineTo(px + ox, py + oy) : g.moveTo(px + ox, py + oy)));
+          g.stroke();
+        });
+      }
+      const leaves: [number, number][] = [[black, 7], [orange, 22], [yellow, 11], [rust, 9], [orange, 8]];
+      for (const [c, n] of leaves) {
+        g.fillStyle = css(c);
+        for (let i = 0; i < n; i++) {
+          const x = R.rr(0, w);
+          const y = R.rr(0, h);
+          const a = R.rr(0, 6.28);
+          const len = R.rr(3, 6.5) * s;
+          const wid = len * R.rr(0.3, 0.45);
+          wrap(w, h, (ox, oy) => leafPath(g, x + ox, y + oy, a, len, wid));
+        }
+      }
       break;
     }
     case 'blotch':

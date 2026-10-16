@@ -5,6 +5,8 @@
  * like everyone else.
  */
 import { ATTACHMENT_BY_ID } from '../../../shared/defs/attachments';
+import { camoFitsWeapon } from '../../../shared/defs/camo-unlocks';
+import { MW2_CAMOS } from '../../../shared/defs/camos';
 import { attachmentSlotsFor } from '../../../shared/frontend/loadout-rules';
 import { KILLSTREAKS } from '../../../shared/defs/killstreaks';
 import { PERKS } from '../../../shared/defs/perks';
@@ -48,6 +50,18 @@ function pickAttachments(def: WeaponDef, rnd: () => number, slots: number): stri
   return second && slots > 1 ? [first, second] : [first];
 }
 
+/**
+ * An MW2 camo for a bot's primary, as if it had played that gun: a pretend headshot record that
+ * grows with skill (a 0.9 bot can reach Red Tiger, rarely Fall), then a random camo among those
+ * it would have (Desert and Arctic always), or none about a third of the time.
+ */
+export function pickBotCamo(def: WeaponDef | undefined, rating: number, rnd: () => number): string {
+  if (!def || rnd() < 0.35) return 'none';
+  const headshots = Math.floor(rnd() * rnd() * 320 * Math.max(0, Math.min(1, rating)));
+  const open = MW2_CAMOS.filter((c) => camoFitsWeapon(c, def) && (c.weaponChallenge?.headshots ?? 0) <= headshots && (c.weaponChallenge?.kills ?? 0) <= headshots * 4);
+  return open.length ? open[Math.floor(rnd() * open.length)]!.id : 'none';
+}
+
 /** A random but sensible class for a bot of overall skill `rating` (0..1). */
 export function chooseBotLoadout(rating: number, rnd: () => number = Math.random): Loadout {
   const base = DEFAULT_LOADOUTS[0]!;
@@ -72,14 +86,19 @@ export function chooseBotLoadout(rating: number, rnd: () => number = Math.random
   chosen.sort((a, b) => (streaks.find((k) => k.id === a)?.kills ?? 0) - (streaks.find((k) => k.id === b)?.kills ?? 0));
   const lethals = DEFAULT_LOADOUTS.map((l) => l.lethal).filter((x): x is string => !!x);
   const tacticals = DEFAULT_LOADOUTS.map((l) => l.tactical).filter((x): x is string => !!x);
+  const attachments = primary ? pickAttachments(primary, rnd, attachmentSlotsFor(perks)) : [];
+  const lethal = lethals.length ? lethals[Math.floor(rnd() * lethals.length)]! : base.lethal;
+  const tactical = tacticals.length ? tacticals[Math.floor(rnd() * tacticals.length)]! : base.tactical;
+  // Drawn last so the rest of the class stays what the same seed gave before camos.
+  const camo = pickBotCamo(primary, rating, rnd);
   return {
     name: 'Bot',
-    primary: primary ? { weapon: primary.id, attachments: pickAttachments(primary, rnd, attachmentSlotsFor(perks)), camo: 'none' } : { ...base.primary },
+    primary: primary ? { weapon: primary.id, attachments, camo } : { ...base.primary },
     secondary: secondary ? { weapon: secondary.id, attachments: [], camo: 'none' } : { ...base.secondary },
     perks,
     killstreaks: chosen,
-    lethal: lethals.length ? lethals[Math.floor(rnd() * lethals.length)]! : base.lethal,
-    tactical: tacticals.length ? tacticals[Math.floor(rnd() * tacticals.length)]! : base.tactical,
+    lethal,
+    tactical,
   };
 }
 
