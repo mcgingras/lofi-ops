@@ -22,6 +22,8 @@ import './tacmap';
 import './nuke';
 // After the nuke: its frame resets `renderer.white`, the rocket cam's white goes on top of it.
 import './valkyrie';
+// After the renderers: it wraps the hardware renderers to show the Glitch's knocked-out look.
+import './glitch';
 
 export { ksClient, streakName } from './store';
 export { tacmapOpen } from './tacmap';

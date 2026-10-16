@@ -12,6 +12,7 @@ import { currentMatch } from '../../state';
 import type { Match } from '../../game/match';
 import { iHave } from '../perks/state';
 import { friendly } from './store';
+import { iAmGlitched } from './glitch-state';
 
 const PX_PER_M = 4;
 const VIEW_M = 50; // metres shown across the radar
@@ -111,7 +112,7 @@ registerHudWidget(
         rect(g, x0 + Math.floor(Math.random() * size), y0 + Math.floor(Math.random() * size), 2 * u, u, v > 0.5 ? '#8a8a80' : '#3a3c34');
       }
       g.restore();
-      txt(g, 'JAMMED', cx, y0 + size + 2 * u, 8, C.warn, 'center', u);
+      txt(g, iAmGlitched() ? 'NO SIGNAL' : 'JAMMED', cx, y0 + size + 2 * u, 8, C.warn, 'center', u);
       return;
     }
     if (mapCanvas) {
