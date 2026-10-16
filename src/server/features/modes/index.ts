@@ -20,6 +20,7 @@ import { InfectedRules } from './infected';
 import { KcRules } from './kc';
 import { Deathcams } from './deathcam';
 import { KillcamRecorder } from './killcam';
+import { FINAL_KILLCAM, finalKillcamSeconds } from '../../../shared/defs/killcam';
 import { SdRules } from './sd';
 import { buildSummary } from './summary';
 import { FfaRules, TdmRules } from './tdm';
@@ -40,6 +41,8 @@ export function registerModeRules(register: (id: string, f: ModeFactory) => void
 }
 
 const STATE_EVERY = 0.25;
+/** Bus priority of the killcams' death handler (mode rules run at 0, Infected at -20). */
+export const FINAL_KILL_PRIORITY = 100;
 
 /** Send each human their view of the objective state. */
 export function pushState(room: Room): void {
@@ -78,17 +81,31 @@ const feature: Feature = {
       const c = controllerOf(room);
       if (c && player.session) c.dirty = true;
     });
-    room.bus.on('death', (e) => {
-      if (isEnemyKill(room, e)) cam.onKill(e.attacker, e.victim, e.weapon, e.headshot);
-      deathcams.onDeath(e);
-    });
+    // Ahead of the mode rules: the kill that reaches the score limit ends the match inside their
+    // handler, and the final killcam must already have it.
+    room.bus.on(
+      'death',
+      (e) => {
+        const view = deathcams.describe(e);
+        if (view && isEnemyKill(room, e)) cam.onKill(e, view);
+        deathcams.onDeath(e, view);
+      },
+      { priority: FINAL_KILL_PRIORITY },
+    );
     room.bus.on(
       'matchEnd',
       ({ results }) => {
         results.ext.modes = buildSummary(room, results);
         // No final killcam after a Tactical Nuke (MW2 cut straight to the scoreboard).
-        const clip = results.reason === 'nuke' ? null : cam.clip();
-        if (clip) room.sendFeature(null, 'modes.killcam', clip);
+        const clip = results.reason === 'nuke' ? null : cam.finalClip(results);
+        if (clip) {
+          // BO1 plays the final killcam before the scoreboard: the post-match waits for it.
+          if (room.options.postMatchSec >= FINAL_KILLCAM.minPostMatchSec && room.phaseEndsAt !== null) {
+            room.phaseEndsAt += finalKillcamSeconds(clip.clip.t0, clip.to, clip.at);
+            clip.endsAt = Math.round(room.phaseEndsAt * 1000) / 1000;
+          }
+          room.sendFeature(null, 'modes.killcam', clip);
+        }
         pushState(room);
       },
       { priority: -10 },
