@@ -60,8 +60,8 @@ export default feature;
 | `spawn` | `{ player, point }` | |
 | `beforeDamage` | `DamageInfo & { cancel }` | **mutable**: change `amount`, or `cancel = true` |
 | `damage` | `DamageInfo & { health }` | after health dropped; `health` is what's left |
-| `death` | `{ victim, attacker, weapon, headshot, distance, assisters, part, means, victimStreak, attackerStreak }` | stats (kills/deaths/assists/streak) are already updated |
-| `fire` | `{ player, weapon, origin, dir, hits[], end }` | one per trigger pull |
+| `death` | `{ victim, attacker, weapon, headshot, distance, assisters, part, means, victimStreak, attackerStreak, penetrated? }` | `penetrated`: a bullet kill through a wall; stats (kills/deaths/assists/streak) are already updated |
+| `fire` | `{ player, weapon, origin, dir, hits[], end, walls? }` | one per trigger pull; `hits[].penetrated`, `walls` = entry/exit points of the walls the first pellet went through |
 | `reload` | `{ player, weapon, empty }` | |
 | `weaponSwitch` | `{ player, slot, weapon }` | |
 | `buttons` | `{ player, pressed, released, buttons }` | edge-triggered bits (`Buttons` in `shared/input.ts`): melee, lethal, tactical, streak, use |
@@ -104,6 +104,7 @@ Timers (room time, pause with the room): `room.schedule(sec, fn)` and `room.ever
 | `swapMultiplier` | `(p) => number` | product | weapon switch time |
 | `sprintOutMultiplier` | `(p) => number` | product | sprint-to-fire delay |
 | `spreadMultiplier` | `(p) => number` | product | hitscan spread |
+| `penetrationMultiplier` | `(p) => number` | product | bullet penetration depth, human shots (Hardened 2; section 13) |
 | `regenDelayMultiplier` | `(p) => number` | product | health regen delay (5 s) |
 | `maxHealthMultiplier` | `(p) => number` | product | at spawn (hardcore 0.3) |
 | `streakCostOffset` | `(p) => number` | sum | for the killstreaks feature to read |
@@ -175,7 +176,7 @@ Core RPCs: `core.profile` -> Profile, `core.setName {name}` -> Profile. Core pus
 
 Client: `hello {token?, name?, version}` (first message; the server replies `welcome {sessionId, token, profile, defaultLoadouts}`; keep `token` in localStorage), `quickplay {mode, map?}`, `joinRoom {roomId}`, `leaveRoom`, `listRooms {mode?}`, `input {cmds: InputCmd[]}`, `fire {seq, time, origin, dir, shot}`, `selectLoadout {index}`, `rpc`, `ping {t0}`.
 
-Server: `welcome`, `joined {roomId, you, mode, map, team, phase, tickRate, snapshotRate, time, timeLimit, scoreLimit}` (also re-sent on map change), `left`, `rooms`, `roster {players}`, `snap` (20 Hz), `killfeed`, `hit` (hitmarker, to shooter), `hurt` (to victim, with direction), `died`, `spawned {x,y,z,yaw,loadout}`, `score {teams, players}`, `phase {phase, time, endsAt}`, `matchEnd {results}`, `profile {profile}` (after match end), `feat`, `rpcResult`, `pong {t0, time}`, `error {code, message}`.
+Server: `welcome`, `joined {roomId, you, mode, map, team, phase, tickRate, snapshotRate, time, timeLimit, scoreLimit}` (also re-sent on map change), `left`, `rooms`, `roster {players}`, `snap` (20 Hz), `killfeed` (`pen`: through a wall), `hit` (hitmarker, to shooter; `pen`: through a wall), `hurt` (to victim, with direction), `died`, `spawned {x,y,z,yaw,loadout}`, `score {teams, players}`, `phase {phase, time, endsAt}`, `matchEnd {results}`, `profile {profile}` (after match end), `feat`, `rpcResult`, `pong {t0, time}`, `error {code, message}`.
 
 Netcode contract for the client:
 
@@ -456,13 +457,23 @@ Settings: `settings.<key>` + `updateSettings`; feature settings go under `settin
 
 ## 13. Weapon behaviours
 
-Hitscan is the default for every weapon: each pellet is stopped by the world (`bullets` mask) first, then by the nearest hitbox.
+Hitscan is the default for every weapon: each pellet goes through the walls it can (below) and is stopped by the next one (`bullets` mask), then by the nearest hitbox before that.
 
 Hitboxes:
 - `playerHitboxes(feet, stance, yaw)`, where `stance` is `'stand' | 'crouch' | 'prone'` or the old `crouched` boolean.
 - A prone body lies along `yaw`, with the head at the movement position and the legs 1.6 m behind. Its parts are turned boxes that `rayHitboxes` tests exactly (`hb.local`); the `head` / `torso` / `legs` AABBs bound them.
 - Use `moveHitboxes(p.move, p.yaw)` for a live player and `poseHitboxes(pose)` for a recorded one. Lag compensation poses carry `prone` and `yaw`.
-- Fully prone shooters get `stanceSpread` (×0.65) on top of `spreadMultiplier`. There is no penetration model: anything with `bullets` collision stops every bullet, whatever the weapon or the Hardened perk (`penetrationMultiplier` is declared but unused); only brushes marked `bullets: false` (thin boards, fences, foliage) let bullets through, at full damage. Human shots rewind targets to the shooter's view time (`HitboxHistory`, at most `MAX_REWIND_MS`); a shot at the present (bots: `room.fire` without `time`) uses live positions. `traceShot(room, p, origin, dir, shot, poses?)` (combat.ts) traces a trigger pull's pellets without firing (no ammo, no damage), with the same spread seed as `fire`. For projectiles, melee or anything else:
+- Fully prone shooters get `stanceSpread` (×0.65) on top of `spreadMultiplier`. Brushes marked `bullets: false` (thin boards, fences, foliage) let every bullet through at full damage; anything else with `bullets` collision is a wall for the penetration rules below. Human shots rewind targets to the shooter's view time (`HitboxHistory`, at most `MAX_REWIND_MS`); a shot at the present (bots: `room.fire` without `time`) uses live positions. `traceShot(room, p, origin, dir, shot, poses?)` (combat.ts) traces a trigger pull's pellets without firing (no ammo, no damage), with the same spread seed as `fire`; each `Pellet` carries the `walls` it went through, the damage `keep` and the falloff `range`.
+
+Penetration (`src/shared/penetration.ts`, pure, used by the server's `traceShot` and the client's predicted impacts; BO1-flavoured, kept small):
+- **Human shots only.** A bot's bullets stop on the first wall (`p.isBot`): bots fire only when they see the target and the path is clear (`bots/sight.ts`), so a bot never hurts anyone through a wall.
+- **Type per weapon** (`WeaponDef.penetration`, default by class like BO1's `penetrateType`): `small` pistols and SMGs, `medium` ARs and LMGs, `large` snipers, `pellet` shotgun pellets, `none` launchers, the knife and anything with a `WeaponBehavior`. The type is a depth: the most wood one wall may be (`PENETRATION.depth`: pellet 4 cm, small 15 cm, medium 30 cm, large 45 cm).
+- **Walls.** A wall's thickness is the ray's entry-to-exit distance through the solid (`raySpan` in collision.ts); solids that touch or overlap along the ray (within 2 cm) are one wall. Each metre is weighted by the material (`penetrationMaterial(map, mat)`, by texture name then material id, unknown = masonry): soft (plaster, drywall, fabric) ×0.5, sheet metal ×0.5, wood ×1, masonry (concrete, brick, block, facade, tile) ×10, solid (rock, stone, earth, sand, sandbags, steel, beams, stairs, tanks, bullet-stopping glass, clips, glTF collision boxes) never. A wall heavier than the depth stops the bullet.
+- **Rules.** At most `PENETRATION.maxWalls` (2) walls per bullet. Each wall keeps ×0.75 of the damage when paper thin, down to ×0.5 at the depth limit (`wallKeep`); walls multiply. After each wall every metre counts double for damage falloff and for the weapon's range (`effectiveDistance`). An AR through a 25 cm Nuketown house wall keeps ×0.54; nothing goes through a concrete wall or rock.
+- **Hardened**: the `penetrationMultiplier` modifier (core key, product; the perks feature registers ×2 for Hardened, BO1 `perk_bulletPenetrationMultiplier`) multiplies the depth, so the same wall also costs less damage.
+- **Flags.** `DamageInfo.penetrated` (every pellet that hit went through a wall), the `hit` message's `pen` (hitmarker bracket), `death.penetrated` and the `killfeed` message's `pen` (killfeed icon). The `fire` event's `walls` and `ShotSnap.x` carry the first pellet's entry and exit points (impact puffs on both sides for everyone, and the killcam's `DeathcamShot.pen`).
+
+For projectiles, melee or anything else:
 
 ```ts
 api.registerWeaponBehavior('launcher', {

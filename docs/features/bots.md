@@ -96,7 +96,7 @@ Playtest report: "I keep dying through walls from the bots. They shouldn't be ab
    - a bullet from its eye would reach the aim point (collision's `bullets` mask plus the bullet-stopping occluders).
 
    Each shot is also traced first (`combat.traceShot`, with the same spread seed that `room.fire` then uses). The shot is held if any pellet would hit someone through drawn bullet-proof geometry. There is no suppressive fire at a last-known position.
-3. **Penetration.** There is no penetration model. Anything with `bullets` collision stops every bullet, whatever the weapon and with or without Hardened (the perk's `penetrationMultiplier` is declared but nothing reads it). Only brushes marked `bullets: false` let bullets through, at full damage:
+3. **Penetration.** Human shots go through thin walls (docs/CONTRACTS.md section 13, `shared/penetration.ts`); a bot's never do. Its bullets stop on anything with `bullets` collision, whatever the weapon, so it can't hurt anyone through a wall: its line of fire checks (`botCanHit`, and the traced shot) are unchanged and ignore penetration, and a player behind a thin wooden wall is neither seen nor shot at, though that player's own shots come through (`tests/penetration.test.ts`). Only brushes marked `bullets: false` let a bot's bullets through, at full damage:
    - thin plank and board walls (Estate's boathouse, Afghan's shack, Firing Range's ply boards);
    - fences and foliage;
    - Hanoi's wooden rails.
@@ -280,7 +280,7 @@ Nothing in the server adds avoidable delay. Inputs are applied on the next tick,
   - `tests/bots.walls.test.ts` (with `tests/bots-walls.ts`): walls.
     - Covers: the synthetic cover box (concrete, render-only wall, bullet-proof glass, thin planks, a couch, a turned crate), and seeded cover spots on Nuketown, Rust, Terminal, Firing Range and Estate (behind collision, and behind drawn geometry only).
     - The bot never notices, fires at or hurts a player behind cover, standing, crouched or firing (it hears and turns). Behind glass it sees but holds fire.
-    - No weapon gets a bullet through bullet-stopping cover, even with Hardened; thin planks let them through.
+    - No bot weapon gets a bullet through bullet-stopping cover; human shots don't get through the glass or the concrete either; thin planks let them through.
     - Also: target memory, the grace, bot shots at live positions (human shots still rewind), the reaction after more than 1 s hidden, and radar steering without firing.
     - The peek sim: 0 deaths through collision or drawn cover, 0 shots at a hidden player, and no first shot within 0.7 × the veteran reaction after more than 1 s hidden.
   - Fixture map: `tests/bots-fixtures.ts`.
