@@ -553,6 +553,7 @@ export class ZombiesGame {
       // Solo without Quick Revive: that's the game.
       this.event({ kind: 'down', player: p.id });
       room.kill(p, null, { weapon: 'downed', means: 'world' });
+      this.checkGameOver();
       return;
     }
     const lost = downedLoss(s.points);
@@ -687,6 +688,8 @@ export class ZombiesGame {
     this.horde.targets = this.survivors().filter((p) => this.isUp(p));
     this.horde.bodies = this.aliveUndead();
 
+    // Everyone down or dead (checked before the between-rounds respawn below brings the dead back).
+    if (this.phase !== 'over' && this.phase !== 'pre') this.checkGameOver();
     if (this.phase === 'pre' || this.phase === 'break') {
       // Late joiners and the dead come in between rounds (BO1 `spectators_respawn`).
       for (const p of this.survivors()) if (!p.alive) room.spawn(p);
