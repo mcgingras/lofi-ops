@@ -18,7 +18,7 @@ import type { Room } from '../../room';
 import type { Brain } from './brain';
 import { createRoomBots, roomBots, type RoomBots, type RoomBotsOptions } from './roster';
 
-export { registerBotGoal, registerBotStreakHandler, registerBotModeStyle, type BotGoal, type BotGoalFn, type BotModeStyle } from './hooks';
+export { registerBotGoal, registerBotStreakHandler, registerBotModeStyle, registerBotStyle, type BotGoal, type BotGoalFn, type BotModeStyle } from './hooks';
 export { navFor, type NavGrid } from './nav';
 export type { RoomBots } from './roster';
 

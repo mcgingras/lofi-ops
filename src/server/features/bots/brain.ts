@@ -137,6 +137,7 @@ export class Brain implements BotBrain {
   /** A lethal lobbed mid-fight (`throwAtRange`): the view is pitched up by `lobPitch` until then. */
   private lobUntil = 0;
   private lobPitch = 0;
+  private lobAt = 0;
   private pitchBias = 0;
   private streakPress: { id: string; at: number } | null = null;
   private retreatUntil = 0;
@@ -198,6 +199,8 @@ export class Brain implements BotBrain {
     this.intentAt = -1;
     this.lingerUntil = 0;
     this.grenadeAt = now + 4;
+    this.lobAt = now + 0.5;
+    this.lobUntil = 0;
   }
 
   /** Roll this life's role; take the lane fewest teammates hold (or pair up with one). */
@@ -367,11 +370,11 @@ export class Brain implements BotBrain {
 
       // Knife-only with a tomahawk left (Infected): lob it at a target in sight at mid range. The
       // throw leaves along the view when the wind-up ends, so the view stays pitched up until then.
-      if (style.throwAtRange && outOfAmmo && vis && d > 6 && d < 18 && now >= this.grenadeAt && this.aim.react <= 0 && (self.ext.weapons?.lethalN ?? 0) > 0) {
+      if (style.throwAtRange && outOfAmmo && vis && d > 6 && d < 18 && now >= this.lobAt && this.aim.react <= 0 && (self.ext.weapons?.lethalN ?? 0) > 0) {
         const t = d / 22;
         this.lobPitch = clamp(Math.atan2(7.5 * t * t, d) - 0.1, 0, 0.5);
         this.lobUntil = now + 0.5;
-        this.grenadeAt = now + 3 + this.rnd() * 2;
+        this.lobAt = now + 3 + this.rnd() * 2;
         pulse(Buttons.LETHAL);
       }
 
