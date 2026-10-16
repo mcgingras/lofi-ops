@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { EQUIPMENT_BY_ID } from '../../shared/defs/equipment';
 import { KILLSTREAK_BY_ID } from '../../shared/defs/killstreaks';
+import { teamNamesFor } from '../../shared/defs/modes';
 import { WEAPON_BY_ID } from '../../shared/defs/weapons';
 import { TEAM_NAMES } from '../../shared/constants';
 import { inputDevice } from '../game/gamepad';
@@ -429,7 +430,7 @@ registerHudWidget(
       const mine = m.myTeam ?? 0;
       for (const team of [mine, mine === 0 ? 1 : 0] as const) {
         const score = m.teamScores?.[team] ?? 0;
-        header(`${TEAM_NAMES[team]!.toUpperCase()}  ${score}`, team === mine ? C.friend : C.enemy);
+        header(`${teamNamesFor(m.mode, TEAM_NAMES)[team]!.toUpperCase()}  ${score}`, team === mine ? C.friend : C.enemy);
         for (const id of ids.filter((i) => m.roster.get(i)?.team === team).sort(byScore)) row(id);
         y += 4 * u;
       }
