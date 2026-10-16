@@ -42,7 +42,7 @@ Sounds: `killstreaks/sounds.ts` holds the synthesized `ks_*` voices; the recorde
 | 1 | Scavenger | every death drops a `perks_pack`; an enemy with Scavenger walking over it gets a mag of reserve per weapon (separate from the dropped guns of the pickups feature) | spawn with +2 mags; emits `perks.resupply {lethal:1, tactical:1}`, which the weapons feature refills up to the carry cap |
 | 1 | Ghost | `radarVisible` false (unless firing an unsuppressed gun) vs Spy Plane / Blackbird | `streakTargetable` false for helicopters, gunner AI, sentries (dogs and RC-XD still find you) |
 | 1 | Hardline | `streakCostOffset` -1 | owner's first USE on their landed Care Package rerolls it |
-| 2 | Hardened | none: there is no penetration model (`bullets: false` cover passes every bullet at full damage, anything else stops them all) | `killstreakDamageDealt` x1.5, `flinchMultiplier` 0.5 |
+| 2 | Hardened | `penetrationMultiplier` 2: bullets go twice as deep through walls, and the same wall costs less damage (docs/CONTRACTS.md section 13; human shots only, bots never penetrate) | `killstreakDamageDealt` x1.5, `flinchMultiplier` 0.5 |
 | 2 | Scout | `holdBreathMultiplier` 2 (weapons sends it in `weapons.equip.breath`; the scope's breath lasts twice as long) | `swapMultiplier` 0.5 |
 | 2 | Steady Aim | `spreadMultiplier` 0.65 while not ADS | `sprintOutMultiplier` 0.5, `meleeSpeedMultiplier` 0.7 (knife cooldown and recovery) |
 | 2 | Sleight of Hand | `reloadMultiplier` 0.5 | `adsMultiplier` 0.5 |
@@ -221,5 +221,5 @@ isCarryingTurret(p)                                // a Sentry Gun / SAM Turret 
 - Care Packages hold streaks or ammo only (no Death Machine / Grim Reaper weapons). Crates have no collision.
 - Care Package marker: nobody else sees the canister in the thrower's hand (only once thrown); "unreachable roof" is a height rule (highest spawn + 4.5 m), not a reachability test; the canister passes through players (BO1 could kill with it); its smoke doesn't block bot sight or aim assist (`registerSightBlocker`).
 - Ghost Pro's hidden red name tag is not applied (core `core.names` widget); `perks.public.ghostPro` lists the ids for whoever replaces it.
-- No mantle in core, so Marathon Pro's faster mantle is a description only. No penetration model, so Hardened has no base effect, and no picking grenades up, so Flak Jacket Pro's fuse reset is a description only (neither registers a modifier).
+- No mantle in core, so Marathon Pro's faster mantle is a description only. No picking grenades up, so Flak Jacket Pro's fuse reset is a description only (it registers no modifier). Hardened's penetration is the light model in `shared/penetration.ts`, not BO1's per-surface tables.
 - Dogs steer straight at targets with stuck-hops and hotspot detours (no nav graph); once the bots area has a nav graph they can use it.
