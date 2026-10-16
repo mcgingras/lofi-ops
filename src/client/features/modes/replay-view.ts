@@ -30,7 +30,7 @@ import { ViewmodelRig } from '../../game/viewmodel';
 import { entityRenderers, shotFxs, type EntityView } from '../../registry';
 import { getTexture } from '../../render/textures';
 import { aimAt, eyeOf, trackPose } from './deathcam-math';
-import { killProjectile, posesAt, projectileAt, type Pose } from './killcam-math';
+import { killProjectile, posesAt, projectileAt, replayGun, type Pose } from './killcam-math';
 import { ReplayActors, type DeathFx } from './replay';
 
 /** What to replay (the per-death and the final killcam payloads both carry this). */
@@ -195,17 +195,16 @@ export class ReplayView {
       this.eye = this.eye < 0 ? want : this.eye + (want - this.eye) * Math.min(1, step * 10);
       cam.position.set(k.x, k.y + this.eye, k.z);
       cam.rotation.set(k.pitch, k.yaw, 0, 'YXZ');
-      const held = parseGear(k.gear) ?? (src.vm ? { weapon: src.vm.weapon, camo: src.vm.camo, attachments: src.vm.attachments } : null);
-      const base = held ? WEAPON_BY_ID.get(held.weapon) : undefined;
-      const eff = base && held ? effectiveWeapon(base, held.attachments) : null;
+      const gun = replayGun(k, src.vm);
+      const eff = gun?.eff ?? null;
       this.ads += ((k.f & PlayerFlags.ADS ? 1 : 0) - this.ads) * Math.min(1, step * 12);
       r.zoom = 1 + ((eff?.zoom ?? 1.15) - 1) * this.ads;
       this.scoped = !!eff?.scope && this.ads > 0.85;
       const speed = this.lastK ? Math.hypot(k.x - this.lastK.x, k.z - this.lastK.z) / Math.max(1e-3, step) : 0;
       this.lastK = k;
-      if (this.rig && eff && held && base) {
+      if (this.rig && gun) {
         killerGun = true;
-        this.rig.setWeapon(base.model ?? base.id, held.attachments, held.camo);
+        this.rig.setWeapon(gun.model, gun.attachments, gun.camo);
         this.rig.visible = !this.scoped;
         if (src.means === 'melee' && !this.melee && t >= src.at - 0.25) {
           this.melee = true;

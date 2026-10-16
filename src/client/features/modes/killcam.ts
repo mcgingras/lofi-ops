@@ -63,7 +63,7 @@ export function finalClock(tl: FinalTimeline, elapsed: number, k = FINAL_KILLCAM
 
 function frame(m: Match, dt: number): void {
   const d = modes.killcam;
-  if (!d || !modes.results || modes.killcamDone || m.phase !== 'ended' || !m.map) {
+  if (!d || modes.killcamDone || !m.map || !(d.round === undefined ? !!modes.results && m.phase === 'ended' : m.phase === 'playing' && (d.endsAt === null || m.serverTime < d.endsAt))) {
     if (view.active) stop();
     if (modes.killcamStart !== null) modes.killcamStart = null;
     return;
@@ -108,7 +108,7 @@ registerHudWidget(
     // After the killcam: the black lifts under the summary as it opens.
     const after = now() - S.endedAt;
     if (modes.killcamStart === null) {
-      if (after >= 0 && after < AFTER_FADE && m.phase === 'ended') {
+      if (after >= 0 && after < AFTER_FADE) {
         g.fillStyle = `rgba(0,0,0,${1 - after / AFTER_FADE})`;
         g.fillRect(0, 0, W, H);
       }
@@ -121,9 +121,13 @@ registerHudWidget(
     if (view.scoped) drawScopeMask(g, W, H);
     const top = Math.round(H * 0.13);
     band(g, 0, W, top);
-    txt(g, 'FINAL KILLCAM', W / 2, Math.max(2 * u, top / 2 - 13 * u), 16, C.paper, 'center', u);
+    txt(g, d.round === undefined ? 'FINAL KILLCAM' : 'ROUND KILLCAM', W / 2, Math.max(2 * u, top / 2 - 13 * u), 16, C.paper, 'center', u);
     const res = modes.results;
-    if (res) {
+    const sd = modes.state?.sd;
+    if (d.round !== undefined && sd?.lastRound) {
+      const mine = m.myTeam === null ? null : sd.lastRound.winner === m.myTeam;
+      txt(g, `ROUND ${d.round} · ${mine === null ? 'OVER' : mine ? 'WON' : 'LOST'}`, W / 2, top / 2 + 5 * u, 8, mine === null ? C.paper : mine ? C.hi : C.warn, 'center', u);
+    } else if (res) {
       const w = winnerLine(res, m.myId);
       const outcome = w.mine === null ? '' : w.mine ? ' · VICTORY' : ' · DEFEAT';
       txt(g, w.text + outcome, W / 2, top / 2 + 5 * u, 8, w.mine === null ? C.paper : w.mine ? C.hi : C.warn, 'center', u);

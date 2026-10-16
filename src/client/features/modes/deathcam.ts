@@ -27,6 +27,7 @@ import { drawScopeMask } from '../weapons/scope';
 import { badgePixels, drawPixels } from '../progression/emblems';
 import { cardLines, deathcamClock, killcamTimer } from './deathcam-math';
 import { ReplayView } from './replay-view';
+import { modes } from './store';
 
 /** Live game volume under the per-death killcam (BO1 plays the killcam's own sound). */
 const DEATHCAM_DUCK = 0.2;
@@ -98,6 +99,8 @@ function frame(m: Match, dt: number): void {
   const d = S.d;
   const death = m.death;
   const clip = S.clip;
+  // A round killcam (S&D) takes the screen over your own.
+  if (modes.killcamStart !== null) S.over = true;
   if (!d || S.over || d.view === 'none' || !clip?.frames.length || m.alive || !death || m.phase !== 'playing' || !m.map) {
     if (S.playing) end();
     return;
@@ -200,7 +203,7 @@ registerHudWidget(
   (g, W, H) => {
     const m = currentMatch();
     const d = S.d;
-    if (!m || !d || m.alive || !m.death || m.phase !== 'playing') return;
+    if (!m || !d || m.alive || !m.death || m.phase !== 'playing' || modes.killcamStart !== null) return;
     const u = unit(H);
     const card: CardInfo = { card: d.card, killer: d.killer, headshot: d.headshot, label: 'KILLED BY', nameColor: C.enemy };
     if (!S.playing) {

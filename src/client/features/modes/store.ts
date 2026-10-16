@@ -76,7 +76,7 @@ onFeature('modes.killcam', (d) => {
   modes.killcamDone = false;
   // The server holds the post-match for the killcam (BO1 plays it before the scoreboard).
   const m = currentMatch();
-  if (m && d.endsAt !== null && m.phase === 'ended') m.phaseEndsAt = d.endsAt;
+  if (m && d.endsAt !== null && d.round === undefined && m.phase === 'ended') m.phaseEndsAt = d.endsAt;
 });
 
 onFeature('modes.event', (ev) => {

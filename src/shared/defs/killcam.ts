@@ -72,8 +72,13 @@ export interface FinalKillcamPayload {
   /** The gun in the killer's hands at the kill. */
   vm?: { weapon: string; attachments: string[]; camo: string; suppressed: boolean };
   clip: PackedClip;
-  /** Room time the post-match now ends (the server waits for the killcam), or null if unchanged. */
+  /**
+   * Room time the post-match (or, for a round killcam, the post-round) now ends: the server waits
+   * for the killcam. Null if unchanged.
+   */
   endsAt: number | null;
+  /** Set for S&D's end-of-round killcam (BO1 `round_end_killcam`): the round it ended. */
+  round?: number;
 }
 
 /** One stretch of the timeline: speed `a` -> `b` (linear in real time) over `d` real seconds, clip `c0` -> `c1`. */

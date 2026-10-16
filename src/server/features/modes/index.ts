@@ -92,6 +92,22 @@ const feature: Feature = {
       },
       { priority: FINAL_KILL_PRIORITY },
     );
+    // BO1 replays the round's final kill at the end of every round too (`round_end_killcam`):
+    // the post-round waits for it. The last round's goes out as the match's final killcam.
+    room.bus.on('modes.roundEnd', ({ round, winner }) => {
+      room.schedule(0, () => {
+        const c = controllerOf(room);
+        if (room.phase !== 'playing' || !(c instanceof SdRules) || c.phase !== 'post' || c.round !== round) return;
+        const clip = cam.finalClip({ winnerTeam: winner });
+        if (!clip) return;
+        c.endsAt += finalKillcamSeconds(clip.clip.t0, clip.to, clip.at);
+        c.dirty = true;
+        clip.round = round;
+        clip.endsAt = Math.round(c.endsAt * 1000) / 1000;
+        room.sendFeature(null, 'modes.killcam', clip);
+      });
+    });
+    room.bus.on('modes.roundStart', () => cam.forgetKills());
     room.bus.on(
       'matchEnd',
       ({ results }) => {

@@ -6,8 +6,27 @@
  * round), so a 20 Hz recording replays without the corners and speed jumps of a straight line,
  * even at BO1's 0.25x slow motion. A jump between two frames (a respawn) is not interpolated.
  */
-import type { ProjectileTrack } from '../../../shared/defs/deathcam';
+import { effectiveWeapon, type EffectiveWeapon } from '../../../shared/defs/attachments';
+import { parseGear, type DeathcamPayload, type ProjectileTrack } from '../../../shared/defs/deathcam';
 import type { KillcamFrame } from '../../../shared/defs/modestate';
+import { WEAPON_BY_ID } from '../../../shared/defs/weapons';
+
+/** The gun a replayed killer shows as the viewmodel: what they held at that moment, else the gun at the kill (`vm`). */
+export interface ReplayGun {
+  weapon: string;
+  /** Viewmodel model id (the weapon def's `model`, else its id). */
+  model: string;
+  attachments: string[];
+  camo: string;
+  eff: EffectiveWeapon;
+}
+
+export function replayGun(pose: Pick<Pose, 'gear'> | undefined, vm: DeathcamPayload['vm'] | undefined): ReplayGun | null {
+  const held = parseGear(pose?.gear) ?? (vm ? { weapon: vm.weapon, camo: vm.camo, attachments: vm.attachments } : null);
+  const base = held ? WEAPON_BY_ID.get(held.weapon) : undefined;
+  if (!held || !base) return null;
+  return { weapon: held.weapon, model: base.model ?? base.id, attachments: held.attachments, camo: held.camo, eff: effectiveWeapon(base, held.attachments) };
+}
 
 export interface Pose {
   x: number;

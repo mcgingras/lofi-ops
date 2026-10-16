@@ -112,6 +112,12 @@ export class KillcamRecorder {
     this.byTeam.clear();
   }
 
+  /** A new round: earlier rounds' kills are no one's final killcam. */
+  forgetKills(): void {
+    this.latest = null;
+    this.byTeam.clear();
+  }
+
   private open(t: number): KillCapture[] {
     const out = new Set<KillCapture>();
     for (const c of [this.latest, ...this.byTeam.values()]) if (c && t <= c.at + this.k.afterSec + 1e-6) out.add(c);
