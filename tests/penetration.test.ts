@@ -8,7 +8,7 @@ import { botBrain } from '../src/server/features/bots/api';
 import { registerPerkModifiers } from '../src/server/features/perks/index';
 import { makeWeapon, type PlayerState } from '../src/server/player';
 import type { Room } from '../src/server/room';
-import { CollisionWorld, type Solid } from '../src/shared/collision';
+import { CollisionWorld, raySpan, type Solid } from '../src/shared/collision';
 import { packClip, unpackClip } from '../src/shared/defs/deathcam';
 import { PERK_TUNING } from '../src/shared/defs/perks';
 import { WEAPON_BY_ID, WEAPONS } from '../src/shared/defs/weapons';
@@ -76,6 +76,19 @@ describe('penetration: depth limits', () => {
         const path = shoot(world(wall(mat, 0, th)), type, PERK_TUNING.hardenedPenetration);
         expect({ mat, th, type, walls: path.walls.length, t: path.t }).toEqual({ mat, th, type, walls: 0, t: 5 });
       }
+  });
+
+  it('raySpan: entry and exit of a box and a ramp wedge (0 entry from inside)', () => {
+    const b = solid({ x: -1, y: 0, z: 0 }, { x: 1, y: 2, z: 0.3 });
+    expect(raySpan(O, D, b)).toEqual({ t0: 5, t1: expect.closeTo(5.3, 9) });
+    expect(raySpan({ x: 0, y: 1, z: 0.1 }, D, b)).toEqual({ t0: 0, t1: expect.closeTo(0.2, 9) });
+    expect(raySpan({ x: 3, y: 1, z: -5 }, D, b)).toBeNull();
+    // A ramp rising along +x from y 0 to 1 over x 0..2: a level ray at y 0.5 from +x enters its high
+    // face (x 2) and leaves through the slope at x 1.
+    const ramp = solid({ x: 0, y: 0, z: -1 }, { x: 2, y: 1, z: 1 }, { ramp: '+x' });
+    const span = raySpan({ x: 5, y: 0.5, z: 0 }, { x: -1, y: 0, z: 0 }, ramp)!;
+    expect(span.t0).toBeCloseTo(3, 9);
+    expect(span.t1).toBeCloseTo(4, 9);
   });
 
   it('a wall is measured entry to exit along the ray: a pistol passes 10 cm of wood square on, not at a steep angle', () => {
