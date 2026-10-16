@@ -349,7 +349,7 @@ describe('per-weapon headshot stats and the unlock popup', () => {
     const orig = room.sendFeature.bind(room);
     room.sendFeature = ((to: PlayerState | null, id: string, data: unknown) => {
       if (to === h) pushed.push({ id, data });
-      return orig(to as PlayerState, id, data as never);
+      return orig(to as PlayerState, id as never, data as never);
     }) as typeof room.sendFeature;
     const steps = (s: number) => {
       for (let i = 0; i < Math.round(s / TICK_DT); i++) room.step();
