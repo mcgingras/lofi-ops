@@ -32,7 +32,7 @@ export const PENETRATION = {
   /** Metres of wood one wall may be, per type (before Hardened). */
   depth: { none: 0, pellet: 0.04, small: 0.15, medium: 0.3, large: 0.45 } as Record<PenetrationType, number>,
   /** Wood-equivalent metres per metre of each material. */
-  resistance: { soft: 0.5, sheet: 0.5, wood: 1, masonry: 8, solid: Infinity } as Record<PenetrationMaterial, number>,
+  resistance: { soft: 0.5, sheet: 0.5, wood: 1, masonry: 10, solid: Infinity } as Record<PenetrationMaterial, number>,
   /** Walls one bullet may pass. */
   maxWalls: 2,
   /** Damage kept through a wall: `maxKeep` for a paper-thin one, down to `minKeep` at the depth limit. */
@@ -67,11 +67,11 @@ export function penetrationType(w: Pick<WeaponDef, 'class' | 'penetration' | 'pe
 
 // Texture / material id patterns, checked in this order (first match wins).
 const SOLID = /rock|stone|cobble|cliff|mud|dirt|ground|earth|sand|gravel|grass|forest|glass|^none$|^clip$|^gltf$/i;
-const HEAVY = /steel|iron|beam|girder|pipe|tank|machine|engine|bulkhead|stairs|rocket|booster|rubber|_deck|bridge|rail/i;
+const HEAVY = /steel|iron|beam|girder|pipe|tank|machine|engine|bulkhead|stairs|ladder|rocket|booster|rubber|_deck|bridge|(^|_)rail/i;
 const MASONRY = /concrete|brick|block|cinder|sandbag|barrier|asphalt|apron|slab|facade|parapet|bunker|blast|tile|bldg|hr_roof|hn_roof|scrap_wall|lc_wall/i;
-const SHEET = /corr|tin|alu|sheet|container|trailer|shed|clad|car|bus|truck|fuse|hull|hj_paint|grate|shutter|hangar|heli|jet|cabinet|console|barrel|locker|vent|warehouse|junk|hazard/i;
+const SHEET = /corr|tin|alu|sheet|container|trailer|shed|clad|carpaint|bus|truck|fuse|hull|hj_paint|grate|shutter|hangar|heli|jet|cabinet|console|barrel|locker|vent|warehouse|junk|hazard/i;
 const SOFT = /plaster|limewash|drywall|term_wall|cubicle|fabric|cloth|mattress|cushion|carpet|seat|tarp|paper|books|mannequin|snow|cabin/i;
-const WOOD = /wood|plank|ply|board|bamboo|crate|pallet|siding|fence|lattice|louvre|door|teak|log|bark|thatch|hut|trim|floor|counter|sign|target|nt_roof/i;
+const WOOD = /wood|plank|ply|board|bamboo|crate|pallet|siding|fence|lattice|louvre|door|teak|log|bark|thatch|hut|trim|nt_floor|jg_floor|counter|desk|sign|target|nt_roof/i;
 
 /** Classify a material by name (a texture id or a material id); null when nothing matches. */
 export function materialByName(name: string): PenetrationMaterial | null {

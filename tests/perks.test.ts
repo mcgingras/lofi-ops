@@ -155,10 +155,12 @@ describe('tier 1', () => {
 });
 
 describe('tier 2', () => {
-  it('Hardened: no base effect (no penetration model); Pro: more damage to killstreaks and less flinch', () => {
+  it('Hardened: bullets penetrate twice as deep; Pro: more damage to killstreaks and less flinch', () => {
     const room = setup();
     const a = bot(room, 0, ['hardened']);
-    expect(room.modifiers.registered().filter((e) => e.id.startsWith('perks.hardened')).map((e) => e.key)).toEqual(['killstreakDamageDealt', 'flinchMultiplier']);
+    expect(room.modifiers.registered().filter((e) => e.id.startsWith('perks.hardened')).map((e) => e.key)).toEqual(['penetrationMultiplier', 'killstreakDamageDealt', 'flinchMultiplier']);
+    expect(room.modifiers.mul('penetrationMultiplier', a)).toBe(T.hardenedPenetration);
+    expect(room.modifiers.mul('penetrationMultiplier', bot(room, 0))).toBe(1);
     expect(room.modifiers.mul('killstreakDamageDealt', a, 'ks_heli')).toBe(1);
     perksOf(a).allPro = true;
     expect(room.modifiers.mul('killstreakDamageDealt', a, 'ks_heli')).toBe(T.hardenedProStreakDamage);

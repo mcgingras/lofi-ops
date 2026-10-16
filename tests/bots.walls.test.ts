@@ -7,9 +7,10 @@
  *               Firing Range and Estate. Gunfire behind cover turns it but never lets it engage.
  *   line of fire  it never fires unless a bullet would reach the point it aims at (bullet-proof
  *               glass: it sees you, it doesn't shoot); no damage ever goes through.
- *   penetration  there is no penetration model: bullets stop on anything with `bullets` collision,
- *               whatever the weapon or Hardened; only brushes marked `bullets: false` (thin boards,
- *               fences) let them through.
+ *   penetration  bots' bullets never penetrate: they stop on anything with `bullets` collision,
+ *               whatever the weapon; only brushes marked `bullets: false` (thin boards, fences) let
+ *               them through. Human shots go through thin walls (tests/penetration.test.ts), never
+ *               concrete or bullet-proof glass.
  *   memory      the moment the target is out of view it stops firing and aims at the last point it
  *               saw, then lets go after LOST_GRACE.
  *   timing      bot shots hit where players are now (no rewind); humans' shots still rewind.
@@ -186,7 +187,7 @@ describe('bots and walls: real cover spots', () => {
 // ---------------------------------------------------------------------------------------------
 
 describe('bots and walls: penetration', () => {
-  it('no weapon gets a bullet through bullet-stopping cover, even thin glass (Hardened has no penetration either); thin planks (bullets: false) let them through', () => {
+  it('no bot weapon gets a bullet through bullet-stopping cover, even thin glass; human shots not through the glass or concrete either; thin planks (bullets: false) let them through', () => {
     const r = room(coverMap());
     const target = addScripted(r, 1, { x: 0, y: 0, z: 0 }, still());
     const shooter = addScripted(r, 0, { x: 0, y: 0, z: 6 }, still());
@@ -199,8 +200,8 @@ describe('bots and walls: penetration', () => {
     r.bus.on('damage', (e) => {
       if (e.victim === target) dealt += 1;
     });
-    const tryShots = (cover: 'glass' | 'planks' | 'none', weapon: string): number => {
-      const c = COVERS.find((x) => x.kind === (cover === 'glass' ? 'bulletproof-glass' : 'thin-planks'))!;
+    const tryShots = (cover: 'glass' | 'planks' | 'concrete' | 'none', weapon: string): number => {
+      const c = COVERS.find((x) => x.kind === (cover === 'glass' ? 'bulletproof-glass' : cover === 'concrete' ? 'concrete' : 'thin-planks'))!;
       // Target right behind the cover, shooter 6 m in front of it, aiming at the chest.
       place(r, target, cover === 'none' ? { x: c.peek.x, y: 0, z: c.hide.z } : c.hide);
       place(r, shooter, { x: cover === 'none' ? c.peek.x : c.hide.x, y: 0, z: -5 + 6 });
@@ -228,6 +229,10 @@ describe('bots and walls: penetration', () => {
       tested++;
       expect({ weapon: w.id, throughGlass: tryShots('glass', w.id) }).toEqual({ weapon: w.id, throughGlass: 0 });
       expect({ weapon: w.id, throughPlanks: tryShots('planks', w.id) > 0 }).toEqual({ weapon: w.id, throughPlanks: true });
+      // The same shots as a human's (penetration on): still nothing through the glass or the concrete.
+      shooter.isBot = false;
+      expect({ weapon: w.id, human: true, throughGlass: tryShots('glass', w.id), throughConcrete: tryShots('concrete', w.id) }).toEqual({ weapon: w.id, human: true, throughGlass: 0, throughConcrete: 0 });
+      shooter.isBot = true;
     }
     expect(tested).toBeGreaterThan(15);
   });
