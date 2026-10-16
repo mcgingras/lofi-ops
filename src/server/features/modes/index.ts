@@ -97,7 +97,8 @@ const feature: Feature = {
     room.bus.on('modes.roundEnd', ({ round, winner }) => {
       room.schedule(0, () => {
         const c = controllerOf(room);
-        if (room.phase !== 'playing' || !(c instanceof SdRules) || c.phase !== 'post' || c.round !== round) return;
+        // Nobody to watch it (bots only): the round goes on as before.
+        if (room.phase !== 'playing' || !(c instanceof SdRules) || c.phase !== 'post' || c.round !== round || !room.humans().length) return;
         const clip = cam.finalClip({ winnerTeam: winner });
         if (!clip) return;
         c.endsAt += finalKillcamSeconds(clip.clip.t0, clip.to, clip.at);
@@ -116,7 +117,7 @@ const feature: Feature = {
         const clip = results.reason === 'nuke' ? null : cam.finalClip(results);
         if (clip) {
           // BO1 plays the final killcam before the scoreboard: the post-match waits for it.
-          if (room.options.postMatchSec >= FINAL_KILLCAM.minPostMatchSec && room.phaseEndsAt !== null) {
+          if (room.options.postMatchSec >= FINAL_KILLCAM.minPostMatchSec && room.phaseEndsAt !== null && room.humans().length) {
             room.phaseEndsAt += finalKillcamSeconds(clip.clip.t0, clip.to, clip.at);
             clip.endsAt = Math.round(room.phaseEndsAt * 1000) / 1000;
           }

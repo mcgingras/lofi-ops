@@ -21,7 +21,9 @@ import { registerMode } from '../src/server/modes/index';
 import type { PlayerState } from '../src/server/player';
 import type { Room, RoomOptions } from '../src/server/room';
 import { RpcRegistry } from '../src/server/rpc';
+import { Session } from '../src/server/session';
 import { Store } from '../src/server/store';
+import { newProfile } from '../src/shared/profile';
 import { registerWeaponBehavior } from '../src/server/combat';
 import { TICK_DT } from '../src/shared/constants';
 import { gearKey, packClip, parseGear, unpackClip } from '../src/shared/defs/deathcam';
@@ -79,6 +81,16 @@ function killcams(room: Room): FinalKillcamPayload[] {
     orig(to, id, data);
   }) as Room['sendFeature'];
   return out;
+}
+
+let seq = 0;
+/** A human in the room (someone to watch the killcam: bot-only rooms don't wait for it). */
+function watcher(room: Room, t: 0 | 1): PlayerState {
+  const s = new Session(`w${++seq}`, null, newProfile(`pw${seq}`, `Watcher${seq}`), 'tok');
+  const p = idle(room.addHuman(s));
+  p.team = t;
+  place(p, 30, 30);
+  return p;
 }
 
 function team(room: Room, names: string[], t: 0 | 1): PlayerState[] {
@@ -200,13 +212,14 @@ describe('which kill', () => {
   it('S&D: earlier rounds end on a round killcam, and the post-round waits for it', () => {
     const room = setup('sd');
     const [atk] = team(room, ['Atk'], 0);
-    const [def] = team(room, ['Def'], 1);
+    team(room, ['Def'], 1);
+    watcher(room, 0);
     room.endMatch('aborted');
     room.startMatch();
     const rules = controllerOf(room) as unknown as SdRules;
     steps(room, MODE_TUNING.sd.prepSec + 1);
     const cams = killcams(room);
-    killBy(room, atk!, def!);
+    for (const p of [...room.players.values()].filter((q) => q.team === 1)) killBy(room, atk!, p);
     steps(room, 0.1);
     expect(rules.phase).toBe('post');
     expect(cams).toHaveLength(1);
@@ -317,6 +330,7 @@ describe('what the clip carries', () => {
     const room = setup('tdm', { postMatchSec: 10 });
     const [a] = team(room, ['A'], 0);
     const [b] = team(room, ['B'], 1);
+    watcher(room, 0);
     place(a!, 0, 0);
     place(b!, 0, -10);
     steps(room, 4);
@@ -344,6 +358,18 @@ describe('what the clip carries', () => {
     expect(sec).toBeGreaterThan(10);
     expect(room.phaseEndsAt! - room.time).toBeCloseTo(10 + sec, 3);
     expect(k.endsAt).toBeCloseTo(room.phaseEndsAt!, 3);
+  });
+
+  it('bot-only rooms do not wait for a killcam nobody watches', () => {
+    const room = setup('tdm', { postMatchSec: 10 });
+    const [a] = team(room, ['A'], 0);
+    const [b] = team(room, ['B'], 1);
+    steps(room, 4);
+    const cams = killcams(room);
+    room.teamScores[0] = room.mode.scoreLimit - 1;
+    killBy(room, a!, b!);
+    expect(cams[0]!.endsAt).toBeNull();
+    expect(room.phaseEndsAt! - room.time).toBeCloseTo(10, 3);
   });
 
   it('rooms with a short post-match (tests, quick rotations) do not wait', () => {
