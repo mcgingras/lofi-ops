@@ -127,6 +127,14 @@ export class ZombiesGame {
     // A survivor's gun never drops on the floor in Zombies.
     room.bus.on('pickups.dropped', ({ entity }) => room.entities.remove(entity));
     room.bus.on('matchStart', () => this.onMatchStart());
+    room.bus.on('matchEnd', () => {
+      // Combat record: the best round reached (the Zombies menu shows it).
+      const round = this.survived ?? this.round;
+      for (const p of room.humans()) {
+        const prof = p.profile;
+        if (prof && round > (prof.stats['zombies.bestRound'] ?? 0)) prof.stats['zombies.bestRound'] = round;
+      }
+    });
     room.bus.on('tick', ({ dt }) => this.tick(dt));
 
     const m = room.modifiers;

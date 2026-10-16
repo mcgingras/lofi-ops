@@ -116,14 +116,14 @@ registerTexture('ks_mbox_inner', {
 });
 
 // ---------------------------------------------------------------------------------------------
-// The box model
+// The box model (exported for Zombies' fixed box: src/client/features/zombies/box.ts)
 // ---------------------------------------------------------------------------------------------
 
 const S = MYSTERY_BOX.size;
 const BEAM_H = 70;
 const BEAM = 0x5aa8ff;
 
-interface BoxModel {
+export interface BoxModel {
   kit: Kit;
   body: THREE.Group;
   lid: THREE.Group;
@@ -131,7 +131,7 @@ interface BoxModel {
   glow: THREE.Sprite;
 }
 
-function buildBox(kit: Kit): BoxModel {
+export function buildBox(kit: Kit): BoxModel {
   const body = new THREE.Group();
   kit.root.add(body);
   const wood = kit.mat('ks_mbox_wood', { rep: 0.6 });
@@ -182,14 +182,14 @@ function buildBox(kit: Kit): BoxModel {
 }
 
 /** A tall open cylinder of light (additive), base at y = 0. */
-function beam(r0: number, r1: number, color: number): THREE.Mesh {
+export function beam(r0: number, r1: number, color: number): THREE.Mesh {
   const geo = new THREE.CylinderGeometry(r1, r0, BEAM_H, 12, 1, true).translate(0, BEAM_H / 2, 0);
   const mat = new THREE.MeshBasicMaterial({ color, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide });
   return new THREE.Mesh(geo, mat);
 }
 
 /** Build a weapon model for the cycle (the same kit as the viewmodel, at world size). */
-function weaponModel(model: string, mats: LookMaterial[]): THREE.Group {
+export function weaponModel(model: string, mats: LookMaterial[]): THREE.Group {
   const g = new THREE.Group();
   const inner = new THREE.Group();
   g.add(inner);

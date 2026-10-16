@@ -21,6 +21,7 @@ const GROUPS: [string, (id: string) => boolean][] = [
   ['Player and UI', (id) => id === 'tick' || id === 'thud'],
   ['Killstreaks', (id) => id.startsWith('ks_')],
   ['Modes', (id) => id.startsWith('modes.')],
+  ['Zombies', (id) => id.startsWith('zombies.')],
 ];
 
 /**
@@ -94,6 +95,26 @@ export const IN_GAME_VOLUME: Record<string, number> = {
   'modes.pickup': 0.55,
   'modes.beep': 0.6,
   'modes.boom': 1,
+  'zombies.round_start': 0.9,
+  'zombies.round_end': 0.9,
+  'zombies.dog_round': 1,
+  'zombies.game_over': 1,
+  'zombies.perk.jugg': 0.8,
+  'zombies.perk.speed': 0.8,
+  'zombies.perk.doubletap': 0.8,
+  'zombies.perk.revive': 0.8,
+  'zombies.groan': 1,
+  'zombies.swipe': 0.8,
+  'zombies.spawn': 0.9,
+  'zombies.growl': 1,
+  'zombies.buy': 0.8,
+  'zombies.nope': 0.7,
+  'zombies.drink': 0.9,
+  'zombies.down': 1,
+  'zombies.powerup_drop': 1,
+  'zombies.powerup_grab': 1,
+  'zombies.nuke': 1,
+  'zombies.teddy': 1,
 };
 
 /** The volume to play an id at in the sound test; undefined only for an id the table doesn't know. */

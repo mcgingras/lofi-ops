@@ -361,6 +361,27 @@ export const SFX_SYNTH_ONLY: Record<string, string> = {
   ks_mbox_beam: 'Mystery Box light beam: synthesized rising hum',
   ks_mbox_open: 'Mystery Box lid: synthesized creak and shimmer',
   ks_mbox_whoosh: 'Mystery Box flying away: synthesized rising whoosh',
+  // Zombies (all original and synthesized).
+  'zombies.round_start': 'Zombies round start stinger: an original synthesized bell toll and drone (no Zombies music)',
+  'zombies.round_end': 'Zombies round end stinger: original synthesized bells',
+  'zombies.dog_round': 'Zombies hellhound round: synthesized thunder and a howl',
+  'zombies.game_over': 'Zombies game over: an original synthesized falling line',
+  'zombies.perk.jugg': 'Juggernog machine: an original synthesized toy-organ jingle (not the Zombies jingle)',
+  'zombies.perk.speed': 'Speed Cola machine: an original synthesized toy-organ jingle',
+  'zombies.perk.doubletap': 'Double Tap machine: an original synthesized toy-organ jingle',
+  'zombies.perk.revive': 'Quick Revive machine: an original synthesized toy-organ jingle',
+  'zombies.groan': 'zombie moan: a synthesized formant voice (no voice recordings)',
+  'zombies.swipe': 'zombie swipe: a synthesized whoosh',
+  'zombies.spawn': 'zombie climbing out of the dirt: synthesized crackle',
+  'zombies.growl': 'hellhound growl: synthesized',
+  'zombies.buy': 'Zombies purchase: a synthesized cash-register ding',
+  'zombies.nope': 'Zombies purchase refused: a synthesized buzz',
+  'zombies.drink': 'Perk-a-Cola drink: synthesized cap pop, fizz and glugs',
+  'zombies.down': 'going down in Zombies: a synthesized heartbeat',
+  'zombies.powerup_drop': 'power-up dropping: a synthesized rising shimmer',
+  'zombies.powerup_grab': 'power-up grabbed: synthesized bells',
+  'zombies.nuke': 'Nuke power-up: a synthesized boom',
+  'zombies.teddy': 'Mystery Box teddy bear: a synthesized toy laugh',
 };
 
 /** Recorded-only ids with no synthesized fallback on purpose: extra layers that may simply be absent until loaded. */
