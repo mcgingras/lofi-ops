@@ -13,6 +13,7 @@ Team Deathmatch and Free-for-All polish, plus Domination, Search and Destroy, He
 | Headquarters | `hq` | 250, 10 min | One HQ at a time, rotating through the map's HQ points. The first comes online 5 s after the start, later ones 5 s after the previous one goes. Capturing takes 10 s. The owners then score 1 point/s for up to 60 s, and their dead do not respawn while it stands. Enemies destroy it in 10 s by standing in it with no defenders present. When the HQ is destroyed or expires, its dead defenders respawn. An unclaimed HQ moves after 60 s. |
 | Kill Confirmed | `kc` | 65, 10 min | Every death drops the victim's dog tags. An enemy who grabs them confirms the kill (+1 team score and +150). A teammate who grabs them denies it (+100). Kills give only player score (100). Tags vanish after 60 s. |
 | Infected | `infected` | no score limit, 10 min | Everyone starts a Survivor. 9 s in, a random player becomes the First Infected. Every Survivor who dies comes back Infected. The Infected win when nobody is left to infect; the Survivors win if one of them is alive at the time limit. See "Infected" below. |
+| Zombies | `zombies` | no limits: until everyone is down | BO1 round survival, co-op 2-4 or solo, against waves of zombies and hellhounds (team 1, AI bodies). Points buy wall guns, the Mystery Box and Perk-a-Colas. Rules in the `zombies` feature: see docs/features/zombies.md. |
 
 All numbers live in `MODE_TUNING` and `MODE_XP` (`src/shared/defs/modes.ts`), so the HUD and the server agree. Change them there.
 
@@ -91,7 +92,7 @@ On top of that, each mode has its own preference:
 
 ### Playing it
 
-- Main menu: **Quick Play → Domination / Search and Destroy / Headquarters / Kill Confirmed / Infected** (menu items `modes.dom|sd|hq|kc|infected`, orders 30–34).
+- Main menu: **Quick Play → Domination / Search and Destroy / Headquarters / Kill Confirmed / Infected** (menu items `modes.dom|sd|hq|kc|infected`, orders 30–34). **Zombies** has its own menu entry and screen (`zombies.play`, solo in one click or co-op), and a `zombies` Quick Play playlist (party); its rules live in the `zombies` feature, not here (docs/features/zombies.md).
 - Rooms: `api.lobby.createRoom({ mode: 'sd', map: 'yard', ... })`, or `navigate('match', { mode: 'dom' })` from the client.
 - The Yard supports all seven modes. It has DOM flags, S&D sites A/B (`team: 1` = defended by team 1's spawn side) and six HQ points.
 
