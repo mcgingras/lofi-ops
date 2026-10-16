@@ -25,6 +25,8 @@ export interface ModifierMap {
   damageDealt: (attacker: PlayerState, info: DamageInfo<PlayerState>) => number | undefined;
   /** Reload time (Sleight of Hand: 0.5). */
   reloadMultiplier: (p: PlayerState) => number | undefined;
+  /** Fire rate (Zombies' Double Tap: 1.33). The client follows `me.params.fireRate`. */
+  fireRateMultiplier: (p: PlayerState) => number | undefined;
   /** Time to ADS. */
   adsMultiplier: (p: PlayerState) => number | undefined;
   /** Weapon switch time. */

@@ -83,6 +83,8 @@ export interface MoveParams {
   /** False for bodies that borrow player movement but can't climb or lie down (RC-XD, dogs). */
   canMantle?: boolean;
   canProne?: boolean;
+  /** Fire rate multiplier (`fireRateMultiplier` modifier, Zombies' Double Tap); not movement, but it rides along in `me.params`. */
+  fireRate?: number;
 }
 
 export const DEFAULT_MOVE_PARAMS: MoveParams = { speed: 1, adsTime: 0.25, adsMove: MOVE.ads, sprint: 1, canSprint: true, jump: 1, canMove: true, canMantle: true, canProne: true };

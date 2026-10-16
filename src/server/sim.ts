@@ -23,6 +23,7 @@ const FIRE_WAIT = 1;
 /** Current movement params for a player: weapon in hand x modifiers. Sent as `me.params`. */
 export function moveParamsFor(room: Room, p: PlayerState): MoveParams {
   const w = currentWeapon(p);
+  const fireRate = room.modifiers.mul('fireRateMultiplier', p);
   return {
     ...DEFAULT_MOVE_PARAMS,
     speed: (w?.def.moveMult ?? 1) * room.modifiers.mul('speedMultiplier', p),
@@ -31,6 +32,7 @@ export function moveParamsFor(room: Room, p: PlayerState): MoveParams {
     sprint: room.modifiers.mul('sprintMultiplier', p),
     canSprint: room.modifiers.any('canSprint', p) !== false,
     canMove: p.alive && room.phase === 'playing',
+    ...(fireRate !== 1 ? { fireRate } : {}),
   };
 }
 

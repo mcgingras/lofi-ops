@@ -23,6 +23,7 @@ export const PLAYLISTS: PlaylistDef[] = [
   { id: 'hq', name: 'Headquarters', description: 'Capture and hold the HQ.', modes: ['hq'], category: 'objective' },
   { id: 'kc', name: 'Kill Confirmed', description: 'Collect dog tags to score.', modes: ['kc'], category: 'objective' },
   { id: 'infected', name: 'Infected', description: 'Survive the outbreak, or spread it.', modes: ['infected'], category: 'party' },
+  { id: 'zombies', name: 'Zombies', description: 'Co-op: survive the rounds together (2-4 players).', modes: ['zombies'], category: 'party' },
 ];
 
 export const PLAYLIST_BY_ID = indexById(PLAYLISTS);

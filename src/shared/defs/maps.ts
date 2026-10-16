@@ -45,10 +45,12 @@ const mw2Modes = () => [...supported('tdm', 'ffa', 'dom', 'sd', 'hq', 'kc', 'inf
  * the wagers), `objectives.dom` A/B/C, `objectives.sd` A/B with `modeSpawns.sd`, and `objectives.hq`.
  * Taken from MODES so objective modes join the list as soon as the modes area registers them.
  */
-const BO_MODES = MODES.map((m) => m.id);
+const BO_MODES = MODES.map((m) => m.id).filter((id) => id !== 'zombies');
+/** Maps with a Zombies layer (src/shared/maps/zombies/<id>.ts: wall-buys, box spots, perk machines, zombie spawns). */
+const withZombies = (modes: string[]) => [...modes, 'zombies'];
 
 export const MAPS: MapDef[] = [
-  { id: 'yard', name: 'Yard', inspiredBy: 'Original (approved look prototype)', build: buildYard, modes: ['tdm', 'ffa', 'dom', 'sd', 'hq', 'kc', 'infected'], size: 'small' },
+  { id: 'yard', name: 'Yard', inspiredBy: 'Original (approved look prototype)', build: buildYard, modes: withZombies(['tdm', 'ffa', 'dom', 'sd', 'hq', 'kc', 'infected']), size: 'small' },
   // maps-mw2
   { id: 'rust', name: 'Rust', inspiredBy: 'Rust (Call of Duty: Modern Warfare 2, 2009)', build: buildRust, modes: mw2Modes(), size: 'small' },
   { id: 'scrapyard', name: 'Scrapyard', inspiredBy: 'Scrapyard (Call of Duty: Modern Warfare 2, 2009)', build: buildScrapyard, modes: mw2Modes(), size: 'medium' },
@@ -57,8 +59,8 @@ export const MAPS: MapDef[] = [
   { id: 'terminal', name: 'Terminal', inspiredBy: 'Terminal (Call of Duty: Modern Warfare 2, 2009), full map: Security, Shopping, Bookstore, Burger Town, the Lounges, Maintenance, the apron and the walk-through plane', build: buildTerminal, modes: mw2Modes(), size: 'large' },
   { id: 'estate', name: 'Estate', inspiredBy: 'Estate (Call of Duty: Modern Warfare 2, 2009): the hillside safehouse Lodge, Greenhouse, Workshop, Substation, Garage, Waterfall and Boathouse', build: buildEstate, modes: mw2Modes(), size: 'large' },
   // maps-bo: Black Ops 1 recreations. Objective data: dom A/B/C, sd A/B (+ modeSpawns.sd), hq points.
-  { id: 'nuketown', name: 'Nuketown', inspiredBy: 'Call of Duty: Black Ops (2010), Nuketown', build: buildNuketown, modes: BO_MODES, size: 'small' },
-  { id: 'firingrange', name: 'Firing Range', inspiredBy: 'Call of Duty: Black Ops (2010), Firing Range', build: buildFiringRange, modes: BO_MODES, size: 'medium' },
+  { id: 'nuketown', name: 'Nuketown', inspiredBy: 'Call of Duty: Black Ops (2010), Nuketown', build: buildNuketown, modes: withZombies(BO_MODES), size: 'small' },
+  { id: 'firingrange', name: 'Firing Range', inspiredBy: 'Call of Duty: Black Ops (2010), Firing Range', build: buildFiringRange, modes: withZombies(BO_MODES), size: 'medium' },
   { id: 'hanoi', name: 'Hanoi', inspiredBy: 'Call of Duty: Black Ops (2010), Hanoi (night): the NVA prison and the barricaded street outside it', build: buildHanoi, modes: BO_MODES, size: 'medium' },
   { id: 'summit', name: 'Summit', inspiredBy: 'Call of Duty: Black Ops (2010), Summit: the Soviet listening post on a Ural mountaintop (Control room, Gallery, Tower, Cable Car and Gondola, Catwalk)', build: buildSummit, modes: BO_MODES, size: 'medium' },
   { id: 'hijacked', name: 'Hijacked', inspiredBy: 'Call of Duty: Black Ops II (2012), Hijacked: the superyacht at sea (bow, stern pool, cabins, central deck, below-deck passage)', build: buildHijacked, modes: BO_MODES, size: 'small' },

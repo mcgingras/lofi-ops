@@ -254,6 +254,17 @@ export function attachProgression(room: Room): ProgressionRoom {
     const mult = victim.isBot ? BOT_KILL_XP_MULT : 1;
     const ctx = killCtx(attacker, e.weapon, e.means);
     const bullet = e.means === 'bullet';
+    const flat = room.mode.killXp;
+    if (flat) {
+      // Modes with hordes of AI enemies (Zombies): flat XP, kill / headshot challenges only.
+      award(attacker, 'kill', 'KILL', flat.kill);
+      metric(attacker, 'kills', 1, ctx);
+      if (e.headshot) {
+        award(attacker, 'headshot', 'HEADSHOT', flat.headshot);
+        metric(attacker, 'headshots', 1, ctx);
+      }
+      return;
+    }
 
     award(attacker, 'kill', 'KILL', XP_SOURCES.kill * mult);
     metric(attacker, 'kills', 1, ctx);

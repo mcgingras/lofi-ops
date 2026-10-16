@@ -8,6 +8,7 @@
  */
 import { WAGER_MODES } from './economy';
 import { INFECTED_TEAM_NAMES } from './infected';
+import { ZOMBIES_TEAM_NAMES, ZOMBIES_XP } from './zombies';
 import { indexById } from './registry';
 
 export interface ModeDef {
@@ -39,6 +40,11 @@ export interface ModeDef {
   teamsByRules?: boolean;
   /** Team names for HUD and summary (default: the factions in TEAM_NAMES). */
   teamNames?: readonly [string, string];
+  /**
+   * Flat XP per kill / headshot instead of the usual kill XP (progression): no medals, streak
+   * bonuses or weapon/attachment progress either (Zombies: hordes of AI enemies).
+   */
+  killXp?: { kill: number; headshot: number };
 }
 
 export const CORE_MODES: ModeDef[] = [
@@ -61,6 +67,22 @@ export const CORE_MODES: ModeDef[] = [
     maxPlayers: 12,
     teamsByRules: true,
     teamNames: INFECTED_TEAM_NAMES,
+  },
+  {
+    // Round-based co-op survival (BO1 Zombies); rules in src/server/features/zombies/.
+    id: 'zombies',
+    name: 'Zombies',
+    short: 'ZOM',
+    description: 'Survive endless rounds of the undead. Earn points, buy guns off the walls, roll the Mystery Box and drink Perk-a-Colas.',
+    teams: true,
+    scoreLimit: 0,
+    timeLimitSec: 0,
+    respawn: false,
+    playlist: 'party',
+    maxPlayers: 4,
+    teamsByRules: true,
+    teamNames: ZOMBIES_TEAM_NAMES,
+    killXp: { kill: ZOMBIES_XP.kill, headshot: ZOMBIES_XP.headshot },
   },
 ];
 

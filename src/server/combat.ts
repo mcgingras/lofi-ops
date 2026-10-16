@@ -80,7 +80,7 @@ export function fire(room: Room, p: PlayerState, req: ShotRequest): FireResult {
   if (moveBusy(p.move)) return { ok: false, reason: 'stance' };
 
   // Rate: a token bucket refilling at the weapon's rate, a little slack for network bunching.
-  const interval = shotInterval(def);
+  const interval = shotInterval(def) / room.modifiers.mul('fireRateMultiplier', p);
   // Burst weapons: at most `burst` rounds, then `burstDelayMs` before the next burst.
   if (def.mode === 'burst') {
     if (now - w.lastShot >= (def.burstDelayMs ?? 0) / 1000 - interval * RATE_SLACK) w.burstCount = 0;

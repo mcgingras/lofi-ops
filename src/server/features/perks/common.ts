@@ -36,6 +36,15 @@ export interface LastStand {
   revive: number;
   /** Weapon slot in hand when they went down: a revive puts it back (BO1 `previousPrimary`). */
   prevSlot: number;
+  /**
+   * Set by a mode that puts players in last stand itself (`enterLastStand`, Zombies): teammates may
+   * revive without Second Chance Pro, how long a revive takes (per reviver), the score a revive
+   * pays (default 50), and what happens at bleed-out (default: the downer gets the kill).
+   */
+  revivable?: boolean;
+  reviveSecFor?: (reviver: PlayerState) => number;
+  reviveScore?: number;
+  onBleedOut?: () => void;
 }
 
 export interface PerksExt {

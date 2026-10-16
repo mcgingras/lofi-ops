@@ -754,7 +754,7 @@ export class Match {
     const c = this.controls;
     const trigger = c.triggerHeld;
     const pressed = trigger && !this.triggerWas;
-    const interval = 60 / Math.max(1, def.rpm);
+    const interval = 60 / Math.max(1, def.rpm) / (this.me?.params.fireRate ?? 1);
     const ammo = this.ammo();
     const reloading = this.reloadProgress() >= 0;
     const switching = this.raiseProgress() >= 0;
