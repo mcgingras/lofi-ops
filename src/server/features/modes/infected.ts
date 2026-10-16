@@ -214,8 +214,15 @@ export class InfectedRules implements ModeRules, ModeController {
 
   /** Re-equip a living player in place with their role's class (conversion, bonus removed). */
   private reequip(p: PlayerState, keepGuns: boolean): void {
-    p.loadout = this.loadoutFor(p);
+    const l = (p.loadout = this.loadoutFor(p));
     if (!keepGuns) this.giveKnife(p);
+    else if (p.weapons.every((w) => w.def.base.id === INFECTED_WEAPON)) {
+      // Back to the guns (an Infected made First Infected again): fresh Survivor guns, primary up.
+      p.weapons = [makeWeapon(l.primary, 'spas12'), makeWeapon(l.secondary, 'm1911')];
+      p.reloadEnd = 0;
+      p.swapEnd = this.room.time + 0.5;
+      forceSlot(this.room, p, 0);
+    }
     equipAtSpawn(this.room, p);
   }
 
@@ -299,7 +306,7 @@ export class InfectedRules implements ModeRules, ModeController {
   }
 
   /** `p` becomes the First Infected where they stand (new: the infection starts with them). */
-  private makeFirst(p: PlayerState, fresh: boolean): void {
+  makeFirst(p: PlayerState, fresh = true): void {
     const room = this.room;
     this.started = true;
     this.pickAt = null;

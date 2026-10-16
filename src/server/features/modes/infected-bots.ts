@@ -29,9 +29,12 @@ import type { InfectedRules } from './infected';
 export const INTEL_SEC = 30;
 /** Infected see Survivors within this range for the team's knowledge. */
 const INTEL_SIGHT = 55;
-/** Survivors re-pick their rally point this often, or sooner when an Infected gets this close to it. */
-const RALLY_EVERY = 8;
-const RALLY_DANGER = 10;
+/**
+ * Survivors keep their rally point until an Infected comes within RALLY_DANGER of it (then they
+ * fall back to another, at most every RALLY_MIN_SEC), and score candidates under 10 m from one low.
+ */
+const RALLY_DANGER = 18;
+const RALLY_MIN_SEC = 3;
 
 const rulesOf = (room: Room): InfectedRules | null => {
   const c = controllerOf(room);
@@ -109,6 +112,7 @@ export function infectedGoal(room: Room, rules: InfectedRules, bot: PlayerState)
 interface Rally {
   at: Vec3;
   t: number;
+  map: string;
 }
 const rallies = new WeakMap<Room, Rally>();
 
@@ -123,13 +127,14 @@ export function enclosure(room: Room, at: Vec3): number {
   return n;
 }
 
-/** The Survivors' rally point (shared, re-picked every RALLY_EVERY s or when the Infected close in). */
+/** The Survivors' rally point (shared; re-picked when the Infected close in on it). */
 export function rallyPoint(room: Room, rules: InfectedRules, rnd: () => number = Math.random): Vec3 | null {
-  const cur = rallies.get(room);
+  let cur = rallies.get(room);
+  if (cur && (cur.map !== room.mapId || cur.t < room.matchStartTime)) cur = undefined;
   const infected = [...room.players.values()].filter((p) => p.alive && rules.roleOf(p) === 'infected');
   const survivors = [...room.players.values()].filter((p) => p.alive && rules.roleOf(p) === 'survivor');
   const nearInfected = (at: Vec3) => infected.reduce((m, q) => Math.min(m, flat(q.move, at)), Infinity);
-  if (cur && room.time - cur.t < RALLY_EVERY && nearInfected(cur.at) > RALLY_DANGER) return cur.at;
+  if (cur && (nearInfected(cur.at) > RALLY_DANGER || room.time - cur.t < RALLY_MIN_SEC)) return cur.at;
   const nav = navFor(room.map);
   const cands: Vec3[] = [...(room.map.hotspots ?? []).map((h) => ({ ...h }))];
   for (let i = 0; i < 24; i++) {
@@ -155,7 +160,7 @@ export function rallyPoint(room: Room, rules: InfectedRules, rnd: () => number =
     if (infected.length) {
       const dI = nearInfected(at);
       s += Math.min(dI, 35) * 0.6;
-      if (dI < RALLY_DANGER) s -= 20;
+      if (dI < 10) s -= 20;
     }
     if (centre) s -= flat(at, centre) * 0.25;
     const k = enclosure(room, at);
@@ -166,7 +171,7 @@ export function rallyPoint(room: Room, rules: InfectedRules, rnd: () => number =
       best = at;
     }
   }
-  if (best) rallies.set(room, { at: best, t: room.time });
+  if (best) rallies.set(room, { at: best, t: room.time, map: room.mapId });
   return best;
 }
 
