@@ -416,7 +416,10 @@ describe('Pro challenges', () => {
     expect(isPro(a, 'hardened')).toBe(false);
     const seen: string[] = [];
     room.bus.on('perks.progress', (e) => seen.push(e.challenge));
+    // Hardened Pro counts kills through walls only (BO1 _properks.gsc).
     gunKill(room, a, bot(room, 1));
+    expect(seen).toEqual([]);
+    room.kill(bot(room, 1), a, { weapon: 'ak47', means: 'bullet', part: 'torso', penetrated: true });
     expect(seen).toEqual([ch.id]);
     expect(a.profile!.challengeProgress[ch.id]).toBe(ch.goal);
     expect(isPro(a, 'hardened')).toBe(true);

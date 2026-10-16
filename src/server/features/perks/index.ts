@@ -142,7 +142,8 @@ function setupChallenges(room: Room): void {
     const bullet = e.means === 'bullet';
     if (hasPerk(a, 'lightweight') && room.time - st.lastSprintAt <= 3) progress(room, a, 'lightweight_pro');
     if (hasPerk(a, 'ghost') && enemyRadarUp(a)) progress(room, a, 'ghost_pro');
-    if (hasPerk(a, 'hardened') && bullet) progress(room, a, 'hardened_pro');
+    // BO1 (_properks.gsc): Hardened Pro counts penetration kills only.
+    if (hasPerk(a, 'hardened') && bullet && e.penetrated) progress(room, a, 'hardened_pro');
     if (hasPerk(a, 'scout') && e.headshot) progress(room, a, 'scout_pro');
     if (hasPerk(a, 'steady_aim') && bullet && a.move.ads < 0.5) progress(room, a, 'steady_aim_pro');
     if (hasPerk(a, 'sleight_of_hand') && room.time - st.lastReloadAt <= 5) progress(room, a, 'sleight_of_hand_pro');

@@ -1,8 +1,8 @@
 /**
  * Bullet penetration: a small, BO1-flavoured model (docs/CONTRACTS.md "Penetration").
  *
- *   type      each weapon penetrates as `small` (pistols, SMGs), `medium` (ARs, LMGs), `large`
- *             (snipers), `pellet` (shotgun pellets: barely) or `none` (launchers, the knife).
+ *   type      each weapon penetrates as `small` (pistols, SMGs), `medium` (ARs; the Python), `large`
+ *             (snipers, LMGs), `pellet` (shotgun pellets: barely) or `none` (launchers, the knife).
  *             BO1 sets `penetrateType` per weapon the same way. The type gives a depth: the most
  *             wood a bullet passes through in one wall.
  *   material  a wall's thickness is the ray's entry-to-exit distance through it (brushes that touch
@@ -54,8 +54,9 @@ export function penetrationType(w: Pick<WeaponDef, 'class' | 'penetration' | 'pe
     case 'smg':
       return 'small';
     case 'ar':
-    case 'lmg':
       return 'medium';
+    // BO1 weapon files: LMGs (HK21, RPK, M60) and snipers penetrate as `large`.
+    case 'lmg':
     case 'sniper':
       return 'large';
     case 'shotgun':

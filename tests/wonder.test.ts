@@ -13,6 +13,7 @@ import pickups, { dropsOf } from '../src/server/features/pickups/index';
 import { chooseWonderDrop } from '../src/server/features/pickups/bots';
 import weapons from '../src/server/features/weapons/index';
 import { frostOf, wonderBotDecision, wonderBotStyle } from '../src/server/features/weapons/wonder/index';
+import { withSeed } from './bots-sim';
 import { chooseBotLoadout } from '../src/server/features/bots/loadout';
 import { Lobby } from '../src/server/lobby';
 import { makeWeapon, type PlayerState } from '../src/server/player';
@@ -192,7 +193,8 @@ describe('Ray Gun', () => {
     expect(room.entities.byKind(WONDER_ENTITY.bolt)).toHaveLength(0);
   });
 
-  it('splash kills near the impact, scratches further out, and stings the shooter a little', () => {
+  // Seeded: hip spread can land the bolt over a metre off, which (correctly) spares `near`.
+  it('splash kills near the impact, scratches further out, and stings the shooter a little', () => withSeed(1, () => {
     const { room, a, foes, dead } = scene(2);
     const [near, far] = foes as [PlayerState, PlayerState];
     place(a, -6, 20, 0, -Math.PI / 2);
@@ -215,7 +217,7 @@ describe('Ray Gun', () => {
     expect(a.alive).toBe(true);
     expect(before - a.health).toBeGreaterThan(5);
     expect(before - a.health).toBeLessThanOrEqual(RAYGUN.splash.max * RAYGUN.selfScale + 1e-6);
-  });
+  }));
 
   it('a wall eats the bolt (no splash through it)', () => {
     const { room, a, foes } = scene(1);

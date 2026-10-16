@@ -105,7 +105,7 @@ export const PERK_PRO_CHALLENGES: ChallengeDef[] = [
   { id: 'scavenger_pro', name: 'Scavenger Pro', description: 'Resupply 50 times from Scavenger packs.', metric: 'perks.scavenger_pickups', goal: 50, xp: 2500 },
   { id: 'ghost_pro', name: 'Ghost Pro', description: 'Kill 30 enemies while an enemy Spy Plane or Blackbird is up, with Ghost.', metric: 'perks.ghost_kills', goal: 30, xp: 2500 },
   { id: 'hardline_pro', name: 'Hardline Pro', description: 'Earn 30 killstreaks with Hardline.', metric: 'perks.hardline_streaks', goal: 30, xp: 2500 },
-  { id: 'hardened_pro', name: 'Hardened Pro', description: 'Get 75 bullet kills with Hardened.', metric: 'perks.hardened_kills', goal: 75, xp: 2500 },
+  { id: 'hardened_pro', name: 'Hardened Pro', description: 'Get 10 kills through walls with Hardened.', metric: 'perks.hardened_pen_kills', goal: 10, xp: 2500 },
   { id: 'scout_pro', name: 'Scout Pro', description: 'Get 30 headshot kills with Scout.', metric: 'perks.scout_headshots', goal: 30, xp: 2500 },
   { id: 'steady_aim_pro', name: 'Steady Aim Pro', description: 'Get 75 hip fire kills with Steady Aim.', metric: 'perks.steady_hip_kills', goal: 75, xp: 2500 },
   { id: 'sleight_of_hand_pro', name: 'Sleight of Hand Pro', description: 'Kill 50 enemies within 5 seconds of reloading, with Sleight of Hand.', metric: 'perks.sleight_reload_kills', goal: 50, xp: 2500 },

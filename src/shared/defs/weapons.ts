@@ -575,6 +575,8 @@ export const WEAPONS: WeaponDef[] = [
     id: 'python',
     name: 'Python',
     blurb: '.357 revolver: big damage, six rounds, slow reload.',
+    // BO1's weapon file gives the Python `medium` penetration (other pistols are `small`).
+    penetration: 'medium',
     damage: { near: 50, far: 35, nearRange: 12, farRange: 30 },
     multipliers: { head: 1.5, torso: 1, limb: 1 },
     rpm: 160,
