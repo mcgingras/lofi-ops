@@ -5,6 +5,7 @@
  * hellhound rounds, the zombie AI on Nuketown, the AI's cost at 24 zombies and the frontend listing.
  * Rooms are stepped tick by tick (Lobby + room.step(), no sockets).
  */
+import { withSeed } from './bots-sim';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import botsFeature from '../src/server/features/bots/index';
 import perksFeature from '../src/server/features/perks/index';
@@ -335,7 +336,8 @@ describe('Zombies game', () => {
     expect(g.buy.buyWall(h, wall)).toBe(false);
   });
 
-  it('the Mystery Box: 950, a weapon you do not carry, taken with a fresh press; the teddy bear refunds and moves it', () => {
+  // Seeded: the box roll and teddy chance are random.
+  it('the Mystery Box: 950, a weapon you do not carry, taken with a fresh press; the teddy bear refunds and moves it', () => withSeed(1, () => {
     const { room, g, h } = game();
     survivorOf(h)!.points = 5000;
     expect(g.buy.box.ent).not.toBeNull();
@@ -370,7 +372,7 @@ describe('Zombies game', () => {
     expect(g.buy.box.spot).not.toBe(spot);
     expect(g.buy.box.moves).toBe(1);
     expect(room.entities.byKind(ZM_ENTITY.box)).toHaveLength(1);
-  });
+  }));
 
   it('Perk-a-Colas: Juggernog 250 health, Speed Cola x0.5 reloads, Double Tap x1.33 fire rate; lost when downed', () => {
     const { room, g, h } = game();
