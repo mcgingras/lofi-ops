@@ -54,7 +54,10 @@ export const thundergunBehavior: WeaponBehavior = {
 
 /** Throw a body: the impulse goes on its MoveState (snapshotted, so its owner predicts the flight). */
 export function launch(room: Room, q: PlayerState, by: PlayerState | null, impulse: { x: number; y: number; z: number }, sec: number): void {
-  applyKnock(q.move, impulse, sec);
+  // Shockproof (Flak Jacket Pro) and the like: the hit lands, the body stays put.
+  const k = room.modifiers.mul('knockbackMultiplier', q);
+  if (!(k > 0)) return;
+  applyKnock(q.move, { x: impulse.x * k, y: impulse.y * k, z: impulse.z * k }, sec);
   const w = wonderOf(q);
   w.knockBy = by?.id ?? null;
   w.knockAt = room.time;

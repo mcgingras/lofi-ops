@@ -1,13 +1,28 @@
 /** Camera shake / concussion timing: effects stamped in a previous room never replay. */
 import { describe, expect, it } from 'vitest';
-import { shakeAmplitude, stunStrength } from '../src/client/features/weapons/camfx';
+import { blastFeel, SHAKE, shakeAmplitude, stunStrength } from '../src/client/features/weapons/camfx';
+import { EQUIPMENT_BY_ID, killRadius } from '../src/shared/defs/equipment';
 
 describe('weapons camera effects', () => {
-  it('a shake lasts half a second and fades', () => {
+  it('a shake lasts SHAKE.sec and fades', () => {
     const s = { at: 10, amount: 1 };
-    expect(shakeAmplitude(10, s)).toBeCloseTo(0.03);
-    expect(shakeAmplitude(10.25, s)).toBeCloseTo(0.015);
-    expect(shakeAmplitude(10.5, s)).toBe(0);
+    expect(shakeAmplitude(10, s)).toBeCloseTo(SHAKE.amp);
+    expect(shakeAmplitude(10 + SHAKE.sec / 2, s)).toBeCloseTo(SHAKE.amp / 2);
+    expect(shakeAmplitude(10 + SHAKE.sec + 1e-6, s)).toBe(0);
+  });
+
+  it('a frag shakes fully inside its kill radius and fades out; ears ring only close in', () => {
+    const kr = killRadius(EQUIPMENT_BY_ID.get('frag')!);
+    expect(blastFeel('frag', kr * 0.5)).toEqual([1, expect.any(Number)]);
+    expect(blastFeel('frag', kr * 0.5)[1]).toBe(1);
+    expect(blastFeel('frag', kr)[0]).toBe(1);
+    const [mid, ringMid] = blastFeel('frag', (kr + SHAKE.reach) / 2);
+    expect(mid).toBeGreaterThan(0.3);
+    expect(mid).toBeLessThan(0.7);
+    expect(ringMid).toBe(0);
+    expect(blastFeel('frag', SHAKE.reach + 1)[0]).toBe(0);
+    expect(blastFeel('semtex', 1)[0]).toBe(1);
+    expect(blastFeel('gl', 1)[0]).toBe(1);
   });
 
   it('a shake stamped in the future (previous room, later clock) is over, not huge', () => {

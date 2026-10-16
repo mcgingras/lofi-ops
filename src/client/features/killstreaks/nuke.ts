@@ -19,6 +19,7 @@ import { registerEntityRenderer, registerHudWidget, registerMatchHook } from '..
 import { makeLookMaterial, setDynLight, type LookMaterial } from '../../render/shader';
 import { getTexture, unbindTexture } from '../../render/textures';
 import { currentMatch } from '../../state';
+import { equipState } from '../weapons/equipment';
 import { findNuke, laptopPose, nukeFrame, nukeLines, nukeSide, sirenTick, type NukeFrame, type NukeInfo, type NukeSide } from './nuke-logic';
 
 /** What the HUD and the cloud read this frame. */
@@ -186,9 +187,11 @@ registerMatchHook('killstreaks.nuke', {
       f.white = Math.max(f.white, nukeWhite(f.since, f.hitSince));
     }
     m.renderer.white = f.white;
-    if (f.shake > 0) {
-      cam.rotation.x += (Math.random() - 0.5) * 2 * f.shake;
-      cam.rotation.z += (Math.random() - 0.5) * 2 * f.shake;
+    // Shockproof (Flak Jacket Pro) keeps the camera still through the shockwave.
+    const shake = f.shake * equipState.shock;
+    if (shake > 0) {
+      cam.rotation.x += (Math.random() - 0.5) * 2 * shake;
+      cam.rotation.z += (Math.random() - 0.5) * 2 * shake;
     }
     m.controls.lookScale *= f.timeScale;
     if (sirenTick(nukeClient.prevT, t, info.times) !== null) sfx.play('modes.beep', { volume: 0.7 });

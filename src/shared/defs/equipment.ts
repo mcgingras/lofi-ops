@@ -57,6 +57,35 @@ export const EQUIPMENT_BY_ID = indexById(EQUIPMENT);
 export const LETHALS = EQUIPMENT.filter((e) => e.kind === 'lethal');
 export const TACTICALS = EQUIPMENT.filter((e) => e.kind === 'tactical');
 
+/** A blast's damage profile: `max` at the centre falling linearly to `min` at `radius`. */
+export interface BlastProfile {
+  radius: number;
+  max: number;
+  min: number;
+}
+
+/**
+ * Damage a blast does at distance `d` from its centre: linear from `max` to `min` at the edge, 0
+ * beyond it (the IW/Treyarch engine's `G_RadiusDamage`).
+ */
+export function blastDamage(b: BlastProfile, d: number): number {
+  if (!(d <= b.radius) || b.radius <= 0) return 0;
+  return b.max + (b.min - b.max) * (Math.max(0, d) / b.radius);
+}
+
+/** How far out a blast still does `health` damage: the kill radius on a full-health player. */
+export function killRadius(b: BlastProfile, health = 100): number {
+  if (b.radius <= 0 || b.max < health) return 0;
+  if (b.min >= health) return b.radius;
+  return (b.radius * (b.max - health)) / (b.max - b.min);
+}
+
+/**
+ * The HUD grenade indicator (client `weapons/danger.ts`): a live lethal that can hurt you shows
+ * within its kill radius plus `margin` (m) and no more than `maxHeight` (m) above or below the eye.
+ */
+export const GRENADE_INDICATOR = { margin: 1.5, maxHeight: 2.6 } as const;
+
 /** The underbarrel grenade launcher's round (weapon id `gl`). */
 export const GL_ROUND = { speed: 45, gravity: 9, armDistance: 8, radius: 5, max: 150, min: 40, impactDamage: 60 } as const;
 
@@ -154,6 +183,8 @@ declare module '../protocol' {
       breath?: number;
       /** Knife cooldown/recovery multiplier (Steady Aim Pro: 0.7), from `meleeSpeedMultiplier`. */
       melee?: number;
+      /** Explosion shake / ringing multiplier (Flak Jacket Pro "Shockproof": 0), from `blastShakeMultiplier`. */
+      shock?: number;
     };
     /** You were flashed (amount 0..1, seconds). */
     'weapons.flash': { amount: number; dur: number };

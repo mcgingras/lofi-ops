@@ -43,6 +43,7 @@ export function sendEquip(room: Room, p: PlayerState): void {
     tacticalN: x.tacticalN,
     breath: room.modifiers.mul('holdBreathMultiplier', p),
     melee: room.modifiers.mul('meleeSpeedMultiplier', p),
+    shock: room.modifiers.mul('blastShakeMultiplier', p),
   });
 }
 
@@ -196,7 +197,7 @@ export function updateNades(room: Room, dt: number): void {
           n.stuckTo = hitP.p.id;
           n.offset = { x: hitP.at.x - hitP.p.move.x, y: Math.min(PLAYER.height * 0.75, Math.max(0.3, hitP.at.y - hitP.p.move.y)), z: hitP.at.z - hitP.p.move.z };
           b.stuck = true;
-          e.s = { ...e.s, k: 1 };
+          e.s = { ...e.s, k: 1, p: hitP.p.id };
         }
       }
       if (n.launcher && r.hit) {
@@ -251,7 +252,8 @@ export function explode(room: Room, at: Vec3, equip: EquipmentDef, ownerId: stri
     const eye = eyeOf(q);
     if (!room.world.lineOfSight(c, eye, 'sight')) continue;
     const base = tacticalAmount(eye, viewDir(q.yaw, q.pitch), c, equip.radius, equip.effect === 'flash');
-    const amount = Math.min(1, base * room.modifiers.mul('tacticalMultiplier', q));
+    const perk = room.modifiers.mul('tacticalMultiplier', q) * (equip.effect === 'concussion' ? room.modifiers.mul('concussionMultiplier', q) : 1);
+    const amount = Math.min(1, base * perk);
     if (amount <= 0.02) continue;
     const dur = (equip.duration ?? 3) * amount;
     const x = wext(q);

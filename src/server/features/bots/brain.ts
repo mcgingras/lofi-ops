@@ -32,6 +32,7 @@
  */
 import { PLAYER, type Team } from '../../../shared/constants';
 import type { BotSkill } from '../../../shared/defs/bots';
+import { THROW_WINDUP } from '../../../shared/defs/equipment';
 import { KILLSTREAK_BY_ID } from '../../../shared/defs/killstreaks';
 import type { WeaponClass } from '../../../shared/defs/weapons';
 import { Buttons, type InputCmd } from '../../../shared/input';
@@ -42,6 +43,7 @@ import { currentWeapon, type BotBrain, type PlayerState } from '../../player';
 import type { Room } from '../../room';
 import { addRecoil, angleDiff, engage, feltOffDeg, flinch, lookToward, newAimState, noticeTime, stepAim, toleranceDeg, type AimState } from './aim';
 import { botGoalFor, botStreakHandler, botStyleFor, type BotGoal } from './hooks';
+import { BOT_GRENADE, grenadeAimPoint, grenadeChance, grenadeCooldown, grenadePitch, minThrowDistance } from './grenades';
 import { botFrozen, effectiveSkill } from './impair';
 import { navFor, type NavCell, type NavGrid } from './nav';
 import { recentSpawns } from '../modes/spawns';
@@ -138,7 +140,7 @@ export class Brain implements BotBrain {
   private stuckT = 0;
   private jumpHeld = false;
   private grenadeAt = 0;
-  private throwing: { at: Vec3; t: number } | null = null;
+  private throwing: { at: Vec3; t: number; pressed: boolean } | null = null;
   /** A lethal lobbed mid-fight (`throwAtRange`): the view is pitched up by `lobPitch` until then. */
   private lobUntil = 0;
   private lobPitch = 0;
@@ -204,7 +206,7 @@ export class Brain implements BotBrain {
     this.stuckT = 0;
     this.intentAt = -1;
     this.lingerUntil = 0;
-    this.grenadeAt = now + 4;
+    this.grenadeAt = now + BOT_GRENADE.spawnDelay;
     this.lobAt = now + 0.5;
     this.lobUntil = 0;
   }
@@ -473,13 +475,16 @@ export class Brain implements BotBrain {
       this.considerStreak(room, self, now, (b) => pulse(b));
 
       if (this.throwing) {
+        // Face the spot on the arc that lands there, press, and keep facing it through the
+        // wind-up: the server lets go along the view when the wind-up ends.
         const th = this.throwing;
         const flat = Math.hypot(th.at.x - eye.x, th.at.z - eye.z);
-        lookToward(this.aim, sk, yawTo(eye, th.at), clamp(0.22 + flat * 0.011, 0.2, 0.62), dt);
-        if (now >= th.t) {
+        lookToward(this.aim, sk, yawTo(eye, th.at), grenadePitch(self.loadout?.lethal ?? 'frag', flat, th.at.y - (eye.y - 0.1)), dt);
+        if (!th.pressed && now >= th.t) {
           pulse(Buttons.LETHAL);
-          this.throwing = null;
+          th.pressed = true;
         }
+        if (th.pressed && now >= th.t + THROW_WINDUP + 0.1) this.throwing = null;
         return this.out(self, buttons);
       }
 
@@ -1025,20 +1030,23 @@ export class Brain implements BotBrain {
   // Lethals and streaks
   // -------------------------------------------------------------------------------------------
 
+  /** After a fight: maybe flush the enemy out of cover with the lethal (tuning in grenades.ts). */
   private considerGrenade(room: Room, self: PlayerState, now: number) {
-    if (this.throwing || !self.loadout?.lethal || now < this.grenadeAt || !this.lastSeen) return;
+    const lethal = self.loadout?.lethal;
+    if (this.throwing || !lethal || lethal === 'tomahawk' || now < this.grenadeAt || !this.lastSeen) return;
+    if ((self.ext.weapons?.lethalN ?? 1) <= 0) return;
     const age = now - this.lastSeen.t;
-    if (age < 0.4 || age > 3) return;
+    if (age < BOT_GRENADE.minAge || age > BOT_GRENADE.maxAge) return;
     const d = dist(self.move, this.lastSeen.at);
-    if (d < 7 || d > 24) return;
+    if (d < minThrowDistance(lethal) || d > BOT_GRENADE.maxDist) return;
     // Nobody of ours near where it would land.
-    for (const q of room.players.values()) if (q !== self && q.alive && !room.isEnemy(self, q) && dist(q.move, this.lastSeen.at) < 5) return;
-    if (this.rnd() > 0.12 + this.skill.aggression * 0.25) {
-      this.grenadeAt = now + 1.5;
+    for (const q of room.players.values()) if (q !== self && q.alive && !room.isEnemy(self, q) && dist(q.move, this.lastSeen.at) < BOT_GRENADE.friendlyClear) return;
+    if (this.rnd() > grenadeChance(this.skill)) {
+      this.grenadeAt = now + BOT_GRENADE.retrySec;
       return;
     }
-    this.throwing = { at: { ...this.lastSeen.at }, t: now + 0.25 };
-    this.grenadeAt = now + 14 + this.rnd() * 8;
+    this.throwing = { at: grenadeAimPoint(this.lastSeen.at, this.skill, this.rnd), t: now + 0.25, pressed: false };
+    this.grenadeAt = now + grenadeCooldown(this.skill, this.rnd());
   }
 
   private considerStreak(room: Room, self: PlayerState, now: number, pulse: (b: number) => void) {

@@ -24,7 +24,7 @@ export interface PerkDef {
 export const PERKS: PerkDef[] = [
   // Tier 1
   { id: 'lightweight', name: 'Lightweight', tier: 1, description: 'Move faster.', pro: { description: 'No falling damage.', challenge: 'lightweight_pro' }, unlockLevel: 1, icon: 'perk_lightweight', price: 2000 },
-  { id: 'flak_jacket', name: 'Flak Jacket', tier: 1, description: 'Reduced explosive damage.', pro: { description: 'Immune to fire damage. Throw back grenades with a reset fuse.', challenge: 'flak_jacket_pro' }, unlockLevel: 1, icon: 'perk_flak', price: 2000 },
+  { id: 'flak_jacket', name: 'Flak Jacket', tier: 1, description: 'Reduced explosive damage.', pro: { description: "Shockproof: explosions don't shake, stun or knock you back; immune to fire; concussions halved.", challenge: 'flak_jacket_pro' }, unlockLevel: 1, icon: 'perk_flak', price: 2000 },
   { id: 'scavenger', name: 'Scavenger', tier: 1, description: 'Pick up ammo from fallen enemies.', pro: { description: 'Start with extra mags. Resupply lethal and tactical grenades.', challenge: 'scavenger_pro' }, unlockLevel: 4, icon: 'perk_scavenger', price: 2000 },
   { id: 'ghost', name: 'Ghost', tier: 1, description: 'Undetectable by the Spy Plane and Blackbird.', pro: { description: 'Not targeted by air support or sentry guns. No red name when targeted.', challenge: 'ghost_pro' }, unlockLevel: 6, icon: 'perk_ghost', price: 2000 },
   { id: 'hardline', name: 'Hardline', tier: 1, description: 'Killstreaks require 1 less kill.', pro: { description: 'Change the contents of a Care Package by pressing USE.', challenge: 'hardline_pro' }, unlockLevel: 1, icon: 'perk_hardline', price: 2000 },
@@ -53,6 +53,16 @@ export const PERK_TUNING = {
   lightweightSpeed: 1.07,
   /** Damage taken from `explosive` means with Flak Jacket. */
   flakExplosive: 0.65,
+  /**
+   * Flak Jacket Pro, "Shockproof": explosions don't rattle you. Blast screen shake and ringing ears
+   * x0, explosive flinch x0, knockback (Thundergun) x0, concussion x0.5, Winter's Howl frost x0.5.
+   * Fire damage x0 (BO1's Pro).
+   */
+  shockproofShake: 0,
+  shockproofFlinch: 0,
+  shockproofKnockback: 0,
+  shockproofConcussion: 0.5,
+  shockproofFrost: 0.5,
   /** Scavenger packs: seconds on the ground, pickup radius (m), mags of reserve refilled per weapon. */
   scavengerPackLife: 20,
   scavengerRadius: 1.4,

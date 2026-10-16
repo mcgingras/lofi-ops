@@ -251,9 +251,11 @@ export class RoomBots {
           if (d <= brain.cur.hearingRange) brain.onHeard(player.move, now);
         }
       }),
-      bus.on('damage', ({ victim, attacker }) => {
-        // Flinch like a player: ~2.5 degrees, scaled by the flinchMultiplier modifier (Hardened Pro).
-        if (victim.isBot) this.brains.get(victim.id)?.onHurt(attacker, this.room.time, FLINCH_DEG * this.room.modifiers.mul('flinchMultiplier', victim));
+      bus.on('damage', ({ victim, attacker, means }) => {
+        // Flinch like a player: ~2.5 degrees, scaled by the flinchMultiplier modifier (Hardened Pro),
+        // and for blasts by explosiveFlinchMultiplier (Flak Jacket Pro "Shockproof").
+        const blast = means === 'explosive' ? this.room.modifiers.mul('explosiveFlinchMultiplier', victim) : 1;
+        if (victim.isBot) this.brains.get(victim.id)?.onHurt(attacker, this.room.time, FLINCH_DEG * this.room.modifiers.mul('flinchMultiplier', victim) * blast);
       }),
       bus.on('matchEnd', ({ results }) => {
         const bots = results.players.filter((p) => p.bot).length;
