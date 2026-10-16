@@ -53,6 +53,11 @@ export interface MoveState {
   dive: number;
   /** A mantle in progress, or null. */
   mantle: MantleState | null;
+  /**
+   * Knocked back (Thundergun blast, `applyKnock`): seconds of lost control left. While > 0 the body
+   * keeps the impulse (no input acceleration, no jump, sprint or mantle) and slides when grounded.
+   */
+  knock: number;
 }
 
 /**
@@ -83,7 +88,28 @@ export interface MoveParams {
 export const DEFAULT_MOVE_PARAMS: MoveParams = { speed: 1, adsTime: 0.25, adsMove: MOVE.ads, sprint: 1, canSprint: true, jump: 1, canMove: true, canMantle: true, canProne: true };
 
 export function createMoveState(x = 0, y = 0, z = 0): MoveState {
-  return { x, y, z, vx: 0, vy: 0, vz: 0, onGround: false, crouched: false, sprinting: false, ads: 0, sinceSprint: 10, jumpHeld: false, prone: false, proneT: 0, proneHeld: false, dive: 0, mantle: null };
+  return { x, y, z, vx: 0, vy: 0, vz: 0, onGround: false, crouched: false, sprinting: false, ads: 0, sinceSprint: 10, jumpHeld: false, prone: false, proneT: 0, proneHeld: false, dive: 0, mantle: null, knock: 0 };
+}
+
+/** Knockback feel: ground slide deceleration (m/s^2) and the speed under which a grounded knock ends. */
+export const KNOCK = { slide: 16, settle: 1.2 };
+
+/**
+ * A velocity impulse (m/s) that takes control away for `sec` (the server applies it, e.g. the
+ * Thundergun; the snapshot carries `knock` and the velocities, so the owner's prediction replays
+ * the same flight). Cancels a mantle, a dive and sprint; an upward impulse leaves the ground.
+ * Mutates and returns `s`.
+ */
+export function applyKnock(s: MoveState, impulse: Vec3, sec: number): MoveState {
+  s.mantle = null;
+  s.dive = 0;
+  s.sprinting = false;
+  s.vx += impulse.x;
+  s.vy = Math.max(s.onGround ? 0 : s.vy, 0) + impulse.y;
+  s.vz += impulse.z;
+  if (impulse.y > 0) s.onGround = false;
+  s.knock = Math.max(s.knock ?? 0, sec);
+  return s;
 }
 
 export const copyMoveState = (s: MoveState): MoveState => ({ ...s, mantle: s.mantle ? { ...s.mantle, from: { ...s.mantle.from }, to: { ...s.mantle.to } } : null });
@@ -174,8 +200,14 @@ function substep(world: CollisionWorld, s: MoveState, buttons: number, yaw: numb
   // under low cover. Crouch: instant down; standing up needs headroom.
   const canProne = p.canProne !== false;
   const wantCrouch = move && (has(buttons, Buttons.CROUCH) || (proneDown && !s.prone));
-  const jumpPress = jumpDown && !s.jumpHeld;
+  const knocked = (s.knock ?? 0) > 0;
+  const jumpPress = jumpDown && !s.jumpHeld && !knocked;
   if (s.dive > 0) s.dive = Math.max(0, s.dive - h);
+  if (knocked) {
+    s.knock = Math.max(0, s.knock - h);
+    // A grounded knock that has slid to a stop gives control back early.
+    if (s.onGround && Math.hypot(s.vx, s.vz) < KNOCK.settle) s.knock = 0;
+  }
   if (canProne && proneDown && !s.proneHeld && !s.prone) {
     if (s.sprinting && s.onGround) startDive(s, yaw);
     else if (s.onGround && legsClear(world, s.x, s.y, s.z, yaw)) {
@@ -203,13 +235,13 @@ function substep(world: CollisionWorld, s: MoveState, buttons: number, yaw: numb
   const lowStance = s.prone || s.proneT > 0;
 
   // ADS and sprint (ADS cancels sprint; no sprint from a low stance or mid-dive).
-  const sprint = move && p.canSprint && has(buttons, Buttons.SPRINT) && !adsHeld && f >= MOVE.sprintMinForward && !s.crouched && !lowStance && s.dive <= 0 && s.ads <= MOVE.sprintMaxAds && (s.onGround || s.sprinting);
+  const sprint = move && p.canSprint && !knocked && has(buttons, Buttons.SPRINT) && !adsHeld && f >= MOVE.sprintMinForward && !s.crouched && !lowStance && s.dive <= 0 && s.ads <= MOVE.sprintMaxAds && (s.onGround || s.sprinting);
   s.sprinting = sprint;
   s.sinceSprint = sprint ? 0 : s.sinceSprint + h;
   updateAds(s, adsHeld && !sprint, h, p);
 
   // Mantle (BO1): jump held, standing, moving forward into a ledge you can't step onto.
-  if (jumpDown && f > 0 && p.canMantle !== false && !s.crouched && !s.prone && s.proneT <= 0 && s.dive <= 0) {
+  if (jumpDown && f > 0 && !knocked && p.canMantle !== false && !s.crouched && !s.prone && s.proneT <= 0 && s.dive <= 0) {
     const plan = findMantle(world, s, yaw);
     if (plan) {
       startMantle(s, plan);
@@ -233,10 +265,11 @@ function substep(world: CollisionWorld, s: MoveState, buttons: number, yaw: numb
   // Accelerate towards it (full on the ground, 30% in the air and only with input). A dive keeps
   // its momentum: no control in the air, a slide along the ground.
   const hasInput = f !== 0 || side !== 0;
-  if (s.dive > 0) {
+  if (s.dive > 0 || knocked) {
+    // Dive or knockback: the impulse carries the body; on the ground it slides to a stop.
     if (s.onGround) {
       const v = Math.hypot(s.vx, s.vz);
-      const k = v > 1e-6 ? Math.max(0, v - PRONE.diveSlide * h) / v : 0;
+      const k = v > 1e-6 ? Math.max(0, v - (knocked ? KNOCK.slide : PRONE.diveSlide) * h) / v : 0;
       s.vx *= k;
       s.vz *= k;
     }

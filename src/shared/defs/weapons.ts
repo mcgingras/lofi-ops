@@ -84,6 +84,12 @@ export interface WeaponDef {
   price?: number;
   /** One-line description for menus. */
   blurb?: string;
+  /**
+   * A BO1 Zombies wonder weapon (Ray Gun, Thundergun, Wunderwaffe DG-2, Winter's Howl): only from
+   * the Mystery Box killstreak (and dropped ones picked up). Never in create-a-class, the store,
+   * unlocks or bot classes. Behaviour: `defs/wonder.ts` and the weapons server's `wonder/`.
+   */
+  wonder?: boolean;
 }
 
 // Shared attachment lists (BO1 availability per class; specific guns adjust below).
@@ -650,12 +656,136 @@ export const WEAPONS: WeaponDef[] = [
     zoom: 1.2,
     swapMs: 400,
   },
+
+  // ------------------------------------------------------------------ wonder weapons (Mystery Box only)
+  // BO1 Zombies numbers (Call of Duty Wiki, T5 `_zombiemode_weap_*.gsc`) tuned for 100-health MP;
+  // the behaviour (projectile, cone, chain, frost) is in defs/wonder.ts and server weapons/wonder/.
+  // `damage` is what stat bars and bots read (the direct hit / the close blast).
+  {
+    // BO1: 20 + 160, 181 rpm, 3 s reload, 1000 direct / 1500-300 splash, hurts its user.
+    id: 'raygun',
+    name: 'Ray Gun',
+    class: 'special',
+    slot: 'primary',
+    wonder: true,
+    blurb: 'Wonder weapon: a slow green energy bolt. A direct hit kills; the splash kills near the impact and stings you too.',
+    damage: { near: 150, far: 150, nearRange: 120, farRange: 120 },
+    multipliers: { head: 1, torso: 1, limb: 1 },
+    rpm: 150,
+    mode: 'auto',
+    magazine: 20,
+    reserve: 60,
+    reloadMs: 3000,
+    reloadEmptyMs: 3000,
+    adsMs: 200,
+    sprintOutMs: 180,
+    moveMult: 1,
+    spread: { hip: 1.2, ads: 0.15, move: 0.8 },
+    recoil: { vertical: 0.9, horizontal: 0.2, recovery: 12 },
+    unlockLevel: 1,
+    attachments: [],
+    model: 'raygun',
+    range: 120,
+    swapMs: 400,
+    zoom: 1.2,
+    projectile: true,
+  },
+  {
+    // BO1: 2 + 12, 2 s reload; flings everything within 12 m of a 4.6 m wide cylinder, kills up close.
+    id: 'thundergun',
+    name: 'Thundergun',
+    class: 'special',
+    slot: 'primary',
+    wonder: true,
+    blurb: 'Wonder weapon: a blast of air that kills up close and hurls everyone in front of you (off roofs, too).',
+    damage: { near: 150, far: 60, nearRange: 6.5, farRange: 12 },
+    multipliers: { head: 1, torso: 1, limb: 1 },
+    rpm: 75,
+    mode: 'semi',
+    magazine: 2,
+    reserve: 12,
+    reloadMs: 2500,
+    reloadEmptyMs: 2500,
+    adsMs: 300,
+    sprintOutMs: 300,
+    moveMult: 0.9,
+    spread: { hip: 0, ads: 0, move: 0 },
+    recoil: { vertical: 4, horizontal: 0.6, recovery: 6 },
+    unlockLevel: 1,
+    attachments: [],
+    model: 'thundergun',
+    range: 12,
+    swapMs: 700,
+    zoom: 1,
+    projectile: true,
+  },
+  {
+    // BO1: 3 + 15 (WaW / BO1 Rezurrection), 6 s reload, one-hit kills that arc to nearby zombies.
+    id: 'wunderwaffe',
+    name: 'Wunderwaffe DG-2',
+    class: 'special',
+    slot: 'primary',
+    wonder: true,
+    blurb: 'Wonder weapon: a lightning bolt that kills its target and arcs to two more enemies close by.',
+    damage: { near: 200, far: 200, nearRange: 45, farRange: 45 },
+    multipliers: { head: 1, torso: 1, limb: 1 },
+    rpm: 60,
+    mode: 'semi',
+    magazine: 3,
+    reserve: 9,
+    reloadMs: 5000,
+    reloadEmptyMs: 5000,
+    adsMs: 300,
+    sprintOutMs: 300,
+    moveMult: 0.92,
+    spread: { hip: 0.8, ads: 0.2, move: 0.6 },
+    recoil: { vertical: 2.5, horizontal: 0.4, recovery: 8 },
+    unlockLevel: 1,
+    attachments: [],
+    model: 'wunderwaffe',
+    range: 45,
+    swapMs: 700,
+    zoom: 1.15,
+    projectile: true,
+  },
+  {
+    // BO1 "Five": 6 + 24, 3.8 s reload; slows, then freezes and shatters.
+    id: 'wintershowl',
+    name: "Winter's Howl",
+    class: 'special',
+    slot: 'primary',
+    wonder: true,
+    blurb: 'Wonder weapon: a short blizzard that slows and frosts whoever it hits. Hit a frozen enemy again to shatter them.',
+    damage: { near: 20, far: 20, nearRange: 12, farRange: 12 },
+    multipliers: { head: 1, torso: 1, limb: 1 },
+    rpm: 130,
+    mode: 'semi',
+    magazine: 6,
+    reserve: 24,
+    reloadMs: 3000,
+    reloadEmptyMs: 3000,
+    adsMs: 220,
+    sprintOutMs: 200,
+    moveMult: 1,
+    spread: { hip: 0, ads: 0, move: 0 },
+    recoil: { vertical: 1.4, horizontal: 0.3, recovery: 10 },
+    unlockLevel: 1,
+    attachments: [],
+    model: 'wintershowl',
+    range: 12,
+    swapMs: 400,
+    zoom: 1.1,
+    projectile: true,
+  },
 ];
 
 export const WEAPON_BY_ID = indexById(WEAPONS);
 
-/** The weapons create-a-class may pick (primary and secondary slots). */
-export const LOADOUT_WEAPONS: WeaponDef[] = WEAPONS.filter((w) => w.slot === 'primary' || w.slot === 'secondary');
+/** The weapons create-a-class may pick (primary and secondary slots; never the Mystery Box's wonder weapons). */
+export const LOADOUT_WEAPONS: WeaponDef[] = WEAPONS.filter((w) => (w.slot === 'primary' || w.slot === 'secondary') && !w.wonder);
+
+/** A Mystery Box wonder weapon (never classable, sold or unlocked). */
+export const isWonderWeapon = (id: string | null | undefined): boolean => !!id && !!WEAPON_BY_ID.get(id)?.wonder;
 
 /** Seconds between trigger pulls for a weapon at its cycle rate (burst weapons: between bursts). */
 export function cycleSec(w: Pick<WeaponDef, 'rpm' | 'mode' | 'burst' | 'burstDelayMs'>): number {

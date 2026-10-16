@@ -156,6 +156,8 @@ export function isUnlocked(p: UnlockProfile, kind: UnlockKind, id: string, weapo
     const v = rule(p, kind, id, weapon);
     if (v !== undefined) return v;
   }
+  // Mystery Box wonder weapons are never unlocked for classes (nor their attachments: they have none).
+  if (kind === 'weapon' && WEAPON_BY_ID.get(id)?.wonder) return false;
   switch (kind) {
     case 'attachment': {
       if (!weapon) return false;
@@ -293,7 +295,7 @@ export function lockReason(kind: UnlockKind, id: string, weapon?: string): strin
 function fallbackWeapon(p: UnlockProfile, slot: 'primary' | 'secondary'): WeaponLoadout {
   const def = DEFAULT_LOADOUTS[0]![slot];
   if (isUnlocked(p, 'weapon', def.weapon)) return { weapon: def.weapon, attachments: [], camo: 'none' };
-  const any = WEAPONS.filter((w) => w.slot === slot && isUnlocked(p, 'weapon', w.id)).sort((a, b) => a.unlockLevel - b.unlockLevel)[0];
+  const any = WEAPONS.filter((w) => w.slot === slot && !w.wonder && isUnlocked(p, 'weapon', w.id)).sort((a, b) => a.unlockLevel - b.unlockLevel)[0];
   return { weapon: any?.id ?? def.weapon, attachments: [], camo: 'none' };
 }
 
