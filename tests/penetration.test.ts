@@ -292,7 +292,7 @@ describe('penetration in a room', () => {
     registerPerkModifiers(r);
     expect(shotAt(r, shooter, target, 8, 'mp5k')).toEqual([]);
     const plain = shotAt(r, shooter, target, -12)[0]!.amount;
-    shooter.loadout = { ...shooter.loadout, perks: ['hardened'] };
+    shooter.loadout = { ...shooter.loadout!, perks: ['hardened'] };
     expect(r.modifiers.mul('penetrationMultiplier', shooter)).toBe(2);
     expect(shotAt(r, shooter, target, 8, 'mp5k')[0]?.penetrated).toBe(true);
     expect(shotAt(r, shooter, target, -12)[0]!.amount).toBeGreaterThan(plain);
