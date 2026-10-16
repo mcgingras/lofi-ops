@@ -12,7 +12,7 @@ export interface PlaylistDef {
   description: string;
   /** Mode ids in rotation order; the first registered one is used. */
   modes: string[];
-  category: 'core' | 'objective';
+  category: 'core' | 'objective' | 'party';
 }
 
 export const PLAYLISTS: PlaylistDef[] = [
@@ -22,6 +22,7 @@ export const PLAYLISTS: PlaylistDef[] = [
   { id: 'sd', name: 'Search & Destroy', description: 'One life. Plant or defuse the bomb.', modes: ['sd'], category: 'objective' },
   { id: 'hq', name: 'Headquarters', description: 'Capture and hold the HQ.', modes: ['hq'], category: 'objective' },
   { id: 'kc', name: 'Kill Confirmed', description: 'Collect dog tags to score.', modes: ['kc'], category: 'objective' },
+  { id: 'infected', name: 'Infected', description: 'Survive the outbreak, or spread it.', modes: ['infected'], category: 'party' },
 ];
 
 export const PLAYLIST_BY_ID = indexById(PLAYLISTS);

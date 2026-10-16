@@ -37,8 +37,8 @@ export interface MapDef {
  * Domination / S&D / HQ data before the modes area registers those modes; they light up then).
  */
 const supported = (...ids: string[]) => ids.filter((id) => MODE_BY_ID.has(id));
-/** Team/FFA/objective modes the maps-mw2 maps carry data for, plus every wager mode (spawns only). */
-const mw2Modes = () => [...supported('tdm', 'ffa', 'dom', 'sd', 'hq', 'kc'), ...MODES.filter((m) => m.playlist === 'wager').map((m) => m.id)];
+/** Team/FFA/objective modes the maps-mw2 maps carry data for, Infected (TDM/FFA spawns), plus every wager mode (spawns only). */
+const mw2Modes = () => [...supported('tdm', 'ffa', 'dom', 'sd', 'hq', 'kc', 'infected'), ...MODES.filter((m) => m.playlist === 'wager').map((m) => m.id)];
 
 /**
  * The maps-bo maps support every registered mode: they carry TDM/FFA spawns (also Kill Confirmed and
@@ -48,7 +48,7 @@ const mw2Modes = () => [...supported('tdm', 'ffa', 'dom', 'sd', 'hq', 'kc'), ...
 const BO_MODES = MODES.map((m) => m.id);
 
 export const MAPS: MapDef[] = [
-  { id: 'yard', name: 'Yard', inspiredBy: 'Original (approved look prototype)', build: buildYard, modes: ['tdm', 'ffa', 'dom', 'sd', 'hq', 'kc'], size: 'small' },
+  { id: 'yard', name: 'Yard', inspiredBy: 'Original (approved look prototype)', build: buildYard, modes: ['tdm', 'ffa', 'dom', 'sd', 'hq', 'kc', 'infected'], size: 'small' },
   // maps-mw2
   { id: 'rust', name: 'Rust', inspiredBy: 'Rust (Call of Duty: Modern Warfare 2, 2009)', build: buildRust, modes: mw2Modes(), size: 'small' },
   { id: 'scrapyard', name: 'Scrapyard', inspiredBy: 'Scrapyard (Call of Duty: Modern Warfare 2, 2009)', build: buildScrapyard, modes: mw2Modes(), size: 'medium' },

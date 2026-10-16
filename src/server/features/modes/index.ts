@@ -1,7 +1,7 @@
 /**
  * Server side of the 'modes' feature area (owner: modes). See docs/features/modes.md.
  *
- * setup(): registers the rules for tdm, ffa (polished), dom, sd, hq and kc.
+ * setup(): registers the rules for tdm, ffa (polished), dom, sd, hq, kc and infected.
  * room():  pushes team-relative objective state to each player (`modes.state`, every 0.25 s and
  *          on change), records the final killcam, sends each killed human their per-death
  *          killcam (deathcam.ts), and writes the end-of-match summary into
@@ -16,6 +16,7 @@ import type { Room } from '../../room';
 import { controllerOf, isEnemyKill } from './common';
 import { DomRules } from './dom';
 import { HqRules } from './hq';
+import { InfectedRules } from './infected';
 import { KcRules } from './kc';
 import { Deathcams } from './deathcam';
 import { KillcamRecorder } from './killcam';
@@ -30,6 +31,7 @@ export const MODE_FACTORIES: Record<string, ModeFactory> = {
   sd: () => new SdRules(),
   hq: () => new HqRules(),
   kc: () => new KcRules(),
+  infected: () => new InfectedRules(),
 };
 
 /** Register every mode's rules (idempotent). Tests that build a Lobby directly call this. */

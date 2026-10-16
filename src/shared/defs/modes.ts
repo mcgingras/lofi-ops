@@ -7,6 +7,7 @@
  * the client HUD can show the same progress bars and timers, and so they are tunable in one place.
  */
 import { WAGER_MODES } from './economy';
+import { INFECTED_TEAM_NAMES } from './infected';
 import { indexById } from './registry';
 
 export interface ModeDef {
@@ -31,6 +32,13 @@ export interface ModeDef {
   rounds?: number;
   /** MapData.objectives key the mode needs ('dom', 'sd', 'hq'); maps without one get derived points. */
   objectives?: string;
+  /**
+   * The rules decide who is on which team (Infected: Survivors / Infected by role), so lobby and
+   * bot team balancing must leave teams alone.
+   */
+  teamsByRules?: boolean;
+  /** Team names for HUD and summary (default: the factions in TEAM_NAMES). */
+  teamNames?: readonly [string, string];
 }
 
 export const CORE_MODES: ModeDef[] = [
@@ -40,6 +48,20 @@ export const CORE_MODES: ModeDef[] = [
   { id: 'sd', name: 'Search and Destroy', short: 'S&D', description: 'One life. Attackers plant the bomb, defenders stop them. First to 4 rounds; sides switch at halftime.', teams: true, scoreLimit: 4, timeLimitSec: 0, respawn: false, playlist: 'objective', maxPlayers: 10, rounds: 4, objectives: 'sd' },
   { id: 'hq', name: 'Headquarters', short: 'HQ', description: 'Capture the HQ and hold it. Defenders do not respawn while it stands.', teams: true, scoreLimit: 250, timeLimitSec: 600, respawn: true, playlist: 'objective', maxPlayers: 12, objectives: 'hq' },
   { id: 'kc', name: 'Kill Confirmed', short: 'KC', description: 'Kills drop dog tags. Grab enemy tags to score, grab your own to deny.', teams: true, scoreLimit: 65, timeLimitSec: 600, respawn: true, playlist: 'objective', maxPlayers: 12 },
+  {
+    id: 'infected',
+    name: 'Infected',
+    short: 'INF',
+    description: 'One player starts Infected. Every Survivor who dies joins them. Survive until time runs out.',
+    teams: true,
+    scoreLimit: 0,
+    timeLimitSec: 600,
+    respawn: true,
+    playlist: 'party',
+    maxPlayers: 12,
+    teamsByRules: true,
+    teamNames: INFECTED_TEAM_NAMES,
+  },
 ];
 
 export const MODES: ModeDef[] = [...CORE_MODES, ...WAGER_MODES];
@@ -48,6 +70,9 @@ export const MODE_BY_ID = indexById(MODES);
 
 /** Objective modes the modes feature implements (ids). */
 export const OBJECTIVE_MODE_IDS = ['dom', 'sd', 'hq', 'kc'] as const;
+
+/** Team names of a mode for HUDs (Infected: Survivors / Infected), else the factions. */
+export const teamNamesFor = (mode: ModeDef | undefined, fallback: readonly [string, string]): readonly [string, string] => mode?.teamNames ?? fallback;
 
 /** Player score (XP) awarded for each action. Kills/assists use XP_SOURCES (progression). */
 export const MODE_XP = {

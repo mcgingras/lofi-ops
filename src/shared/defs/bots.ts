@@ -71,7 +71,7 @@ export interface LobbyBotSettings {
   variance: number;
 }
 
-export const DEFAULT_TARGET_PLAYERS: Record<string, number> = { tdm: 12, ffa: 8, dom: 12, sd: 10, hq: 12, kc: 12, oitc: 6, gungame: 8, sharpshooter: 8, sticks: 8 };
+export const DEFAULT_TARGET_PLAYERS: Record<string, number> = { tdm: 12, ffa: 8, dom: 12, sd: 10, hq: 12, kc: 12, infected: 12, oitc: 6, gungame: 8, sharpshooter: 8, sticks: 8 };
 
 /** Matchmade lobbies wait this long for humans before backfilling with bots and starting. */
 export const MATCHMAKING_WAIT_SEC = 20;
