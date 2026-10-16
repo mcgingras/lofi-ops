@@ -20,3 +20,16 @@ export function frameSlot(o: { slot: number; want: number; alive: boolean; playi
   if (o.playing && o.want !== o.slot && o.want >= 0 && o.want < o.weapons) return { slot: o.want, switched: true };
   return { slot: o.slot, switched: false };
 }
+
+/**
+ * The weapon the first-person viewmodel shows: the one in the slot you ask for, or, when the server
+ * changed your weapons under you (a mode handing out its own class, the Infected knife, a last-stand
+ * pistol) and that slot no longer exists, the primary. Never null while you hold anything, so the
+ * viewmodel never keeps showing a gun you no longer have. `model` is the weapon def's model id.
+ */
+export function heldWeapon<W extends { id: string; attachments: string[]; camo: string }>(weapons: readonly W[] | undefined, slot: number, modelOf: (id: string) => string | undefined): { slot: number; weapon: W; model: string } | null {
+  if (!weapons?.length) return null;
+  const s = slot >= 0 && slot < weapons.length ? slot : SPAWN_SLOT;
+  const weapon = weapons[s]!;
+  return { slot: s, weapon, model: modelOf(weapon.id) ?? weapon.id };
+}

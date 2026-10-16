@@ -17,6 +17,7 @@ import { registerViewmodel } from '../../render/models/viewmodels';
 import { navigate } from '../../router';
 import { currentMatch } from '../../state';
 import { actionHands } from '../weapons/viewmodels';
+import { isWornMaterial } from '../weapons/worldmodels';
 import { modes } from './store';
 
 /** Sickly green: the Infected's tint (HUD and soldiers). */
@@ -192,7 +193,8 @@ registerMatchHook('modes.infected', {
       // The soldier is rebuilt when its team changes, so a new one starts untinted.
       if (v.team !== 1 || tinted.has(v.soldier)) continue;
       tinted.add(v.soldier);
-      for (const mat of v.soldier.mats) mat.uniforms.uTint.value.multiply(SKIN);
+      // The body only: the gun or knife in their hands keeps its colours.
+      for (const mat of v.soldier.mats) if (!isWornMaterial(mat)) mat.uniforms.uTint.value.multiply(SKIN);
     }
   },
 });

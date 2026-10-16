@@ -16,8 +16,9 @@ import { onFeature, registerEntityRenderer, registerHudWidget, registerMatchHook
 import { makeLookMaterial, setDynLight, type LookMaterial } from '../../render/shader';
 import { getTexture, unbindTexture } from '../../render/textures';
 import { currentMatch } from '../../state';
-import { shakeAmplitude, stunStrength } from './camfx';
+import { blastFeel, shakeAmplitude, stunStrength } from './camfx';
 import { frameTimeOfSeq, pushFrame, type FrameSeq } from './cook';
+import { dangerRingPos, grenadeDangers, type DangerNade } from './danger';
 
 export const equipState = {
   lethal: null as string | null,
@@ -31,10 +32,27 @@ export const equipState = {
   flash: { at: -99, dur: 0, amount: 0 },
   stun: { at: -99, dur: 0, amount: 0 },
   shake: { at: -99, amount: 0 },
+  /** How hard blasts rattle you (camera shake, ringing ears, rumble): 0 with Flak Jacket Pro "Shockproof". */
+  shock: 1,
 };
 
 // Equipment arrives at spawn, possibly before the match hook starts (map still loading).
-onFeature('weapons.equip', (d) => Object.assign(equipState, { breath: 1, melee: 1 }, d));
+onFeature('weapons.equip', (d) => Object.assign(equipState, { breath: 1, melee: 1, shock: 1 }, d));
+
+/**
+ * An explosion rattling the local player: camera shake (0..1), controller rumble and, for a close
+ * one, ringing ears (`ring` 0..1). Every blast goes through here (grenades, launchers, killstreak
+ * blasts, wonder weapons) so Shockproof (`equipState.shock`, from `blastShakeMultiplier`) can
+ * silence them all.
+ */
+export function blastJolt(m: Match, amount: number, ring = 0): void {
+  const k = equipState.shock;
+  if (!(k > 0) || amount <= 0) return;
+  const a = Math.min(1, amount * k);
+  if (a >= equipState.shake.amount || m.time - equipState.shake.at > 0.3) equipState.shake = { at: m.time, amount: a };
+  rumble('explosion', a);
+  if (ring > 0.05 && m.alive) sfx.play('weapons.ring', { volume: 0.5 * Math.min(1, ring * k) });
+}
 
 // ---------------------------------------------------------------------------------------------
 // Projectiles
@@ -174,10 +192,7 @@ function boom(m: Match, x: number, y: number, z: number, e: string) {
   blasts.push({ sprite, life: 0.25, max: 0.25 });
   const cam = m.renderer.cam.position;
   const d = Math.hypot(cam.x - x, cam.y - y, cam.z - z);
-  if (d < 16 && !tactical) {
-    equipState.shake = { at: m.time, amount: Math.min(1, (16 - d) / 12) };
-    rumble('explosion', equipState.shake.amount);
-  }
+  if (!tactical) blastJolt(m, ...blastFeel(e, d));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -449,8 +464,8 @@ registerHudWidget(
   27,
 );
 
-// Grenade danger: an icon over live grenades close to you (BO1-style), at the screen edge when behind.
-const tmp = new THREE.Vector3();
+// Grenade indicator (BO1): a grenade icon on a ring around the crosshair with a pointer aimed at
+// each live lethal that can kill you (danger.ts), red inside the kill radius itself.
 registerHudWidget(
   'weapons.danger',
   (g, W, H) => {
@@ -459,26 +474,41 @@ registerHudWidget(
     if (!m || !snap || !m.alive) return;
     const u = unit(H);
     const cam = m.renderer.cam;
-    for (const e of snap.ents) {
-      if (e.kind !== NADE_ENTITY) continue;
-      const id = String(e.s?.e ?? '');
-      if (id !== 'frag' && id !== 'semtex') continue;
-      const d = Math.hypot(e.x - cam.position.x, e.y - cam.position.y, e.z - cam.position.z);
-      if (d > 8) continue;
-      tmp.set(e.x, e.y + 0.3, e.z).project(cam);
-      let sx = (tmp.x * 0.5 + 0.5) * W;
-      let sy = (-tmp.y * 0.5 + 0.5) * H;
-      if (tmp.z > 1 || sx < 0 || sx > W || sy < 0 || sy > H) {
-        // Behind / off screen: pin to the bottom edge on the right side.
-        const yawTo = Math.atan2(-(e.x - cam.position.x), -(e.z - cam.position.z));
-        const rel = -(yawTo - m.yaw);
-        sx = W / 2 + Math.sin(rel) * W * 0.3;
-        sy = H * 0.75;
-      }
-      const blinkOn = Math.floor(m.time * 6) % 2 === 0 || d < 4;
-      if (!blinkOn) continue;
-      icon(g, id, sx - 2 * u, sy - 3 * u, u, false);
-      rect(g, sx - 6 * u, sy + 6 * u, 12 * u, u, d < 4 ? C.warn : C.hi);
+    const nades: DangerNade[] = [];
+    for (const e of snap.ents) if (e.kind === NADE_ENTITY) nades.push({ x: e.x, y: e.y, z: e.z, equip: String(e.s?.e ?? ''), owner: e.owner ?? null, stuckTo: typeof e.s?.p === 'string' ? e.s.p : null });
+    if (!nades.length) return;
+    const marks = grenadeDangers(nades, { x: cam.position.x, y: cam.position.y, z: cam.position.z, yaw: m.yaw, id: m.myId, canHurt: (owner) => !owner || owner === m.myId || m.isEnemy(owner) });
+    const r = 42 * u;
+    const u2 = u * 2;
+    for (const mk of marks.slice(0, 4)) {
+      // Inside the kill radius: solid red; in the margin: a steady yellow blink.
+      if (!mk.lethal && !blink(m.time, 0.3, 0.2)) continue;
+      const pos = dangerRingPos(mk.angle, W / 2, H / 2, r, 20 * u);
+      const col = mk.lethal ? C.warn : C.hi;
+      // Pointer: a wedge beyond the icon, aimed at the grenade.
+      const ax = Math.sin(mk.angle);
+      const ay = -Math.cos(mk.angle);
+      const tip = { x: pos.tipX, y: pos.tipY };
+      const base = { x: pos.x + ax * 9 * u, y: pos.y + ay * 9 * u };
+      const wing = 7 * u;
+      g.beginPath();
+      g.moveTo(tip.x + ax * u, tip.y + ay * u);
+      g.lineTo(base.x - ay * (wing + u), base.y + ax * (wing + u));
+      g.lineTo(base.x + ay * (wing + u), base.y - ax * (wing + u));
+      g.closePath();
+      g.fillStyle = C.ink;
+      g.fill();
+      g.beginPath();
+      g.moveTo(tip.x, tip.y);
+      g.lineTo(base.x - ay * wing, base.y + ax * wing);
+      g.lineTo(base.x + ay * wing, base.y - ax * wing);
+      g.closePath();
+      g.fillStyle = col;
+      g.fill();
+      // The grenade icon at double size on a dark tile with a coloured rim.
+      rect(g, pos.x - 9 * u, pos.y - 9 * u, 18 * u, 18 * u, col);
+      rect(g, pos.x - 8 * u, pos.y - 8 * u, 16 * u, 16 * u, 'rgba(10,10,10,.8)');
+      icon(g, mk.equip, pos.x - 2.5 * u2, pos.y - 2.5 * u2, u2, false);
     }
   },
   26,

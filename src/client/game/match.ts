@@ -35,7 +35,7 @@ import { Controls } from './controls';
 import { inputDevice, rumble } from './gamepad';
 import { Effects } from './effects';
 import { Remotes } from './remotes';
-import { frameSlot, SPAWN_SLOT } from './slots';
+import { frameSlot, heldWeapon, SPAWN_SLOT } from './slots';
 import { ViewmodelRig } from './viewmodel';
 
 export interface KillfeedEntry {
@@ -626,8 +626,8 @@ export class Match {
     this.map?.update(this.time, cam.position);
 
     // Viewmodel.
-    const w = me?.weapons[this.slot];
-    if (w) this.viewmodel.setWeapon(WEAPON_BY_ID.get(w.id)?.model ?? w.id, w.attachments, w.camo);
+    const held = heldWeapon(me?.weapons, this.slot, (id) => WEAPON_BY_ID.get(id)?.model);
+    if (held) this.viewmodel.setWeapon(held.model, held.weapon.attachments, held.weapon.camo);
     this.viewmodel.visible = alive && !scoped && this.phase !== 'ended';
     const light = this.map ? this.map.lightAt(shown.x, shown.y + 1.3, shown.z) : [1, 1, 1];
     const mantle = st.mantle ? st.mantle.t / Math.max(1e-6, st.mantle.dur) : -1;

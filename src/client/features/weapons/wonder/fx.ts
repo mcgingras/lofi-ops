@@ -18,12 +18,11 @@ import { rayHitboxes, playerHitboxes } from '../../../../shared/collision';
 import { RAYGUN, THUNDERGUN, WINTERS_HOWL, WONDER_ENTITY, WUNDERWAFFE, type WonderFx } from '../../../../shared/defs/wonder';
 import type { Vec3 } from '../../../../shared/math';
 import { sfx } from '../../../game/audio';
-import { rumble } from '../../../game/gamepad';
 import type { Match } from '../../../game/match';
 import { onFeature, registerEntityRenderer, registerMatchHook, registerShotFx } from '../../../registry';
 import { getTexture } from '../../../render/textures';
 import { currentMatch } from '../../../state';
-import { equipState } from '../equipment';
+import { blastJolt, equipState } from '../equipment';
 
 const GREEN = 0x5cff4a;
 const CYAN = 0x9ae8ff;
@@ -185,10 +184,7 @@ function blast(m: Match, o: Vec3, dir: Vec3, local: boolean): void {
   }
   const me = m.net.predictor.state;
   const dist = Math.hypot(me.x - o.x, me.z - o.z);
-  if (local || dist < THUNDERGUN.range) {
-    equipState.shake = { at: m.time, amount: local ? 0.5 : 0.8 };
-    rumble('explosion', local ? 0.6 : 0.8);
-  }
+  if (local || dist < THUNDERGUN.range) blastJolt(m, local ? 0.5 : 0.8);
 }
 
 /** One jagged lightning bolt from a to b that flickers (re-jitters) while it lives. */

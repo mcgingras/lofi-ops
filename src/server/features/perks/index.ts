@@ -2,8 +2,9 @@
  * Server side of the 'perks' feature area (owner: perks-streaks). BO1 perks with Pro versions,
  * implemented through the modifier registry and room events:
  *
- *   T1 Lightweight (speed; Pro no fall damage), Flak Jacket (explosives x0.65; Pro fire immune;
- *      the fuse reset is a description only: no throwing grenades back), Scavenger (resupply packs
+ *   T1 Lightweight (speed; Pro no fall damage), Flak Jacket (explosives x0.65; Pro "Shockproof":
+ *      fire immune, no blast shake / ringing / explosive flinch / knockback, concussion and frost
+ *      halved), Scavenger (resupply packs
  *      from the dead; Pro extra mags + grenade resupply event), Ghost (hidden from Spy
  *      Plane/Blackbird unless firing loud; Pro ignored by air support and sentries), Hardline
  *      (streaks -1 kill; Pro care package reroll, in killstreaks).
@@ -55,6 +56,12 @@ export function registerPerkModifiers(room: Room): void {
     },
     'perks.flak_jacket',
   );
+  // Flak Jacket Pro, "Shockproof": explosions don't shake, stun or knock you back.
+  m.add('blastShakeMultiplier', (p) => (isPro(p, 'flak_jacket') ? T.shockproofShake : undefined), 'perks.flak_jacket_pro_shake');
+  m.add('explosiveFlinchMultiplier', (p) => (isPro(p, 'flak_jacket') ? T.shockproofFlinch : undefined), 'perks.flak_jacket_pro_flinch');
+  m.add('knockbackMultiplier', (p) => (isPro(p, 'flak_jacket') ? T.shockproofKnockback : undefined), 'perks.flak_jacket_pro_knockback');
+  m.add('concussionMultiplier', (p) => (isPro(p, 'flak_jacket') ? T.shockproofConcussion : undefined), 'perks.flak_jacket_pro_concussion');
+  m.add('frostMultiplier', (p) => (isPro(p, 'flak_jacket') ? T.shockproofFrost : undefined), 'perks.flak_jacket_pro_frost');
   m.add(
     'radarVisible',
     (target) => {

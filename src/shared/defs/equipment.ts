@@ -42,8 +42,13 @@ export interface EquipmentDef {
 }
 
 export const EQUIPMENT: EquipmentDef[] = [
-  { id: 'frag', name: 'Frag', kind: 'lethal', effect: 'frag', count: 1, fuse: 3, cookable: true, sticky: false, speed: 17, loft: 0.25, radius: 6.5, max: 150, min: 25, unlockLevel: 1, blurb: 'Cook it by holding G. Bounces.' },
-  { id: 'semtex', name: 'Semtex', kind: 'lethal', effect: 'semtex', count: 1, fuse: 2, cookable: false, sticky: true, speed: 16, loft: 0.2, radius: 6, max: 150, min: 25, unlockLevel: 1, price: 1000, blurb: 'Sticks to whatever it hits.' },
+  // BO1 (Call of Duty Wiki "Frag Grenade": 200-75 damage, 6.5 m; the Treyarch weapon file, WaW and
+  // BO2 `frag_grenade_mp`: explosionRadius 256, fuseTime 3.5, cookOffHold 1): kills a full-health
+  // player within 5.2 m of their feet.
+  { id: 'frag', name: 'Frag', kind: 'lethal', effect: 'frag', count: 1, fuse: 3.5, cookable: true, sticky: false, speed: 17, loft: 0.25, radius: 6.5, max: 200, min: 75, unlockLevel: 1, blurb: 'Cook it by holding G. Bounces.' },
+  // BO1 (Call of Duty Wiki "Semtex": 200-55, the frag's radius; BO2 `sticky_grenade_mp`: radius 256,
+  // fuseTime 2, cookOffHold 0): kills within 4.5 m, and always kills whoever it sticks to.
+  { id: 'semtex', name: 'Semtex', kind: 'lethal', effect: 'semtex', count: 1, fuse: 2, cookable: false, sticky: true, speed: 16, loft: 0.2, radius: 6.5, max: 200, min: 55, unlockLevel: 1, price: 1000, blurb: 'Sticks to whatever it hits.' },
   // BO1: a retrievable hatchet, instant death on impact, bounces off walls and floors (bank shots).
   // Hold the button to raise it, release to throw. Lands as a pickup anyone carrying tomahawks can
   // walk over to get back (BO2 `_weaponobjects.gsc` `watchhatchettrigger`). Level 18 matches the
@@ -56,6 +61,37 @@ export const EQUIPMENT: EquipmentDef[] = [
 export const EQUIPMENT_BY_ID = indexById(EQUIPMENT);
 export const LETHALS = EQUIPMENT.filter((e) => e.kind === 'lethal');
 export const TACTICALS = EQUIPMENT.filter((e) => e.kind === 'tactical');
+
+/** A blast's damage profile: `max` at the centre falling linearly to `min` at `radius`. */
+export interface BlastProfile {
+  radius: number;
+  max: number;
+  min: number;
+}
+
+/**
+ * Damage a blast does at distance `d` from its centre: linear from `max` to `min` at the edge, 0
+ * beyond it (the IW/Treyarch engine's `G_RadiusDamage`).
+ */
+export function blastDamage(b: BlastProfile, d: number): number {
+  if (!(d <= b.radius) || b.radius <= 0) return 0;
+  return b.max + (b.min - b.max) * (Math.max(0, d) / b.radius);
+}
+
+/** How far out a blast still does `health` damage: the kill radius on a full-health player. */
+export function killRadius(b: BlastProfile, health = 100): number {
+  if (b.radius <= 0 || b.max < health) return 0;
+  if (b.min >= health) return b.radius;
+  return (b.radius * (b.max - health)) / (b.max - b.min);
+}
+
+/**
+ * The HUD grenade indicator (client `weapons/danger.ts`): a live lethal that can hurt you shows
+ * within `range` (BO1's `cg_hudGrenadeIconMaxRangeFrag` 250 units, from the T5 dvar defaults), or
+ * its kill radius plus `margin` if that is further, and no more than `maxHeight` (m) above or
+ * below the eye (CoD4's `cg_hudGrenadeIconMaxHeight` 104 units).
+ */
+export const GRENADE_INDICATOR = { range: 250 * 0.0254, margin: 1, maxHeight: 104 * 0.0254 } as const;
 
 /** The underbarrel grenade launcher's round (weapon id `gl`). */
 export const GL_ROUND = { speed: 45, gravity: 9, armDistance: 8, radius: 5, max: 150, min: 40, impactDamage: 60 } as const;
@@ -154,6 +190,8 @@ declare module '../protocol' {
       breath?: number;
       /** Knife cooldown/recovery multiplier (Steady Aim Pro: 0.7), from `meleeSpeedMultiplier`. */
       melee?: number;
+      /** Explosion shake / ringing multiplier (Flak Jacket Pro "Shockproof": 0), from `blastShakeMultiplier`. */
+      shock?: number;
     };
     /** You were flashed (amount 0..1, seconds). */
     'weapons.flash': { amount: number; dur: number };

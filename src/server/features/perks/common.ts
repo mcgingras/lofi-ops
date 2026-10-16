@@ -10,16 +10,19 @@
  *     tacticalMultiplier    (victim)     mul  flash/concussion strength and duration (Tactical Mask: 0.35)
  *     meleeSpeedMultiplier  (p)          mul  knife cooldown / recovery (Steady Aim Pro: 0.7)
  *     holdBreathMultiplier  (p)          mul  scoped hold-breath time (Scout: 2), sent to the client
+ *     blastShakeMultiplier  (p)          mul  explosion shake / ringing ears (Flak Jacket Pro: 0), sent to the client
+ *     concussionMultiplier  (victim)     mul  concussion strength and duration (Flak Jacket Pro: 0.5)
+ *     knockbackMultiplier   (p)          mul  Thundergun launch / shove impulse (Flak Jacket Pro: 0)
+ *     frostMultiplier       (p)          mul  Winter's Howl frost gained (Flak Jacket Pro: 0.5)
  *   declared here, read by bots / killstreaks:
  *     flinchMultiplier     (p) => number     mul   view flinch when shot (Hardened Pro: 0.5).
+ *     explosiveFlinchMultiplier (p) => number mul  extra flinch factor for explosive damage (Flak Jacket Pro: 0).
  *     silentFootsteps      (p) => boolean    any   no footstep sounds (Ninja). Bots' hearing reads it.
  *     hearingMultiplier    (p) => number     mul   how far this player hears footsteps (Ninja Pro: 1.8).
  *     streakTargetable     (target, kind) => boolean   any   false = killstreak AI of `kind` ignores target (Ghost Pro).
  *     killstreakDamageDealt(attacker, kind) => number   mul   bullet damage to killstreak hardware (Hardened Pro: 1.5).
  *   declared in core (src/server/modifiers.ts), read by combat:
  *     penetrationMultiplier(p) => number     mul   bullet penetration depth (Hardened: 2; shared/penetration.ts).
- * Not registered, because nothing in the game could read it: Flak Jacket Pro's fuse reset (no
- * picking grenades up to throw back).
  */
 import type { Team } from '../../../shared/constants';
 import { PERK_BY_ID, PERK_PRO_CHALLENGES, proChallengeFor } from '../../../shared/defs/perks';
@@ -72,6 +75,7 @@ declare module '../../player' {
 declare module '../../modifiers' {
   interface ModifierMap {
     flinchMultiplier: (p: PlayerState) => number | undefined;
+    explosiveFlinchMultiplier: (p: PlayerState) => number | undefined;
     silentFootsteps: (p: PlayerState) => boolean | undefined;
     hearingMultiplier: (p: PlayerState) => number | undefined;
     streakTargetable: (target: PlayerState, kind: string) => boolean | undefined;

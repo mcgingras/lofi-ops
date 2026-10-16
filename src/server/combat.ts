@@ -20,6 +20,7 @@ import { HEALTH, PLAYER, RESPAWN_DELAY } from '../shared/constants';
 import type { DamageInfo, DamageMeans } from '../shared/events';
 import { cloneLoadout, DEFAULT_LOADOUTS, sanitizeLoadout, type Loadout } from '../shared/loadout';
 import type { SpawnPoint } from '../shared/maps/types';
+import { blastDistance, blastExposure, type BlastBody } from '../shared/blast';
 import { dist, normalize, type Vec3 } from '../shared/math';
 import { effectiveDistance, keepAt, penetrationMaterial, penetrationType, traceBullet, type WallPass } from '../shared/penetration';
 import { bodyHeight, createMoveState, eyeHeight, moveBusy, movePose } from '../shared/movement';
@@ -280,19 +281,26 @@ export function kill(room: Room, victim: PlayerState, attacker: PlayerState | nu
 }
 
 /**
- * Damage everyone within `radius` of `center` with falloff from `max` to `min`, if they are in
- * line of sight of the blast (explosives, killstreaks). Returns victims hit.
+ * Damage everyone within `radius` of `center` with linear falloff from `max` to `min` (explosives,
+ * killstreaks), BO1's engine rules (shared/blast.ts): distance to the player's origin (feet), the
+ * damage scaled by how much of the body the blast reaches (five traces, hits / 3: walls stop it,
+ * thin props take part of it). `ensureKill` takes that player to 0 whatever the falloff, cover or
+ * perks (a semtex stuck to them). Returns victims hit.
  */
-export function radiusDamage(room: Room, center: Vec3, radius: number, max: number, min: number, opts: { attacker: PlayerState | null; weapon: string; means?: DamageMeans; hitSelf?: boolean }): PlayerState[] {
+export function radiusDamage(room: Room, center: Vec3, radius: number, max: number, min: number, opts: { attacker: PlayerState | null; weapon: string; means?: DamageMeans; hitSelf?: boolean; ensureKill?: PlayerState | null }): PlayerState[] {
   const hit: PlayerState[] = [];
   for (const q of room.players.values()) {
     if (!q.alive) continue;
     if (q === opts.attacker && !opts.hitSelf) continue;
-    // A crouched body's chest height (lower for someone lying down, so prone behind cover is cover).
-    const chest = { x: q.move.x, y: q.move.y + Math.min(PLAYER.crouchHeight, bodyHeight(q.move)) * 0.6, z: q.move.z };
-    const d = dist(center, chest);
-    if (d > radius || !room.world.lineOfSight(center, chest, 'bullets')) continue;
-    const amount = max + (min - max) * (d / radius);
+    const body: BlastBody = { x: q.move.x, y: q.move.y, z: q.move.z, eye: eyeHeight(q.move) };
+    const d = blastDistance(center, body);
+    const stuck = opts.ensureKill === q;
+    if (!stuck && d > radius) continue;
+    const reach = stuck ? 1 : blastExposure(room.world, center, body);
+    if (reach <= 0) continue;
+    // Stuck to them: more than any multiplier can take back to survivable (BO1: the stuck semtex
+    // is at the centre of the blast and skips Flak Jacket).
+    const amount = stuck ? Math.max(max, q.maxHealth) * 10 : (max + (min - max) * (d / radius)) * reach;
     if (damage(room, { victim: q, attacker: opts.attacker, amount, weapon: opts.weapon, part: 'torso', means: opts.means ?? 'explosive', from: center, distance: d }) > 0) hit.push(q);
   }
   return hit;

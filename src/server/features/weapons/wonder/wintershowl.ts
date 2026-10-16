@@ -25,7 +25,7 @@ export function frostHit(room: Room, q: PlayerState, by: PlayerState, d: number,
     if (!q.alive) wonderFx(room, { k: 'shatter', p: by.id, v: q.id, x: Math.round(c.x * 100) / 100, y: Math.round(c.y * 100) / 100, z: Math.round(c.z * 100) / 100 });
     return dealt;
   }
-  w.frost = Math.min(1, w.frost + frostAdded(d));
+  w.frost = Math.min(1, w.frost + frostAdded(d) * room.modifiers.mul('frostMultiplier', q));
   w.frostAt = room.time;
   if (w.frost >= 1) w.frozenUntil = room.time + WINTERS_HOWL.frozenSec;
   syncFrostEntity(room, q);

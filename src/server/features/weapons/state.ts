@@ -62,6 +62,19 @@ declare module '../../modifiers' {
     meleeSpeedMultiplier: (p: PlayerState) => number | undefined;
     /** Scoped hold-breath time (Scout: 2). Product. Sent to the client in `weapons.equip.breath`. */
     holdBreathMultiplier: (p: PlayerState) => number | undefined;
+    /**
+     * How hard explosions rattle this player's camera and ears: screen shake, ringing ears (grenades,
+     * launchers, killstreak blasts, the Nuke's shockwave, wonder weapon blasts). Product (Flak Jacket
+     * Pro "Shockproof": 0). Sent to the client in `weapons.equip.shock`; the client scales every
+     * blast effect by it.
+     */
+    blastShakeMultiplier: (p: PlayerState) => number | undefined;
+    /** Strength and duration of a concussion grenade on this victim, on top of `tacticalMultiplier` (Shockproof: 0.5). Product. */
+    concussionMultiplier: (victim: PlayerState) => number | undefined;
+    /** Knockback impulse on this player (the Thundergun's launch and shove; Shockproof: 0). Product. */
+    knockbackMultiplier: (p: PlayerState) => number | undefined;
+    /** Frost gained from Winter's Howl (Shockproof: 0.5). Product. */
+    frostMultiplier: (p: PlayerState) => number | undefined;
   }
 }
 

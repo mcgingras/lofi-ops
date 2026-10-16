@@ -43,6 +43,7 @@ export function sendEquip(room: Room, p: PlayerState): void {
     tacticalN: x.tacticalN,
     breath: room.modifiers.mul('holdBreathMultiplier', p),
     melee: room.modifiers.mul('meleeSpeedMultiplier', p),
+    shock: room.modifiers.mul('blastShakeMultiplier', p),
   });
 }
 
@@ -196,7 +197,7 @@ export function updateNades(room: Room, dt: number): void {
           n.stuckTo = hitP.p.id;
           n.offset = { x: hitP.at.x - hitP.p.move.x, y: Math.min(PLAYER.height * 0.75, Math.max(0.3, hitP.at.y - hitP.p.move.y)), z: hitP.at.z - hitP.p.move.z };
           b.stuck = true;
-          e.s = { ...e.s, k: 1 };
+          e.s = { ...e.s, k: 1, p: hitP.p.id };
         }
       }
       if (n.launcher && r.hit) {
@@ -224,7 +225,7 @@ export function updateNades(room: Room, dt: number): void {
 function explodeAt(room: Room, e: Entity, n: NadeData, at: Vec3) {
   room.entities.remove(e.id);
   const equip = n.equip === 'gl' ? null : (EQUIPMENT_BY_ID.get(n.equip) ?? null);
-  if (equip) explode(room, at, equip, n.owner);
+  if (equip) explode(room, at, equip, n.owner, n.stuckTo);
   else {
     const owner = n.owner ? (room.players.get(n.owner) ?? null) : null;
     const c = { x: at.x, y: at.y + 0.1, z: at.z };
@@ -234,14 +235,18 @@ function explodeAt(room: Room, e: Entity, n: NadeData, at: Vec3) {
   }
 }
 
-/** Detonate a piece of equipment at a point. */
-export function explode(room: Room, at: Vec3, equip: EquipmentDef, ownerId: string | null): void {
+/**
+ * Detonate a piece of equipment at a point. `stuckTo`: the player a semtex is stuck to, who dies
+ * whatever the falloff, Flak Jacket or armour (BO1 / MW2: a stick is a kill).
+ */
+export function explode(room: Room, at: Vec3, equip: EquipmentDef, ownerId: string | null, stuckTo: string | null = null): void {
   const owner = ownerId ? (room.players.get(ownerId) ?? null) : null;
   const c = { x: at.x, y: at.y + 0.1, z: at.z };
   room.sendFeature(null, 'weapons.boom', { x: c.x, y: c.y, z: c.z, e: equip.id, owner: ownerId });
   room.bus.emit('weapons.detonated', { player: owner, equipment: equip.id, effect: equip.effect, ...c, radius: equip.radius, max: equip.max, min: equip.min });
   if (equip.effect === 'frag' || equip.effect === 'semtex') {
-    room.radiusDamage(c, equip.radius, equip.max, equip.min, { attacker: owner, weapon: equip.id, means: 'explosive', hitSelf: true });
+    const stuck = stuckTo ? (room.players.get(stuckTo) ?? null) : null;
+    room.radiusDamage(c, equip.radius, equip.max, equip.min, { attacker: owner, weapon: equip.id, means: 'explosive', hitSelf: true, ensureKill: stuck });
     return;
   }
   // Tacticals: everyone who can see it (enemies and the thrower; teammates are spared).
@@ -251,7 +256,8 @@ export function explode(room: Room, at: Vec3, equip: EquipmentDef, ownerId: stri
     const eye = eyeOf(q);
     if (!room.world.lineOfSight(c, eye, 'sight')) continue;
     const base = tacticalAmount(eye, viewDir(q.yaw, q.pitch), c, equip.radius, equip.effect === 'flash');
-    const amount = Math.min(1, base * room.modifiers.mul('tacticalMultiplier', q));
+    const perk = room.modifiers.mul('tacticalMultiplier', q) * (equip.effect === 'concussion' ? room.modifiers.mul('concussionMultiplier', q) : 1);
+    const amount = Math.min(1, base * perk);
     if (amount <= 0.02) continue;
     const dur = (equip.duration ?? 3) * amount;
     const x = wext(q);
