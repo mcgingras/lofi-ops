@@ -145,8 +145,14 @@ export class KillcamRecorder {
     this.push(poseFrame(this.room));
   }
 
+  /** Add a frame; one at the same instant as the last replaces it (the kill's own pose wins over the tick's). */
   private push(f: KillcamFrame): void {
-    if (this.frames.at(-1)?.t === f.t) return;
+    const prev = this.frames.at(-1);
+    if (prev?.t === f.t) {
+      this.frames[this.frames.length - 1] = f;
+      for (const c of this.open(f.t)) if (c.frames.at(-1) === prev) c.frames[c.frames.length - 1] = f;
+      return;
+    }
     this.frames.push(f);
     for (const c of this.open(f.t)) if (c.frames.at(-1) !== f) c.frames.push(f);
     const cut = this.room.time - KEEP_SEC;
@@ -157,8 +163,7 @@ export class KillcamRecorder {
   onKill(e: DeathEvent<PlayerState> & { attacker: PlayerState }, view: KillView): void {
     if (this.room.phase !== 'playing') return;
     // The kill's own instant (the tick's regular frame comes after the match may already be over).
-    const now = poseFrame(this.room);
-    if (this.frames.at(-1)?.t !== now.t) this.push(now);
+    this.push(poseFrame(this.room));
     const at = this.room.time;
     const got = this.between(at - this.k.beforeSec, at);
     const ids = new Set<string>();
