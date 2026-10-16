@@ -25,6 +25,7 @@ import { makeWeapon, type PlayerState, type WeaponState } from '../../player';
 import type { Room } from '../../room';
 import { getRoomBots, configureRoomBots } from '../bots/api';
 import { enterLastStand, reviveFromLastStand } from '../perks/laststand';
+import { sendEquip } from '../weapons/equipment';
 import { getLobbyBotSettings } from '../frontend/index';
 import { createHorde, ZombieBrain, type Horde } from './brain';
 import { Buyables } from './buy';
@@ -224,7 +225,10 @@ export class ZombiesGame {
     p.health = p.maxHealth;
     if (p.isBot) this.armAlly(p);
     const x = p.ext.weapons;
-    if (x && x.lethal) x.lethalN = ZOMBIES.startGrenades;
+    if (x && x.lethal) {
+      x.lethalN = ZOMBIES.startGrenades;
+      sendEquip(this.room, p);
+    }
     this.dirty = true;
   }
 
