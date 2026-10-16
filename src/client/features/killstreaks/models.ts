@@ -311,10 +311,18 @@ export function buildPack(kit: Kit): void {
  * marker smokes blue), standing on its base at the origin, ~0.15 m tall: body, crimped top, the
  * fuse head with its spoon down one side and the pull ring. Returns the group (y up).
  */
-export function buildMarkerCanister(kit: Kit, parent: THREE.Object3D = kit.root): THREE.Group {
+export function buildMarkerCanister(kit: Kit, parent: THREE.Object3D = kit.root, variant: 'package' | 'box' = 'package'): THREE.Group {
   const g = new THREE.Group();
-  const body = kit.mat('ks_canister', { rep: 1 });
+  // The Mystery Box's canister: midnight blue with glowing bands and a glowing head (see mysterybox.ts).
+  const box = variant === 'box';
+  const body = box ? kit.mat('ks_mbox_can', { rep: 1 }) : kit.mat('ks_canister', { rep: 1 });
   const dark = kit.mat('ks_dark');
+  if (box) {
+    const glow = kit.mat('ks_mbox_glow', { emissive: 1 });
+    kit.cyl(g, 0.0335, 0.0335, 0.012, glow, 0, 0.04, 0, 'y', 8);
+    kit.cyl(g, 0.0335, 0.0335, 0.012, glow, 0, 0.09, 0, 'y', 8);
+    kit.cyl(g, 0.008, 0.008, 0.012, glow, 0, 0.16, 0, 'y', 6);
+  }
   const steel = kit.mat('gunmetal', { rep: 0.3 });
   kit.cyl(g, 0.032, 0.032, 0.12, body, 0, 0.06, 0, 'y', 8);
   kit.cyl(g, 0.034, 0.034, 0.008, dark, 0, 0.004, 0, 'y', 8);

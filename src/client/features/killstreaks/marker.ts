@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 import { groundTop, markerLaunch, resolveDrop, simulateMarker, MARKER, type DropReason, type DropSpot } from '../../../shared/defs/care-marker';
 import { KILLSTREAK_BY_ID, KS_ENTITY } from '../../../shared/defs/killstreaks';
+import { MYSTERY_BOX_ID } from '../../../shared/defs/mystery-box';
 import { clamp, quantizeAngle, type Vec3 } from '../../../shared/math';
 import { eyeHeight } from '../../../shared/movement';
 import { sfx } from '../../game/audio';
@@ -98,20 +99,23 @@ export function previewThrow(m: Match, yaw: number, pitch: number): MarkerPrevie
 
 class FirstPersonCanister {
   private kit: Kit | null = null;
+  private variant: 'package' | 'box' = 'package';
   private readonly off = new THREE.Vector3();
   private readonly q = new THREE.Quaternion();
   private readonly tilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.2, -0.35, 0.12));
 
   /** `raise` 0..1 (down..up), `thrown` 0..1 through the throw (hidden after), or both 0 to hide. */
-  update(m: Match, raise: number, thrown: number): void {
+  update(m: Match, raise: number, thrown: number, variant: 'package' | 'box' = 'package'): void {
     const show = raise > 0.001 && thrown < 1;
+    if (this.kit && variant !== this.variant && show) this.dispose();
+    this.variant = variant;
     if (!show) {
       if (this.kit) this.kit.root.visible = false;
       return;
     }
     if (!this.kit) {
       const kit = new Kit();
-      buildMarkerCanister(kit);
+      buildMarkerCanister(kit, kit.root, this.variant);
       // Gloved fingers round the can's lower half, the wrist and sleeve running back off screen.
       const glove = kit.mat('glove', { rep: 0.25 });
       const sleeve = kit.mat('camo', { rep: 0.4 });
@@ -223,6 +227,7 @@ class PreviewView {
 
 let fp: FirstPersonCanister | null = null;
 let view: PreviewView | null = null;
+let heldVariant: 'package' | 'box' = 'package';
 
 registerMatchHook('killstreaks.marker', {
   start() {
@@ -271,7 +276,9 @@ registerMatchHook('killstreaks.marker', {
     markerClient.preview = held ? previewThrow(m, m.yaw, m.pitch) : null;
     if (held || m.time - markerClient.thrownAt < 0.3) m.viewmodel.visible = false;
     const thrownK = m.time - markerClient.thrownAt < 0.3 ? (m.time - markerClient.thrownAt) / 0.3 : held ? 0 : 1;
-    fp?.update(m, held || thrownK < 1 ? Math.min(1, (m.time - markerClient.raisedAt) / 0.25) : 0, held ? 0 : thrownK);
+    // The Mystery Box has its own canister (blue, glowing bands).
+    if (held) heldVariant = (st?.marker?.id ?? markerSelected()) === MYSTERY_BOX_ID ? 'box' : 'package';
+    fp?.update(m, held || thrownK < 1 ? Math.min(1, (m.time - markerClient.raisedAt) / 0.25) : 0, held ? 0 : thrownK, heldVariant);
     view?.show(m, markerClient.preview);
   },
 });
@@ -318,6 +325,8 @@ interface Puff {
 }
 
 const SHADES = [0, 0.06, -0.08, 0.12];
+/** The Mystery Box canister's smoke: pale, glowing blue-white. */
+const MYSTERY_BOX_SMOKE = 0xbfe2ff;
 /** One wind direction for every plume (m/s): BO1 smoke leans and drifts. */
 const WIND = { x: 0.55, z: 0.25 };
 
@@ -390,9 +399,11 @@ registerEntityRenderer(KS_ENTITY.marker, (e, m) => {
   const kit = new Kit();
   const tilt = new THREE.Group();
   kit.root.add(tilt);
-  const can = buildMarkerCanister(kit, tilt);
+  // `s.mb`: the Mystery Box's canister, which pours pale glowing smoke.
+  const box = e.s?.mb === 1;
+  const can = buildMarkerCanister(kit, tilt, box ? 'box' : 'package');
   can.position.y = -0.075; // spin about its middle
-  const plume = new SmokePlume(m.renderer.scene, MARKER.smokeColor);
+  const plume = new SmokePlume(m.renderer.scene, box ? MYSTERY_BOX_SMOKE : MARKER.smokeColor);
   let spin = Math.random() * 6;
   let bounced = false;
   let lastY = e.y;

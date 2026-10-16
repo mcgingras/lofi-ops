@@ -53,3 +53,5 @@ sfx.register('ks_mark', (ctx) => tone(ctx, 0.08, (t) => Math.sin(t * 2 * Math.PI
 sfx.register('ks_confirm', (ctx) => tone(ctx, 0.1, (t) => Math.sin(t * 2 * Math.PI * 2000) * 0.15 * Math.min(1, t / 0.004, (0.1 - t) / 0.01)));
 // Care Package marker: the canister's smoke pouring out (a soft hiss, re-triggered while it smokes).
 sfx.register('ks_smoke', (ctx) => noise(ctx, 0.9, 1, (k) => Math.min(1, k * 8) * Math.min(1, (1 - k) * 4) * 0.16));
+// Mystery Box: the music box, cycle tick, lightning, landing, beam, lid and fly-away.
+import './mysterybox-sounds';

@@ -11,3 +11,4 @@ import './hud';
 
 export { WONDER_GUNS } from './models';
 export { myFrost } from './hud';
+export { fxEmit, fxLightning, fxRing } from './fx';

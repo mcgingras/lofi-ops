@@ -574,3 +574,6 @@ registerMatchHook('weapons.wonder', {
     bodies(m);
   },
 });
+
+/** The particle / bolt / ring helpers, for the Mystery Box's call-in (killstreaks client). */
+export { emit as fxEmit, lightning as fxLightning, ring as fxRing };

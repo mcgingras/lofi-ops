@@ -26,6 +26,7 @@ const SHORT: Record<string, string> = {
   mortar: 'MORTAR',
   attack_helicopter: 'HELI',
   valkyrie: 'VALKYRIE',
+  mystery_box: 'BOX',
   blackbird: 'BLACKBIRD',
   rolling_thunder: 'THUNDER',
   chopper_gunner: 'GUNNER',

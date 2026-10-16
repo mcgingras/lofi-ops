@@ -177,8 +177,8 @@ export function callMysteryBox(ctx: KsRoom, p: PlayerState, args: CallArgs): str
 function startBox(ctx: KsRoom, act: Active, owner: PlayerState, at: Vec3, t0: number): MysteryBox {
   const room = ctx.room;
   const tl = t0 + MYSTERY_BOX.descendAt + MYSTERY_BOX.descendSec;
-  // Facing the owner, so the "?" and the lid face them.
-  const yaw = Math.atan2(-(owner.move.x - at.x), -(owner.move.z - at.z)) + Math.PI;
+  // Its front (model -z, game yaw convention) faces the owner, so the lid opens toward them.
+  const yaw = Math.atan2(-(owner.move.x - at.x), -(owner.move.z - at.z));
   const ent = room.entities.add({ kind: MYSTERY_BOX_ENTITY, x: at.x, y: at.y, z: at.z, yaw, owner: owner.id, team: owner.team, s: { sd: 1 + Math.floor(Math.random() * 1e6) } });
   act.entities.push(ent.id);
   const b: MysteryBox = { ent, owner, phase: BOX_PHASE.call, t0, tl, to: 0, tw: 0, te: 0, tx: 0, idleUntil: tl + MYSTERY_BOX.idleSec, weapon: null, taken: false, hold: 0, useWas: false };
