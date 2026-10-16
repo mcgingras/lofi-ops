@@ -192,6 +192,7 @@ Netcode contract for the client:
   - It includes prone (`prone`, `proneT` 0 up..1 down, `proneHeld`, `dive`) and a mantle in progress (`mantle: { t, dur, from, to, over } | null`). Copy it with `copyMoveState`, which is deep.
   - `moveBusy(move)` means the weapon is down (mantling, diving, mid stance change). The server refuses shots with `reason: 'stance'`.
   - Helpers: `eyeHeight`, `bodyHeight`, `stanceOf` (`'stand' | 'crouch' | 'prone'`; prone once `proneT >= 0.5`), `moveHitboxes(move, yaw)`, `movePose(move, yaw)`.
+  - Knockback: `knock` (seconds of lost control left). `applyKnock(move, impulse, sec)` adds a velocity impulse and takes control away (no input acceleration, jump, sprint or mantle; a grounded body slides to a stop at `KNOCK.slide`); it cancels a mantle or dive. Server code calls it (the Thundergun); the snapshot carries it, so the owner's prediction replays the flight.
   - `MoveParams.canMantle` / `canProne` default to true. They are false for bodies that borrow player movement: RC-XD, dogs.
   - Details: docs/features/movement.md.
 
@@ -203,7 +204,8 @@ Each file exports a typed array and a `*_BY_ID` map (`indexById` throws on dupli
 
 | file | exports | owner |
 |---|---|---|
-| `weapons.ts` | `WeaponDef` (optional `projectile`: no local hitscan tracer; `ammoNoun`: the HUD counts loaded + spare as "N BOLTS"), `WEAPONS`, `WEAPON_BY_ID`, `LOADOUT_WEAPONS` (create-a-class picks; `knife` and `gl` have slots `melee` / `attachment`), `shotsToKill`, `ttkMs`, `cycleSec` | weapons |
+| `weapons.ts` | `WeaponDef` (optional `projectile`: no local hitscan tracer; `ammoNoun`: the HUD counts loaded + spare as "N BOLTS"; `wonder`: a Mystery Box wonder weapon, never classable, sold or unlocked), `WEAPONS`, `WEAPON_BY_ID`, `LOADOUT_WEAPONS` (create-a-class picks; `knife` and `gl` have slots `melee` / `attachment`; no wonder weapons), `isWonderWeapon`, `shotsToKill`, `ttkMs`, `cycleSec` | weapons |
+| `wonder.ts` | the wonder weapons (Ray Gun, Thundergun, Wunderwaffe DG-2, Winter's Howl): `WONDER_WEAPON_IDS`, tuning `RAYGUN` / `THUNDERGUN` / `WUNDERWAFFE` / `WINTERS_HOWL`, pure maths (`raygunSplash`, `inTube`, `thunderDamage`, `thunderLaunch`, `chainTargets`, `frostAdded`, `frostSlow`), `WONDER_ENTITY` (`weapons.raybolt`, `weapons.frost` with `s.p` / `s.f`), `WONDER_DROP_LIFE_SEC`, the `weapons.wonderFx` push (`WonderFx`) | weapons |
 | `attachments.ts` | `AttachmentDef` (`unlockKills`, `price`), `ATTACHMENTS`, `effectiveWeapon(def, ids)`, `validAttachments(def, ids, max)`, `canAttach`, `BASE_ATTACHMENT_SLOTS` (1) | weapons |
 | `equipment.ts` | `EquipmentDef`, `EQUIPMENT` (frag, semtex, tomahawk, flashbang, concussion), `LETHALS`, `TACTICALS`, `MELEE`, `GL_ROUND`, `NADE_ENTITY`, `TOMAHAWK` / `TOMAHAWK_ENTITY` (`weapons.tomahawk`, `s.k` = 1 once retrievable), cook maths shared by the server fuse and the HUD (`COOK`, `cookLeft`, `cookWarning`, `cookTickTimes`, `cookTicksBetween`), weapons feature messages (incl. `weapons.retrieve`, `weapons.cook {e, seq, fuse}`: the pin came out on input `seq`) | weapons |
 | `perks.ts` | `PerkDef`, `PERKS` (BO1's 15 plus Pack Rat (T2) and Tracker (T3)), `PERK_TUNING`, `PERK_PRO_CHALLENGES` | perks-streaks |
@@ -211,6 +213,7 @@ Each file exports a typed array and a `*_BY_ID` map (`indexById` throws on dupli
 | `pack-rat.ts` | Pack Rat perk: `PACK_RAT` tuning (USE hold x0, switch x0.6, picked-up raise 30%) | perks-streaks |
 | `glitch.ts` | Glitch killstreak: `GLITCH` tuning (20 s, bot skill changes, stutter, screen effects), `glitchHits`, `glitchStrength`, `glitchSkill`, push `killstreaks.glitch {active: [{owner, team, until}]}` | perks-streaks |
 | `killstreaks.ts` | `KillstreakDef` (`targeting`: `marker` for the Care Package's thrown canister, `mapPick`, `marks`, `countsStreakKills`, `noWager`...), `KILLSTREAKS` (BO1's 14 + the original Glitch at 10 (`defs/glitch.ts`) + MW2's Tactical Nuke at 25; `valkyrie` is a `marker` drop whose crate holds the launcher; `sentry_gun` / `sam_turret` are `place`: carried, then put down, `defs/turret-place.ts`), `KS_ENTITY` (incl. `sentry` = `ks_sentry`: `s.b` placed facing, `s.t` id of the player it tracks, `s.a` 1 once it may fire, `s.f` firing, `s.st` stunned, `s.h` hacked, `s.c` 1 while carried with `s.v` 1 on a good spot; `sam` = `ks_sam` the same `s.c` / `s.v` / `s.b` / `s.st` / `s.h`), (incl. `marker` = `ks_marker`, the canister: `s.k` 1 settled, `s.sm` smoke start, `s.v` 0 when the drop moved; `rocket` = `ks_rocket`, a Valkyrie rocket: `s.p` pitch, `s.v` speed, `s.f` fuel, `s.b` boosting, `s.w` feed white; `launcher` = `ks_launcher` on a player holding the launcher), `streakAllowedIn` | perks-streaks |
+| `mystery-box.ts` | Mystery Box killstreak: `MYSTERY_BOX` timeline (call-in, reach, lid, offer, leave), `MYSTERY_BOX_ENTITY` (`ks_mbox`, `BoxSnap`), `BOX_PHASE`, the BO1 cycle (`BOX_CYCLE_WAITS`, `BOX_CYCLE_SEC`, `cycleStepAt`, `cycleTimes`, `cycleModel`, `seeded`), `rollWonder`, `boxHeight` | perks-streaks |
 | `care-marker.ts` | Care Package marker, shared by the server and the client's throw preview: `MARKER` tuning, `markerLaunch`, `markerStep` / `simulateMarker` (per tick at TICK_DT), `resolveDrop` (where the crate can come down: bounds, open sky, roof limit, walls, with the walk-back fallback), `groundTop`, `roofLimit` | perks-streaks |
 | `valkyrie.ts` | Valkyrie Rockets (BO1 TV-guided missile): `VALKYRIE` tuning, `VALKYRIE_LAUNCHER` (the ready-list id of the launcher from its crate), flight maths shared by the server and the rocket cam (`rocketLaunch`, `stepRocket`, `turnRateAt`, `steerToward`, `clampLead`, `rocketOutOfBounds`, `signalWhite`, `bankRoll`, `dirAngles`) | perks-streaks |
 | `sentry.ts` | Sentry Gun: `SENTRY` tuning (60 s, 500 hp, bullet / explosive scales, arming, acquisition, turn rate, arc, bursts, damage and accuracy falloff, stuns) and pure maths (`angleDiff`, `inSentryArc`, `sentryTurn`, `sentryDamage`, `sentryHitChance`) | perks-streaks |
@@ -229,7 +232,7 @@ Each file exports a typed array and a `*_BY_ID` map (`indexById` throws on dupli
 | `maps.ts` | `MapDef {id, name, inspiredBy, build, modes, size}`, `MAPS`, `getMapData(id)` (cached), `mapsForMode` | maps-bo, maps-mw2 |
 | `progression.ts` | `MAX_LEVEL` 50, `MAX_PRESTIGE` 15, `XP_TABLE`, `levelForXp`, `xpForLevel`, `addXp`, `canPrestige`, `applyPrestige`, `XP_SOURCES` | progression |
 | `challenges.ts` | `ChallengeDef`, `CHALLENGES` (seeded: `tdm_kills`) | progression |
-| `pickups.ts` | weapon drops and pickups: `PICKUP` tuning (reach, hold time, life, room cap), `PICKUP_ENTITY` (`pickups_weapon`, `s = {w,a,c,l,m,r,o}`), `canDropWeapon`, `pickDropTarget` / `dropScore` (the same target maths on both sides), `pickups.swapped` / `pickups.ammo` messages; see docs/features/pickups.md | pickups |
+| `pickups.ts` | weapon drops and pickups: `PICKUP` tuning (reach, hold time, life (wonder weapons: `WONDER_DROP_LIFE_SEC`), room cap), `PICKUP_ENTITY` (`pickups_weapon`, `s = {w,a,c,l,m,r,o}`), `canDropWeapon`, `pickDropTarget` / `dropScore` (the same target maths on both sides), `pickups.swapped` / `pickups.ammo` messages; see docs/features/pickups.md | pickups |
 | `camos.ts` | `CamoDef {price, unlock, tier, recipe: CamoRecipe | null}`, `CAMOS` (16: Woodland ... Gold, Ice, Dragon); client texture `camo.<id>`, picker swatch `camoPreview(id)` from `src/client/features/economy` | economy |
 
 `collision.ts`: `free(x, y, z, r?, h?)` and `groundBelow(x, z, fromY, drop, r?)` take any radius (their defaults are `PLAYER.radius` / `PLAYER.height`; the parameters used to be typed as those literals).
@@ -379,6 +382,8 @@ registerFootstepFilter('perks.ninja', (playerId, volume) => volume);   // remote
 registerAimAssistGate('frontend.lobby', (match) => true);  // false = no controller aim assist in this match
 registerSightBlocker('weapons.smoke', (a, b) => false);    // true = something (smoke) blocks sight a -> b for aim assist
 registerButtonFilter('killstreaks.valkyrie', (match, buttons) => buttons); // rewrite this frame's outgoing Buttons bits (after pause masking)
+registerShotFx('raygun', { local(match, origin, dir) {}, replay(match, shooter, from, to, hit, t) {} }); // a weapon's own look: on the local pull (Match) and in killcam replays instead of the tracer
+registerKillfeedIcon('raygun', (g, x, y, u) => width);     // a pixel icon beside the weapon name in the killfeed
 ```
 
 - Screens: `mount(root, params)` returns an optional unmount. Replacing a core id (`menu`) replaces the core screen; feature folders load after core, so the last registration wins. `params.overlay === '1'` when shown with `openOverlay` over a match; use `back(params)` for a Back button.
@@ -488,6 +493,8 @@ api.registerWeaponBehavior('launcher', {
   },
 });
 ```
+
+Behaviours that replace hitscan get no `fire` room event from core; the wonder weapons emit it themselves (so killcams, stats and hardware see their shots) and push `weapons.wonderFx` for the look.
 
 Weapons-area extensions (see `docs/features/weapons.md`):
 

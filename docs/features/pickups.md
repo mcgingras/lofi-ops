@@ -15,7 +15,7 @@ tests/pickups.integration.test.ts real server + sockets (drop, swap, reach, weap
 | what | how |
 |---|---|
 | Drop on death | The gun in the victim's hands (the primary if they had the underbarrel launcher up, the pistol in last stand) drops at the body with its magazine, reserve, attachments, camo and launcher rounds. It leaves the hands ~1 m up with a little toss, tumbles and spins down, and lies flat on its side. Completely empty guns (0 + 0) don't drop. Only `primary` / `secondary` weapons drop (`canDropWeapon`; no knife, launcher slot or wager-only guns). |
-| Life and cap | `PICKUP.lifeSec` 45 s, then it's gone. At most `PICKUP.maxPerRoom` 16 per room: the oldest goes first. A new S&D round clears them (`modes.roundStart`); a new match clears all entities anyway. |
+| Life and cap | `PICKUP.lifeSec` 45 s, then it's gone (a Mystery Box wonder weapon: `WONDER_DROP_LIFE_SEC` 20 s). At most `PICKUP.maxPerRoom` 16 per room: the oldest goes first. A new S&D round clears them (`modes.roundStart`); a new match clears all entities anyway. |
 | Prompt | Within `PICKUP.radius` 1.6 m (feet to gun, ±1.4 m height) with line of sight: "HOLD F TO SWAP FOR <GUN>" (the USE key from `useKey()`), with its attachments and ammo under it, and a fill bar while you hold. If several are in reach the one nearest the crosshair wins (score = distance + 2 × angle off the crosshair), then the nearest. |
 | Swap | Hold USE `PICKUP.holdSec` 0.25 s. The gun in your hand is replaced (slot kept, so a primary can end up in your pistol slot as in CoD); you take its ammo, yours drops where you stand with its ammo, and the new gun comes up over its swap time. Then USE must be let go before another swap, and the gun you just put down can't be taken back by you for `PICKUP.reswapSec` 1 s (covers lag gaps where the server sees USE go up). Not while the launcher slot is up. |
 | Same weapon | You never carry two of the same gun (same weapon id; attachments don't matter): no prompt. Walking over it (`PICKUP.ammoRadius` 1.1 m) takes its rounds into that gun's reserve up to the max (`max(def.reserve, current)`) and removes it; if you're full it stays. |
@@ -54,6 +54,8 @@ No special hook needed: progression credits kills to the `attacker` with `death.
 - `pickups.prompt` HUD widget (order 8), notices for ammo taken, a sound on swap.
 - `pickups.corpses` match hook: a dead remote soldier whose gun is on the floor (`s.o`) stops holding it (its `aim` child groups are hidden until it respawns).
 - `game/match.ts` (core, small): when the server replaces the gun in the current slot, the local prediction drops pending shots / reload for it and raises the new gun over its own swap time.
+
+Wonder weapons (Mystery Box): a bot with full guns (`ammoNeed` 0) still walks to a dropped wonder weapon within `14 × (0.5 + weaponPickup)` m it doesn't carry, when no enemy watches (`chooseWonderDrop`, goal priority 0.6).
 
 ## Not done / simplified
 

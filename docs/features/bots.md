@@ -208,6 +208,7 @@ Nothing in the server adds avoidable delay. Inputs are applied on the next tick,
 - **Perception at 20 Hz**, staggered between bots (the current target is checked every tick): see Perception above. It hears gunfire and footsteps. It knows about enemies the radar shows it (`radarVisible` modifier returning true, which is the UAV hook); a radar contact is a place to go, never something to shoot at.
 - **Fighting:**
   - The aim model above.
+  - Holding a Mystery Box wonder weapon, it fights by that weapon's rules (`src/server/features/weapons/wonder/bots.ts`, `wonderBotStyle` / `wonderBotDecision`): its preferred range and ADS distance replace the class style; the Thundergun and Winter's Howl hold fire outside their blast (11 m) and swap to the other gun past 16 m (and back up close); the Ray Gun's bolt leads a moving target for it.
   - Bursts for auto and burst weapons; paced shots for semi, bolt and pump.
   - ADS by range, depending on weapon class.
   - Holds its class's preferred range (closer for aggressive bots).
