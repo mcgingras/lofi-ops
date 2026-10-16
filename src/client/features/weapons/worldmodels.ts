@@ -44,7 +44,7 @@ const WORLD_ONLY: Record<string, (k: Kit) => { grip: THREE.Vector3; muzzle: THRE
   knife(k) {
     const { M } = k;
     const blade = new THREE.Group();
-    blade.rotation.x = 0.18;
+    blade.rotation.x = 0.45;
     k.root.add(blade);
     k.box(0.014, 0.05, 0.25, M.steel, 0, 0.004, -0.165, 0, 0, 0, blade);
     k.box(0.01, 0.026, 0.07, M.steel, 0, 0.014, -0.315, 0.35, 0, 0, blade);
@@ -53,7 +53,7 @@ const WORLD_ONLY: Record<string, (k: Kit) => { grip: THREE.Vector3; muzzle: THRE
     k.box(0.036, 0.044, 0.12, M.poly, 0, -0.002, 0.04);
     for (let i = 0; i < 3; i++) k.box(0.04, 0.048, 0.008, M.metal, 0, -0.002, 0.0 + i * 0.035);
     k.box(0.042, 0.042, 0.022, M.metal, 0, 0, 0.11);
-    return { grip: new THREE.Vector3(0, 0, 0.04), muzzle: new THREE.Vector3(0, 0.05, -0.36), scale: 1.3 };
+    return { grip: new THREE.Vector3(0, 0, 0.04), muzzle: new THREE.Vector3(0, 0.15, -0.34), scale: 1.6 };
   },
 };
 
