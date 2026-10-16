@@ -56,7 +56,7 @@ Sounds: `killstreaks/sounds.ts` holds the synthesized `ks_*` voices; the recorde
 | 2 | Steady Aim | `spreadMultiplier` 0.65 while not ADS | `sprintOutMultiplier` 0.5, `meleeSpeedMultiplier` 0.7 (knife cooldown and recovery) |
 | 2 | Sleight of Hand | `reloadMultiplier` 0.5 | `adsMultiplier` 0.5 |
 | 2 | Warlord | `attachmentSlotsOffset` +1 (sum; base 1): two attachments on the primary, read at `beforeSpawn` from the class being spawned | `equipmentCountOffset` +1 for both kinds: 2 lethals, 3 tacticals |
-| 2 | Pack Rat | a tap of USE swaps for a dropped gun (`pickupHoldMultiplier` 0), the picked-up gun comes up in 30% of its raise and wears your camo for that slot; every switch x0.6 (`swapMultiplier`) | the picked-up gun comes with a full magazine and full reserve |
+| 2 | Pack Rat | a tap of USE swaps for a dropped gun (`pickupHoldMultiplier` 0), the picked-up gun comes up in 30% of its raise and wears your camo for that slot (MW2 camos included); every switch x0.6 (`swapMultiplier`) | the picked-up gun comes with a full magazine and full reserve |
 | 3 | Tactical Mask | `tacticalMultiplier` 0.35 (flash / concussion strength, and so duration) | enemies you stun (`weapons.tactical` event) show on your radar for the stun |
 | 3 | Marathon | sprint stamina x2 | unlimited sprint |
 | 3 | Ninja | `silentFootsteps`; remote footsteps silent on clients | enemy footsteps x1.8 for you; `hearingMultiplier` 1.8 |
