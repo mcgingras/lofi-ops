@@ -326,7 +326,7 @@ interface Puff {
 
 const SHADES = [0, 0.06, -0.08, 0.12];
 /** The Mystery Box canister's smoke: pale, glowing blue-white. */
-const MYSTERY_BOX_SMOKE = 0xbfe2ff;
+const MYSTERY_BOX_SMOKE = 0x8ab4e0;
 /** One wind direction for every plume (m/s): BO1 smoke leans and drifts. */
 const WIND = { x: 0.55, z: 0.25 };
 
@@ -429,7 +429,8 @@ registerEntityRenderer(KS_ENTITY.marker, (e, m) => {
       lastY = s.y;
       const sm = typeof s.s?.sm === 'number' ? s.s.sm : Infinity;
       kit.root.getWorldPosition(pos);
-      plume.update(dt, { x: pos.x, y: pos.y, z: pos.z }, m.serverTime >= sm ? 1 : 0, (at) => sfx.play('ks_smoke', { at, volume: 0.9 }));
+      // The box's canister only wisps (its beam of light is the marker).
+      plume.update(dt, { x: pos.x, y: pos.y, z: pos.z }, m.serverTime >= sm ? (box ? 0.08 : 1) : 0, (at) => sfx.play('ks_smoke', { at, volume: box ? 0.4 : 0.9 }));
     },
     dispose() {
       plume.dispose();

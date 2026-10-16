@@ -27,18 +27,14 @@ function raygun(k: Kit): GunBuild {
   const red = k.mat('wonder.ray', { rep: 0.3 });
   const chrome = k.mat('wonder.chrome', { rep: 0.25 });
   const green = glow(k, 'wonder.green');
-  const glass = k.mat('wonder.glass', { rep: 0.1 });
   const { M } = k;
   // Body: a rounded receiver with a hump over it.
   k.box(0.055, 0.075, 0.2, red, 0, 0, -0.02);
   k.cyl(0.03, 0.2, red, 0, 0.025, -0.02, 8);
   k.box(0.04, 0.02, 0.16, M.metal, 0, -0.045, -0.03);
-  // The two energy tubes on top, in glass sleeves, held by chrome bands.
-  for (const x of [-0.016, 0.016]) {
-    k.cyl(0.01, 0.17, glass, x, 0.062, -0.03, 6);
-    k.cyl(0.006, 0.168, green, x, 0.062, -0.03, 6);
-  }
-  for (const z of [0.045, -0.1]) k.box(0.06, 0.012, 0.012, chrome, 0, 0.062, z);
+  // The two glowing energy tubes on top, held by chrome bands.
+  for (const x of [-0.017, 0.017]) k.cyl(0.011, 0.17, green, x, 0.064, -0.03, 6);
+  for (const z of [0.045, -0.1]) k.box(0.064, 0.026, 0.012, chrome, 0, 0.064, z);
   // Rear dial.
   k.cyl(0.03, 0.02, chrome, 0, 0.02, 0.09, 8);
   k.cyl(0.012, 0.012, green, 0, 0.02, 0.102, 6);
@@ -122,9 +118,9 @@ function wunderwaffe(k: Kit): GunBuild {
   k.root.add(bulbs);
   for (const z of [0.07, 0, -0.07]) {
     k.cyl(0.02, 0.015, copper, 0, 0.008, z, 8, bulbs);
-    k.cyl(0.022, 0.055, glass, 0, 0.045, z, 8, bulbs, 'y', 0.016);
-    k.cyl(0.011, 0.045, bulbGlow, 0, 0.045, z, 6, bulbs, 'y');
-    k.cyl(0.008, 0.01, copper, 0, 0.078, z, 6, bulbs, 'y');
+    k.cyl(0.023, 0.012, glass, 0, 0.02, z, 8, bulbs, 'y');
+    k.cyl(0.021, 0.05, bulbGlow, 0, 0.05, z, 8, bulbs, 'y', 0.015);
+    k.cyl(0.008, 0.012, copper, 0, 0.081, z, 6, bulbs, 'y');
   }
   // Sights over the bulbs.
   k.box(0.012, 0.03, 0.012, dark, 0, 0.11, 0.08);

@@ -160,7 +160,7 @@ export function callMysteryBox(ctx: KsRoom, p: PlayerState, args: CallArgs): str
       } else if (!b && !box) box = startBox(ctx, act, p, { x: canister.ent.x, y: canister.ent.y, z: canister.ent.z }, room.time + 0.2);
       if (box) {
         // The canister goes once the box is down.
-        if (room.entities.get(canister.ent.id) && room.time >= box.tl + 1.5) ctx.removeEntity(canister.ent.id);
+        if (room.entities.get(canister.ent.id) && room.time >= box.tl) ctx.removeEntity(canister.ent.id);
         return updateBox(ctx, box, dt);
       }
       return true;

@@ -167,21 +167,21 @@ function ring(at: Vec3, normal: Vec3, color: number, r0: number, r1: number, lif
 /** Thundergun: rolling rings of compressed air down the tube, dust off the ground, a shake. */
 function blast(m: Match, o: Vec3, dir: Vec3, local: boolean): void {
   const d = unit(dir);
-  for (let i = 0; i < 4; i++) ring(add(o, d, 0.6 + i * 0.4), d, AIR, 0.25 + i * 0.1, THUNDERGUN.r1 * 1.3, 0.32 + i * 0.07, { dir: d, dist: THUNDERGUN.range * (0.6 + i * 0.1) });
+  for (let i = 0; i < 3; i++) ring(add(o, d, 1.2 + i * 0.6), d, 0x8a96a8, 0.25 + i * 0.1, THUNDERGUN.r1 * 1.2, 0.3 + i * 0.08, { dir: d, dist: THUNDERGUN.range * (0.6 + i * 0.12) });
   const [a, b] = basis(d);
-  for (let i = 0; i < 26; i++) {
-    const along = 0.5 + Math.random() * 2;
+  for (let i = 0; i < 22; i++) {
+    const along = 1.5 + Math.random() * 2;
     const spread = 0.35;
     const v = unit({ x: d.x + a.x * rnd(spread) + b.x * rnd(spread), y: d.y + a.y * rnd(spread) + b.y * rnd(spread), z: d.z + a.z * rnd(spread) + b.z * rnd(spread) });
-    emit(add(o, d, along), { color: AIR, life: 0.3 + Math.random() * 0.2, size: 0.25, size1: 1.2, vel: { x: v.x * 22, y: v.y * 22, z: v.z * 22 }, drag: 3 });
+    emit(add(o, d, along), { color: 0x5a6070, life: 0.3 + Math.random() * 0.2, size: 0.2, size1: 0.9, vel: { x: v.x * 22, y: v.y * 22, z: v.z * 22 }, drag: 3 });
   }
   // Dust kicked up along the floor under the blast.
   const world = m.net.world;
   for (let i = 0; i < 10; i++) {
-    const p = add(o, d, 1 + (i / 10) * THUNDERGUN.range);
+    const p = add(o, d, 2.5 + (i / 10) * (THUNDERGUN.range - 1.5));
     const g = world.groundBelow(p.x, p.z, p.y, 3);
     if (g === null) continue;
-    for (let j = 0; j < 2; j++) emit({ x: p.x + rnd(1), y: g + 0.2, z: p.z + rnd(1) }, { tex: 'puff', color: DUST, additive: false, life: 0.9 + Math.random() * 0.5, size: 0.4, size1: 1.8, vel: { x: d.x * 6 + rnd(1.5), y: 1 + Math.random() * 1.5, z: d.z * 6 + rnd(1.5) }, drag: 2 });
+    for (let j = 0; j < 2; j++) emit({ x: p.x + rnd(1), y: g + 0.15, z: p.z + rnd(1) }, { tex: 'puff', color: DUST, additive: false, life: 0.8 + Math.random() * 0.5, size: 0.25, size1: 1.1, vel: { x: d.x * 7 + rnd(1.5), y: 0.8 + Math.random() * 1.2, z: d.z * 7 + rnd(1.5) }, drag: 2 });
   }
   const me = m.net.predictor.state;
   const dist = Math.hypot(me.x - o.x, me.z - o.z);
@@ -256,8 +256,8 @@ function lightning(a: Vec3, b: Vec3, color: number, life = 0.22, width = 0.045):
       core.dispose();
     },
   });
-  emit(b, { color, life: 0.25, size: 0.9, size1: 0.3 });
-  emit(a, { color, life: 0.12, size: 0.5 });
+  emit(b, { color, life: 0.25, size: 0.7, size1: 0.25 });
+  emit(a, { color, life: 0.1, size: 0.12 });
 }
 
 /** An arc to a body: the bolt, sparks at the end, a crackle. */
@@ -278,9 +278,9 @@ function frostCone(o: Vec3, dir: Vec3): void {
     const speed = 14 + Math.random() * 10;
     emit(add(o, d, 0.3), { tex: 'wonder.shard', color: ICE, additive: false, life: (WINTERS_HOWL.range / speed) * (0.7 + Math.random() * 0.4), size: 0.08, size1: 0.2, vel: { x: v.x * speed, y: v.y * speed, z: v.z * speed }, drag: 0.6 });
   }
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 12; i++) {
     const v = unit({ x: d.x + a.x * rnd(0.18) + b.x * rnd(0.18), y: d.y + a.y * rnd(0.18) + b.y * rnd(0.18), z: d.z + a.z * rnd(0.18) + b.z * rnd(0.18) });
-    emit(add(o, d, 0.5), { color: 0x6ab8e8, life: 0.6 + Math.random() * 0.3, size: 0.3, size1: 2.2, vel: { x: v.x * 12, y: v.y * 12 + 0.5, z: v.z * 12 }, drag: 2.5 });
+    emit(add(o, d, 1.5), { color: 0x2a5a80, life: 0.6 + Math.random() * 0.3, size: 0.2, size1: 1.3, vel: { x: v.x * 12, y: v.y * 12 + 0.5, z: v.z * 12 }, drag: 2.5 });
   }
 }
 
@@ -479,9 +479,9 @@ registerShotFx('wintershowl', {
 registerEntityRenderer(WONDER_ENTITY.bolt, (e, m) => {
   const root = new THREE.Group();
   const core = new THREE.Sprite(spriteMat('wonder.glow', GREEN, true));
-  core.scale.setScalar(0.5);
+  core.scale.setScalar(0.8);
   const hot = new THREE.Sprite(spriteMat('wonder.glow', 0xeaffd8, true));
-  hot.scale.setScalar(0.18);
+  hot.scale.setScalar(0.28);
   root.add(core, hot);
   const own = e.owner === m.myId;
   const born = typeof e.s?.b === 'number' ? e.s.b : m.serverTime;
@@ -491,15 +491,15 @@ registerEntityRenderer(WONDER_ENTITY.bolt, (e, m) => {
       // My own bolt: the predicted one is showing for the first moment.
       root.visible = !own || m.serverTime - born >= localBoltSec(m);
       if (!root.visible) return;
-      core.scale.setScalar(0.45 + Math.sin(m.time * 40) * 0.06);
-      emit({ x: root.position.x, y: root.position.y, z: root.position.z }, { color: GREEN, life: 0.22, size: 0.26, size1: 0.04 });
+      core.scale.setScalar(0.75 + Math.sin(m.time * 40) * 0.08);
+      emit({ x: root.position.x, y: root.position.y, z: root.position.z }, { color: GREEN, life: 0.25, size: 0.4, size1: 0.05 });
     },
   };
 });
 
 registerEntityRenderer(WONDER_ENTITY.frost, (e, m) => {
   const root = new THREE.Group();
-  const iceMat = new THREE.MeshBasicMaterial({ color: ICE, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
+  const iceMat = new THREE.MeshBasicMaterial({ color: 0xcdeeff });
   const blockMat = new THREE.MeshBasicMaterial({ color: 0x5aa8d8, transparent: true, opacity: 0.35, depthWrite: false });
   const geo = new THREE.BoxGeometry(1, 1, 1);
   const shards: THREE.Mesh[] = [];

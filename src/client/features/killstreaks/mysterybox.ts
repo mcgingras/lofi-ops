@@ -240,10 +240,11 @@ function setWhite(m: Match, v: number): void {
 registerEntityRenderer(MYSTERY_BOX_ENTITY, (e, m) => {
   const kit = new Kit();
   const model = buildBox(kit);
-  const outer = beam(0.5, 1.1, BEAM);
-  const core = beam(0.14, 0.32, 0xdff0ff);
+  const outer = beam(0.32, 0.75, BEAM);
+  const core = beam(0.07, 0.17, 0xdff0ff);
   kit.root.add(outer, core);
   const holder = new THREE.Group();
+  holder.scale.setScalar(1.15);
   model.body.add(holder);
   const gunMats: LookMaterial[] = [];
   const guns = new Map<string, THREE.Group>();
@@ -289,8 +290,11 @@ registerEntityRenderer(MYSTERY_BOX_ENTITY, (e, m) => {
       outer.scale.set(1, Math.max(0.01, grow), 1);
       core.scale.set(1, Math.max(0.01, grow), 1);
       const pulse = 0.8 + 0.2 * Math.sin(m.time * 3);
-      (outer.material as THREE.MeshBasicMaterial).color.setHex(BEAM).multiplyScalar(0.35 * beamK * pulse);
-      (core.material as THREE.MeshBasicMaterial).color.setHex(0xdff0ff).multiplyScalar(0.5 * beamK * pulse);
+      // Thinner in your face: standing at the box, the beam mustn't hide it.
+      const camD = Math.hypot(m.renderer.cam.position.x - kit.root.position.x, m.renderer.cam.position.z - kit.root.position.z);
+      const closeK = 0.25 + 0.75 * smooth((camD - 2) / 5);
+      (outer.material as THREE.MeshBasicMaterial).color.setHex(BEAM).multiplyScalar(0.2 * beamK * pulse * closeK);
+      (core.material as THREE.MeshBasicMaterial).color.setHex(0xdff0ff).multiplyScalar(0.34 * beamK * pulse * closeK);
       cues.at('beam', t0, now, () => sfx.play('ks_mbox_beam', { at: at(), volume: 1.2, range: 'far' }));
       // ---- Sky flicker, then the lightning strike.
       const fl = now - t0 - B.flickerAt;
@@ -298,8 +302,10 @@ registerEntityRenderer(MYSTERY_BOX_ENTITY, (e, m) => {
       const sinceStrike = now - t0 - B.strikeAt;
       cues.at('strike', t0 + B.strikeAt, now, () => {
         const p = at();
-        fxLightning({ x: p.x + (Math.random() - 0.5) * 6, y: p.y + 45, z: p.z + (Math.random() - 0.5) * 6 }, { x: p.x, y: p.y + 0.1, z: p.z }, 0xdfeeff, 0.35, 0.12);
-        fxLightning({ x: p.x + (Math.random() - 0.5) * 8, y: p.y + 40, z: p.z + (Math.random() - 0.5) * 8 }, { x: p.x, y: p.y + 0.1, z: p.z }, BEAM, 0.25, 0.06);
+        // Down out of the sky at an angle, so the bolt reads apart from the beam.
+        const a = Math.random() * Math.PI * 2;
+        fxLightning({ x: p.x + Math.cos(a) * 14, y: p.y + 42, z: p.z + Math.sin(a) * 14 }, { x: p.x, y: p.y + 0.1, z: p.z }, 0xeef6ff, 0.4, 0.22);
+        fxLightning({ x: p.x + Math.cos(a + 0.5) * 18, y: p.y + 40, z: p.z + Math.sin(a + 0.5) * 18 }, { x: p.x, y: p.y + 0.1, z: p.z }, BEAM, 0.3, 0.1);
         for (let i = 0; i < 24; i++) fxEmit({ x: p.x, y: p.y + 0.2, z: p.z }, { color: i % 2 ? 0xffe8a0 : 0xbfe2ff, life: 0.5 + Math.random() * 0.4, size: 0.1, size1: 0.03, vel: { x: (Math.random() - 0.5) * 10, y: 2 + Math.random() * 6, z: (Math.random() - 0.5) * 10 }, grav: 14 });
         fxRing({ x: p.x, y: p.y, z: p.z }, { x: 0, y: 1, z: 0 }, 0xdfeeff, 0.3, 5, 0.5);
         sfx.play('ks_mbox_thunder', { at: p, volume: 2.2, range: 'far' });
@@ -315,8 +321,10 @@ registerEntityRenderer(MYSTERY_BOX_ENTITY, (e, m) => {
       model.body.position.y = y;
       model.body.visible = now >= t0 + B.descendAt - 0.05 && (tx === undefined || y < B.dropHeight * 1.35);
       const falling = now >= t0 + B.descendAt && now < tl;
-      model.glow.scale.setScalar(falling ? 2.6 + Math.sin(m.time * 12) * 0.3 : 1.6 + Math.sin(m.time * 2) * 0.15);
-      (model.glow.material as THREE.SpriteMaterial).color.setHex(BEAM).multiplyScalar(falling ? 0.9 : 0.45);
+      // A blue glow: strong while it rides the beam down, a soft halo while it waits, none once open.
+      model.glow.visible = to === undefined || now < to;
+      model.glow.scale.setScalar(falling ? 1.9 + Math.sin(m.time * 12) * 0.2 : 1.4 + Math.sin(m.time * 2) * 0.1);
+      (model.glow.material as THREE.SpriteMaterial).color.setHex(BEAM).multiplyScalar(falling ? 0.55 : 0.22);
       if (falling && Math.random() < 0.6) {
         const p = at();
         fxEmit({ x: p.x + (Math.random() - 0.5) * S.w, y: p.y + y + Math.random() * 0.5, z: p.z + (Math.random() - 0.5) * S.d }, { color: 0xbfe2ff, life: 0.6, size: 0.08, size1: 0.02, vel: { x: 0, y: 1.5, z: 0 } });
@@ -341,9 +349,9 @@ registerEntityRenderer(MYSTERY_BOX_ENTITY, (e, m) => {
       model.lid.rotation.x = B.lidAngle * lidK;
       model.inner.visible = lidK > 0.02;
       if (to !== undefined) cues.at('open', to, now, () => sfx.play('ks_mbox_open', { at: at(), volume: 1 }));
-      if (lidK > 0.3 && Math.random() < 0.5) {
+      if (lidK > 0.3 && Math.random() < 0.3) {
         const p = at();
-        fxEmit({ x: p.x + (Math.random() - 0.5) * S.w * 0.8, y: p.y + y + S.h, z: p.z + (Math.random() - 0.5) * S.d * 0.6 }, { color: 0xffe8a0, life: 0.7, size: 0.18, size1: 0.5, vel: { x: 0, y: 1.2, z: 0 } });
+        fxEmit({ x: p.x + (Math.random() - 0.5) * S.w * 0.8, y: p.y + y + S.h, z: p.z + (Math.random() - 0.5) * S.d * 0.6 }, { color: 0x7a6440, life: 0.7, size: 0.05, size1: 0.22, vel: { x: 0, y: 1.0, z: 0 } });
       }
       // ---- The cycle and the offer.
       if (to !== undefined && ph >= BOX_PHASE.open && !(tx !== undefined && num(ss.tk) === 1)) {
