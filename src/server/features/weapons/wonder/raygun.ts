@@ -21,24 +21,29 @@ interface BoltData {
   born: number;
 }
 
-/** A bot shooter aims where its target will be when the bolt arrives (the enemy nearest its aim ray). */
+/**
+ * A bot shooter leads a moving target: the enemy nearest its aim ray, by the target's velocity
+ * times the bolt's flight time (the bot's own aim point is kept otherwise; humans lead themselves).
+ */
 export function boltLead(room: Room, p: PlayerState, origin: Vec3, dir: Vec3): Vec3 {
   if (p.session) return dir;
   let best: PlayerState | null = null;
   let bestOff = 0.12; // radians off the aim
+  let bestD = 0;
   for (const q of targetsOf(room, p)) {
     const c = chest(q);
+    const D = Math.hypot(c.x - origin.x, c.y - origin.y, c.z - origin.z);
     const d = normalize({ x: c.x - origin.x, y: c.y - origin.y, z: c.z - origin.z });
     const off = Math.acos(Math.max(-1, Math.min(1, d.x * dir.x + d.y * dir.y + d.z * dir.z)));
     if (off < bestOff) {
       best = q;
       bestOff = off;
+      bestD = D;
     }
   }
   if (!best) return dir;
-  const c = chest(best);
-  const t = Math.hypot(c.x - origin.x, c.y - origin.y, c.z - origin.z) / RAYGUN.speed;
-  const at = { x: c.x + best.move.vx * t, y: c.y - 0.3, z: c.z + best.move.vz * t };
+  const t = bestD / RAYGUN.speed;
+  const at = { x: origin.x + dir.x * bestD + best.move.vx * t, y: origin.y + dir.y * bestD, z: origin.z + dir.z * bestD + best.move.vz * t };
   return normalize({ x: at.x - origin.x, y: at.y - origin.y, z: at.z - origin.z });
 }
 
