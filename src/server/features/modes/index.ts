@@ -66,7 +66,7 @@ const feature: Feature = {
       cam.clear();
       deathcams.clear();
     });
-    room.bus.on('fire', (e) => cam.onShot(e.player, e.end, e.hits.length > 0));
+    room.bus.on('fire', (e) => cam.onShot(e.player, e.end, e.hits.length > 0, e.walls));
     room.bus.on('damage', (e) => deathcams.onDamage(e.victim, e.from));
     room.bus.on('tick', ({ tick }) => {
       cam.onTick(tick);

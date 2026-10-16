@@ -2,6 +2,8 @@
  * Firing, damage, death and respawn. Hitscan is lag compensated: targets are rewound to the
  * shooter's view time (clamped to MAX_REWIND_MS); the world is hit first, then hitboxes. A shot at
  * the present (bots) uses where everyone is now. `traceShot` traces a shot without firing it.
+ * Human shots go through thin walls (`shared/penetration.ts`): less damage and range per wall, at
+ * most two walls; bots' shots stop on the first wall, as they fire only with a clear path.
  *
  * Extension points:
  *   - `registerWeaponBehavior(idOrClass, behavior)`: replace hitscan for a weapon id or class
@@ -10,15 +12,16 @@
  *   - bus events `beforeDamage` (mutable), `damage`, `death`, `fire`, `reload`, `weaponSwitch`,
  *     `beforeSpawn` (mutable loadout/point), `spawn`.
  *   - modifiers: damageTaken, damageDealt, reloadMultiplier, swapMultiplier, sprintOutMultiplier,
- *     spreadMultiplier, regenDelayMultiplier, maxHealthMultiplier.
+ *     spreadMultiplier, regenDelayMultiplier, maxHealthMultiplier, penetrationMultiplier.
  */
 import { damageAtRange, isLowerTorso, partMultiplier, shotInterval, shotSeed, spreadDegrees, spreadDirection, stanceSpread } from '../shared/ballistics';
-import { poseHitboxes, poseStance, rayHitboxes, type HitPart } from '../shared/collision';
+import { poseHitboxes, poseStance, rayHitboxes, type HitPart, type Solid } from '../shared/collision';
 import { HEALTH, PLAYER, RESPAWN_DELAY } from '../shared/constants';
 import type { DamageInfo, DamageMeans } from '../shared/events';
 import { cloneLoadout, DEFAULT_LOADOUTS, sanitizeLoadout, type Loadout } from '../shared/loadout';
 import type { SpawnPoint } from '../shared/maps/types';
 import { dist, normalize, type Vec3 } from '../shared/math';
+import { effectiveDistance, keepAt, penetrationMaterial, penetrationType, traceBullet, type WallPass } from '../shared/penetration';
 import { bodyHeight, createMoveState, eyeHeight, moveBusy, movePose } from '../shared/movement';
 import { q3 } from '../shared/protocol';
 import { HitboxHistory, type Pose } from './lagcomp';
@@ -110,28 +113,34 @@ export function fire(room: Room, p: PlayerState, req: ShotRequest): FireResult {
   const viewTime = HitboxHistory.clampTime(req.time, now);
   const poses = viewTime >= now ? null : room.history.rewind(viewTime);
   const traced = traceShot(room, p, origin, dir, req.shot, poses);
-  const perVictim = new Map<PlayerState, { damage: number; part: HitPart; distance: number }>();
+  const perVictim = new Map<PlayerState, { damage: number; part: HitPart; distance: number; penetrated: boolean }>();
   const first = traced[0]!;
   const end: Vec3 = { x: origin.x + first.dir.x * first.t, y: origin.y + first.dir.y * first.t, z: origin.z + first.dir.z * first.t };
   let hitAny = false;
   for (const pel of traced) {
     if (!pel.victim) continue;
     hitAny = true;
-    const dmg = damageAtRange(def, pel.t) * partMultiplier(def, pel.part, pel.lower);
+    // Through walls: each one keeps part of the damage and stretches the falloff distance.
+    const dmg = damageAtRange(def, pel.range) * partMultiplier(def, pel.part, pel.lower) * pel.keep;
+    const through = pel.walls.length > 0;
     const acc = perVictim.get(pel.victim);
     if (acc) {
       acc.damage += dmg;
+      acc.penetrated &&= through;
       if (pel.part === 'head') acc.part = 'head';
-    } else perVictim.set(pel.victim, { damage: dmg, part: pel.part, distance: pel.t });
+    } else perVictim.set(pel.victim, { damage: dmg, part: pel.part, distance: pel.t, penetrated: through });
   }
 
-  const hits: { victim: PlayerState; part: HitPart; damage: number }[] = [];
+  const hits: { victim: PlayerState; part: HitPart; damage: number; penetrated: boolean }[] = [];
   for (const [victim, h] of perVictim) {
-    const dealt = damage(room, { victim, attacker: p, amount: h.damage, weapon: def.base.id, part: h.part, means: 'bullet', from: origin, distance: h.distance });
-    hits.push({ victim, part: h.part, damage: dealt });
+    const dealt = damage(room, { victim, attacker: p, amount: h.damage, weapon: def.base.id, part: h.part, means: 'bullet', from: origin, distance: h.distance, ...(h.penetrated ? { penetrated: true } : {}) });
+    hits.push({ victim, part: h.part, damage: dealt, penetrated: h.penetrated });
   }
-  room.recordShot({ p: p.id, o: [q3(origin.x), q3(origin.y), q3(origin.z)], e: [q3(end.x), q3(end.y), q3(end.z)], w: def.base.id, ...(hitAny ? { h: 1 as const } : {}) });
-  room.bus.emit('fire', { player: p, weapon: def.base.id, origin, dir, hits, end });
+  // The first pellet's walls (entry and exit points): impact effects on both sides, replays.
+  const walls = first.walls.flatMap((w) => [w.point, w.exit]);
+  const wire = walls.flatMap((v) => [q3(v.x), q3(v.y), q3(v.z)]);
+  room.recordShot({ p: p.id, o: [q3(origin.x), q3(origin.y), q3(origin.z)], e: [q3(end.x), q3(end.y), q3(end.z)], w: def.base.id, ...(hitAny ? { h: 1 as const } : {}), ...(wire.length ? { x: wire } : {}) });
+  room.bus.emit('fire', { player: p, weapon: def.base.id, origin, dir, hits, end, walls });
   if (w.mag <= 0) startReload(room, p);
   return { ok: true };
 }
@@ -139,19 +148,26 @@ export function fire(room: Room, p: PlayerState, req: ShotRequest): FireResult {
 /** One pellet of a traced shot: its direction, where it stopped (t), and whom it hit there. */
 export interface Pellet {
   dir: Vec3;
-  /** Distance to the hit (the victim's hitbox, else the world, else the weapon's range). */
+  /** Distance to the hit (the victim's hitbox, else the wall that stopped it, else the weapon's range). */
   t: number;
   victim: PlayerState | null;
   part: HitPart;
   /** Lower torso (for weapons with a lower-torso multiplier). */
   lower: boolean;
+  /** Walls it went through before `t` (human shots only). */
+  walls: WallPass[];
+  /** Damage kept through those walls (1 with none). */
+  keep: number;
+  /** Distance for damage falloff (`t`, stretched past each wall). */
+  range: number;
 }
 
 /**
  * The pellets of one trigger pull of `p`'s current weapon: spread around `dir` by the shot seed
- * (`shot`), stopped by the world ('bullets' mask), then the nearest hitbox at `poses` (a rewound
- * frame, or null for where everyone is now). `fire` uses it; bots call it to check a shot before
- * taking it. Pure: no ammo, no damage.
+ * (`shot`), through the walls a human's bullet can pass and stopped by the next ('bullets' mask,
+ * `traceBullet`; a bot's stop on the first), then the nearest hitbox at `poses` (a rewound frame,
+ * or null for where everyone is now). `fire` uses it; bots call it to check a shot before taking
+ * it. Pure: no ammo, no damage.
  */
 export function traceShot(room: Room, p: PlayerState, origin: Vec3, dir: Vec3, shot: number, poses: Map<string, Pose> | null = null): Pellet[] {
   const def = currentWeapon(p)?.def;
@@ -159,11 +175,14 @@ export function traceShot(room: Room, p: PlayerState, origin: Vec3, dir: Vec3, s
   const moving = Math.hypot(p.move.vx, p.move.vz) > 0.5;
   const spread = spreadDegrees(def, p.move.ads, moving, room.modifiers.mul('spreadMultiplier', p) * stanceSpread(p.move));
   const range = def.range ?? DEFAULT_RANGE;
+  const type = p.isBot ? 'none' : penetrationType(def);
+  const depthMultiplier = type === 'none' ? 1 : room.modifiers.mul('penetrationMultiplier', p);
+  const materialOf = (s: Solid) => penetrationMaterial(room.map, s.mat);
   const out: Pellet[] = [];
   for (let i = 0; i < Math.max(1, def.pellets ?? 1); i++) {
     const d = spreadDirection(dir, spread, shotSeed(p.seed, shot, i));
-    const wall = room.world.raycast(origin, d, range, 'bullets');
-    let maxT = wall ? wall.t : range;
+    const path = traceBullet(room.world, materialOf, origin, d, { range, type, depthMultiplier });
+    let maxT = path.t;
     let victim: PlayerState | null = null;
     let part: HitPart = 'torso';
     let lower = false;
@@ -179,7 +198,8 @@ export function traceShot(room: Room, p: PlayerState, origin: Vec3, dir: Vec3, s
         lower = part === 'torso' && isLowerTorso(pose, poseStance(pose), origin.y + d.y * hit.t);
       }
     }
-    out.push({ dir: d, t: maxT, victim, part, lower });
+    const walls = path.walls.filter((w) => w.tIn < maxT);
+    out.push({ dir: d, t: maxT, victim, part, lower, walls, keep: keepAt(walls, maxT), range: effectiveDistance(walls, maxT) });
   }
   return out;
 }
@@ -204,13 +224,13 @@ export function damage(room: Room, info: DamageInfo<PlayerState>): number {
   room.bus.emit('damage', { ...ev, health: victim.health });
   const killed = victim.health <= 0;
   victim.session?.send({ t: 'hurt', attacker: attacker?.id ?? null, amount: q3(ev.amount), from: ev.from ? [q3(ev.from.x), q3(ev.from.y), q3(ev.from.z)] : null, health: Math.ceil(victim.health) });
-  if (attacker && attacker !== victim) attacker.session?.send({ t: 'hit', victim: victim.id, part: ev.part ?? 'torso', damage: q3(dealt), kill: killed });
-  if (killed) kill(room, victim, attacker, { weapon: ev.weapon, part: ev.part, means: ev.means, distance: ev.distance });
+  if (attacker && attacker !== victim) attacker.session?.send({ t: 'hit', victim: victim.id, part: ev.part ?? 'torso', damage: q3(dealt), kill: killed, ...(ev.penetrated ? { pen: true } : {}) });
+  if (killed) kill(room, victim, attacker, { weapon: ev.weapon, part: ev.part, means: ev.means, distance: ev.distance, penetrated: ev.penetrated });
   return dealt;
 }
 
 /** Kill a player (credit, assists, streaks, killfeed, respawn timer, `death` event). */
-export function kill(room: Room, victim: PlayerState, attacker: PlayerState | null, how: { weapon: string; part?: HitPart | null; means: DamageMeans; distance?: number }): void {
+export function kill(room: Room, victim: PlayerState, attacker: PlayerState | null, how: { weapon: string; part?: HitPart | null; means: DamageMeans; distance?: number; penetrated?: boolean }): void {
   if (!victim.alive) return;
   victim.alive = false;
   victim.health = 0;
@@ -222,6 +242,7 @@ export function kill(room: Room, victim: PlayerState, attacker: PlayerState | nu
 
   const credited = !!attacker && attacker !== victim && room.isEnemy(attacker, victim);
   const headshot = how.part === 'head' && how.means === 'bullet';
+  const penetrated = !!how.penetrated && how.means === 'bullet';
   if (credited) {
     attacker.stats.kills += 1;
     attacker.stats.streak += 1;
@@ -251,8 +272,9 @@ export function kill(room: Room, victim: PlayerState, attacker: PlayerState | nu
     means: how.means,
     victimStreak,
     attackerStreak: credited ? attacker.stats.streak : 0,
+    penetrated,
   });
-  room.broadcast({ t: 'killfeed', attacker: attacker?.id ?? null, victim: victim.id, weapon: how.weapon, headshot, means: how.means, attackerTeam: attacker?.team ?? null, victimTeam: victim.team });
+  room.broadcast({ t: 'killfeed', attacker: attacker?.id ?? null, victim: victim.id, weapon: how.weapon, headshot, means: how.means, attackerTeam: attacker?.team ?? null, victimTeam: victim.team, ...(penetrated ? { pen: true } : {}) });
   victim.session?.send({ t: 'died', attacker: attacker?.id ?? null, weapon: how.weapon, respawnAt: victim.respawnAt });
   room.broadcastScore();
 }

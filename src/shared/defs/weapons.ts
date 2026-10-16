@@ -12,6 +12,7 @@
  */
 import { damageAtRange, partMultiplier } from '../ballistics';
 import type { HitPart } from '../collision';
+import type { PenetrationType } from '../penetration';
 import { indexById } from './registry';
 
 export type WeaponClass = 'ar' | 'smg' | 'lmg' | 'sniper' | 'shotgun' | 'pistol' | 'launcher' | 'special';
@@ -66,6 +67,12 @@ export interface WeaponDef {
   model: string;
   /** Max hitscan range (default 200 m). */
   range?: number;
+  /**
+   * How far its bullets go through walls (`shared/penetration.ts`). Default by class, as BO1's
+   * `penetrateType`: pistols and SMGs small, ARs and LMGs medium, snipers large, shotguns pellet,
+   * the rest none.
+   */
+  penetration?: PenetrationType;
   /** Weapon raise/lower time when switching (default 500 ms). */
   swapMs?: number;
   /** Fires a server-simulated projectile (crossbow bolt, ballistic knife blade): no local hitscan tracer or impact puff. */

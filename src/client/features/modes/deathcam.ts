@@ -225,6 +225,7 @@ function frame(m: Match, dt: number): void {
     }
     if (s.hit) m.effects.puff('blood', to);
     else m.effects.puff('dust', to, undefined, 3);
+    for (const p of s.pen ?? []) m.effects.puff('dust', { x: p[0], y: p[1], z: p[2] }, undefined, 3);
   }
   S.lastT = Math.max(S.lastT, c.t);
 }

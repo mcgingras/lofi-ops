@@ -139,6 +139,11 @@ registerHudWidget(
     const my = Math.floor(H / 2);
     const col = m.hitKill ? '#ff4a3a' : '#ffffff';
     for (let i = 3; i < 7; i++) for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]] as const) rect(g, mx + sx * i * u, my + sy * i * u, u, u, col);
+    // Through a wall: a bracket around the cross (a penetration kill shows it in red).
+    if (m.hitPen) for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
+      rect(g, mx + sx * 8 * u, my + sy * 8 * u - (sy < 0 ? 0 : 2 * u), u, 3 * u, col);
+      rect(g, mx + sx * 8 * u - (sx < 0 ? 0 : 2 * u), my + sy * 8 * u, 3 * u, u, col);
+    }
   },
   25,
 );
@@ -288,6 +293,13 @@ registerHudWidget(
       const wtxt = `[${weaponName(f.weapon).toUpperCase()}${f.headshot ? ' HS' : ''}]`;
       const ww = txt(g, wtxt, x, y, 8, C.paper, 'right', u);
       x -= ww + 4 * u;
+      if (f.pen) {
+        // Penetration kill: a bullet through a wall.
+        rect(g, x - 4 * u, y - u, u, 8 * u, C.dim);
+        rect(g, x - 8 * u, y + 3 * u, 8 * u, u, C.paper);
+        rect(g, x - 2 * u, y + 2 * u, u, 3 * u, C.paper);
+        x -= 12 * u;
+      }
       if (f.attacker && f.attacker !== f.victim) txt(g, m.nameOf(f.attacker), x, y, 8, attCol, 'right', u);
       y += 9 * u;
     }

@@ -14,6 +14,8 @@ import { WEAPON_BY_ID } from '../../shared/defs/weapons';
 import { shotSeed, spreadDegrees, spreadDirection, stanceSpread } from '../../shared/ballistics';
 import { playerHitboxes, rayHitboxes } from '../../shared/collision';
 import { PRONE, type Team } from '../../shared/constants';
+import { PERK_TUNING } from '../../shared/defs/perks';
+import { penetrationMaterial, penetrationType, traceBullet } from '../../shared/penetration';
 import type { MatchPhase, MatchResults } from '../../shared/events';
 import { Buttons } from '../../shared/input';
 import { hashString, viewDir, type Vec3 } from '../../shared/math';
@@ -45,6 +47,8 @@ export interface KillfeedEntry {
   means: string;
   attackerTeam: Team | null;
   victimTeam: Team | null;
+  /** Through a wall (bullet penetration). */
+  pen?: boolean;
 }
 
 export interface DeathInfo {
@@ -80,6 +84,10 @@ export class Match {
   hitAt = -9;
   hitKill = false;
   hitHead = false;
+  /** The last confirmed hit went through a wall. */
+  hitPen = false;
+  /** This life's penetration depth multiplier (Hardened), for predicted impacts. */
+  private penDepth = 1;
   /** Damage direction markers: local time and world yaw towards the source. */
   damageMarks: { t: number; yaw: number }[] = [];
   death: DeathInfo | null = null;
@@ -349,13 +357,14 @@ export class Match {
         this.results = m.results;
       }),
       s.on('killfeed', (m) => {
-        this.killfeed.unshift({ t: this.time, attacker: m.attacker, victim: m.victim, weapon: m.weapon, headshot: m.headshot, means: m.means, attackerTeam: m.attackerTeam, victimTeam: m.victimTeam });
+        this.killfeed.unshift({ t: this.time, attacker: m.attacker, victim: m.victim, weapon: m.weapon, headshot: m.headshot, means: m.means, attackerTeam: m.attackerTeam, victimTeam: m.victimTeam, ...(m.pen ? { pen: true } : {}) });
         if (this.killfeed.length > 6) this.killfeed.length = 6;
       }),
       s.on('hit', (m) => {
         this.hitAt = this.time;
         this.hitKill = m.kill;
         this.hitHead = m.part === 'head';
+        this.hitPen = !!m.pen;
         sfx.play('tick', { volume: m.kill ? 0.5 : 0.35, rate: m.kill ? 0.94 : 1 });
         const v = this.remotes.views.get(m.victim);
         if (v) this.effects.puff('blood', { x: v.x, y: v.y + (m.part === 'head' ? 1.65 : m.part === 'legs' ? 0.6 : 1.2) * (v.crouch > 0.5 ? 0.67 : 1), z: v.z });
@@ -376,6 +385,7 @@ export class Match {
       }),
       s.on('spawned', (m) => {
         this.death = null;
+        this.penDepth = m.loadout.perks.includes('hardened') ? PERK_TUNING.hardenedPenetration : 1;
         this.controls.yaw = m.yaw;
         this.controls.pitch = 0;
         this.controls.clearPresses();
@@ -394,7 +404,7 @@ export class Match {
         this.phase = m.phase;
         this.pendingShots = this.pendingShots.filter((x) => x.seq > m.ack);
         this.serverWeaponChange(m.me, m.ack);
-        for (const shot of m.shots) this.remoteShot(shot.p, shot.o, shot.e, shot.w, !!shot.h);
+        for (const shot of m.shots) this.remoteShot(shot.p, shot.o, shot.e, shot.w, !!shot.h, shot.x);
         this.syncEntities(m.ents);
       }),
       onFeature('core.notice', (d) => {
@@ -422,11 +432,13 @@ export class Match {
     this.burstQueued = false;
   }
 
-  private remoteShot(id: string, o: [number, number, number], e: [number, number, number], weapon: string, hit: boolean) {
+  private remoteShot(id: string, o: [number, number, number], e: [number, number, number], weapon: string, hit: boolean, walls?: number[]) {
     const v = this.remotes.views.get(id);
     const from = v ? v.soldier.muzzle.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(o[0], o[1], o[2]);
     this.effects.tracer(from, { x: e[0], y: e[1], z: e[2] });
     if (!hit) this.effects.puff('dust', { x: e[0], y: e[1], z: e[2] }, undefined, 3);
+    // Penetrated walls: a puff where it went in and where it came out.
+    if (walls) for (let k = 0; k + 2 < walls.length; k += 3) this.effects.puff('dust', { x: walls[k]!, y: walls[k + 1]!, z: walls[k + 2]! }, undefined, 3);
     sfx.gunshot(weapon, { x: o[0], y: o[1], z: o[2] });
   }
 
@@ -791,11 +803,16 @@ export class Match {
     const seed = hashString(this.myId);
     const o = { x: origin[0], y: origin[1], z: origin[2] };
     const pellets = def.projectile ? 0 : Math.max(1, def.pellets ?? 1);
+    const mapData = this.map?.map;
+    const pen = { type: mapData ? penetrationType(def) : ('none' as const), depthMultiplier: this.penDepth };
+    const sparks = (mat: string) => mat.startsWith('container') || mat === 'steel' || mat === 'tank';
     for (let i = 0; i < pellets; i++) {
       const d = spreadDirection(dir, spread, shotSeed(seed, this.shot, i));
       const range = def.range ?? 200;
-      const wall = this.net.world.raycast(o, d, range, 'bullets');
-      let maxT = wall ? wall.t : range;
+      // The server's trace (penetration included), so impacts show on both sides of a thin wall.
+      const path = traceBullet(this.net.world, (s) => (mapData ? penetrationMaterial(mapData, s.mat) : 'solid'), o, d, { range, ...pen });
+      const wall = path.hit;
+      let maxT = path.t;
       let hitPlayer = false;
       for (const v of this.remotes.views.values()) {
         if (!v.alive) continue;
@@ -810,7 +827,12 @@ export class Match {
         const m = this.viewmodelMuzzleWorld();
         this.effects.tracer(m ?? o, end);
       }
-      if (wall && !hitPlayer) this.effects.puff(wall.solid.mat.startsWith('container') || wall.solid.mat === 'steel' || wall.solid.mat === 'tank' ? 'spark' : 'dust', end, wall.normal, 3);
+      for (const w of path.walls) {
+        if (w.tIn >= maxT) break;
+        this.effects.puff(sparks(w.mat) ? 'spark' : 'dust', w.point, w.normal, 3);
+        if (w.tOut < maxT) this.effects.puff(sparks(w.mat) ? 'spark' : 'dust', w.exit, d, 3);
+      }
+      if (wall && !hitPlayer) this.effects.puff(sparks(wall.solid.mat) ? 'spark' : 'dust', end, wall.normal, 3);
     }
   }
 
