@@ -122,3 +122,19 @@ export function ordinal(n: number): string {
   const s = j === 1 && k !== 11 ? 'ST' : j === 2 && k !== 12 ? 'ND' : j === 3 && k !== 13 ? 'RD' : 'TH';
   return `${n}${s}`;
 }
+
+/**
+ * Who won, for the final killcam's banner: the winning team ("BLACK OPS WIN"), the winner of a
+ * free-for-all ("PLAYER WINS"), or "DRAW"; `mine` = whether this player won (null: not in it / draw).
+ */
+export function winnerLine(results: MatchResults, myId: string): { text: string; mine: boolean | null } {
+  const me = results.players.find((p) => p.id === myId);
+  const mine = !me || results.winners.length === 0 ? null : results.winners.includes(myId);
+  if (results.winnerTeam === 0 || results.winnerTeam === 1) {
+    const names = teamNamesFor(MODE_BY_ID.get(results.mode), TEAM_NAMES);
+    return { text: `${names[results.winnerTeam]!.toUpperCase()} WIN`, mine };
+  }
+  const top = results.winners[0];
+  if (top) return { text: `${(results.players.find((p) => p.id === top)?.name ?? top).toUpperCase()} WINS`, mine };
+  return { text: 'DRAW', mine };
+}

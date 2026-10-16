@@ -648,7 +648,7 @@ describe('Kill Confirmed', () => {
 // -----------------------------------------------------------------------------------------------
 
 describe('summary, killcam, objective points', () => {
-  it('match end writes an MVP, objective stats and an XP breakdown; the final kill is replayable', () => {
+  it('match end writes an MVP, objective stats and an XP breakdown; an old kill makes no final killcam', () => {
     const room = setup('dom', { onEnd: 'close' });
     const a = room.addBot({ name: 'A', team: 0 });
     const b = room.addBot({ name: 'B', team: 1 });
@@ -674,11 +674,9 @@ describe('summary, killcam, objective points', () => {
     const labels = ext.players[a.id]!.xp.map((l) => l.label);
     expect(labels).toEqual(expect.arrayContaining(['Kills', 'Flag captures', 'Time played', 'Victory']));
     expect(ext.players[a.id]!.xpTotal).toBe(ext.players[a.id]!.xp.reduce((s, l) => s + l.amount, 0));
-    const cam = sent.find((m) => m.id === 'modes.killcam')?.data as { killer: string; victim: string; frames: { t: number }[] } | undefined;
-    expect(cam).toBeDefined();
-    expect(cam!.killer).toBe(a.id);
-    expect(cam!.victim).toBe(b.id);
-    expect(cam!.frames.length).toBeGreaterThan(40);
+    // BO1: the flag tick ended it 5 s after the last kill, past the 2 s window, so no final killcam
+    // (tests/finalkillcam.test.ts covers the kills that do make one).
+    expect(sent.find((m) => m.id === 'modes.killcam')).toBeUndefined();
   });
 
   it('prefers the progression feature XP breakdown when present', () => {

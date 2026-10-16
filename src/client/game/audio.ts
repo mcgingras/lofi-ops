@@ -10,7 +10,9 @@
  * the camera, darker with distance). Samples rotate variants and vary pitch/volume per play
  * (gently: a few percent, a dB or so); each id has a voice cap. Mix: positional sounds -> world
  * bus, others -> local bus; both -> master volume -> gentle glue compressor -> safety limiter ->
- * speakers. No ducking: the recordings keep their own dynamics.
+ * speakers. No ducking: the recordings keep their own dynamics. The one exception is killcams:
+ * `duckLive` fades the live buses while `replay(fn)` routes the replay's own sounds to a third
+ * bus (slowed with the slow motion).
  */
 import { DISTANT_RATE, SFX_BINDINGS, type SfxBinding } from '../../shared/defs/sfx-recipes';
 import { WEAPON_BY_ID, type WeaponClass } from '../../shared/defs/weapons';
@@ -63,6 +65,10 @@ export class Sfx {
   private master: GainNode | null = null;
   private world: GainNode | null = null;
   private local: GainNode | null = null;
+  /** Killcam replay sounds (not ducked with the live game). */
+  private replayBus: GainNode | null = null;
+  private liveLevel = 1;
+  private replaying: { rate: number } | null = null;
   private buffers = new Map<string, AudioBuffer>();
   private makers = new Map<string, BufferMaker>();
   private samples = new Map<string, Sample>();
@@ -140,8 +146,11 @@ export class Sfx {
         this.master.gain.value = this.volume * MAKEUP;
         this.world = ctx.createGain();
         this.local = ctx.createGain();
+        this.replayBus = ctx.createGain();
         this.world.connect(this.master);
         this.local.connect(this.master);
+        this.replayBus.connect(this.master);
+        this.duckLive(this.liveLevel, 0);
         this.master.connect(glue).connect(limiter).connect(ctx.destination);
         const l = ctx.listener;
         if (l.positionX === undefined) l.setPosition(0, 0, 0);
@@ -150,6 +159,32 @@ export class Sfx {
       if (this.ctx.state === 'suspended') void this.ctx.resume();
     } catch {
       /* no audio */
+    }
+  }
+
+  /**
+   * Killcam replays: the live game's sounds (world + local buses) fade to `level` (0 = muted,
+   * 1 = back to normal) over about `sec`, while sounds played inside `replay()` keep full volume.
+   */
+  duckLive(level: number, sec = 0.3): void {
+    this.liveLevel = Math.max(0, Math.min(1, level));
+    const ctx = this.ctx;
+    if (!ctx || !this.world || !this.local) return;
+    for (const g of [this.world, this.local]) {
+      g.gain.cancelScheduledValues(ctx.currentTime);
+      if (sec <= 0) g.gain.value = this.liveLevel;
+      else g.gain.setTargetAtTime(this.liveLevel, ctx.currentTime, sec / 3);
+    }
+  }
+
+  /** Play the sounds `fn` makes as part of a replay: on their own bus (not ducked), at `rate` x their pitch (slow motion). */
+  replay<T>(fn: () => T, rate = 1): T {
+    const prev = this.replaying;
+    this.replaying = { rate };
+    try {
+      return fn();
+    } finally {
+      this.replaying = prev;
     }
   }
 
@@ -295,6 +330,8 @@ export class Sfx {
       } else buf = this.buffer(id) ?? (b.fallback ? this.buffer(b.fallback) : null);
     } else buf = this.buffer(id);
     if (!buf) return;
+    const replay = this.replaying;
+    if (replay) rate *= replay.rate;
     if (o.at && lowpass === undefined) lowpass = airLowpass(this.distanceTo(o.at)) ?? undefined;
     try {
       const src = ctx.createBufferSource();
@@ -331,7 +368,7 @@ export class Sfx {
         } else p.setPosition(o.at.x, o.at.y, o.at.z);
         node = node.connect(p);
       }
-      node.connect(o.at ? world : local);
+      node.connect(replay && this.replayBus ? this.replayBus : o.at ? world : local);
       const voice: Voice = { src, gain: g };
       for (const old of this.voices.add(id, voice, s?.binding.maxVoices ?? DEFAULT_VOICES, ctx.currentTime)) {
         const t = ctx.currentTime;

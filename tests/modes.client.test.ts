@@ -3,7 +3,7 @@
  * view model (MVP, team tables, stat columns, XP fallback) and the killcam timeline/interpolation.
  */
 import { describe, expect, it } from 'vitest';
-import { clipTime, playSeconds, posesAt } from '../src/client/features/modes/killcam-math';
+import { posesAt } from '../src/client/features/modes/killcam-math';
 import { buildSummaryView, ordinal } from '../src/client/features/modes/summary-data';
 import { eventLine } from '../src/client/features/modes/text';
 import type { KillcamFrame, MatchSummaryExt } from '../src/shared/defs/modestate';
@@ -73,12 +73,8 @@ describe('summary view', () => {
   });
 });
 
-describe('killcam timeline', () => {
-  it('plays at 1x then slow motion, interpolating poses (yaw the short way round)', () => {
-    expect(clipTime(1, 3.5)).toBe(1);
-    expect(clipTime(2.9 + 0.35 / 0.35, 3.5)).toBeCloseTo(3.25, 5);
-    expect(clipTime(100, 3.5)).toBe(3.5);
-    expect(playSeconds(3.5)).toBeCloseTo(2.9 + 0.6 / 0.35 + 1.2, 5);
+describe('killcam interpolation', () => {
+  it('interpolates poses between frames (yaw the short way round), holding the last frame past the end', () => {
     const frames: KillcamFrame[] = [
       { t: 10, p: [['a', 0, 0, 0, 3.0, 0, 1]] },
       { t: 10.05, p: [['a', 1, 0, 2, -3.0, 0.2, 3]] },
@@ -88,5 +84,6 @@ describe('killcam timeline', () => {
     expect(mid.z).toBeCloseTo(1, 5);
     expect(Math.abs(mid.yaw)).toBeGreaterThan(3); // through PI, not through 0
     expect(posesAt(frames, 11).get('a')!.f).toBe(3);
+    expect(posesAt(frames, 11).get('a')!.x).toBeCloseTo(1, 5);
   });
 });
