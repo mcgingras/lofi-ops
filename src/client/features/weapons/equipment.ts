@@ -478,25 +478,37 @@ registerHudWidget(
     for (const e of snap.ents) if (e.kind === NADE_ENTITY) nades.push({ x: e.x, y: e.y, z: e.z, equip: String(e.s?.e ?? ''), owner: e.owner ?? null, stuckTo: typeof e.s?.p === 'string' ? e.s.p : null });
     if (!nades.length) return;
     const marks = grenadeDangers(nades, { x: cam.position.x, y: cam.position.y, z: cam.position.z, yaw: m.yaw, id: m.myId, canHurt: (owner) => !owner || owner === m.myId || m.isEnemy(owner) });
-    const r = 34 * u;
+    const r = 42 * u;
+    const u2 = u * 2;
     for (const mk of marks.slice(0, 4)) {
-      // Close in: solid; at the edge of the range: a steady blink.
+      // Inside the kill radius: solid red; in the margin: a steady yellow blink.
       if (!mk.lethal && !blink(m.time, 0.3, 0.2)) continue;
-      const pos = dangerRingPos(mk.angle, W / 2, H / 2, r, 9 * u);
+      const pos = dangerRingPos(mk.angle, W / 2, H / 2, r, 20 * u);
       const col = mk.lethal ? C.warn : C.hi;
-      // Pointer: a short wedge beyond the icon, toward the grenade.
-      const ux = (pos.tipX - pos.x) / (9 * u);
-      const uy = (pos.tipY - pos.y) / (9 * u);
-      for (let i = 0; i < 4; i++) {
-        const w = (3 - i) * u;
-        const cx = pos.x + ux * (6 + i * 1.5) * u;
-        const cy = pos.y + uy * (6 + i * 1.5) * u;
-        rect(g, cx - w / 2 - u / 2, cy - w / 2 - u / 2, w + u, w + u, C.ink);
-        rect(g, cx - w / 2, cy - w / 2, w, w, col);
-      }
-      rect(g, pos.x - 5 * u, pos.y - 5 * u, 11 * u, 11 * u, 'rgba(10,10,10,.55)');
-      icon(g, mk.equip, pos.x - 2 * u, pos.y - 3 * u, u, false);
-      rect(g, pos.x - 5 * u, pos.y + 5 * u, 11 * u, u, col);
+      // Pointer: a wedge beyond the icon, aimed at the grenade.
+      const ax = Math.sin(mk.angle);
+      const ay = -Math.cos(mk.angle);
+      const tip = { x: pos.tipX, y: pos.tipY };
+      const base = { x: pos.x + ax * 9 * u, y: pos.y + ay * 9 * u };
+      const wing = 7 * u;
+      g.beginPath();
+      g.moveTo(tip.x + ax * u, tip.y + ay * u);
+      g.lineTo(base.x - ay * (wing + u), base.y + ax * (wing + u));
+      g.lineTo(base.x + ay * (wing + u), base.y - ax * (wing + u));
+      g.closePath();
+      g.fillStyle = C.ink;
+      g.fill();
+      g.beginPath();
+      g.moveTo(tip.x, tip.y);
+      g.lineTo(base.x - ay * wing, base.y + ax * wing);
+      g.lineTo(base.x + ay * wing, base.y - ax * wing);
+      g.closePath();
+      g.fillStyle = col;
+      g.fill();
+      // The grenade icon at double size on a dark tile with a coloured rim.
+      rect(g, pos.x - 9 * u, pos.y - 9 * u, 18 * u, 18 * u, col);
+      rect(g, pos.x - 8 * u, pos.y - 8 * u, 16 * u, 16 * u, 'rgba(10,10,10,.8)');
+      icon(g, mk.equip, pos.x - 2.5 * u2, pos.y - 2.5 * u2, u2, false);
     }
   },
   26,

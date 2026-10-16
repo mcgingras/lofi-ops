@@ -11,6 +11,7 @@ import { configureRoomBots } from '../src/server/features/bots/api';
 import { grant } from '../src/server/features/killstreaks/state';
 import type { PlayerState } from '../src/server/player';
 import type { Room } from '../src/server/room';
+import { EQUIPMENT_BY_ID } from '../src/shared/defs/equipment';
 import { KS_ENTITY } from '../src/shared/defs/killstreaks';
 import { MAX_LEVEL, XP_TABLE } from '../src/shared/defs/progression';
 import { Buttons } from '../src/shared/input';
@@ -107,7 +108,7 @@ describe('round 3 over the wire', () => {
     const stop = pump(a, { buttons: () => Buttons.LETHAL });
     try {
       const ack = await a.waitFor('feat', (m) => m.id === 'weapons.cook', 3000);
-      expect(ack.data).toEqual({ e: 'frag', seq: first, fuse: 3 });
+      expect(ack.data).toEqual({ e: 'frag', seq: first, fuse: EQUIPMENT_BY_ID.get('frag')!.fuse });
     } finally {
       stop();
       room.close();

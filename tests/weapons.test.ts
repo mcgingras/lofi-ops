@@ -356,7 +356,7 @@ describe('weapons in a room', () => {
     expect(room.fire(a, { dir: { x: 0, y: 0, z: -1 } }).ok).toBe(true);
   });
 
-  it('frag: thrown on the button, flies, explodes on its fuse with linear falloff to the body box and no damage through walls', () => {
+  it('frag: thrown on the button, flies, explodes on its fuse with linear falloff from the feet and no damage through walls', () => {
     const room = setup();
     const { a, b, setButtons } = duel(room, 'ak47', 8);
     const frag = EQUIPMENT_BY_ID.get('frag')!;
@@ -370,10 +370,10 @@ describe('weapons in a room', () => {
     steps(room, frag.fuse + 0.2);
     expect(room.entities.byKind(NADE_ENTITY).length).toBe(0);
 
-    // Falloff: explode at known distances from the side of B's box (BO1 measures to the bounds).
+    // Falloff: explode at known distances from B's feet (BO1 measures players to their origin).
     for (const d of [1, 3, 5]) {
       b.health = b.maxHealth = 1000;
-      explode(room, { x: b.move.x + PLAYER.radius + d, y: b.move.y + 0.9 - 0.1, z: b.move.z }, frag, a.id);
+      explode(room, { x: b.move.x + d, y: b.move.y, z: b.move.z }, frag, a.id);
       const expected = frag.max + (frag.min - frag.max) * (d / frag.radius);
       expect(1000 - b.health).toBeCloseTo(expected, 0);
     }
