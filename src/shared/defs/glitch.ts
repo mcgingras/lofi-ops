@@ -24,12 +24,13 @@ export const GLITCH = {
   durationSec: 20,
   /**
    * Bot skill while glitched: knob x mul + add, then clamped to the slider range (BOT_SKILL_RANGES).
-   * Regular (550 ms, 6.5 deg) becomes about 1240 ms and 15 deg; Veteran (180 ms, 1.2 deg) about
-   * 575 ms and 6.9 deg, so even the best bots miss a lot and react late.
+   * Regular (550 ms, 6.5 deg) becomes about 1080 ms and 13.3 deg; Veteran (180 ms, 1.2 deg) about
+   * 490 ms and 5.3 deg, so even the best bots react late and miss a lot (duel numbers in
+   * docs/features/perks-streaks.md), while a glitched bot up close can still hurt you.
    */
   bot: {
-    reactionMs: { mul: 1.8, add: 250 },
-    aimErrorDeg: { mul: 1.6, add: 5 },
+    reactionMs: { mul: 1.6, add: 200 },
+    aimErrorDeg: { mul: 1.5, add: 3.5 },
     turnSpeedDeg: { mul: 0.55, add: 0 },
     fovDeg: { mul: 0.7, add: 0 },
     hearingRange: { mul: 0.4, add: 0 },

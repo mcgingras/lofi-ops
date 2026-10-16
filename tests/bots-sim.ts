@@ -91,6 +91,8 @@ export interface DuelOpts {
   trials?: number;
   seed?: number;
   weapon?: string;
+  /** Called once the room and both bots exist (e.g. start a Glitch against the shooter's side). */
+  setup?: (room: Room, shooter: PlayerState, target: PlayerState) => void;
 }
 
 export interface DuelResult {
@@ -124,6 +126,7 @@ export function duel(o: DuelOpts): DuelResult {
       const shooter = r.addBot({ name: 'Shooter', team: 0 });
       const target = r.addBot({ name: 'Target', team: 1 });
       steps(r, 0.3);
+      o.setup?.(r, shooter, target);
       let strafeDir = 1;
       let strafeUntil = 0;
       target.brain = {
