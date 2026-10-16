@@ -1,7 +1,8 @@
 /**
  * Server side of the 'weapons' feature area. See docs/features/weapons.md.
  *
- *   setup: the underbarrel grenade launcher behaviour (weapon id `gl`).
+ *   setup: the underbarrel grenade launcher behaviour (weapon id `gl`) and the Mystery Box's wonder
+ *          weapons (`wonder/`: Ray Gun, Thundergun, Wunderwaffe DG-2, Winter's Howl).
  *   room:  attachment count (1 + `attachmentSlotsOffset`, Warlord) at `beforeSpawn`; equipment and
  *          the GL slot at `spawn`; knife on the MELEE edge; lethal / tactical raised on the press
  *          and thrown on release (frags cook while held); grenades, tomahawks (retrievable),
@@ -22,6 +23,7 @@ import { melee } from './melee';
 import { onReload, updateShells } from './reload';
 import { updateTomahawks } from './tomahawk';
 import { wext } from './state';
+import { registerWonderBehaviors, wireWonder } from './wonder/index';
 
 export { melee, meleeTarget } from './melee';
 export { startThrow, flashedAmount, stunnedAmount, explode, spawnNade } from './equipment';
@@ -38,10 +40,14 @@ const feature: Feature = {
   id: 'weapons',
   setup(api) {
     api.registerWeaponBehavior('gl', GL_BEHAVIOR);
+    registerWonderBehaviors(api.registerWeaponBehavior);
   },
   room(room) {
     // Idempotent: also here so rooms built without the app (unit tests) get the launcher.
     registerWeaponBehavior('gl', GL_BEHAVIOR);
+    // Mystery Box wonder weapons: Ray Gun bolts, Thundergun, Wunderwaffe arcs, Winter's Howl frost.
+    registerWonderBehaviors(registerWeaponBehavior);
+    wireWonder(room);
     // BO1: one attachment per weapon; Warlord-style perks add slots through the modifier.
     room.bus.on(
       'beforeSpawn',
