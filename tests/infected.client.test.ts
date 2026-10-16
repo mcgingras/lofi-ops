@@ -31,5 +31,6 @@ describe('Infected announcer lines', () => {
     const view = buildSummaryView(results, 'me', 0);
     expect(view.title).toBe('VICTORY');
     expect(view.teams?.map((t) => t.name)).toEqual(['Survivors', 'Infected']);
+    expect(view.reason).toBe('The survivors outlasted the infection');
   });
 });

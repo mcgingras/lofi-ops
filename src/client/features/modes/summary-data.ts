@@ -54,6 +54,8 @@ export interface SummaryView {
 }
 
 const REASONS: Record<string, string> = { score: 'Score limit reached', time: 'Time limit reached', rounds: 'Round limit reached', forfeit: 'Forfeit', aborted: 'Match aborted', nuke: 'TACTICAL NUKE' };
+/** Infected ends one of two ways: nobody left to infect, or the clock ran out on the Infected. */
+const INFECTED_REASONS: Record<string, string> = { score: 'Everyone was infected', time: 'The survivors outlasted the infection' };
 
 function fallbackXp(r: PlayerResult): XpLine[] {
   const lines: XpLine[] = [];
@@ -100,7 +102,7 @@ export function buildSummaryView(results: MatchResults, myId: string, myTeam: Te
     title,
     modeName: MODE_BY_ID.get(results.mode)?.name ?? results.mode.toUpperCase(),
     mapName: MAP_BY_ID.get(results.map)?.name ?? results.map,
-    reason: REASONS[results.reason] ?? results.reason,
+    reason: (results.mode === 'infected' ? INFECTED_REASONS[results.reason] : undefined) ?? REASONS[results.reason] ?? results.reason,
     teams,
     rows,
     statKeys,
