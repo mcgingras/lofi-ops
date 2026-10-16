@@ -103,7 +103,10 @@ src/shared/defs/modes.ts        ModeDefs (dom/sd/hq/kc/infected added; teamsByRu
                                 OBJECTIVE_MODE_IDS, teamNamesFor
 src/shared/defs/infected.ts     Infected tuning (INFECTED, INFECTED_XP), loadouts, InfectedStatePayload
 src/shared/defs/deathcam.ts     per-death killcam: DEATHCAM timing, deathcamWindow, DeathcamPayload,
-                                packClip / unpackClip (quantised, delta-coded clip)
+                                packClip / unpackClip (quantised, delta-coded clip + gear, frost, teams,
+                                projectiles), gearKey / parseGear
+src/shared/defs/killcam.ts      final killcam: FINAL_KILLCAM (BO1 timing), finalTimeline (slow motion),
+                                finalClock, FinalKillcamPayload
 src/shared/defs/modestate.ts    wire types + FeatureMessages: modes.state, modes.event, modes.killcam, modes.deathcam;
                                 MatchSummaryExt (results.ext.modes); MODE_ENTITY kinds
 src/server/features/modes/
@@ -114,8 +117,10 @@ src/server/features/modes/
   infected-bots.ts  Infected bot goals (hunt / search / rally), per-bot style, team intel
   bots.ts       objective hooks for bots (objectivesFor / bestObjective)
   summary.ts    MVP + XP breakdown (progression adapter, else derived)
-  killcam.ts    20 Hz pose history (+ health %, hitscan shots) + final kill clip
-  deathcam.ts   per-death killcam: killer card, clip cut to the respawn, nearby players only, streak views
+  killcam.ts    20 Hz pose history (+ health %, gear, frost, projectiles, hitscan shots), kill captures,
+                final killcam choice (pickFinalKill) and clip (buildFinalClip)
+  deathcam.ts   per-death killcam: killer card, clip cut to the respawn, nearby players only, streak views;
+                describe(kill) = the card / viewmodel / streak camera both killcams use
   ext.ts        PlayerExt.modes, events modes.roundStart / modes.roundEnd
 src/client/features/modes/
   index.ts      menu items, wraps of core.scoreboard / core.phase / core.death
@@ -128,10 +133,14 @@ src/client/features/modes/
   props.ts      entity renderers: modes.flag, modes.bomb, modes.hq, modes.tag (+ texture recipes
                 modes.white, modes.cloth, modes.bomb)
   sounds.ts     sfx: modes.good / bad / horn / alarm / pickup / beep / boom (synth fallbacks; recordings and radio cues in shared/defs/sfx-recipes.ts: good/bad/horn/alarm are short radio pips, no air horn or klaxon; pickup is a dog-tag clink)
-  killcam.ts    final killcam playback (+ killcam-math.ts, pure); HUD widget modes.killcam 95
-  deathcam.ts   per-death killcam playback (+ deathcam-math.ts, pure): killer's eyes + viewmodel, shots,
-                streak views, skip; HUD widget modes.deathcam 94 (KILLCAM banner, timer, killer card)
-  replay.ts     stand-in soldiers shared by both killcams
+  killcam.ts    final / S&D round killcam playback: BO1 slow motion, fades, banner, winner, card;
+                HUD widget modes.killcam 95
+  deathcam.ts   per-death killcam playback (+ deathcam-math.ts, pure): timeline, skip; HUD widget
+                modes.deathcam 94 (KILLCAM banner, timer, killer card; band/drawCard shared)
+  replay-view.ts the replay renderer both killcams use (camera, viewmodel, ADS/scope, shots, sounds,
+                projectiles, streak views, live audio ducked)
+  replay.ts     stand-in soldiers shared by both killcams (real weapons, Infected look, frost, flung/shattered)
+  killcam-math.ts pure: spline pose interpolation, replayGun, killProjectile, deathEffects
   summary.ts    summary overlay screen `modes.summary` (+ summary-data.ts, pure; modes.css)
 tests/modes.test.ts              rules for every mode, summary, killcam, objective points, bot hooks
 tests/modes.integration.test.ts  DOM capture, S&D plant over the wire + summary, KC tags (real server)
@@ -139,6 +148,12 @@ tests/modes.client.test.ts       announcer wording, summary view model, killcam 
 tests/deathcam.test.ts           per-death killcam server side: victim only, cut to respawn, none for suicide/fall/world,
                                  S&D full clip, streak view, nearby filter; window maths and clip codec
 tests/deathcam.client.test.ts    per-death killcam timeline (beat, play, cut at respawn), timer, aim, card text
+tests/finalkillcam.test.ts       final killcam: kill choice per mode (TDM, FFA, DOM, S&D, KC, Infected, Gun Game),
+                                 Nuke, clip contents, spawn trim, leavers, S&D round killcam, post-match wait,
+                                 timeline and codec, bandwidth
+tests/finalkillcam.client.test.ts  clock, spline interpolation, respawn jump, leavers held, killer's gun from a
+                                 real clip, projectile follow, Thundergun / Winter's Howl deaths, winner line
+tests/finalkillcam.integration.test.ts  TDM ended by a shot over real sockets: clip with killer, weapon, shots
 tests/infected.test.ts           Infected rules: pick and countdown, conversion, loadouts, First Infected bonus, last
                                  Survivor, wins, disconnects, spawns, XP/challenges, listing, quick play and private lobbies
 tests/infected.integration.test.ts  Infected over real sockets: first infected, infection, last survivor, the end
@@ -243,8 +258,26 @@ Earlier modes:
   - `modes.hq`: the same fields plus `st`
   - `modes.bomb`: `{ st, site, end }`
   - `modes.tag`: `team` = the victim's team
-- `modes.killcam` is sent once at match end, when the match ended within 8 s of a credited kill. It carries poses at 20 Hz for the 3.5 s up to the kill (each pose now also carries the player's health %, which the final killcam ignores).
+- `modes.killcam` (`FinalKillcamPayload`, `src/shared/defs/killcam.ts`) goes to everyone once at match end when a kill qualifies (see "Final killcam"), and in S&D at the end of a non-final round (`round` set). Fields: `killer`, `victim`, `weapon`, `means`, `headshot`, `at` (kill), `to` (= at + 2 s, the replay's end), `card`, `vname` (victim's name), `view` (`eyes` | `streak`), `cam`, `vm`, `clip` (`PackedClip`, as the deathcam's, from max(kill - 5 s, the killer's spawn) to the match end) and `endsAt` (the post-match / post-round end after the server's wait, or null).
+- `PackedClip` optional fields (both killcams): `w` gear table (`weaponId|camo|attachments`) + `g` changes `[ms, player, gear]`, `x` frost changes `[ms, player, %]`, `tm` team per player at the kill, `pk` / `pj` / `pe` projectiles (string table; `[entity, kind, owner, sub]`; positions `[ms, entity, x, y, z cm]`). A 7 s clip of 12 moving players is ~37 KB of JSON (6 players ~20 KB).
 - `modes.deathcam` (`DeathcamPayload`, `src/shared/defs/deathcam.ts`) goes **only to the victim**, `postSec` (0.5 s) after a kill by an enemy player. It is never sent for suicides, falls, out of bounds or world deaths, to bots, or once the match has ended (the final killcam takes over). Fields: `killer`, `victim`, `weapon`, `means`, `headshot`, `at` (kill, room time), `playAt` (= at + 1 s death view), `respawnAt`, `card` (`KillerCard`: name, level, prestige, weapon, attachments, health / maxHealth at the kill, streak), `view` (`eyes` | `streak` | `none`), `cam` (streak view: camera position or `top`), `vm` (the gun in the killer's hands: id, attachments, camo, suppressed) and `clip` (`PackedClip`: frame times in ms from `t0`, players as indices into `ids`, positions in cm and angles in mrad delta-coded per player, flags, health %, and hitscan shots `[ms, index, end cm xyz, hit]`).
+
+## Final killcam
+
+BO1 behaviour (T5 scripts, `maps/mp/gametypes/_killcam.gsc` and `_globallogic_player.gsc`, plutoniummod/t5-scripts; Call of Duty Wiki, "KillCam"):
+- `finalKillcam()` replays 5 s before the death (`calcKillcamTime` with no respawn) and 2 s after (`calcPostDelay`).
+- `waitFinalKillcamSlowdown()`: `SetTimeScale(0.25, deathTime - 500)`, back to 1.0 half a second after a 3 s wait that began 2 s before the death: 0.25x from 0.5 s before the kill to 1.5 s after.
+- Not skippable: the final killcam threads no `waitSkipKillcamButton` (the per-death one does).
+- Which kill: a death checks `game["state"]` after its 0.25 + 1.75 s death delay and, if the game is over, calls `startFinalKillcam`: the kill that ended the match, or one within ~2 s of the end. A time-out or objective end with no such kill has none (S&D's elimination ends call `startLastKillcam`, which is the eliminating kill). It plays after every round in round modes (`postRoundFinalKillcam` is a post-round event; match flag `round_end_killcam` vs `final_killcam`). The wiki adds that MW3 (and BO2) show the last kill by the winning team.
+- The Nuke: no final killcam (MW2).
+
+Here:
+- **Which kill.** Every enemy kill opens a capture (5 s before, frames keep coming for 2 s after). TDM, FFA, DOM, S&D, HQ and the wagers use BO1's rule: the latest kill if it came at most 2 s (`FINAL_KILLCAM.recentSec`) before the end. Kill Confirmed and Infected (MW3 modes, `WINNING_TEAM_KILLCAM_MODES`) show the winning team's last kill however long ago. The Nuke skips it. The killcams' death handler runs at bus priority 100, ahead of the mode rules (the kill that reaches the limit ends the match inside the rules' handler; before, the final killcam showed the kill before it).
+- **S&D rounds.** A round that ends on (or within 2 s of) a kill gets a ROUND KILLCAM; the last round's is the FINAL KILLCAM.
+- **Waiting for it.** The post-match (or S&D post-round) is extended by the killcam's length (~13 s for a full clip), so the summary keeps its full time; not in rooms without humans or with a post-match under 5 s (test rooms).
+- **Playback** (replay-view.ts, shared with the per-death killcam): the killer's eyes, eye height eased through crouch / prone, their real gun (what they held at that moment, camo and attachments), ADS zoom and the scope overlay when scoped, kick, flash, tracers, impacts and gunshots from the recorded shots (wonder weapons through `shotFxs`), stand-ins holding their own weapons (Infected tinted, frost, Thundergun flings, shatters), projectiles drawn with the weapons feature's models and followed for grenade / launcher / thrown kills, streak kills from the streak camera.
+- **Presentation.** Fade in from black (0.35 s), 1x then 0.25x around the kill (0.2 s ramps), the body falls in slow motion, fade to black (0.5 s), 0.4 s black, then the summary fades in. Red bands: "FINAL KILLCAM", who won ("BLACK OPS WIN · VICTORY"), a timer, and the killer's card ("KILLED <VICTIM>"). The player's own HUD (crosshair, ammo, killfeed, XP and CoD Points popups) is hidden. Live game audio is muted (`sfx.duckLive(0)`) and the replay's sounds play on their own bus, pitched down with the slow motion. Not skippable (BO1).
+- **Robustness.** Poses are a Catmull-Rom spline through the 20 Hz frames; a jump of more than 3 m between frames (a respawn) is not interpolated, and the clip starts at the killer's spawn if it came inside the window. A killer or victim who left keeps their last pose; the card and victim name come from the kill.
 
 ## Per-death killcam
 
@@ -254,14 +287,13 @@ Here:
 - **When.** A human killed by an enemy player sees the normal death view for 1 s (`DEATHCAM.beatSec`), then the replay at 1x, ending 0.5 s after the kill. Room-time anchored: a clip that arrives late starts part-way.
 - **Respawn never gets later.** The server cuts the clip to fit between the death view and the respawn (`deathcamWindow`): TDM's 3 s respawn leaves 2 s of replay (1.5 s before the kill, 0.5 s after); with less than 1 s of room there is no replay, only the killer card on the death screen. The server still respawns you at `respawnAt` as before, which ends the replay. No respawn (S&D, an HQ that still stands) gets the full 4 s, then the death view / spectating as before.
 - **Skip.** F (the `use` key, or gamepad X / Square) skips back to the death screen and its respawn countdown.
-- **View.** First person from the killer's recorded pose (crouch eye height, ADS zoom of their weapon and attachments; scoped ADS hides the gun). The killer's gun is the viewmodel (their camo and attachments), kicking and flashing on their recorded hitscan shots with gunshots, tracers and impacts (blood on hits); a melee kill swings the knife. Other nearby players are stand-in soldiers with tracers and positional gunshots. The killer's health tints the screen.
+- **View.** The shared replay renderer (see "Final killcam" above): first person from the killer's recorded pose with their real gun, ADS and the scope overlay, shots, grenade kills following the projectile, stand-ins holding their real weapons. A melee kill swings the knife. The killer's health tints the screen. The live game is ducked to 20 %.
 - **Killstreak kills** (`isStreakWeapon`): watched from the killer's helicopter, chopper gunner, sentry, dog or RC-XD entity at the kill, or from the blast for others; strikes and crates (`TOP_DOWN_STREAKS`: napalm, rolling thunder, mortar, care package, valkyrie) from high above the victim. No viewmodel.
 - **Bandwidth.** Only players within 40 m of the killer or the victim at the kill (max 10), quantised and delta coded: a 4 s clip of six moving players is ~10 KB of JSON, sent to one player once per death.
 
 ## Known limits / next steps
 
-- **Final killcam.** It replays poses only: no tracers or gunshots, no third-person killer model, no viewmodel (the per-death killcam has those; the final clip doesn't carry shots or the killer's weapon yet).
-- **Per-death killcam.** Stand-ins carry the default rifle (remote weapon models are only dressed on live remotes); grenades, launchers and other non-hitscan kills are seen from the killer's eyes without following the projectile; no scope overlay when the killer is scoped (the gun is hidden); streak views use a fixed camera at the streak's position at the kill. Live gunfire and entities in the real match keep playing (sounds included) underneath the replay. Hardcore has no killcam in BO1; there is no hardcore playlist yet, so nothing turns it off.
+- **Killcams.** Streak views use a fixed camera at the streak's position at the kill (no recorded helicopter / dog path). Live entities (helicopters, fires, other features' props) are not part of the clip and show as they are now. Shots are hitscan traces; muzzle flashes of others come from the stand-ins' FIRING flag. Effects (tracers, puffs) run at real speed in slow motion. Grenade kills follow the recorded projectile but the throw itself isn't animated. Stand-ins wear no uniform camo. The CoD Points popup (`economy.award`) is hidden while the final killcam plays and its timer runs out under it. Hardcore has no killcam in BO1; there is no hardcore playlist yet, so nothing turns it off.
 - **No bot brains here.** Bots stand still until the bots feature uses the hooks above. A solo human in S&D with an empty enemy team plays rounds that end on time (an empty team cannot be eliminated).
 - **No objective sounds for the bomb carrier on the defender side** (by design, defenders aren't told who carries).
 - **Infected.** No Tactical Insertion, death zones or Juggernaut variants. Remote Infected show no knife in their hands (the weapons feature has no third-person knife model). Bot-only matches lean to the Infected (about 100 s on average with 8 regular bots). Infected bots know where Survivors are only by sight, gunfire and the last-Survivor sweep, then search; a silent human camper can hold out until they reach the spot.
