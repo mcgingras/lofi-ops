@@ -93,7 +93,7 @@ export interface BotModeStyle {
   meleeHappy: boolean;
   /** Prefer rushing (gun game, sticks). */
   rush: boolean;
-  /** In a fight, never close in and back away from a target inside ~7 m (Infected's Survivors). */
+  /** In a fight, never close in and back away from a target inside 4 m (Infected's Survivors). */
   kite?: boolean;
   /** Lob the lethal (a tomahawk) at a target in sight 6-18 m away, mid-fight (Infected). */
   throwAtRange?: boolean;
