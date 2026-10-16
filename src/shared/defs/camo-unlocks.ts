@@ -49,7 +49,12 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 /** One camo's challenge state for one gun, or null if the camo isn't a per-weapon challenge camo. */
 export function weaponCamoProgress(p: StatsLike, camoId: string, weaponId: string, weapons: ReadonlyMap<string, WeaponDef> = WEAPON_BY_ID): WeaponCamoProgress | null {
   const camo = CAMO_BY_ID.get(camoId);
-  if (!camo?.weaponChallenge) return null;
+  return camo ? challengeProgress(p, camo, weaponId, weapons) : null;
+}
+
+/** `weaponCamoProgress` for a def in hand (null if it has no `weaponChallenge`). */
+export function challengeProgress(p: StatsLike, camo: CamoDef, weaponId: string, weapons: ReadonlyMap<string, WeaponDef> = WEAPON_BY_ID): WeaponCamoProgress | null {
+  if (!camo.weaponChallenge) return null;
   const ch = camo.weaponChallenge;
   const wdef = weapons.get(weaponId);
   const wName = wdef?.name ?? weaponId;

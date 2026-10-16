@@ -364,7 +364,7 @@ export function paintCamo(g: CanvasRenderingContext2D, w: number, h: number, rec
         const segs = 2 + Math.floor(R.rr(0, 2));
         for (let k = 0; k < segs; k++) {
           const len = R.rr(14, 30) * s;
-          poly(g, w, h, x + len / 2, y + R.rr(-1.5, 1.5) * s, R.rr(-0.22, 0.22), tigerStroke(R, len, R.rr(1.6, 3.4) * s, R.rr(0.8, 2.2) * s));
+          poly(g, w, h, (x + len / 2) % w, y + R.rr(-1.5, 1.5) * s, R.rr(-0.22, 0.22), tigerStroke(R, len, R.rr(1.6, 3.4) * s, R.rr(0.8, 2.2) * s));
           x += len + R.rr(1, 8) * s;
         }
       }
