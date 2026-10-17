@@ -690,7 +690,7 @@ export interface AllyTuning {
   preset: 'recruit' | 'regular' | 'veteran';
   /** Chance an engagement goes for the head (zombies walk straight at you: heads are the play). */
   headAim: number;
-  /** Zombies within `swarmRadius` of it (or of the downed) it will revive through; more and it backs off first. */
+  /** Zombies within `reviveClear` m of it (or of the downed) it will revive through; more and it clears them (or backs off) first. */
   reviveSwarm: number;
   /** Bleed-out seconds left under which it revives whatever the swarm. */
   reviveUrgentSec: number;
@@ -711,6 +711,8 @@ export const ZOMBIES_ALLY = {
   /** Out of the player's line of fire: never within this angle (rad) of where they face, inside `fireLaneRange` m. */
   fireLaneHalf: 0.45,
   fireLaneRange: 25,
+  /** Reviving: zombies within this of it or the downed player count against `reviveSwarm` (they'd land a swipe during the hold). */
+  reviveClear: 6,
   /** Overwhelmed: this many zombies within `swarmRadius` m. */
   swarmRadius: 3.5,
   overwhelmed: 3,
@@ -723,8 +725,8 @@ export const ZOMBIES_ALLY = {
   calloutEvery: 6,
   tuning: {
     recruit: { preset: 'recruit', headAim: 0.25, reviveSwarm: 1, reviveUrgentSec: 7, buyReserve: 600, boxChance: 0.1 },
-    regular: { preset: 'regular', headAim: 0.55, reviveSwarm: 2, reviveUrgentSec: 10, buyReserve: 300, boxChance: 0.2 },
-    veteran: { preset: 'veteran', headAim: 0.85, reviveSwarm: 3, reviveUrgentSec: 14, buyReserve: 100, boxChance: 0.3 },
+    regular: { preset: 'regular', headAim: 0.55, reviveSwarm: 1, reviveUrgentSec: 10, buyReserve: 300, boxChance: 0.2 },
+    veteran: { preset: 'veteran', headAim: 0.85, reviveSwarm: 2, reviveUrgentSec: 14, buyReserve: 100, boxChance: 0.3 },
   } as Record<AllyDifficulty, AllyTuning>,
 } as const;
 

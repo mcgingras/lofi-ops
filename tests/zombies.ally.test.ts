@@ -163,14 +163,19 @@ describe('reviving', () => {
         z.health = z.maxHealth = 1e6;
       }
       steps(room, 0.5, () => hold(room, h, 0));
-      expect(brain.mode).toBe('retreat');
+      // Not reviving yet: backing off (or clearing them first), USE not held.
+      expect(['retreat', 'fight']).toContain(brain.mode);
+      expect(ally.buttons & Buttons.USE).toBe(0);
       expect(g.isDown(h)).toBe(true);
+      // Overwhelmed (zombies on top of it): it backs away.
+      for (const z of g.aliveUndead()) place(room, z, ally.move.x + (Math.random() - 0.5), ally.move.z + (Math.random() - 0.5));
+      steps(room, 0.2, () => hold(room, h, 0));
+      expect(brain.mode).toBe('retreat');
       // Bleeding out soon: it goes in anyway.
       const ls = h.ext.perks!.lastStand!;
       ls.until = room.time + ZOMBIES_ALLY.tuning.recruit.reviveUrgentSec - 1;
       steps(room, 0.5, () => hold(room, h, 0));
       expect(brain.mode).toBe('revive');
-      void ally;
     });
   });
 

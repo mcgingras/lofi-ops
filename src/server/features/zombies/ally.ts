@@ -162,12 +162,18 @@ export class AllyBrain implements BotBrain {
       this.buy = null;
       const ls = downed.ext.perks!.lastStand!;
       const left = ls.until - now;
-      const nearDowned = zombies.filter((z) => flat(z.move, downed.move) < ZOMBIES_ALLY.swarmRadius).length;
-      const pressure = Math.max(swarm, nearDowned);
+      // Zombies close enough to land a swipe during the 3 s hold.
+      const threat = zombies.filter((z) => Math.min(flat(z.move, downed.move), flat(z.move, self.move)) < ZOMBIES_ALLY.reviveClear).length;
       const d = flat(self.move, downed.move);
-      if (pressure > this.tuning.reviveSwarm && left > this.tuning.reviveUrgentSec) {
-        this.mode = 'retreat';
-        move = this.retreatFrom(self, zombies, downed.move);
+      if (threat > this.tuning.reviveSwarm && left > this.tuning.reviveUrgentSec) {
+        // Not yet: overwhelmed, back off (toward them); else hold near them and clear the zombies.
+        if (swarm >= 2 || self.health < self.maxHealth * 0.6) {
+          this.mode = 'retreat';
+          move = this.retreatFrom(self, zombies, downed.move);
+        } else {
+          this.mode = 'fight';
+          move = d > 3 ? downed.move : null;
+        }
       } else {
         this.mode = 'revive';
         if (d <= 1.0 && Math.abs(downed.move.y - self.move.y) < 1.2) {
