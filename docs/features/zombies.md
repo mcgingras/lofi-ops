@@ -70,7 +70,7 @@ src/client/features/zombies/
   props.ts      entity renderers: zm_wall (chalk gun + price), zm_perk (vending machine), zm_box, zm_boxspot,
                 zm_powerup; textures
   blockers.ts   zm_barrier (six boards, torn off / slammed back), zm_door (debris, furniture, the HELP door, cleared
-                when bought), rebuild / buy prompts, the prediction world's gates, flames over the layer's fires
+                when bought), rebuild / buy prompts, the prediction world's gates, flames over the layer's fires; its sounds in blocker-sounds.ts
   look.ts       zombie soldiers (tint, rags, glowing eyes, arms out, shamble, swipe, rising, head gibs),
                 hellhounds (a charred dog in a burning halo), groans
   sounds.ts     every Zombies sound, synthesized and original (no Zombies music)

@@ -14,6 +14,7 @@
  *   `zombies.nuke`, `zombies.teddy` (a wobbly toy laugh).
  */
 import { sfx } from '../../game/audio';
+import './blocker-sounds';
 
 function tone(ctx: AudioContext, dur: number, f: (t: number, i: number, sr: number) => number): AudioBuffer {
   const sr = ctx.sampleRate;
