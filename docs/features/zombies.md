@@ -4,12 +4,30 @@ BO1-style round-based survival against waves of zombies and hellhounds: solo fir
 
 ## Playing it
 
-- Main menu → **Zombies** (`zombies` screen): **Solo** starts a game in one click (the `zombies.solo` RPC opens a private Zombies lobby and starts it as soon as you are in). Under it, **Play with a bot partner** (on by default): 1-3 AI partners and their skill (Recruit / Regular / Veteran), remembered in `lofi.zombies.allies`; unticked, you play alone. **Co-op lobby** (`zombies.coop`) gives you a lobby code to share; the host starts. **Find a co-op game** matchmakes the `zombies` Quick Play playlist (category `party`). Join a party by code. Pick the map (remembered in `lofi.zombies.map`); your best round shows from `profile.stats['zombies.bestRound']`.
+- Main menu → **Zombies** (`zombies` screen): **Solo** starts a game in one click (the `zombies.solo` RPC opens a private Zombies lobby and starts it as soon as you are in). Under it, **Play with a bot partner** (on by default): 1-3 AI partners and their skill (Recruit / Regular / Veteran), remembered in `lofi.zombies.allies`; unticked, you play alone. Next to it, **Difficulty**: **Casual** (the default) or **Classic (BO1)**, remembered in `lofi.zombies.difficulty` and sent with Solo and Co-op lobby (`difficulty` on `zombies.solo` / `zombies.coop`; a co-op lobby plays its host's choice, matchmade co-op plays Casual). See "Difficulty" below. **Co-op lobby** (`zombies.coop`) gives you a lobby code to share; the host starts. **Find a co-op game** matchmakes the `zombies` Quick Play playlist (category `party`). Join a party by code. Pick the map (remembered in `lofi.zombies.map`); your best round shows from `profile.stats['zombies.bestRound']`.
 - The private lobby's mode list also has Zombies, so a private match can switch to it.
 - Maps: **Nuketown** (dusk, a nod to BO2's Nuketown Zombies), **Firing Range** (evening), **Yard** (night).
 - Solo comes with one AI partner by default (see "AI allies" below). In a co-op lobby the host can turn bot fill on: AI allies fill the survivors up to the target (at most 4 survivors in all), at the lobby's difficulty (Hardened plays as Veteran).
 - Maps: **Nacht der Untoten** (night; the World at War / BO1 original, Zombies only: boarded windows, debris doors, see docs/maps/nacht-reference.md), **Nuketown** (dusk, a nod to BO2's Nuketown Zombies), **Firing Range** (evening), **Yard** (night).
 - Bots do not join by default (the mode's default bot target is 1, i.e. just you). In a co-op lobby the host can turn bot fill on: ally bots join the survivors (at most 4 survivors in all) with the soldier brain, a free gun each round and no points.
+
+## Difficulty
+
+Two settings, one table (`ZOMBIES_DIFFICULTY` in `src/shared/defs/zombies.ts`). **Classic** is BO1 exactly (every number in "Rules and numbers" below). **Casual**, the default, came from solo playtests with the bot partner ("getting swiped twice is too hard", "too many of them in the early rounds", "it shouldn't be multiple pistol shots to kill them in round 2"): the early rounds forgive, and the curves join BO1's (health by round 9, round size by round 12). The game reads the room's setting at each game start (`setZombiesDifficulty(room, d)` from the RPCs; Casual when unset), sends it in `zombies.state.difficulty` and `results.ext.zombies.difficulty`. The scoreboard shows it under the round, as do the "GET READY" intro and the game-over card ("CASUAL" / "CLASSIC"), and the results screen's sub line ("Nuketown · Zombies · CASUAL").
+
+| | Casual (default) | Classic (BO1) |
+|---|---|---|
+| Zombie health, rounds 1-8 | 100, 140, 220, 330, 450, 600, 750, 900 | 150, 250, 350, 450, 550, 650, 750, 850 |
+| Zombie health, round 9 on | BO1's: 950, 1045, 1149 ... | 950, 1045, 1149 ... |
+| Zombies per round | BO1's count x0.6 in rounds 1-5, the factor ramping linearly to x1 by round 12 (rounded, at least 1) | BO1's count |
+| Solo, rounds 1-12 | 4, 5, 8, 11, 14, 18, 20, 22, 24, 29, 32, 36 | 6, 8, 13, 18, 24, 27, 28, 28, 29, 33, 34, 36 |
+| AI partners in the round size | don't count (only humans) | count as players (you + 1 partner = the 2-player count: 7 in round 1) |
+| M1911 vs zombies | x1.0: 40 near, head x3.5 = 140, body x1.25 = 50; round 1 head 1 / body 2, round 2 1 / 3, round 3 2 / 5 | x0.5: head 70, body 25; round 1 head 3 / body 6 |
+| Other guns | unchanged (MP5K / AK-74u body / head, rounds 1-5: 1/1, 2/1, 3/1, 4/1, 5/2) | MP5K / AK-74u: 2/1, 3/1, 4/1, 5/2, 6/2 |
+| Zombie swipe | 34 every 1.3 s: 3 hits down you, 8 with Juggernog (250) | 50 every 1.1 s: 2 hits, 5 with Juggernog |
+| Hellhound rounds | dogs x0.6 (humans only; rounded, at least 1), health x0.75: 300 / 675 / 975 / 1200 | players x 6 (x 8 from the 3rd); 400 / 900 / 1300 / 1600 |
+| Bleed-out (co-op) | 45 s | 30 s |
+| Regen, revives, points, perks, box, power-ups | as Classic | BO1 |
 
 ## Rules and numbers
 
@@ -18,7 +36,7 @@ All tuning and formulas are in `src/shared/defs/zombies.ts`, with the source of 
 | what | BO1 rule (source) | ours |
 |---|---|---|
 | Zombie health | 150, +100 a round to round 9, then +10% (truncated) a round (`ai_calculate_health`) | `zombieHealth(round)`: 150, 250 ... 950, 1045, 1149 ... |
-| Zombies per round | 24 + per player (solo +0.5 x 6, co-op +(n-1) x 6) x max(1, round/5) (x round x 0.15 from 10); rounds 1-5 take 25/30/50/70/90% (`round_spawning`, `default_max_zombie_func`) | `zombiesForRound(round, players)`: solo 6, 8, 13, 18, 24, 27 ... 33 at 10; 4 players 10 at round 1. AI allies count as players (BO1 counts every player in the game, so the partner carries its weight): you + 1 partner is the 2-player count (7 in round 1). Hellhound counts and the power-up score threshold count them too |
+| Zombies per round | 24 + per player (solo +0.5 x 6, co-op +(n-1) x 6) x max(1, round/5) (x round x 0.15 from 10); rounds 1-5 take 25/30/50/70/90% (`round_spawning`, `default_max_zombie_func`) | `zombiesForRound(round, players)` (`zombiesForRoundAt` applies the difficulty): solo 6, 8, 13, 18, 24, 27 ... 33 at 10; 4 players 10 at round 1. Classic: AI allies count as players (BO1 counts every player in the game, so the partner carries its weight): you + 1 partner is the 2-player count (7 in round 1). Hellhound counts and the power-up score threshold count them too |
 | Alive at once | 24 (`level.zombie_ai_limit`); the rest wait | the director queues the rest |
 | Spawn delay | 2.0 s, x0.95 after each round while above 0.08 (`round_think`) | `spawnDelay(round)` |
 | Run speed | base = (round - 1) x 8 (1 in round 1); roll in [base, base+35): <= 35 walk, <= 70 run, else sprint (`set_run_speed`) | `rollGait`, `gaitOdds`; 1.35 / 3.1 / 4.7 m/s (players walk 5.0) |
@@ -111,7 +129,8 @@ Difficulties use the bots' presets (recruit / regular / veteran `BotSkill`, fiel
 
 ```
 src/shared/defs/zombies.ts           tuning, formulas, perks / power-ups / box defs, ZM_ENTITY kinds, wire types
-                                     (zombies.state, zombies.event, zombies.solo / zombies.coop RPCs), ZOMBIES_LOADOUT, XP
+                                     (zombies.state, zombies.event, zombies.solo / zombies.coop RPCs), ZOMBIES_LOADOUT, XP,
+                                     ZOMBIES_DIFFICULTY (Casual / Classic) and the *At / *For formulas that apply it
 src/shared/maps/zombies/             one file per map: the Zombies layer (types.ts: wall-buys, box spots, perks,
   nacht.ts nuketown.ts firingrange.ts zombie spawns (zone, barrier), survivor spawns, time preset, optional barriers,
   yard.ts                            doors, zones, fires, dogs on/off); index.ts registry
@@ -131,6 +150,7 @@ src/server/features/zombies/
 src/client/features/zombies/
   index.ts      atmosphere: the layer's time preset, the hellhound fog
   store.ts      state, banners, point popups, stingers
+  difficulty.ts the remembered difficulty, the Solo / Co-op lobby requests, the HUD / results labels
   hud.ts        chalk tally (1-5) / round number, points, perks, power-up timers, prompts, downs, drink,
                 game over; wraps of core widgets (killfeed, compass, minimap, streak ladder, XP popups,
                 scoreboard, names, death screen, result title)
@@ -145,7 +165,7 @@ src/client/features/zombies/
 scripts/zm-layout.ts  top-down PNG of a map's nav and Zombies layer (authoring aid)
 scripts/zm-place.ts   snap rough targets to wall faces / free floor / nav cells (authoring aid)
 scripts/zm-smoke.ts   a headless game with one idle survivor
-tests/zombies.test.ts              formulas, cap and queue, points, wall-buys, box and teddy, perks, Quick Revive,
+tests/zombies.test.ts              (Classic) formulas, cap and queue, points, wall-buys, box and teddy, perks, Quick Revive,
                                    co-op revives and bleed-out, power-ups, hellhounds, AI reach, 24-zombie tick cost, listing
 tests/zombies.layers.test.ts       every layer's spots on free, reachable floor / real walls
 tests/zombies.integration.test.ts  real server: one-click solo, points over the wire, a wall-buy, game over, results,
@@ -155,7 +175,11 @@ tests/zombies.headshots.test.ts    BO1 head multipliers across guns, shots to ki
                                    hitmarker part / killfeed headshot, crouched while rising
 tests/zombies.ally.test.ts         partner option, round size, following, killing, reviving (time bound, swarm),
                                    being revived, buying Jug and a wall gun, game over with allies, HUD state
-tests/zombies-helpers.ts           shared room set-up for the two above
+tests/zombies.difficulty.test.ts   Casual / Classic: the table, real-room health and round sizes (solo, 1 and 3 partners),
+                                   M1911 shots to kill a zombie bot (rounds 1-3), swipes to go down, dog rounds,
+                                   bleed-out, state / results label, the RPCs carrying it (real server)
+tests/zombies-difficulty.client.test.ts  the remembered choice, the requests, the labels
+tests/zombies-helpers.ts           shared room set-up for the room tests (`zmRoom(map, difficulty?)`)
 tests/zombies.blockers.test.ts     barriers (tear rate, climb in, rebuild points and cap, Carpenter), doors (block, buy,
                                    zones, per-room worlds, path cost), the AI through a window on Nacht
 tests/maps-nacht.test.ts           Nacht layout vs the floor plans, Zombies-only, reachability, doors gate areas, windows

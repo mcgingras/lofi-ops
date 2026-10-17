@@ -11,8 +11,8 @@
  * room's bot count is not managed in Zombies); `ZombieBrain` does.
  */
 import { HEALTH, type Team } from '../../../shared/constants';
-import { allyCount, allyDifficulty, ZOMBIES_ALLY, type AllyDifficulty } from '../../../shared/defs/zombies';
-import { DOGS, POINTS, dogHealth, dogSpawnWait, dogsForRound, downedLoss, firstDogRound, killPoints, newDropTracker, nextDogRound, PERK_COLA_BY_ID, PERK_EFFECTS, rollGait, roundUpToTen, roundXp, scaledPoints, spawnDelay, STARTING_WEAPON, ZOMBIE_SPEED, zombieDamageMult, zombieHealth, zombiePartMult, ZOMBIES, ZOMBIES_LOADOUT, ZOMBIES_TEAMS, zombiesForRound, type DropTracker, type PerkColaId, type ZombiesEventPayload, type ZombiesPhase, type ZombiesPlayerInfo, type ZombiesStatePayload } from '../../../shared/defs/zombies';
+import { allyCount, allyDifficulty, dogHealthAt, dogsForRoundAt, ZOMBIES_ALLY, ZOMBIES_DIFFICULTY, zombieHealthFor, zombiesDifficulty, zombiesForRoundAt, type AllyDifficulty, type ZombiesDifficulty } from '../../../shared/defs/zombies';
+import { DOGS, POINTS, dogSpawnWait, downedLoss, firstDogRound, killPoints, newDropTracker, nextDogRound, PERK_COLA_BY_ID, PERK_EFFECTS, rollGait, roundUpToTen, roundXp, scaledPoints, spawnDelay, STARTING_WEAPON, ZOMBIE_SPEED, zombieDamageMult, zombiePartMult, ZOMBIES, ZOMBIES_LOADOUT, ZOMBIES_TEAMS, type DropTracker, type PerkColaId, type ZombiesEventPayload, type ZombiesPhase, type ZombiesPlayerInfo, type ZombiesStatePayload } from '../../../shared/defs/zombies';
 import { MOVE } from '../../../shared/constants';
 import { EQUIPMENT_BY_ID } from '../../../shared/defs/equipment';
 import { cloneLoadout, type Loadout } from '../../../shared/loadout';
@@ -65,12 +65,25 @@ const liveGames = new WeakMap<Room, ZombiesGame>();
 /** The room's ally request, if any. */
 export const zombiesAlliesOf = (room: Room) => allySettings.get(room) ?? null;
 
+/** Difficulty per room (`zombies.solo` / `zombies.coop { difficulty }`, the host's choice); Casual when unset (matchmade co-op). */
+const difficultySettings = new WeakMap<Room, ZombiesDifficulty>();
+
+/** Set this room's Zombies difficulty: now if no round has started yet, else from the next game. */
+export function setZombiesDifficulty(room: Room, difficulty: unknown): void {
+  difficultySettings.set(room, zombiesDifficulty(difficulty));
+  const g = liveGames.get(room);
+  if (g && g.round === 0) g.applyDifficulty();
+}
+
+export const zombiesDifficultyOf = (room: Room): ZombiesDifficulty => difficultySettings.get(room) ?? zombiesDifficulty(undefined);
+
 /** Pistols a downed survivor fights with, best first (BO1: the Ray Gun if you have it, else a pistol, else an M1911). */
 const LAST_STAND_PICKS = ['raygun', 'python', 'asp', 'm1911'];
 
 export interface ZombiesResultsExt {
   round: number;
   map: string;
+  difficulty: ZombiesDifficulty;
   players: { id: string; name: string; bot: boolean; kills: number; headshots: number; downs: number; revives: number; points: number }[];
 }
 
@@ -82,6 +95,8 @@ export class ZombiesGame {
   /** Barriers and doors (layers that have them). */
   blockers: Blockers;
   round = 0;
+  /** Casual or Classic (BO1), read from the room at each game start. */
+  difficulty: ZombiesDifficulty;
   phase: ZombiesPhase = 'pre';
   phaseEndsAt: number | null = null;
   dogRound = false;
@@ -121,6 +136,7 @@ export class ZombiesGame {
   ) {
     this.rnd = rnd;
     liveGames.set(room, this);
+    this.difficulty = zombiesDifficultyOf(room);
     this.layer = zombiesLayer(room.mapId);
     this.blockers = new Blockers(this, rnd);
     this.horde = this.makeHorde();
@@ -130,10 +146,20 @@ export class ZombiesGame {
     this.powerups = new Powerups(this);
   }
 
+  /** Take the room's difficulty (game start, or set before round 1). */
+  applyDifficulty(): void {
+    this.difficulty = zombiesDifficultyOf(this.room);
+    const t = ZOMBIES_DIFFICULTY[this.difficulty];
+    this.horde.swipe = { damage: t.swipeDamage, every: t.swipeEvery };
+    this.dirty = true;
+  }
+
   private makeHorde(): Horde {
     const h = createHorde(this.room, (a, v, amount, weapon) => this.swipe(a, v, amount, weapon));
     h.entry = this.blockers.entry;
     h.pathCost = this.blockers.cellCost;
+    const t = ZOMBIES_DIFFICULTY[this.difficulty];
+    h.swipe = { damage: t.swipeDamage, every: t.swipeEvery };
     return h;
   }
 
@@ -184,7 +210,7 @@ export class ZombiesGame {
     m.add('canSprint', (p) => (undeadOf(p) ? false : undefined), 'zombies.sprint');
     m.add('regenDelayMultiplier', (p) => (undeadOf(p) ? 1e6 : undefined), 'zombies.regen');
     // BO1 zombie weapon damage, and BO1's hit-part multipliers (heads x3-x10) in place of the gun's multiplayer ones.
-    m.add('damageDealt', (a, info) => (survivorOf(a) && undeadOf(info.victim) ? zombieDamageMult(info.weapon, info.means) * zombiePartMult(info.weapon, info.part, info.means) : undefined), 'zombies.damage');
+    m.add('damageDealt', (a, info) => (survivorOf(a) && undeadOf(info.victim) ? zombieDamageMult(info.weapon, info.means, this.difficulty) * zombiePartMult(info.weapon, info.part, info.means) : undefined), 'zombies.damage');
     m.add('reloadMultiplier', (p) => (this.hasPerk(p, 'speed') ? PERK_EFFECTS.speedReload : undefined), 'zombies.speedcola');
     m.add('fireRateMultiplier', (p) => (this.hasPerk(p, 'doubletap') ? PERK_EFFECTS.doubleTapRate : undefined), 'zombies.doubletap');
     m.add('useClaimed', (p) => (this.buy.claimsUse(p) || this.blockers.claimsUse(p) ? true : undefined), 'zombies.use');
@@ -282,6 +308,17 @@ export class ZombiesGame {
     return out;
   }
 
+  /** Survivors split into humans and AI allies (the round size counts allies in Classic only). */
+  survivorCounts(): { humans: number; allies: number } {
+    let humans = 0;
+    let allies = 0;
+    for (const p of this.survivors()) {
+      if (p.isBot) allies++;
+      else humans++;
+    }
+    return { humans, allies };
+  }
+
   get solo(): boolean {
     return this.survivors().length <= 1;
   }
@@ -341,6 +378,7 @@ export class ZombiesGame {
   /** Each match start (the rules' reset, before the phase changes). */
   reset(): void {
     const room = this.room;
+    this.difficulty = zombiesDifficultyOf(room);
     this.layer = zombiesLayer(room.mapId);
     this.horde = this.makeHorde();
     this.round = 0;
@@ -425,7 +463,7 @@ export class ZombiesGame {
     this.round = r;
     this.phase = 'active';
     this.phaseEndsAt = null;
-    const players = Math.max(1, this.survivors().length);
+    const { humans, allies } = this.survivorCounts();
     // Hellhound rounds, unless the map never had them (Nacht der Untoten).
     if (this.layer?.dogs === false && r === this.nextDog) this.nextDog = nextDogRound(r, this.rnd());
     this.dogRound = r === this.nextDog;
@@ -433,10 +471,10 @@ export class ZombiesGame {
     if (this.dogRound) {
       this.dogRounds++;
       this.nextDog = nextDogRound(r, this.rnd());
-      count = dogsForRound(this.dogRounds, players);
+      count = dogsForRoundAt(this.dogRounds, humans, allies, this.difficulty);
       this.nextSpawnAt = room.time + DOGS.introSec;
     } else {
-      count = zombiesForRound(r, players);
+      count = zombiesForRoundAt(r, humans, allies, this.difficulty);
       this.nextSpawnAt = room.time + (r === 1 ? 0.5 : 1.5);
     }
     this.queue = count;
@@ -536,7 +574,7 @@ export class ZombiesGame {
     room.spawn(body, point);
     // Outside a window: it has to come in through it (blockers.ts).
     if (at.barrier !== undefined && kind === 'zombie') this.blockers.assign(body, at.barrier);
-    const hp = kind === 'dog' ? dogHealth(this.dogRounds) : zombieHealth(this.round);
+    const hp = kind === 'dog' ? dogHealthAt(this.dogRounds, this.difficulty) : zombieHealthFor(this.round, this.difficulty);
     body.maxHealth = hp;
     body.health = hp;
     body.damageLog = [];
@@ -634,7 +672,7 @@ export class ZombiesGame {
       attacker,
       weapon,
       means,
-      durationSec: solo ? ZOMBIES.soloReviveSec + 5 : ZOMBIES.bleedOutSec,
+      durationSec: solo ? ZOMBIES.soloReviveSec + 5 : ZOMBIES_DIFFICULTY[this.difficulty].bleedOutSec,
       revivable: !solo,
       reviveSecFor: (r) => ZOMBIES.reviveSec * (this.hasPerk(r, 'revive') ? PERK_EFFECTS.reviveSpeed : 1),
       reviveScore: 0,
@@ -796,7 +834,8 @@ export class ZombiesGame {
       if (this.spawnOne(kind)) {
         this.queue--;
         if (this.dogRound) {
-          const max = dogsForRound(this.dogRounds, Math.max(1, this.survivors().length));
+          const { humans, allies } = this.survivorCounts();
+          const max = dogsForRoundAt(this.dogRounds, humans, allies, this.difficulty);
           this.nextSpawnAt = now + Math.max(0.2, dogSpawnWait(this.dogRounds, max - this.queue, max));
         } else this.nextSpawnAt = now + spawnDelay(this.round);
         this.dirty = true;
@@ -843,6 +882,7 @@ export class ZombiesGame {
       dogs: this.bodies.filter((b) => undeadOf(b)?.kind === 'dog').map((b) => b.id),
       soloLives: this.soloLives,
       survived: this.survived,
+      difficulty: this.difficulty,
     };
   }
 
@@ -871,6 +911,7 @@ export class ZombiesGame {
     const ext: ZombiesResultsExt = {
       round: this.survived ?? this.round,
       map: room.mapId,
+      difficulty: this.difficulty,
       players: this.survivors().map((p) => {
         const s = survivorOf(p) as SurvivorExt;
         return { id: p.id, name: p.name, bot: p.isBot, kills: s.kills, headshots: s.headshots, downs: s.downs, revives: s.revives, points: s.total };

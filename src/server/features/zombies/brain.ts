@@ -45,6 +45,8 @@ export interface Horde {
   entry?: (self: PlayerState, now: number) => HordeEntry | null;
   /** Path cost multiplier per nav cell (shut doors). */
   pathCost?: (c: NavCell) => number;
+  /** Zombie swipe damage and gap (s): the game's difficulty (`ZOMBIES_DIFFICULTY`); BO1's when unset. */
+  swipe?: { damage: number; every: number };
 }
 
 /**
@@ -172,8 +174,9 @@ export class ZombieBrain implements BotBrain {
     if (this.swingEnd !== null) {
       if (now >= this.swingEnd) {
         this.swingEnd = null;
-        this.nextSwing = now + (dog ? ZOMBIES.dogBiteEvery : ZOMBIES.swipeEvery) - ZOMBIES.swipeWindup;
-        if (t && vd <= reach * 1.3 && Math.abs(vdy) < ZOMBIES.swipeDy && sees) this.horde.hit(self, t, dog ? ZOMBIES.dogBite : ZOMBIES.swipeDamage, dog ? 'hellhound' : 'zombie');
+        const swipe = this.horde.swipe;
+        this.nextSwing = now + (dog ? ZOMBIES.dogBiteEvery : (swipe?.every ?? ZOMBIES.swipeEvery)) - ZOMBIES.swipeWindup;
+        if (t && vd <= reach * 1.3 && Math.abs(vdy) < ZOMBIES.swipeDy && sees) this.horde.hit(self, t, dog ? ZOMBIES.dogBite : (swipe?.damage ?? ZOMBIES.swipeDamage), dog ? 'hellhound' : 'zombie');
       }
     } else if (inReach && now >= this.nextSwing) {
       this.swingEnd = now + (dog ? ZOMBIES.swipeWindup * 0.6 : ZOMBIES.swipeWindup);

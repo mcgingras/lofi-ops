@@ -479,10 +479,10 @@ export const ZOMBIE_DAMAGE = {
   explosive: 2.5,
 } as const;
 
-export function zombieDamageMult(weapon: string, means: string): number {
+export function zombieDamageMult(weapon: string, means: string, difficulty: ZombiesDifficulty = 'classic'): number {
   if (means === 'melee') return 1;
   const w = WEAPON_BY_ID.get(weapon);
-  const byW = ZOMBIE_DAMAGE.byWeapon[weapon];
+  const byW = ZOMBIES_DIFFICULTY[difficulty].damageByWeapon[weapon] ?? ZOMBIE_DAMAGE.byWeapon[weapon];
   if (byW !== undefined) return byW;
   if (w) return ZOMBIE_DAMAGE.byClass[w.class] ?? 2.5;
   return means === 'explosive' ? ZOMBIE_DAMAGE.explosive : 1;
@@ -533,12 +533,124 @@ export function zombiePartMult(weapon: string, part: 'head' | 'torso' | 'legs' |
 }
 
 /** Damage one bullet of `weapon` does to a zombie at point blank on `part` (tests, docs). */
-export function zombieBulletDamage(weapon: string, part: 'head' | 'torso' | 'legs'): number {
+export function zombieBulletDamage(weapon: string, part: 'head' | 'torso' | 'legs', difficulty: ZombiesDifficulty = 'classic'): number {
   const w = WEAPON_BY_ID.get(weapon);
   if (!w) return 0;
   const own = part === 'head' ? w.multipliers.head : part === 'torso' ? w.multipliers.torso : w.multipliers.limb;
-  return w.damage.near * own * zombieDamageMult(weapon, 'bullet') * zombiePartMult(weapon, part, 'bullet');
+  return w.damage.near * own * zombieDamageMult(weapon, 'bullet', difficulty) * zombiePartMult(weapon, part, 'bullet');
 }
+
+// ---------------------------------------------------------------------------------------------
+// Difficulty: Casual (the default) and Classic (BO1, every number above)
+// ---------------------------------------------------------------------------------------------
+
+export type ZombiesDifficulty = 'casual' | 'classic';
+export const ZOMBIES_DIFFICULTIES: readonly ZombiesDifficulty[] = ['casual', 'classic'];
+export const ZOMBIES_DEFAULT_DIFFICULTY: ZombiesDifficulty = 'casual';
+
+export interface ZombiesDifficultyTuning {
+  /** Menu name, HUD / results label, menu blurb. */
+  name: string;
+  label: string;
+  blurb: string;
+  /** Zombie health for rounds 1..n (index 0 = round 1); later rounds use BO1's `zombieHealth`. */
+  earlyHealth: readonly number[];
+  /** Round size: BO1's count x `countScale` up to `countRampFrom`, ramping linearly to x1 at `countFullAt`. */
+  countScale: number;
+  countRampFrom: number;
+  countFullAt: number;
+  /** AI partners add to the player count for the round size (BO1 counts every player). */
+  alliesCount: boolean;
+  /** Zombie swipe damage and the gap between swipes (s). */
+  swipeDamage: number;
+  swipeEvery: number;
+  /** Co-op bleed-out (s). */
+  bleedOutSec: number;
+  /** Per-weapon damage factors against zombies, over `ZOMBIE_DAMAGE.byWeapon`. */
+  damageByWeapon: Record<string, number>;
+  /** Hellhound rounds: dog count and dog health factors. */
+  dogCount: number;
+  dogHealth: number;
+}
+
+/**
+ * Casual: the early rounds forgive (100-health round-1 zombies, a one-shot M1911 headshot in
+ * rounds 1-2, 3 swipes to down you, 8 with Juggernog), joining BO1's curves by round 9 (health)
+ * and round 12 (round size). Classic: BO1 exactly.
+ */
+export const ZOMBIES_DIFFICULTY: Record<ZombiesDifficulty, ZombiesDifficultyTuning> = {
+  casual: {
+    name: 'Casual',
+    label: 'CASUAL',
+    blurb: 'Softer early rounds, fewer zombies, 3 swipes to go down. Joins BO1 by round 12.',
+    earlyHealth: [100, 140, 220, 330, 450, 600, 750, 900],
+    countScale: 0.6,
+    countRampFrom: 5,
+    countFullAt: 12,
+    alliesCount: false,
+    swipeDamage: 34,
+    swipeEvery: 1.3,
+    bleedOutSec: 45,
+    damageByWeapon: { m1911: 1.0 },
+    dogCount: 0.6,
+    dogHealth: 0.75,
+  },
+  classic: {
+    name: 'Classic (BO1)',
+    label: 'CLASSIC',
+    blurb: 'Black Ops 1 numbers: 2 swipes down you, the M1911 takes six to the body in round 1.',
+    earlyHealth: [],
+    countScale: 1,
+    countRampFrom: 5,
+    countFullAt: 12,
+    alliesCount: true,
+    swipeDamage: ZOMBIES.swipeDamage,
+    swipeEvery: ZOMBIES.swipeEvery,
+    bleedOutSec: ZOMBIES.bleedOutSec,
+    damageByWeapon: {},
+    dogCount: 1,
+    dogHealth: 1,
+  },
+};
+
+/** A requested difficulty, or the default (Casual). */
+export const zombiesDifficulty = (d: unknown): ZombiesDifficulty => (ZOMBIES_DIFFICULTIES.includes(d as ZombiesDifficulty) ? (d as ZombiesDifficulty) : ZOMBIES_DEFAULT_DIFFICULTY);
+
+/** Zombie health in a round at a difficulty (Classic: `zombieHealth`). */
+export function zombieHealthFor(round: number, difficulty: ZombiesDifficulty): number {
+  const early = ZOMBIES_DIFFICULTY[difficulty].earlyHealth;
+  return round >= 1 && round <= early.length ? early[round - 1]! : zombieHealth(round);
+}
+
+/** The round-size factor at a difficulty (1 for Classic). */
+export function roundSizeScale(round: number, difficulty: ZombiesDifficulty): number {
+  const t = ZOMBIES_DIFFICULTY[difficulty];
+  if (round <= t.countRampFrom) return t.countScale;
+  if (round >= t.countFullAt) return 1;
+  return t.countScale + ((1 - t.countScale) * (round - t.countRampFrom)) / (t.countFullAt - t.countRampFrom);
+}
+
+/** Players the round size counts: everyone in Classic (BO1), humans only in Casual. */
+export const roundSizePlayers = (humans: number, allies: number, difficulty: ZombiesDifficulty): number => Math.max(1, humans + (ZOMBIES_DIFFICULTY[difficulty].alliesCount ? allies : 0));
+
+/** Zombies in a round at a difficulty, for `humans` players and `allies` AI partners. */
+export function zombiesForRoundAt(round: number, humans: number, allies: number, difficulty: ZombiesDifficulty): number {
+  const n = zombiesForRound(round, roundSizePlayers(humans, allies, difficulty));
+  if (difficulty === 'classic') return n;
+  return Math.max(1, Math.round(n * roundSizeScale(round, difficulty)));
+}
+
+/** Hellhounds in the `dogRound`-th dog round at a difficulty. */
+export function dogsForRoundAt(dogRound: number, humans: number, allies: number, difficulty: ZombiesDifficulty): number {
+  const n = dogsForRound(dogRound, roundSizePlayers(humans, allies, difficulty));
+  if (difficulty === 'classic') return n;
+  return Math.max(1, Math.round(n * ZOMBIES_DIFFICULTY[difficulty].dogCount));
+}
+
+export const dogHealthAt = (dogRound: number, difficulty: ZombiesDifficulty): number => Math.round(dogHealth(dogRound) * ZOMBIES_DIFFICULTY[difficulty].dogHealth);
+
+/** Swipes that down a survivor with `health` (100, 250 with Juggernog). */
+export const swipesToDown = (health: number, difficulty: ZombiesDifficulty): number => Math.ceil(health / ZOMBIES_DIFFICULTY[difficulty].swipeDamage);
 
 // ---------------------------------------------------------------------------------------------
 // The zombie's pose (client look.ts) kept inside its hitboxes
@@ -821,6 +933,8 @@ export interface ZombiesStatePayload {
   soloLives: number;
   /** Highest round reached at game over (null while playing). */
   survived: number | null;
+  /** The game's difficulty (HUD label, the bleed-out bar). */
+  difficulty: ZombiesDifficulty;
 }
 
 export type ZombiesEventKind = 'round_start' | 'round_end' | 'dog_round' | 'powerup' | 'perk' | 'buy' | 'ammo' | 'box' | 'teddy' | 'box_move' | 'down' | 'revived' | 'bleedout' | 'game_over' | 'points' | 'nope' | 'board' | 'callout' | 'door';
@@ -844,8 +958,9 @@ declare module '../protocol' {
     'zombies.event': ZombiesEventPayload;
   }
   interface RpcMap {
-    /** `allies`: AI partners 0..3 (default 1), `allyDifficulty` their skill (default regular). */
-    'zombies.solo': { req: { map?: string; allies?: number; allyDifficulty?: AllyDifficulty }; res: { roomId: string; code: string } };
-    'zombies.coop': { req: { map?: string }; res: { roomId: string; code: string } };
+    /** `allies`: AI partners 0..3 (default 1), `allyDifficulty` their skill (default regular); `difficulty` default Casual. */
+    'zombies.solo': { req: { map?: string; allies?: number; allyDifficulty?: AllyDifficulty; difficulty?: ZombiesDifficulty }; res: { roomId: string; code: string } };
+    /** `difficulty`: the host's choice for the lobby's games (default Casual). */
+    'zombies.coop': { req: { map?: string; difficulty?: ZombiesDifficulty }; res: { roomId: string; code: string } };
   }
 }

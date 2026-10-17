@@ -1,10 +1,11 @@
 /**
  * Zombies menus: the main menu entry ("Zombies"), the `zombies` screen (solo in one click, a private
- * co-op lobby with a code, matchmade co-op, join by code, map pick, your best round) and the
+ * co-op lobby with a code, matchmade co-op, join by code, map pick, the difficulty (Casual / Classic,
+ * remembered, sent with Solo and Co-op lobby; matchmade co-op plays Casual), your best round) and the
  * game-over results that take the place of the match summary in a Zombies match.
  */
 import { MAP_BY_ID, mapsForMode } from '../../../shared/defs/maps';
-import { ALLY_DIFFICULTIES, allyCount, allyDifficulty, ZOMBIES_ALLY, type AllyDifficulty } from '../../../shared/defs/zombies';
+import { ALLY_DIFFICULTIES, allyCount, allyDifficulty, ZOMBIES_ALLY, ZOMBIES_DIFFICULTIES, ZOMBIES_DIFFICULTY, type AllyDifficulty, type ZombiesDifficulty } from '../../../shared/defs/zombies';
 import type { MatchResults } from '../../../shared/events';
 import type { Match } from '../../game/match';
 import { h } from '../../menus/dom';
@@ -12,6 +13,7 @@ import { net } from '../../net';
 import { registerMatchHook, registerMenuItem, registerScreen, screens, type ScreenMount } from '../../registry';
 import { back, closeOverlay, navigate } from '../../router';
 import { currentMatch } from '../../state';
+import { coopRequest, resultsSubtitle, saveDifficulty, savedDifficulty, soloRequest } from './difficulty';
 import { isZombiesMatch } from './store';
 import './zombies.css';
 
@@ -119,12 +121,22 @@ registerScreen('zombies', (root, params) => {
     );
   };
   renderPartner();
-  const solo = h('button', { class: 'lf-btn primary zm-big', type: 'button', onclick: () => void busy(net.rpc('zombies.solo', { map, allies: allies.count, allyDifficulty: allies.difficulty })) }, 'Solo');
+  // Difficulty: Casual (default) or Classic (BO1); for Solo and the co-op lobbies you host.
+  let difficulty: ZombiesDifficulty = savedDifficulty();
+  const diff = h('div', { class: 'zm-partner zm-difficulty' });
+  const renderDifficulty = () => {
+    diff.replaceChildren(
+      h('div', { class: 'zm-row' }, h('small', {}, 'Difficulty'), h('div', { class: 'zm-seg', role: 'group', 'aria-label': 'Difficulty' }, ...ZOMBIES_DIFFICULTIES.map((d) => h('button', { class: 'zm-seg-b', type: 'button', 'aria-pressed': String(d === difficulty), onclick: () => { difficulty = d; saveDifficulty(d); renderDifficulty(); } }, ZOMBIES_DIFFICULTY[d].name)))),
+      h('p', { class: 'fe-small' }, ZOMBIES_DIFFICULTY[difficulty].blurb),
+    );
+  };
+  renderDifficulty();
+  const solo = h('button', { class: 'lf-btn primary zm-big', type: 'button', onclick: () => void busy(net.rpc('zombies.solo', soloRequest(map, allies, difficulty))) }, 'Solo');
   root.append(
     h(
       'div',
       { class: 'fe-page lf-bg zm-page' },
-      h('div', { class: 'fe-top' }, h('div', {}, h('h1', { class: 'lf-title zm-title' }, 'ZOMBIES'), h('div', { class: 'lf-sub' }, 'Round-based survival · BO1 rules · solo or 2-4 co-op'))),
+      h('div', { class: 'fe-top' }, h('div', {}, h('h1', { class: 'lf-title zm-title' }, 'ZOMBIES'), h('div', { class: 'lf-sub' }, 'Round-based survival · Casual or BO1 rules · solo or 2-4 co-op'))),
       h(
         'div',
         { class: 'zm-grid' },
@@ -134,9 +146,10 @@ registerScreen('zombies', (root, params) => {
           h('h3', { class: 'fe-h' }, 'Play'),
           solo,
           partner,
+          diff,
           h('div', { class: 'fe-list' },
-            h('button', { class: 'fe-li', type: 'button', onclick: () => void busy(net.rpc('zombies.coop', { map })) }, 'Co-op lobby', h('small', {}, 'Invite friends by code')),
-            h('button', { class: 'fe-li', type: 'button', onclick: () => void busy(net.rpc('frontend.matchmake', { playlist: 'zombies' })) }, 'Find a co-op game', h('small', {}, 'Matchmade, 2-4 players')),
+            h('button', { class: 'fe-li', type: 'button', onclick: () => void busy(net.rpc('zombies.coop', coopRequest(map, difficulty))) }, 'Co-op lobby', h('small', {}, 'Invite friends by code (your difficulty)')),
+            h('button', { class: 'fe-li', type: 'button', onclick: () => void busy(net.rpc('frontend.matchmake', { playlist: 'zombies' })) }, 'Find a co-op game', h('small', {}, 'Matchmade, 2-4 players, Casual')),
           ),
           h('h3', { class: 'fe-h' }, 'Join a party'),
           h('div', { class: 'fe-code-row' }, code, h('button', { class: 'lf-btn small', type: 'button', onclick: join }, 'Join')),
@@ -167,6 +180,7 @@ registerScreen('zombies', (root, params) => {
 interface ZombiesExt {
   round: number;
   map: string;
+  difficulty?: ZombiesDifficulty;
   players: { id: string; name: string; bot: boolean; kills: number; headshots: number; downs: number; revives: number; points: number }[];
 }
 
@@ -185,7 +199,7 @@ function renderResults(root: HTMLElement, m: Match, results: MatchResults, param
     h(
       'div',
       { class: 'lf-page lfm-summary zm-over', role: 'dialog', 'aria-label': 'Game over' },
-      h('div', { class: 'lfm-head' }, h('h1', { class: 'lfm-title zm-title' }, 'GAME OVER'), h('div', { class: 'lf-sub' }, `${MAP_BY_ID.get(ext?.map ?? results.map)?.name ?? results.map} · Zombies`), h('div', { class: 'lfm-score zm-survived' }, `YOU SURVIVED ${round} ROUND${round === 1 ? '' : 'S'}`)),
+      h('div', { class: 'lfm-head' }, h('h1', { class: 'lfm-title zm-title' }, 'GAME OVER'), h('div', { class: 'lf-sub zm-results-sub' }, resultsSubtitle(MAP_BY_ID.get(ext?.map ?? results.map)?.name ?? results.map, ext?.difficulty)), h('div', { class: 'lfm-score zm-survived' }, `YOU SURVIVED ${round} ROUND${round === 1 ? '' : 'S'}`)),
       h(
         'div',
         { class: 'lfm-grid' },

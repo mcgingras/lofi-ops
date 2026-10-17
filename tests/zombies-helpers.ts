@@ -7,7 +7,8 @@ import botsFeature from '../src/server/features/bots/index';
 import perksFeature from '../src/server/features/perks/index';
 import progressionFeature from '../src/server/features/progression/index';
 import weaponsFeature from '../src/server/features/weapons/index';
-import type { ZombiesGame } from '../src/server/features/zombies/game';
+import { setZombiesDifficulty, type ZombiesGame } from '../src/server/features/zombies/game';
+import type { ZombiesDifficulty } from '../src/shared/defs/zombies';
 import { zombiesGameOf, ZombiesRules } from '../src/server/features/zombies/index';
 import { registerMode } from '../src/server/modes/index';
 import { Lobby } from '../src/server/lobby';
@@ -28,11 +29,13 @@ export interface ZmWorld {
 
 let seq = 0;
 
-export function zmRoom(map = 'nuketown'): ZmWorld {
+/** A Zombies room at `difficulty` (Casual, the default, when not given). */
+export function zmRoom(map = 'nuketown', difficulty?: ZombiesDifficulty): ZmWorld {
   registerMode('zombies', () => new ZombiesRules());
   const store = new Store(':memory:');
   const lobby = new Lobby({ store, features: [weaponsFeature, perksFeature, progressionFeature, botsFeature], log: () => {}, autoTick: false });
   const room = lobby.createRoom({ mode: 'zombies', map, closeWhenEmpty: false });
+  if (difficulty) setZombiesDifficulty(room, difficulty);
   return {
     store,
     lobby,

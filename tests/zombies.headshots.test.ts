@@ -147,7 +147,7 @@ describe('a real room: shots at a zombie bot', () => {
           const def = WEAPON_BY_ID.get(gun)!;
           const zm = ZOMBIE_PARTS.byWeapon[gun] ?? ZOMBIE_PARTS.byClass[def.class]!;
           expect(headDmg / bodyDmg).toBeGreaterThanOrEqual(zm.head / (zm.torso ?? 1) - 1e-6);
-          expect(headDmg).toBeCloseTo(zombieBulletDamage(gun, 'head'), 3);
+          expect(headDmg).toBeCloseTo(zombieBulletDamage(gun, 'head', w!.g.difficulty), 3);
         }
       }
     }

@@ -35,8 +35,8 @@ function clearHorde(x: ZmWorld): void {
 const flat = (a: PlayerState, b: PlayerState) => Math.hypot(a.move.x - b.move.x, a.move.z - b.move.z);
 
 /** A solo game with `n` allies; round 1 under way (or the first break when `quiet`: no zombies). */
-function duo(opts: { n?: number; difficulty?: string; quiet?: boolean; god?: boolean } = {}) {
-  w = zmRoom('nuketown');
+function duo(opts: { n?: number; difficulty?: string; quiet?: boolean; god?: boolean; mode?: 'casual' | 'classic' } = {}) {
+  w = zmRoom('nuketown', opts.mode);
   const room = w.room;
   setZombiesAllies(room, opts.n ?? 1, opts.difficulty ?? 'regular');
   const h = human(room);
@@ -66,8 +66,8 @@ describe('the partner option', () => {
     expect(g.solo).toBe(false);
   });
 
-  it('allies count as players for the round size (BO1 scales by players)', () => {
-    const { g } = duo({ n: 1 });
+  it('Classic: allies count as players for the round size (BO1 scales by players)', () => {
+    const { g } = duo({ n: 1, mode: 'classic' });
     // Round 1, two survivors: BO1's 2-player count.
     expect(g.queue + g.aliveUndead().length).toBe(zombiesForRound(1, 2));
     expect(zombiesForRound(1, 2)).toBeGreaterThan(zombiesForRound(1, 1));

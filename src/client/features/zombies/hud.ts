@@ -24,6 +24,7 @@ import { drawWaypoint, useKey, type WaypointSlot } from '../../hud/waypoints';
 import { hudWidgets, registerHudWidget, registerMatchHook, type HudDraw } from '../../registry';
 import { currentMatch } from '../../state';
 import { blockerPrompts } from './blockers';
+import { bleedOutSecFor, difficultyLabel } from './difficulty';
 import { isZombiesMatch, myInfo, now, zm } from './store';
 
 const CHALK_RED = '#c02a1a';
@@ -118,7 +119,7 @@ function drawPoints(m: Match, g: CanvasRenderingContext2D, W: number, H: number)
         const bw = 60 * u;
         const left = p.downUntil !== null ? Math.max(0, p.downUntil - m.serverTime) : 0;
         rect(g, right - bw, y + u, bw, 2 * u, C.ink);
-        rect(g, right - bw, y + u, bw * Math.min(1, left / ZOMBIES.bleedOutSec), 2 * u, C.health);
+        rect(g, right - bw, y + u, bw * Math.min(1, left / bleedOutSecFor(zm.state?.difficulty)), 2 * u, C.health);
         if (p.revive > 0) rect(g, right - bw, y + 3 * u, bw * Math.min(1, p.revive), 2 * u, C.friend);
         y -= 5 * u;
       }
@@ -311,7 +312,10 @@ registerHudWidget(
     }
     const st = zm.state;
     // "ROUND 1" while the first round comes in.
-    if (st && st.phase === 'pre' && st.phaseEndsAt !== null) txt(g, 'GET READY', W / 2, H * 0.36, 16, CHALK_HI, 'center', u);
+    if (st && st.phase === 'pre' && st.phaseEndsAt !== null) {
+      txt(g, 'GET READY', W / 2, H * 0.36, 16, CHALK_HI, 'center', u);
+      txt(g, difficultyLabel(st.difficulty), W / 2, H * 0.36 + 20 * u, 8, C.paper, 'center', u);
+    }
   },
   72,
 );
@@ -346,7 +350,7 @@ registerHudWidget(
     const me = myInfo(m);
     if (!me || !me.down || !m.alive) return;
     const left = me.downUntil !== null ? Math.max(0, me.downUntil - m.serverTime) : 0;
-    const total = me.selfRevive ? ZOMBIES.soloReviveSec : ZOMBIES.bleedOutSec;
+    const total = me.selfRevive ? ZOMBIES.soloReviveSec : bleedOutSecFor(zm.state?.difficulty);
     const title = me.selfRevive ? 'QUICK REVIVE' : me.revive > 0 ? 'BEING REVIVED' : 'BLEEDING OUT';
     txt(g, title, W / 2, H * 0.3, 16, blink(m.time, 0.8, 0.55) ? C.warn : C.hi, 'center', u);
     const bw = 90 * u;
@@ -393,10 +397,11 @@ registerHudWidget(
     const u = unit(H);
     const t = now() - zm.gameOverAt;
     if (t < 0.4) return;
-    rect(g, 0, H * 0.32, W, 46 * u, '#120404');
+    rect(g, 0, H * 0.32, W, 56 * u, '#120404');
     txt(g, 'GAME OVER', W / 2, H * 0.32 + 6 * u, 16, CHALK_HI, 'center', u);
     const n = st.survived;
     txt(g, `YOU SURVIVED ${n} ROUND${n === 1 ? '' : 'S'}`, W / 2, H * 0.32 + 28 * u, 8, C.paper, 'center', u);
+    txt(g, difficultyLabel(st.difficulty), W / 2, H * 0.32 + 40 * u, 8, C.dim, 'center', u);
   },
   96,
 );
@@ -472,10 +477,12 @@ function drawScoreboard(m: Match, g: CanvasRenderingContext2D, W: number, H: num
   const w = Math.min(W - 20 * u, 300 * u);
   const x = (W - w) / 2;
   let y = H * 0.22;
-  rect(g, x, y, w, (24 + st.players.length * 12) * u, '#0a0a0ae0');
+  rect(g, x, y, w, (34 + st.players.length * 12) * u, '#0a0a0ae0');
   txt(g, `ROUND ${st.round}`, x + 6 * u, y + 4 * u, 8, CHALK_HI, 'left', u);
+  // The difficulty under the round: "CASUAL" / "CLASSIC".
+  txt(g, difficultyLabel(st.difficulty), x + 6 * u, y + 14 * u, 8, C.dim, 'left', u);
   cols.forEach((c, i) => txt(g, c, x + w * (0.42 + i * 0.12), y + 4 * u, 8, C.dim, 'center', u));
-  y += 16 * u;
+  y += 26 * u;
   st.players.forEach((p, k) => {
     const col = PLAYER_COLORS[k % PLAYER_COLORS.length]!;
     txt(g, m.nameOf(p.id).toUpperCase(), x + 6 * u, y, 8, p.id === m.myId ? C.hi : col, 'left', u);
