@@ -115,6 +115,9 @@ export const IN_GAME_VOLUME: Record<string, number> = {
   'zombies.powerup_grab': 1,
   'zombies.nuke': 1,
   'zombies.teddy': 1,
+  'zombies.board_tear': 0.9,
+  'zombies.board_slam': 0.9,
+  'zombies.door_clear': 1.1,
 };
 
 /** The volume to play an id at in the sound test; undefined only for an id the table doesn't know. */

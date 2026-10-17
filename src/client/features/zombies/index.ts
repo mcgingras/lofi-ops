@@ -19,6 +19,7 @@ import './store';
 import './props';
 import './look';
 import './hud';
+import './blockers';
 import './screen';
 import { isZombiesMatch, zm } from './store';
 

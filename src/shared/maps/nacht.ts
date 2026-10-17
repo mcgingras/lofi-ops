@@ -335,12 +335,12 @@ function bunker(k: MapKit): void {
     crate(-10.2, z + 0.4, 0.5, 0.9);
   }
   k.aabb(-5.6, 0, -6.6, -5.0, 2.0, -5.0, 'rail', { bullets: false, sight: false });
-  k.box(1.2, 0.8, 0.7, 'wood', -6.6, 0, 6.2);
-  k.box(0.35, 0.25, 0.25, 'steel', -6.4, 0.8, 6.2);
+  k.box(1.2, 0.8, 0.7, 'wood', -7.9, 0, 7.95);
+  k.box(0.35, 0.25, 0.25, 'steel', -7.7, 0.8, 7.95);
   k.box(1.3, 0.5, 1.0, 'rubble', -9.6, 0, 5.6, { ry: 0.4 });
   k.box(0.9, 0.4, 0.8, 'rubble', -6.2, 0, 3.8, { ry: -0.5 });
   // Upstairs: the fallen beam across the left room, rubble heaps, the sniper cabinet.
-  k.aabb(-6.85, F2, -7.1, -6.35, F2 + 0.9, -3.2, 'concreteDark');
+  k.aabb(-6.85, F2, -7.1, -6.35, F2 + 0.9, -3.9, 'concreteDark');
   k.box(1.6, 0.5, 1.2, 'rubble', -9.4, F2, 2.4, { ry: 0.5 });
   k.box(1.2, 0.4, 1.0, 'rubble', -6.2, F2, 4.6, { ry: -0.3 });
   k.box(1.4, 0.45, 0.9, 'rubble', -2.4, F2, 2.8, { ry: 0.8 });

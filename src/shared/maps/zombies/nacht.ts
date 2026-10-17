@@ -57,7 +57,7 @@ export const NACHT_ZOMBIES: ZombiesLayer = {
   boxSpots: [
     { x: -6.2, y: 0, z: 7.9, yaw: N },
     { x: -3.4, y: 0, z: -0.35, yaw: S },
-    { x: -1.4, y: F2, z: 5.85, yaw: N },
+    { x: -0.4, y: F2, z: 5.85, yaw: N },
   ],
   perks: [
     { perk: 'revive', x: 8.9, y: 0, z: 8.15, yaw: N },
