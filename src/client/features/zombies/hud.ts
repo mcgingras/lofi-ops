@@ -27,6 +27,7 @@ import { isZombiesMatch, myInfo, now, zm } from './store';
 
 const CHALK_RED = '#c02a1a';
 const CHALK_HI = '#ff4a2a';
+const HEADSHOT_GOLD = '#ffc83a';
 const PLAYER_COLORS = ['#ece2ce', '#7ab0ff', '#ffd84a', '#7cff6a'];
 const v3 = new THREE.Vector3();
 
@@ -94,7 +95,33 @@ function drawPoints(m: Match, g: CanvasRenderingContext2D, W: number, H: number)
     const right = W - 8 * u;
     const label = p.dead ? 'DEAD' : p.down ? 'DOWN' : String(p.points);
     txt(g, label, right, y - size * u, size, p.down || p.dead ? C.warn : col, 'right', u);
-    if (p !== mine) txt(g, m.nameOf(p.id).toUpperCase(), right - textWidth(g, label, size, u) - 6 * u, y - size * u, 8, C.dim, 'right', u);
+    if (p !== mine) {
+      // Teammates and AI partners: name (a BOT tag), points, perks, and while down the bleed-out
+      // left and the revive progress.
+      let x = right - textWidth(g, label, size, u) - 6 * u;
+      const name = m.nameOf(p.id).toUpperCase();
+      txt(g, name, x, y - size * u, 8, C.dim, 'right', u);
+      x -= textWidth(g, name, 8, u) + 4 * u;
+      if (p.bot) {
+        txt(g, 'BOT', x, y - size * u, 8, C.friend, 'right', u);
+        x -= textWidth(g, 'BOT', 8, u) + 4 * u;
+      }
+      for (const id of [...p.perks].reverse()) {
+        const d = PERK_COLA_BY_ID.get(id);
+        if (!d) continue;
+        rect(g, x - 7 * u, y - size * u, 7 * u, 7 * u, C.ink);
+        rect(g, x - 6 * u, y - size * u + u, 5 * u, 5 * u, d.color);
+        x -= 9 * u;
+      }
+      if (p.down) {
+        const bw = 60 * u;
+        const left = p.downUntil !== null ? Math.max(0, p.downUntil - m.serverTime) : 0;
+        rect(g, right - bw, y + u, bw, 2 * u, C.ink);
+        rect(g, right - bw, y + u, bw * Math.min(1, left / ZOMBIES.bleedOutSec), 2 * u, C.health);
+        if (p.revive > 0) rect(g, right - bw, y + 3 * u, bw * Math.min(1, p.revive), 2 * u, C.friend);
+        y -= 5 * u;
+      }
+    }
     y -= (size + 4) * u;
   });
   // Popups for my points: drift left and fade (BO1 "+10").
@@ -300,7 +327,18 @@ registerHudWidget(
       const r = m.remotes.views.get(p.id);
       if (!r) continue;
       const left = p.downUntil !== null ? Math.max(0, Math.ceil(p.downUntil - m.serverTime)) : 0;
-      drawWaypoint(m, g, W, H, { x: r.x, y: r.y + 1.0, z: r.z, label: p.revive > 0 ? 'REVIVING' : 'REVIVE', caption: `${m.nameOf(p.id).toUpperCase()} ${left}`, color: C.warn, blink: true, hideWithin: 1.2 }, placed);
+      drawWaypoint(m, g, W, H, { x: r.x, y: r.y + 1.0, z: r.z, label: p.revive > 0 ? 'REVIVING' : 'REVIVE', caption: `${m.nameOf(p.id).toUpperCase()} ${left}`, color: p.revive > 0 ? C.friend : C.warn, blink: p.revive <= 0, hideWithin: 1.2 }, placed);
+      // The revive progress under the marker (whoever is reviving: you or a partner).
+      if (p.revive > 0) {
+        v3.set(r.x, r.y + 1.0, r.z).project(m.renderer.cam);
+        if (v3.z < 1 && Math.abs(v3.x) < 1 && Math.abs(v3.y) < 1) {
+          const sx = (v3.x * 0.5 + 0.5) * W;
+          const sy = (-v3.y * 0.5 + 0.5) * H;
+          const bw = 40 * u;
+          box(g, sx - bw / 2, sy + 26 * u, bw, 3 * u, C.empty, u);
+          rect(g, sx - bw / 2, sy + 26 * u, bw * Math.min(1, p.revive), 3 * u, C.friend);
+        }
+      }
     }
     const me = myInfo(m);
     if (!me || !me.down || !m.alive) return;
@@ -376,6 +414,18 @@ function wrapWidgets(): void {
     if (!isZombiesMatch(currentMatch())) orig(g, W, H, dt);
   };
   for (const id of ['core.killfeed', 'core.compass', 'core.title', 'killstreaks.radar', 'killstreaks.ladder', 'progression.popups', 'progression.ticker', 'frontend.classHint', 'perks.laststand', 'perks.list']) wrap(id, hideInZombies);
+  // Headshots: a bigger gold hitmarker (red with a gold centre on a head kill), so the x4 head
+  // multiplier reads at a glance. The server's `hit` carries the part it registered.
+  wrap('core.hitmarker', (orig) => (g, W, H, dt) => {
+    const m = currentMatch();
+    if (!isZombiesMatch(m) || !m.hitHead || m.time - m.hitAt > 0.3) return orig(g, W, H, dt);
+    const u = unit(H);
+    const mx = Math.floor(W / 2);
+    const my = Math.floor(H / 2);
+    const col = m.hitKill ? '#ff4a3a' : HEADSHOT_GOLD;
+    for (let i = 3; i < 9; i++) for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]] as const) rect(g, mx + sx * i * u, my + sy * i * u, u * (i < 5 ? 2 : 1), u * (i < 5 ? 2 : 1), col);
+    for (const [sx, sy] of [[0, -1], [1, 0], [0, 1], [-1, 0]] as const) rect(g, mx + sx * 2 * u, my + sy * 2 * u, u, u, HEADSHOT_GOLD);
+  });
   wrap('core.score', (orig) => (g, W, H, dt) => {
     const m = currentMatch();
     if (!isZombiesMatch(m)) return orig(g, W, H, dt);

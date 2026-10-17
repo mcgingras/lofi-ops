@@ -166,7 +166,7 @@ export class Buyables {
         if (this.box.user === p) this.box.released = true;
         continue;
       }
-      if (!g.isUp(p) || s.useLatched || s.drinkingUntil > now || p.isBot) continue;
+      if (!g.isUp(p) || s.useLatched || s.drinkingUntil > now) continue;
       const t = this.targetOf(p);
       if (!t) {
         s.useHold = 0;

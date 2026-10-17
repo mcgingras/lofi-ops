@@ -4,6 +4,7 @@
  * game-over results that take the place of the match summary in a Zombies match.
  */
 import { MAP_BY_ID, mapsForMode } from '../../../shared/defs/maps';
+import { ALLY_DIFFICULTIES, allyCount, allyDifficulty, ZOMBIES_ALLY, type AllyDifficulty } from '../../../shared/defs/zombies';
 import type { MatchResults } from '../../../shared/events';
 import type { Match } from '../../game/match';
 import { h } from '../../menus/dom';
@@ -15,6 +16,18 @@ import { isZombiesMatch } from './store';
 import './zombies.css';
 
 const MAP_KEY = 'lofi.zombies.map';
+const ALLY_KEY = 'lofi.zombies.allies';
+
+/** Solo's AI partners (count 0-3, difficulty), remembered per browser. */
+function savedAllies(): { count: number; difficulty: AllyDifficulty } {
+  try {
+    const v = JSON.parse(localStorage.getItem(ALLY_KEY) ?? 'null') as { count?: unknown; difficulty?: unknown } | null;
+    if (v) return { count: allyCount(v.count), difficulty: allyDifficulty(v.difficulty) };
+  } catch {
+    /* private mode, bad JSON */
+  }
+  return { count: ZOMBIES_ALLY.defaultCount, difficulty: ZOMBIES_ALLY.defaultDifficulty };
+}
 
 function savedMap(): string {
   try {
@@ -78,7 +91,35 @@ registerScreen('zombies', (root, params) => {
   const prof = net.profile;
   const best = prof?.stats['zombies.bestRound'] ?? 0;
   const kills = prof?.stats['mode.zombies.kills'] ?? 0;
-  const solo = h('button', { class: 'lf-btn primary zm-big', type: 'button', onclick: () => void busy(net.rpc('zombies.solo', { map })) }, 'Solo');
+  // Play with a bot partner: on by default in solo (1), 0-3 allies, and how good they are.
+  const allies = savedAllies();
+  const saveAllies = () => {
+    try {
+      localStorage.setItem(ALLY_KEY, JSON.stringify(allies));
+    } catch {
+      /* ignore */
+    }
+  };
+  const partner = h('div', { class: 'zm-partner' });
+  const renderPartner = () => {
+    const seg = <T extends string | number>(label: string, opts: readonly T[], cur: T, name: (v: T) => string, set: (v: T) => void) =>
+      h('div', { class: 'zm-seg', role: 'group', 'aria-label': label }, ...opts.map((o) => h('button', { class: 'zm-seg-b', type: 'button', 'aria-pressed': String(o === cur), onclick: () => { set(o); saveAllies(); renderPartner(); } }, name(o))));
+    partner.replaceChildren(
+      h('label', { class: 'zm-check' },
+        h('input', { type: 'checkbox', checked: allies.count > 0, 'aria-label': 'Play with a bot partner', onchange: (e: Event) => { allies.count = (e.target as HTMLInputElement).checked ? Math.max(1, allies.count) : 0; saveAllies(); renderPartner(); } }),
+        h('span', {}, 'Play with a bot partner'),
+      ),
+      ...(allies.count > 0
+        ? [
+            h('div', { class: 'zm-row' }, h('small', {}, 'Partners'), seg('Partners', [1, 2, 3] as const, allies.count as 1 | 2 | 3, (n) => String(n), (n) => (allies.count = n))),
+            h('div', { class: 'zm-row' }, h('small', {}, 'Skill'), seg('Partner skill', ALLY_DIFFICULTIES, allies.difficulty, (d) => d[0]!.toUpperCase() + d.slice(1), (d) => (allies.difficulty = d))),
+            h('p', { class: 'fe-small' }, 'They follow you, shoot zombies, revive you, buy with their own points and need reviving too.'),
+          ]
+        : []),
+    );
+  };
+  renderPartner();
+  const solo = h('button', { class: 'lf-btn primary zm-big', type: 'button', onclick: () => void busy(net.rpc('zombies.solo', { map, allies: allies.count, allyDifficulty: allies.difficulty })) }, 'Solo');
   root.append(
     h(
       'div',
@@ -92,6 +133,7 @@ registerScreen('zombies', (root, params) => {
           { class: 'fe-sub' },
           h('h3', { class: 'fe-h' }, 'Play'),
           solo,
+          partner,
           h('div', { class: 'fe-list' },
             h('button', { class: 'fe-li', type: 'button', onclick: () => void busy(net.rpc('zombies.coop', { map })) }, 'Co-op lobby', h('small', {}, 'Invite friends by code')),
             h('button', { class: 'fe-li', type: 'button', onclick: () => void busy(net.rpc('frontend.matchmake', { playlist: 'zombies' })) }, 'Find a co-op game', h('small', {}, 'Matchmade, 2-4 players')),

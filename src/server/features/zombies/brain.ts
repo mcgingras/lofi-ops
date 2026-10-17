@@ -12,7 +12,7 @@
  * - string pulling (walk straight to the farthest waypoint in reach) is re-checked every 0.3 s;
  * - target choice every 0.4 s, line of sight every 0.2 s, separation from the 24 others per tick.
  */
-import { ZOMBIES } from '../../../shared/defs/zombies';
+import { ZOMBIE_POSE, ZOMBIES } from '../../../shared/defs/zombies';
 import { Buttons } from '../../../shared/input';
 import { hashString, type Vec3 } from '../../../shared/math';
 import { PLAYER } from '../../../shared/constants';
@@ -105,6 +105,10 @@ export class ZombieBrain implements BotBrain {
     const idle = { buttons: dog ? Buttons.CROUCH : 0, yaw: this.yaw, pitch: 0, weaponSlot: 0 };
     if (this.horde.frozen) return idle;
     const pos = self.move;
+    // Climbing out of the ground: stand still, crouched for the first part (the client draws the
+    // climb; the crouched hitbox keeps the head where it is drawn).
+    const since = now - z.spawnedAt;
+    if (!dog && since < ZOMBIE_POSE.riseSec) return { buttons: since < ZOMBIE_POSE.riseCrouchSec ? Buttons.CROUCH : 0, yaw: this.yaw, pitch: 0, weaponSlot: 0 };
 
     // ---- Target: the nearest survivor who is up (BO1 zombies leave downed players alone).
     if (!this.target || now >= this.targetAt || !this.horde.targets.includes(this.target)) {

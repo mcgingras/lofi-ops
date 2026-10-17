@@ -5,6 +5,14 @@
 .zm-big { font-size: 18px; padding: 12px 18px; letter-spacing: 0.12em; }
 .zm-howto p { line-height: 1.5; }
 .zm-over .lfm-score.zm-survived { color: #ece2ce; font-size: 18px; letter-spacing: 0.1em; }
+.zm-partner { margin: 10px 0 4px; display: grid; gap: 6px; }
+.zm-check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.zm-row { display: flex; align-items: center; gap: 10px; }
+.zm-row small { min-width: 64px; color: #c8b8a8; }
+.zm-seg { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.zm-seg-b { background: #1a1614; color: #ece2ce; border: 1px solid #4a4640; padding: 4px 10px; font: inherit; cursor: pointer; }
+.zm-seg-b[aria-pressed='true'] { background: #d8341e; border-color: #d8341e; color: #fff; }
+.zm-seg-b:focus-visible, .zm-check input:focus-visible { outline: 2px solid #ffd84a; outline-offset: 1px; }
 @media (max-width: 520px) {
   .zm-big { width: 100%; }
 }
