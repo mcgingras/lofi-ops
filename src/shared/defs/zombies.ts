@@ -678,6 +678,60 @@ export const BARRIER = {
   capPerRound: (round: number) => Math.min(50 * round, 500),
 } as const;
 
+// ---------------------------------------------------------------------------------------------
+// AI allies ("partners"): bot survivors for solo (and co-op bot fill)
+// ---------------------------------------------------------------------------------------------
+
+export type AllyDifficulty = 'recruit' | 'regular' | 'veteran';
+export const ALLY_DIFFICULTIES: readonly AllyDifficulty[] = ['recruit', 'regular', 'veteran'];
+
+export interface AllyTuning {
+  /** The bots' skill preset it aims and notices with (src/shared/defs/bots.ts). */
+  preset: 'recruit' | 'regular' | 'veteran';
+  /** Chance an engagement goes for the head (zombies walk straight at you: heads are the play). */
+  headAim: number;
+  /** Zombies within `swarmRadius` of it (or of the downed) it will revive through; more and it backs off first. */
+  reviveSwarm: number;
+  /** Bleed-out seconds left under which it revives whatever the swarm. */
+  reviveUrgentSec: number;
+  /** How readily it spends: the points it keeps in hand after a buy (and the box chance per break). */
+  buyReserve: number;
+  boxChance: number;
+}
+
+export const ZOMBIES_ALLY = {
+  /** Solo: allies by default and at most (humans + allies <= 4). */
+  defaultCount: 1,
+  maxCount: 3,
+  defaultDifficulty: 'regular' as AllyDifficulty,
+  /** Stay this far from the player it follows (m): closer and it gives room, further and it catches up. */
+  followMin: 6,
+  followMax: 15,
+  followIdeal: 9,
+  /** Out of the player's line of fire: never within this angle (rad) of where they face, inside `fireLaneRange` m. */
+  fireLaneHalf: 0.45,
+  fireLaneRange: 25,
+  /** Overwhelmed: this many zombies within `swarmRadius` m. */
+  swarmRadius: 3.5,
+  overwhelmed: 3,
+  /** Power-ups: only these close (m). */
+  powerupReach: 6,
+  /** Buying trips: at most this far (m), only with no zombie within `buySafe` m. */
+  buyReach: 28,
+  buySafe: 9,
+  /** Text callouts: at most one every this many seconds per kind. */
+  calloutEvery: 6,
+  tuning: {
+    recruit: { preset: 'recruit', headAim: 0.25, reviveSwarm: 1, reviveUrgentSec: 7, buyReserve: 600, boxChance: 0.1 },
+    regular: { preset: 'regular', headAim: 0.55, reviveSwarm: 2, reviveUrgentSec: 10, buyReserve: 300, boxChance: 0.2 },
+    veteran: { preset: 'veteran', headAim: 0.85, reviveSwarm: 3, reviveUrgentSec: 14, buyReserve: 100, boxChance: 0.3 },
+  } as Record<AllyDifficulty, AllyTuning>,
+} as const;
+
+/** Clamp a requested ally count (solo: 0..3). */
+export const allyCount = (n: unknown): number => (typeof n === 'number' && Number.isFinite(n) ? Math.max(0, Math.min(ZOMBIES_ALLY.maxCount, Math.round(n))) : ZOMBIES_ALLY.defaultCount);
+export const allyDifficulty = (d: unknown): AllyDifficulty => (ALLY_DIFFICULTIES.includes(d as AllyDifficulty) ? (d as AllyDifficulty) : ZOMBIES_ALLY.defaultDifficulty);
+
 export type ZombiesPhase = 'pre' | 'active' | 'break' | 'over';
 
 export interface ZombiesPlayerInfo {
@@ -696,6 +750,8 @@ export interface ZombiesPlayerInfo {
   revives: number;
   /** Solo Quick Revive lives left (shown on the machine). */
   drinking?: number;
+  /** An AI ally (a "partner" bot). */
+  bot?: boolean;
 }
 
 /** `zombies.state`, pushed to every human on change (and every second). */
@@ -720,7 +776,7 @@ export interface ZombiesStatePayload {
   survived: number | null;
 }
 
-export type ZombiesEventKind = 'round_start' | 'round_end' | 'dog_round' | 'powerup' | 'perk' | 'buy' | 'ammo' | 'box' | 'teddy' | 'box_move' | 'down' | 'revived' | 'bleedout' | 'game_over' | 'points' | 'nope' | 'board';
+export type ZombiesEventKind = 'round_start' | 'round_end' | 'dog_round' | 'powerup' | 'perk' | 'buy' | 'ammo' | 'box' | 'teddy' | 'box_move' | 'down' | 'revived' | 'bleedout' | 'game_over' | 'points' | 'nope' | 'board' | 'callout';
 
 /** `zombies.event`: announcer lines, point popups, stingers. */
 export interface ZombiesEventPayload {
@@ -741,7 +797,8 @@ declare module '../protocol' {
     'zombies.event': ZombiesEventPayload;
   }
   interface RpcMap {
-    'zombies.solo': { req: { map?: string }; res: { roomId: string; code: string } };
+    /** `allies`: AI partners 0..3 (default 1), `allyDifficulty` their skill (default regular). */
+    'zombies.solo': { req: { map?: string; allies?: number; allyDifficulty?: AllyDifficulty }; res: { roomId: string; code: string } };
     'zombies.coop': { req: { map?: string }; res: { roomId: string; code: string } };
   }
 }

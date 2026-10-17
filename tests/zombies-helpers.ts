@@ -72,7 +72,7 @@ export function human(room: Room, name = `H${++seq}`): PlayerState {
 }
 
 export function place(room: Room, p: PlayerState, x: number, z: number, yaw = p.yaw): void {
-  const y = room.world.groundBelow(x, z, 3, 6) ?? 0;
+  const y = room.world.groundBelow(x, z, 1.2, 6) ?? 0;
   p.move = { ...createMoveState(x, y, z), onGround: true };
   p.yaw = yaw;
 }
