@@ -286,7 +286,7 @@ function bunker(k: MapKit): void {
   rail(0.8, 0.6, 1.2, 0.68);
   rail(1.12, 0.68, 1.2, 3.6);
   rail(1.2, 3.52, 3.6, 3.6);
-  rail(3.6, 3.52, 3.68, 3.6);
+  rail(3.6, 2.6, 3.68, 3.52);
 
   // ---- the tower stairs (Help room -> top floor), rising north to the landing -------------
   k.stairs(-12.1, 0, 4.2, -10.9, F2, 8.6, '-z', 'concrete', 15);
@@ -315,7 +315,7 @@ function bunker(k: MapKit): void {
   // Sandbags under the windows outside.
   for (const id of ['S1', 'S3', 'H1']) {
     const w = W_(id);
-    k.box(1.6, 0.6, 0.6, 'sandbag', w.at, 0, w.c + (w.c > 0 ? 1.0 : -1.0));
+    k.box(1.4, 0.6, 0.6, 'sandbag', w.at + 1.7, 0, w.c + (w.c > 0 ? 0.6 : -0.6));
   }
 
   // ---- inside: debris, furniture, sandbags, lamps -----------------------------------------
