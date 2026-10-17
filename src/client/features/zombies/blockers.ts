@@ -367,11 +367,12 @@ registerMatchHook('zombies.blockers', {
       for (const f of fires) {
         if (Math.hypot(cam.x - f.x, cam.z - f.z) > 55) continue;
         const s = f.size ?? 1;
-        if (Math.random() < 14 * step * s) {
-          const r = 0.35 * s;
-          fxEmit({ x: f.x + (Math.random() - 0.5) * r * 2, y: f.y + 0.1, z: f.z + (Math.random() - 0.5) * r * 2 }, { color: Math.random() < 0.5 ? 0xff8a30 : 0xffc040, life: 0.5 + Math.random() * 0.4, size: 0.5 * s, size1: 0.1, vel: { x: (Math.random() - 0.5) * 0.3, y: 1.6 + Math.random(), z: (Math.random() - 0.5) * 0.3 } });
+        // Tongues of flame licking up, a few sparks.
+        for (let n = Math.floor(30 * step * s + Math.random()); n > 0; n--) {
+          const r = 0.55 * s;
+          fxEmit({ x: f.x + (Math.random() - 0.5) * r * 2, y: f.y + 0.1, z: f.z + (Math.random() - 0.5) * r * 2 }, { color: Math.random() < 0.5 ? 0xff7a20 : 0xffb030, life: 0.45 + Math.random() * 0.45, size: (0.7 + Math.random() * 0.5) * s, size1: 0.15, vel: { x: (Math.random() - 0.5) * 0.4, y: 1.4 + Math.random() * 1.2, z: (Math.random() - 0.5) * 0.4 } });
         }
-        if (Math.random() < 3 * step * s) fxEmit({ x: f.x, y: f.y + 1.0 * s, z: f.z }, { color: 0x2a2a2e, additive: false, life: 2.6, size: 0.6 * s, size1: 1.8 * s, vel: { x: 0.25, y: 1.0, z: 0.1 }, drag: 0.2 });
+        if (Math.random() < 4 * step * s) fxEmit({ x: f.x + (Math.random() - 0.5) * s, y: f.y + 0.5, z: f.z + (Math.random() - 0.5) * s }, { color: 0xffe0a0, life: 1.2, size: 0.06, vel: { x: (Math.random() - 0.5) * 1.2, y: 2.5 + Math.random() * 2, z: (Math.random() - 0.5) * 1.2 }, grav: 1.2 });
       }
     };
     frames.set(m, frame);

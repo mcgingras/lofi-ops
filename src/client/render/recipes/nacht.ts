@@ -20,7 +20,7 @@ registerTexture('nd_concrete', {
     streaks(g, R, w, 0, 5, 18, 0.25, '40,40,36');
   },
   photos: ['concrete_block_wall_02'],
-  photo: (c) => c.fromPhoto('concrete_block_wall_02', { filter: 'grayscale(.75) brightness(.85) contrast(1.1)', over: (g, w, h) => dirtBottom(g, w, h, 0.6, 0.5) }),
+  photo: (c) => c.fromPhoto('concrete_block_wall_02', { filter: 'grayscale(.75) brightness(1.05) contrast(1.05)', over: (g, w, h) => dirtBottom(g, w, h, 0.6, 0.5) }),
 });
 
 registerTexture('nd_ceiling', {
@@ -31,7 +31,7 @@ registerTexture('nd_ceiling', {
     blotch(g, R, w, h, 10, '#3e3c38', 0.35, 2, 8);
   },
   photos: ['concrete'],
-  photo: (c) => c.fromPhoto('concrete', { filter: 'grayscale(.7) brightness(.7) contrast(1.15)' }),
+  photo: (c) => c.fromPhoto('concrete', { filter: 'grayscale(.7) brightness(.85) contrast(1.1)' }),
 });
 
 registerTexture('nd_floor', {
@@ -47,7 +47,7 @@ registerTexture('nd_floor', {
     blotch(g, R, w, h, 5, '#2c2a26', 0.3, 2, 5);
   },
   photos: ['stone_tiles'],
-  photo: (c) => c.fromPhoto('stone_tiles', { filter: 'grayscale(.7) brightness(.6) contrast(1.1)' }),
+  photo: (c) => c.fromPhoto('stone_tiles', { filter: 'grayscale(.7) brightness(.75) contrast(1.1)' }),
 });
 
 registerTexture('nd_mud', {

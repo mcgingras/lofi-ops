@@ -347,11 +347,11 @@ function bunker(k: MapKit): void {
   k.box(0.9, 0.35, 0.9, 'rubble', 4.2, F2, 4.0, { ry: 0.2 });
   k.aabb(-8.45, F2, -3.55, -7.75, F2 + 2.2, -2.45, 'wood');
   // Lamps: bare bulbs on flex (cold) and a lantern on a pillar.
-  for (const [x, y, z] of [[1.0, CEIL, 3.0], [8.0, CEIL, 4.5], [-8.0, CEIL, -3.6], [-8.0, CEIL, 3.0], [-7.6, ROOF, -0.5], [-2.0, ROOF, 4.0]] as const) {
+  for (const [x, y, z] of [[1.0, CEIL, 3.0], [-3.2, CEIL, 4.4], [8.0, CEIL, 4.5], [10.8, CEIL, 1.0], [-8.0, CEIL, -6.8], [-8.0, CEIL, -0.4], [-8.0, CEIL, 6.6], [-6.0, ROOF, -6.4], [-7.6, ROOF, 2.4], [-2.0, ROOF, 4.0], [3.0, ROOF, 5.2]] as const) {
     k.box(0.02, 0.5, 0.02, 'rail', x, y - 0.5, z, { collide: false });
     k.box(0.3, 0.12, 0.3, 'steel', x, y - 0.62, z, { collide: false });
     k.box(0.12, 0.1, 0.12, 'lamp', x, y - 0.72, z, { collide: false });
-    k.light(x, y - 0.9, z, [0.95, 0.92, 0.85], 7.5, 'lamp');
+    k.light(x, y - 0.9, z, [1.0, 0.95, 0.86], 9.5, 'lamp');
     k.glow(x, y - 0.75, z, [1, 0.95, 0.85], 0.5, 'lamp');
   }
   k.box(0.18, 0.28, 0.18, 'ember', 1.85, 1.7, 4.55, { collide: false });
@@ -378,8 +378,8 @@ export const NACHT_FIRES: { x: number; y: number; z: number; size: number }[] = 
 /** Wrecks, craters, fences, trees and fires in the field round the bunker. */
 function field(k: MapKit): void {
   for (const f of NACHT_FIRES) {
-    k.light(f.x, f.y + 1.2, f.z, [1.0, 0.48, 0.16], 11 * f.size, 'fire');
-    k.glow(f.x, f.y + 0.8, f.z, [1, 0.55, 0.2], 2.2 * f.size, 'fire');
+    k.light(f.x, f.y + 1.2, f.z, [1.0, 0.5, 0.18], 15 * f.size, 'fire');
+    k.glow(f.x, f.y + 1.0, f.z, [1, 0.55, 0.2], 3.6 * f.size, 'fire');
     k.box(0.5 * f.size, 0.25, 0.5 * f.size, 'ember', f.x, f.y, f.z, { collide: false, ry: 0.4 });
   }
   // The ground (mud) round the bunker's footprint.
@@ -482,7 +482,7 @@ export function buildNacht(): MapData {
     objectives: {},
     // Night: a cold blue moon through thin cloud, fog over the field, orange firelight.
     times: [
-      { id: 'night', name: 'Night', clock: '23:45', sky: 'nd_skyNight', unlit: [0.62, 0.68, 0.9], skyRot: 0, sunDir: unitVec(0.55, 0.62, -0.56), sun: [0.3, 0.38, 0.6], amb: [0.2, 0.22, 0.32], fog: [0.1, 0.12, 0.18], fogNear: 6, fogFar: 62, lights: { lamp: 1, fire: 1 }, glow: 1 },
+      { id: 'night', name: 'Night', clock: '23:45', sky: 'nd_skyNight', unlit: [0.62, 0.68, 0.9], skyRot: 0, sunDir: unitVec(0.55, 0.62, -0.56), sun: [0.5, 0.58, 0.85], amb: [0.32, 0.34, 0.46], fog: [0.15, 0.17, 0.25], fogNear: 8, fogFar: 72, lights: { lamp: 1, fire: 1 }, glow: 1 },
     ],
     defaultTime: 'night',
     hotspots: [hot(3, 0, 4), hot(-7.6, 0, 1.5), hot(-7.6, F2, -2), hot(-1.5, F2, 4.5), hot(9, 0, 5)],
