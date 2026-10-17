@@ -252,6 +252,18 @@ describe('doors and debris', () => {
     expect(h.move.x).toBeLessThan(-5.5);
   });
 
+  it('USE at the Help room box buys the box, not a door out of reach', () => {
+    const { room, g, h } = game();
+    g.blockers.open(g.blockers.doors.find((d) => d.spec.id === 'help')!);
+    place(room, h, -6.2, 0, 6.5, 0);
+    survivorOf(h)!.points = 2500;
+    const bought: string[] = [];
+    room.bus.on('zombies.bought', (e) => bought.push(e.what));
+    expect(g.blockers.doorTarget(h)).toBeNull();
+    steps(room, 0.5, () => hold(room, h, Buttons.USE));
+    expect(bought).toEqual(['box']);
+  });
+
   it('zombie spawns and windows behind a door only work once it is bought', () => {
     const { room, g } = game();
     const layer = zombiesLayer('nacht')!;
