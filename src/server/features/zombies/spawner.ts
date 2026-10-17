@@ -13,8 +13,14 @@ import type { PlayerState } from '../../player';
 
 export const SPAWN_RULES = { minDist: 9, sightRange: 50, likeNear: 10, likeFar: 40, top: 4 } as const;
 
-export function spawnCandidates(map: MapData, layer: ZombiesLayer | null): Vec3[] {
-  if (layer?.zombieSpawns.length) return layer.zombieSpawns.map((s) => ({ x: s.x, y: s.y, z: s.z }));
+/** A place zombies climb out of; `zone` / `barrier` from the layer (blockers.ts). */
+export interface SpawnCandidate extends Vec3 {
+  zone?: string;
+  barrier?: number;
+}
+
+export function spawnCandidates(map: MapData, layer: ZombiesLayer | null): SpawnCandidate[] {
+  if (layer?.zombieSpawns.length) return layer.zombieSpawns.map((s) => ({ x: s.x, y: s.y, z: s.z, ...(s.zone !== undefined ? { zone: s.zone } : {}), ...(s.barrier !== undefined ? { barrier: s.barrier } : {}) }));
   const all = [...map.spawns.ffa, ...map.spawns.teams[0], ...map.spawns.teams[1]];
   return all.map((s) => ({ x: s.x, y: s.y, z: s.z }));
 }
@@ -34,7 +40,7 @@ export function seenBy(world: CollisionWorld, p: Vec3, survivors: readonly Playe
  * Pick a spawn for the next zombie. `survivors` are the living survivors (downed included: they
  * still see). Random among the best few so the horde comes from several sides.
  */
-export function pickZombieSpawn(world: CollisionWorld, candidates: readonly Vec3[], survivors: readonly PlayerState[], last: Vec3 | null, rnd: () => number): Vec3 | null {
+export function pickZombieSpawn<T extends Vec3>(world: CollisionWorld, candidates: readonly T[], survivors: readonly PlayerState[], last: Vec3 | null, rnd: () => number): T | null {
   if (!candidates.length) return null;
   const scored = candidates.map((c) => {
     let near = Infinity;

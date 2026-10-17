@@ -30,10 +30,11 @@ import { sendEquip } from '../weapons/equipment';
 import { getLobbyBotSettings } from '../frontend/index';
 import { pickBotName } from '../bots/loadout';
 import { AllyBrain } from './ally';
+import { Blockers } from './blockers';
 import { createHorde, ZombieBrain, type Horde } from './brain';
 import { Buyables } from './buy';
 import { Powerups } from './powerups';
-import { pickZombieSpawn, spawnCandidates } from './spawner';
+import { pickZombieSpawn, spawnCandidates, type SpawnCandidate } from './spawner';
 import { newSurvivor, survivorOf, undeadOf, type SurvivorExt, type UndeadExt } from './state';
 import '../weapons/state';
 import '../pickups/drops';
@@ -78,6 +79,8 @@ export class ZombiesGame {
   horde: Horde;
   buy: Buyables;
   powerups: Powerups;
+  /** Barriers and doors (layers that have them). */
+  blockers: Blockers;
   round = 0;
   phase: ZombiesPhase = 'pre';
   phaseEndsAt: number | null = null;
@@ -106,7 +109,7 @@ export class ZombiesGame {
   private addingAlly: AllyDifficulty | null = null;
   /** AI allies' brains (by player id). */
   readonly allies = new Map<string, AllyBrain>();
-  private candidates: Vec3[] = [];
+  private candidates: SpawnCandidate[] = [];
   /** Points lost when a survivor went down (paid to whoever revives them). */
   private lostOnDown = new Map<string, number>();
   private downPrevSlot = new Map<string, number>();
@@ -119,11 +122,19 @@ export class ZombiesGame {
     this.rnd = rnd;
     liveGames.set(room, this);
     this.layer = zombiesLayer(room.mapId);
-    this.horde = createHorde(room, (a, v, amount, weapon) => this.swipe(a, v, amount, weapon));
+    this.blockers = new Blockers(this, rnd);
+    this.horde = this.makeHorde();
     this.drops = newDropTracker(1);
     this.nextDog = firstDogRound(rnd());
     this.buy = new Buyables(this);
     this.powerups = new Powerups(this);
+  }
+
+  private makeHorde(): Horde {
+    const h = createHorde(this.room, (a, v, amount, weapon) => this.swipe(a, v, amount, weapon));
+    h.entry = this.blockers.entry;
+    h.pathCost = this.blockers.cellCost;
+    return h;
   }
 
   // -------------------------------------------------------------------------------------------
@@ -176,7 +187,7 @@ export class ZombiesGame {
     m.add('damageDealt', (a, info) => (survivorOf(a) && undeadOf(info.victim) ? zombieDamageMult(info.weapon, info.means) * zombiePartMult(info.weapon, info.part, info.means) : undefined), 'zombies.damage');
     m.add('reloadMultiplier', (p) => (this.hasPerk(p, 'speed') ? PERK_EFFECTS.speedReload : undefined), 'zombies.speedcola');
     m.add('fireRateMultiplier', (p) => (this.hasPerk(p, 'doubletap') ? PERK_EFFECTS.doubleTapRate : undefined), 'zombies.doubletap');
-    m.add('useClaimed', (p) => (this.buy.claimsUse(p) ? true : undefined), 'zombies.use');
+    m.add('useClaimed', (p) => (this.buy.claimsUse(p) || this.blockers.claimsUse(p) ? true : undefined), 'zombies.use');
     // Grenades: carry up to four (BO1), refilled each round.
     m.add('equipmentCountOffset', (p, kind) => {
       if (!survivorOf(p) || kind !== 'lethal') return undefined;
@@ -331,7 +342,7 @@ export class ZombiesGame {
   reset(): void {
     const room = this.room;
     this.layer = zombiesLayer(room.mapId);
-    this.horde = createHorde(room, (a, v, amount, weapon) => this.swipe(a, v, amount, weapon));
+    this.horde = this.makeHorde();
     this.round = 0;
     this.phase = 'pre';
     this.phaseEndsAt = null;
@@ -403,6 +414,7 @@ export class ZombiesGame {
   private onMatchStart(): void {
     this.phase = 'pre';
     this.phaseEndsAt = this.room.time + ZOMBIES.firstRoundDelay;
+    this.blockers.reset();
     this.buy.reset();
     this.powerups.reset();
     this.dirty = true;
@@ -414,6 +426,8 @@ export class ZombiesGame {
     this.phase = 'active';
     this.phaseEndsAt = null;
     const players = Math.max(1, this.survivors().length);
+    // Hellhound rounds, unless the map never had them (Nacht der Untoten).
+    if (this.layer?.dogs === false && r === this.nextDog) this.nextDog = nextDogRound(r, this.rnd());
     this.dogRound = r === this.nextDog;
     let count: number;
     if (this.dogRound) {
@@ -486,7 +500,8 @@ export class ZombiesGame {
     const room = this.room;
     const now = room.time;
     const watchers = this.survivors().filter((s) => s.alive);
-    const at = pickZombieSpawn(room.world, this.candidates, watchers, this.lastSpawn, this.rnd);
+    const live = this.blockers.active ? this.candidates.filter((c) => this.blockers.spawnActive(c)) : this.candidates;
+    const at = pickZombieSpawn(room.world, live, watchers, this.lastSpawn, this.rnd);
     if (!at) return false;
     let body = this.bodies.find((b) => !b.alive && undeadOf(b)?.kind === kind && now - b.diedAt >= ZOMBIES.corpseSec);
     if (!body) {
@@ -517,7 +532,10 @@ export class ZombiesGame {
       point.x = at.x;
       point.z = at.z;
     }
+    this.blockers.release(body.id);
     room.spawn(body, point);
+    // Outside a window: it has to come in through it (blockers.ts).
+    if (at.barrier !== undefined && kind === 'zombie') this.blockers.assign(body, at.barrier);
     const hp = kind === 'dog' ? dogHealth(this.dogRounds) : zombieHealth(this.round);
     body.maxHealth = hp;
     body.health = hp;
@@ -570,6 +588,7 @@ export class ZombiesGame {
   private onDeath(victim: PlayerState, attacker: PlayerState | null, part: 'head' | 'torso' | 'legs' | null, means: string, headshot: boolean): void {
     const z = undeadOf(victim);
     if (z) {
+      this.blockers.release(victim.id);
       const failsafe = means === 'world' && !attacker && !z.nuked;
       if (failsafe && this.phase === 'active') this.queue++;
       const credited = attacker && survivorOf(attacker) && !z.nuked && !failsafe;
@@ -760,6 +779,7 @@ export class ZombiesGame {
       if (s.selfReviveAt !== null && now >= s.selfReviveAt && p.alive && this.isDown(p)) reviveFromLastStand(room, p, p);
     }
     if (this.phase !== 'over') {
+      this.blockers.tick(dt);
       this.buy.tick(dt);
       this.powerups.tick(dt);
       this.checkGameOver();
@@ -862,11 +882,12 @@ export class ZombiesGame {
 
   /** Destroyed windows (Carpenter needs 5); no barriers on a layer = none. */
   brokenWindows(): number {
-    return 0;
+    return this.blockers.brokenWindows();
   }
 
   /** Carpenter: every board back up, +200 to everyone up. */
   carpenter(): void {
+    this.blockers.carpenter();
     for (const q of this.survivors()) this.award(q, POINTS.carpenter, 'carpenter');
   }
 

@@ -8,6 +8,8 @@ BO1-style round-based survival against waves of zombies and hellhounds: solo fir
 - The private lobby's mode list also has Zombies, so a private match can switch to it.
 - Maps: **Nuketown** (dusk, a nod to BO2's Nuketown Zombies), **Firing Range** (evening), **Yard** (night).
 - Solo comes with one AI partner by default (see "AI allies" below). In a co-op lobby the host can turn bot fill on: AI allies fill the survivors up to the target (at most 4 survivors in all), at the lobby's difficulty (Hardened plays as Veteran).
+- Maps: **Nacht der Untoten** (night; the World at War / BO1 original, Zombies only: boarded windows, debris doors, see docs/maps/nacht-reference.md), **Nuketown** (dusk, a nod to BO2's Nuketown Zombies), **Firing Range** (evening), **Yard** (night).
+- Bots do not join by default (the mode's default bot target is 1, i.e. just you). In a co-op lobby the host can turn bot fill on: ally bots join the survivors (at most 4 survivors in all) with the soldier brain, a free gun each round and no points.
 
 ## Rules and numbers
 
@@ -26,7 +28,9 @@ All tuning and formulas are in `src/shared/defs/zombies.ts`, with the source of 
 | Start | 500 points (mp/zombiemode.csv), the M1911, 2 frags | M1911 with 8 + 32 (`STARTING_WEAPON`), frags topped up each round to at most 4 (`award_grenades_for_survivors`) |
 | Downed | lose 5% (`penalty_downed`); the reviver gets it (wiki); bleed out 30 s; teammates lose 10% if you bleed out (`penalty_no_revive`) | same; revive 3 s hold, 1.5 s with Quick Revive |
 | Power-up drops | max 4 a round; the next kill drops when the team's total score passes a threshold (start: players x 500 + 2000, step x1.14), or 3% at random; picked from a shuffled cycle (`watch_for_drop`, `powerup_drop`, `get_next_powerup`) | `newDropTracker`, `updateDropTracker`, `rollDrop`, `PowerupCycle` |
-| Power-ups | Max Ammo, Insta-Kill 30 s, Double Points 30 s, Nuke (all zombies die, +400 each, no kill points), Carpenter (5+ broken windows); on the ground 15 s then blinking | same (Carpenter only on layers with barriers: none yet), 15 s solid + 11 s blinking |
+| Power-ups | Max Ammo, Insta-Kill 30 s, Double Points 30 s, Nuke (all zombies die, +400 each, no kill points), Carpenter (5+ broken windows); on the ground 15 s then blinking | same (Carpenter in the cycle only on layers with barriers: every board back, +200 each), 15 s solid + 11 s blinking |
+| Barriers | six boards a window; a zombie tears one off per tear animation, climbs in once all are down; holding USE puts one back per second (`blocker_trigger_think` `wait(1)`), 10 points while the round's running total stays under min(50 x round, 500) (`round_think`), reset each round (`_zombiemode_blockers.gsc`) | `BARRIER`: a board every 1.5 s (x0.85-1.15), up to 3 zombies tearing at a window, 1.3 s climb; rebuild 1 s (0.5 s with Speed Cola); `boardReward` |
+| Doors / debris | hold USE to buy (`door_think`, `debris_think`); opening a door enables its zones' spawns (`enable_zone`) | layer `doors` (cost, zones), hold USE like a wall-buy |
 | Perk-a-Colas | Juggernog 2500, Speed Cola 3000 (reload x0.5), Double Tap 2000 (rate x1/0.75), Quick Revive 1500 / 500 solo (solo: revived after 10 s, sold at most 3 times) (`_zombiemode_perks.gsc`, wiki) | same; Juggernog 250 health (wiki; the T5 script's `zombie_perk_juggernaut_health` is 160, which would be 4 hits: we follow the wiki and the "5 hits" rule); perks are lost when you go down; a ~2.6 s drink lowers the gun |
 | Mystery Box | 950; the weapon floats 12 s (`timer_til_despawn`); teddy bear: never before the 4th use since the last move, 15% on uses 4-7, always by the 8th at the first spot, 30% on 8-12 and 50% from 13 after a move (`treasure_chest_weapon_spawn`) | `teddyRoll`; every classable gun but the M1911 (weight 1), the Ray Gun 0.6, other wonder weapons 0.3 (`boxPool`, `rollBoxWeapon`); the teddy refunds the 950, the box flies up its beam and lands at another spot 6 s later |
 | Hellhound rounds | first at round 5-7, then every 4-5; players x 6 dogs (x 8 from the 3rd dog round); 2 alive per living player; health 400 / 900 / 1300 / 1600; spawn waits 3 / 2.5 / 2 / 1.5 s minus count/max; the last dog drops a Max Ammo (`_zombiemode_ai_dogs.gsc`) | same; 7 s intro, the fog closes in and turns burning orange |
@@ -109,7 +113,8 @@ Difficulties use the bots' presets (recruit / regular / veteran `BotSkill`, fiel
 src/shared/defs/zombies.ts           tuning, formulas, perks / power-ups / box defs, ZM_ENTITY kinds, wire types
                                      (zombies.state, zombies.event, zombies.solo / zombies.coop RPCs), ZOMBIES_LOADOUT, XP
 src/shared/maps/zombies/             one file per map: the Zombies layer (types.ts: wall-buys, box spots, perks,
-  nuketown.ts firingrange.ts yard.ts zombie spawns, survivor spawns, time preset, optional barriers); index.ts registry
+  nacht.ts nuketown.ts firingrange.ts zombie spawns (zone, barrier), survivor spawns, time preset, optional barriers,
+  yard.ts                            doors, zones, fires, dogs on/off); index.ts registry
 src/server/features/zombies/
   index.ts      Feature: registers the mode, the RPCs, the ally-bot hooks
   rules.ts      ModeRules: teams by role, no respawn, layer spawns, ends after game over
@@ -117,7 +122,9 @@ src/server/features/zombies/
                 game over, state push, results.ext.zombies
   brain.ts      ZombieBrain (BotBrain) and the per-room Horde (targets, path budget)
   spawner.ts    zombie spawn picking (out of sight, 10-40 m from the nearest survivor)
-  buy.ts        wall-buys, Perk-a-Colas, the Mystery Box (USE holds, the box timeline, the teddy bear)
+  buy.ts        wall-buys, Perk-a-Colas, the Mystery Box (USE holds, the box timeline, the teddy bear), door targets
+  blockers.ts   barriers (boards, zombies walking to / tearing at / climbing through windows, rebuilding, Carpenter),
+                doors (the room's own CollisionWorld with gates, buying, zones, the path cost round shut doors)
   powerups.ts   drops, grabs, effects (the Nuke)
   ally.ts       AI allies ("partners"): AllyBrain (follow, fight, revive, buy, power-ups, callouts)
   state.ts      PlayerExt.zombies (survivor / undead) and the room events
@@ -129,6 +136,8 @@ src/client/features/zombies/
                 scoreboard, names, death screen, result title)
   props.ts      entity renderers: zm_wall (chalk gun + price), zm_perk (vending machine), zm_box, zm_boxspot,
                 zm_powerup; textures
+  blockers.ts   zm_barrier (six boards, torn off / slammed back), zm_door (debris, furniture, the HELP door, cleared
+                when bought), rebuild / buy prompts, the prediction world's gates, flames over the layer's fires; its sounds in blocker-sounds.ts
   look.ts       zombie soldiers (tint, rags, glowing eyes, arms out, shamble, swipe, rising, head gibs),
                 hellhounds (a charred dog in a burning halo), groans
   sounds.ts     every Zombies sound, synthesized and original (no Zombies music)
@@ -147,6 +156,9 @@ tests/zombies.headshots.test.ts    BO1 head multipliers across guns, shots to ki
 tests/zombies.ally.test.ts         partner option, round size, following, killing, reviving (time bound, swarm),
                                    being revived, buying Jug and a wall gun, game over with allies, HUD state
 tests/zombies-helpers.ts           shared room set-up for the two above
+tests/zombies.blockers.test.ts     barriers (tear rate, climb in, rebuild points and cap, Carpenter), doors (block, buy,
+                                   zones, per-room worlds, path cost), the AI through a window on Nacht
+tests/maps-nacht.test.ts           Nacht layout vs the floor plans, Zombies-only, reachability, doors gate areas, windows
 ```
 
 ### How it plugs in
@@ -158,13 +170,16 @@ tests/zombies-helpers.ts           shared room set-up for the two above
 - **Double Tap** needs a fire-rate hook: core modifier `fireRateMultiplier` (combat `fire()` divides the shot interval by it), sent to the client as `me.params.fireRate` so the local trigger keeps up.
 - **Progression**: `ModeDef.killXp` (10 a kill, +5 a headshot) replaces kill XP and skips medals, streak bonuses and weapon / attachment progress; each round survived pays `roundXp(round)` (`progression.xp`, line "ROUND SURVIVED") and reports `zombies_round` (`progression.metric`, aggregate max); revives pay 50. Challenges (`MODE_CHALLENGE_TEMPLATES.zombies`): Survivor (reach round 10 / 20 / 30), Undead Exterminator (kill 100 / 1000 / 5000 zombies), Brain Surgeon (100 / 500 / 2500 headshots), plus the generated per-mode ones.
 - **Killcams**: bleed-outs and game-over deaths use `means: 'world'` with no attacker, and the match ends 8.5 s after the last kill, so neither the per-death nor the final killcam plays.
-- **Wire**: `zombies.state` (round, phase, dog round, left, solo, players' points / perks / down state / stats, power-up timers, dog ids, solo Quick Revive lives, survived) on change and every second; `zombies.event` for announcer lines and popups. Entities: `zm_wall { w, p, a }`, `zm_perk { k, p, off? }`, `zm_box` (the killstreak box's `BoxSnap` plus `c` cost, `tc` lid closing, `ty` teddy), `zm_boxspot`, `zm_powerup { k, t0, te }`.
+- **Barriers** (`blockers.ts`): a window opening is a players-only clip in the map, so nobody walks through it (zombies included) and bullets pass. A zombie that spawns at a spawn with `barrier: i` gets an entry: the brain (`Horde.entry`) walks it to the window's outside stand point, holds it there facing in (swiping anyone right inside), the blockers tick pulls boards on a timer, and with every board down one zombie at a time climbs by script (the brain returns null, the body is moved over the sill), then hunts normally. A survivor's USE at a window's inside rebuilds (it claims USE like a buyable).
+- **Doors** (`blockers.ts`): map brushes with `gate: 'door:<id>'`. On a layer with doors the room gets its own `CollisionWorld` (`room.world`) whose `gateOn` says a gate is shut until its door is bought, so doors open per room; the shared map world (nav, tests, the client's bake) treats gates as open. The zombie A* multiplies the cost of nav cells inside shut doors (`Horde.pathCost`). Buying opens the door's zones: spawns and windows with that `zone` start working. The client sets the same `gateOn` on its prediction world from the `zm_door` entities.
+- **Wire**: `zombies.state` (round, phase, dog round, left, solo, players' points / perks / down state / stats, power-up timers, dog ids, solo Quick Revive lives, survived) on change and every second; `zombies.event` for announcer lines and popups. Entities: `zm_wall { w, p, a }`, `zm_perk { k, p, off? }`, `zm_box` (the killstreak box's `BoxSnap` plus `c` cost, `tc` lid closing, `ty` teddy), `zm_boxspot`, `zm_powerup { k, t0, te }`, `zm_barrier { b boards, w, h, sl sill }`, `zm_door { c cost, k kind, w, h, o? opened at, l? label }`. Events: `board` (a board rebuilt), `door` (bought).
 
 ### Adding a map
 
 1. Make `src/shared/maps/zombies/<map>.ts` (see nuketown.ts): `npx tsx scripts/zm-layout.ts <map> out.png` to see the walkable floor, `npx tsx scripts/zm-place.ts <map> wall:x,z[,n|s|e|w] perk:x,z free:x,z,yawDeg spawn:x,z` to snap spots.
-2. Register it in `src/shared/maps/zombies/index.ts` and add `'zombies'` to the map's `modes` in `defs/maps.ts` (`withZombies`).
+2. Register it in `src/shared/maps/zombies/index.ts` and add `'zombies'` to the map's `modes` in `defs/maps.ts` (`withZombies`; a Zombies-only map lists just `['zombies']`, like Nacht).
 3. `tests/zombies.layers.test.ts` checks the spots.
+4. Barriers and doors (optional): put a players-only clip in each window opening and list it in `barriers` (centre on the wall line, yaw facing in, sill, zone); tie outside spawns to their window with `barrier: i`. For a door, add a brush with `gate: 'door:<id>'` filling the gap (noRender: the `zm_door` entity draws it) and list it in `doors` with its cost and the zones it opens. `dogs: false` turns hellhound rounds off; `fires` gets flames drawn.
 
 ## Visual check
 
@@ -172,8 +187,9 @@ Headless Chrome (muted). Headshots and partners: the gold headshot hitmarker and
 
 ## Skipped / known limits
 
-- **Barriers and Carpenter**: no boarded windows. The maps are open (zombies come from every side rather than through windows), so the layer type has an optional `barriers` list but no map uses it and the Carpenter is left out of the power-up cycle until one does.
-- **No power switch, doors / debris, Pack-a-Punch, Fire Sale, Death Machine, Monkey Bombs, Bowie knife, PhD Flopper, Stamin-Up, Mule Kick.**
+- **Barriers and doors on Nacht only**: Nuketown, Firing Range and Yard stay open maps (no windows, no doors, no Carpenter).
+- **Barriers**: boards come off top-down and go back bottom-up (BO1 picks a random chunk); zombies don't use BO1's vault animation (the climb is a scripted move over the sill); one zombie climbs at a time.
+- **No power switch, Pack-a-Punch, Fire Sale, Death Machine, Monkey Bombs, Bowie knife, PhD Flopper, Stamin-Up, Mule Kick.**
 - **Zombie bodies are player-shaped**: hellhounds use the crouched hitbox (about 1.2 m tall); there are no crawlers, no limb gibs (a headshot kill pops the head, everything else topples like a soldier).
 - **Hellhound heads**: dogs keep the crouched body box (1.2 m) and their drawn head is ahead of and below its head part, so a shot at a dog's head usually registers on the body.
 - **The soldier's drawn head** pokes about 10 cm above the standing head box (a core model / hitbox mismatch, in multiplayer too); the zombie pose keeps the head inside the box horizontally.

@@ -382,6 +382,9 @@ export const SFX_SYNTH_ONLY: Record<string, string> = {
   'zombies.powerup_grab': 'power-up grabbed: synthesized bells',
   'zombies.nuke': 'Nuke power-up: a synthesized boom',
   'zombies.teddy': 'Mystery Box teddy bear: a synthesized toy laugh',
+  'zombies.board_tear': 'Zombies barrier board torn off: a synthesized wood crack and splinter',
+  'zombies.board_slam': 'Zombies barrier board rebuilt: a synthesized thud and hammer taps',
+  'zombies.door_clear': 'Zombies debris / door cleared: synthesized rubble slide and thumps',
 };
 
 /** Recorded-only ids with no synthesized fallback on purpose: extra layers that may simply be absent until loaded. */

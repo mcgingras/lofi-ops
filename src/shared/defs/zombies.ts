@@ -662,20 +662,65 @@ export const ZM_ENTITY = {
   boxSpot: 'zm_boxspot',
   /** A power-up on the ground: `s = { k: id, t0: dropped at, te: gone at }`. */
   powerup: 'zm_powerup',
-  /** A boarded window: `s = { b: boards up (0..6), w, h }`, yaw = facing inside. */
+  /** A boarded window: `s = { b: boards up (0..6), w, h, sl: sill }` at the opening's centre on the wall line, yaw = facing inside. */
   barrier: 'zm_barrier',
+  /** A buyable door / debris pile: `s = { c: cost, k: kind, w, h, o?: room time it opened, l?: chalk label }`, yaw = its front. */
+  door: 'zm_door',
 } as const;
 
+/**
+ * Barriers (BO1 `_zombiemode_blockers.gsc`, `_zombiemode_spawner.gsc` `tear_into_building`): six
+ * boards; a zombie at the window pulls one off per tear animation and climbs in once all are down.
+ * A survivor holding USE at the window puts one back per second (`blocker_trigger_think`: `wait(1)`
+ * per chunk) for 10 points (`zombie_cost` default 10), paid only while the round's running total
+ * stays under `rebuild_barrier_cap_per_round` = min(50 x round, 500) (`round_think`); the total
+ * resets each round (`rebuild_barrier_reward_reset`).
+ */
 export const BARRIER = {
   boards: 6,
-  /** A zombie tears a board off every this many seconds while at the window. */
-  tearSec: 1.1,
-  /** Holding USE rebuilds a board every this many seconds. */
-  rebuildSec: 0.75,
-  /** Rebuild reach. */
+  /** A zombie tears a board off every this many seconds while at the window (the tear animations run ~1.2-1.8 s). */
+  tearSec: 1.5,
+  /** Zombies tearing at one window at once (BO1 has three attack spots per window). */
+  tearers: 3,
+  /** Climbing over the sill once the boards are gone. */
+  climbSec: 1.3,
+  /** Holding USE rebuilds a board every this many seconds (Speed Cola: half, BO1 `has_perk`). */
+  rebuildSec: 1.0,
+  /** Rebuild reach from the window's inside stand point. */
   reach: 1.8,
+  /** How close a zombie must be to its outside point to tear. */
+  tearReach: 0.7,
+  /** A zombie at the window swipes a survivor this close (through the boards' gaps). */
+  swipeReach: 1.9,
+  /** Points per board rebuilt. */
+  points: 10,
   /** BO1: board points per round capped at min(50 x round, 500). */
   capPerRound: (round: number) => Math.min(50 * round, 500),
+  /** Default sill height and stand-off from the wall line. */
+  sill: 0.9,
+  standOff: 0.8,
+} as const;
+
+/** What a rebuilt board pays (`blocker_trigger_think`): the running total goes up first, the points are paid only while it stays under the cap. */
+export function boardReward(totalBefore: number, round: number): { total: number; pay: number } {
+  const total = totalBefore + BARRIER.points;
+  return { total, pay: total < BARRIER.capPerRound(round) ? BARRIER.points : 0 };
+}
+
+/** A barrier's inside and outside stand points (`yaw` faces inside). */
+export function barrierPoints(b: { x: number; y: number; z: number; yaw: number; outY?: number; reach?: number }): { inside: Vec3; outside: Vec3 } {
+  const k = b.reach ?? BARRIER.standOff;
+  const fx = -Math.sin(b.yaw);
+  const fz = -Math.cos(b.yaw);
+  return { inside: { x: b.x + fx * k, y: b.y, z: b.z + fz * k }, outside: { x: b.x - fx * k, y: b.outY ?? b.y, z: b.z - fz * k } };
+}
+
+/** Doors and debris: hold USE to buy (BO1 `door_think` / `debris_think`). */
+export const DOORS = {
+  /** Reach from the gap's centre (either side). */
+  reach: 2.2,
+  /** The clearing animation (the debris drops away, the door swings). */
+  openSec: 1.0,
 } as const;
 
 // ---------------------------------------------------------------------------------------------
@@ -778,7 +823,7 @@ export interface ZombiesStatePayload {
   survived: number | null;
 }
 
-export type ZombiesEventKind = 'round_start' | 'round_end' | 'dog_round' | 'powerup' | 'perk' | 'buy' | 'ammo' | 'box' | 'teddy' | 'box_move' | 'down' | 'revived' | 'bleedout' | 'game_over' | 'points' | 'nope' | 'board' | 'callout';
+export type ZombiesEventKind = 'round_start' | 'round_end' | 'dog_round' | 'powerup' | 'perk' | 'buy' | 'ammo' | 'box' | 'teddy' | 'box_move' | 'down' | 'revived' | 'bleedout' | 'game_over' | 'points' | 'nope' | 'board' | 'callout' | 'door';
 
 /** `zombies.event`: announcer lines, point popups, stingers. */
 export interface ZombiesEventPayload {

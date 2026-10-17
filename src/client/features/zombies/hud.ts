@@ -23,6 +23,7 @@ import { blink, box, HUD_COLORS as C, rect, textWidth, txt, unit } from '../../h
 import { drawWaypoint, useKey, type WaypointSlot } from '../../hud/waypoints';
 import { hudWidgets, registerHudWidget, registerMatchHook, type HudDraw } from '../../registry';
 import { currentMatch } from '../../state';
+import { blockerPrompts } from './blockers';
 import { isZombiesMatch, myInfo, now, zm } from './store';
 
 const CHALK_RED = '#c02a1a';
@@ -252,6 +253,8 @@ export function promptFor(m: Match): Prompt | null {
       }
     }
   }
+  // Windows to rebuild, doors and debris to buy (blockers.ts).
+  for (const b of blockerPrompts(m, pos, key())) consider(b.d, { text: b.text, color: b.cost === 0 ? '#e8c890' : points >= b.cost ? C.paper : C.warn });
   // Reviving a downed teammate.
   for (const p of st.players) {
     if (p.id === m.myId || !p.down) continue;
