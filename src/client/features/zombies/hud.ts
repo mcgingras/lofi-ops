@@ -95,7 +95,33 @@ function drawPoints(m: Match, g: CanvasRenderingContext2D, W: number, H: number)
     const right = W - 8 * u;
     const label = p.dead ? 'DEAD' : p.down ? 'DOWN' : String(p.points);
     txt(g, label, right, y - size * u, size, p.down || p.dead ? C.warn : col, 'right', u);
-    if (p !== mine) txt(g, m.nameOf(p.id).toUpperCase(), right - textWidth(g, label, size, u) - 6 * u, y - size * u, 8, C.dim, 'right', u);
+    if (p !== mine) {
+      // Teammates and AI partners: name (a BOT tag), points, perks, and while down the bleed-out
+      // left and the revive progress.
+      let x = right - textWidth(g, label, size, u) - 6 * u;
+      const name = m.nameOf(p.id).toUpperCase();
+      txt(g, name, x, y - size * u, 8, C.dim, 'right', u);
+      x -= textWidth(g, name, 8, u) + 4 * u;
+      if (p.bot) {
+        txt(g, 'BOT', x, y - size * u, 8, C.friend, 'right', u);
+        x -= textWidth(g, 'BOT', 8, u) + 4 * u;
+      }
+      for (const id of [...p.perks].reverse()) {
+        const d = PERK_COLA_BY_ID.get(id);
+        if (!d) continue;
+        rect(g, x - 7 * u, y - size * u, 7 * u, 7 * u, C.ink);
+        rect(g, x - 6 * u, y - size * u + u, 5 * u, 5 * u, d.color);
+        x -= 9 * u;
+      }
+      if (p.down) {
+        const bw = 60 * u;
+        const left = p.downUntil !== null ? Math.max(0, p.downUntil - m.serverTime) : 0;
+        rect(g, right - bw, y + u, bw, 2 * u, C.ink);
+        rect(g, right - bw, y + u, bw * Math.min(1, left / ZOMBIES.bleedOutSec), 2 * u, C.health);
+        if (p.revive > 0) rect(g, right - bw, y + 3 * u, bw * Math.min(1, p.revive), 2 * u, C.friend);
+        y -= 5 * u;
+      }
+    }
     y -= (size + 4) * u;
   });
   // Popups for my points: drift left and fade (BO1 "+10").
@@ -301,7 +327,18 @@ registerHudWidget(
       const r = m.remotes.views.get(p.id);
       if (!r) continue;
       const left = p.downUntil !== null ? Math.max(0, Math.ceil(p.downUntil - m.serverTime)) : 0;
-      drawWaypoint(m, g, W, H, { x: r.x, y: r.y + 1.0, z: r.z, label: p.revive > 0 ? 'REVIVING' : 'REVIVE', caption: `${m.nameOf(p.id).toUpperCase()} ${left}`, color: C.warn, blink: true, hideWithin: 1.2 }, placed);
+      drawWaypoint(m, g, W, H, { x: r.x, y: r.y + 1.0, z: r.z, label: p.revive > 0 ? 'REVIVING' : 'REVIVE', caption: `${m.nameOf(p.id).toUpperCase()} ${left}`, color: p.revive > 0 ? C.friend : C.warn, blink: p.revive <= 0, hideWithin: 1.2 }, placed);
+      // The revive progress under the marker (whoever is reviving: you or a partner).
+      if (p.revive > 0) {
+        v3.set(r.x, r.y + 1.0, r.z).project(m.renderer.cam);
+        if (v3.z < 1 && Math.abs(v3.x) < 1 && Math.abs(v3.y) < 1) {
+          const sx = (v3.x * 0.5 + 0.5) * W;
+          const sy = (-v3.y * 0.5 + 0.5) * H;
+          const bw = 40 * u;
+          box(g, sx - bw / 2, sy + 26 * u, bw, 3 * u, C.empty, u);
+          rect(g, sx - bw / 2, sy + 26 * u, bw * Math.min(1, p.revive), 3 * u, C.friend);
+        }
+      }
     }
     const me = myInfo(m);
     if (!me || !me.down || !m.alive) return;

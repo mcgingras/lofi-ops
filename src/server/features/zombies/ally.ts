@@ -101,6 +101,7 @@ export class AllyBrain implements BotBrain {
   private jumpHeld = false;
   private calloutAt = new Map<string, number>();
   private lastDt = 1 / 60;
+  private downAt = 0;
 
   constructor(
     readonly game: ZombiesGame,
@@ -145,9 +146,11 @@ export class AllyBrain implements BotBrain {
 
     // ---- Down: shoot from the floor, ask for help.
     if (g.isDown(self)) {
+      if (this.mode !== 'down') this.downAt = now;
       this.mode = 'down';
       this.buy = null;
-      this.callout('down', `${self.name.toUpperCase()} NEEDS A REVIVE`);
+      // The "is down" banner goes out with the down; a reminder after a few seconds.
+      if (now - this.downAt > 5) this.callout('down', `${this.label()} NEEDS A REVIVE`);
       buttons |= this.fight(room, self, eye, now, dt, true);
       return this.out(self, buttons);
     }
@@ -171,7 +174,7 @@ export class AllyBrain implements BotBrain {
           using = true;
           buttons |= Buttons.USE;
           if (ls.reviveBy !== self.id || ls.revive < 0.05) {
-            if (!downed.isBot) this.callout('revive', `${self.name.toUpperCase()}: REVIVING YOU`, downed);
+            if (!downed.isBot) this.callout('revive', `${this.label()}: REVIVING YOU`, downed);
           }
         } else {
           move = downed.move;
@@ -618,7 +621,7 @@ export class AllyBrain implements BotBrain {
     const plan = (kind: BuyPlan['kind'], ent: number, at: Vec3 | null, label: string, cost: number): BuyPlan | null => {
       if (!at || !reach(at)) return null;
       this.buy = { kind, ent, at, label, cost, since: now, before: pts, taking: false };
-      if (kind === 'perk' || kind === 'wall' || kind === 'box') this.callout(`buy-${label}`, `${self.name.toUpperCase()}: GETTING ${label.toUpperCase()}`);
+      if (kind === 'perk' || kind === 'wall' || kind === 'box') this.callout(`buy-${label}`, `${this.label()}: GETTING ${label.toUpperCase()}`);
       return this.buy;
     };
     // Ammo for a wall gun it carries, when it is running dry.
@@ -814,6 +817,11 @@ export class AllyBrain implements BotBrain {
   // -------------------------------------------------------------------------------------------
   // Callouts
   // -------------------------------------------------------------------------------------------
+
+  /** "PARTNER" with one ally, its name with more. */
+  private label(): string {
+    return this.game.allies.size <= 1 ? 'PARTNER' : this.self.name.toUpperCase();
+  }
 
   /** A text banner for the humans (or one of them), at most one per kind every few seconds. */
   callout(kind: string, text: string, to: PlayerState | null = null): void {

@@ -80,6 +80,9 @@ onFeature('zombies.event', (e: ZombiesEventPayload) => {
   if (!m) return;
   const mine = e.player === m.myId;
   const name = e.player ? m.nameOf(e.player) : '';
+  // AI partners read as "PARTNER <name>".
+  const bot = !!e.player && !!zm.state?.players.find((p) => p.id === e.player)?.bot;
+  const who = bot ? `PARTNER ${name.toUpperCase()}` : name.toUpperCase();
   switch (e.kind) {
     case 'points':
       if (mine && e.amount) zm.popups.push({ amount: e.amount, at: now(), dx: (Math.random() - 0.5) * 16 });
@@ -137,18 +140,22 @@ onFeature('zombies.event', (e: ZombiesEventPayload) => {
       break;
     case 'down':
       if (mine) sfx.play('zombies.down', { volume: 1 });
-      else banner(`${name.toUpperCase()} IS DOWN`, '#ff6a4a', { dur: 3 });
+      else banner(`${who} IS DOWN!`, '#ff6a4a', { dur: 3, ...(bot ? { sub: 'HOLD USE NEXT TO THEM TO REVIVE' } : {}) });
       break;
     case 'revived':
-      if (!mine) banner(`${name.toUpperCase()} IS BACK UP`, '#7ab0ff', { dur: 2.5 });
+      if (!mine) banner(`${who} IS BACK UP`, '#7ab0ff', { dur: 2.5 });
       break;
     case 'bleedout':
-      if (!mine) banner(`${name.toUpperCase()} BLED OUT`, '#ff6a4a', { dur: 3 });
+      if (!mine) banner(`${who} BLED OUT`, '#ff6a4a', { dur: 3, ...(bot ? { sub: 'BACK NEXT ROUND' } : {}) });
       break;
     case 'game_over':
       sfx.play('zombies.game_over', { volume: 1 });
       break;
     case 'board':
+      break;
+    case 'callout':
+      // A partner's line ("DUTCH: REVIVING YOU", "... NEEDS A REVIVE", "... GETTING JUGGERNOG").
+      if (e.text) banner(e.text, '#9ac8ff', { dur: 2.5 });
       break;
   }
 });
