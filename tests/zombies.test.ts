@@ -671,7 +671,7 @@ describe('zombie AI', () => {
 // ---------------------------------------------------------------------------------------------
 
 describe('Zombies listing', () => {
-  it('a party playlist, the mode def, three maps with layers, challenges', () => {
+  it('a party playlist, the mode def, four maps with layers, challenges', () => {
     const mode = MODE_BY_ID.get('zombies')!;
     expect(mode).toMatchObject({ teams: true, teamsByRules: true, respawn: false, maxPlayers: 4, timeLimitSec: 0 });
     expect(mode.killXp).toBeDefined();
@@ -679,7 +679,7 @@ describe('Zombies listing', () => {
     expect(pl.category).toBe('party');
     expect(playlistMode(pl)).toBe('zombies');
     const maps = mapsForMode('zombies').map((m) => m.id).sort();
-    expect(maps).toEqual(['firingrange', 'nuketown', 'yard']);
+    expect(maps).toEqual(['firingrange', 'nacht', 'nuketown', 'yard']);
     for (const id of maps) expect(zombiesLayer(id)).not.toBeNull();
     const ids = CHALLENGES.map((c) => c.id);
     for (const id of ['zombies_round', 'zombies_horde', 'zombies_headshots']) expect(ids).toContain(id);
