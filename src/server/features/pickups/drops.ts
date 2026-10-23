@@ -5,6 +5,7 @@
  * clears them too).
  */
 import { canDropWeapon, dropScore, PICKUP, PICKUP_ENTITY, type DropSnapState } from '../../../shared/defs/pickups';
+import { packWeaponState } from '../../../shared/defs/pack-a-punch';
 import { isWonderWeapon } from '../../../shared/defs/weapons';
 import { WONDER_DROP_LIFE_SEC } from '../../../shared/defs/wonder';
 import type { Vec3 } from '../../../shared/math';
@@ -25,6 +26,8 @@ export interface DropData {
   reserve: number;
   /** Underbarrel grenade launcher rounds that go with the gun. */
   gl: { mag: number; reserve: number } | null;
+  /** Pack-a-Punched (killstreak): it stays packed on the ground and for whoever takes it. */
+  pap?: boolean;
   vx: number;
   vy: number;
   vz: number;
@@ -78,6 +81,7 @@ export function spawnDrop(room: Room, w: WeaponState, at: Vec3, vel: Vec3, from:
     mag: w.mag,
     reserve: w.reserve,
     gl: gl ? { mag: gl.mag, reserve: gl.reserve } : null,
+    ...(w.pap ? { pap: true } : {}),
     vx: vel.x,
     vy: vel.y,
     vz: vel.z,
@@ -182,6 +186,8 @@ export function swapFor(room: Room, p: PlayerState, drop: DropEntity, slot = p.s
   const old = p.weapons[slot]!;
   const hadGlSlot = glSlot(p);
   const nw = makeWeapon({ weapon: d.weapon, attachments: d.attachments, camo: d.camo }, d.weapon);
+  // A packed gun stays packed (its ammo is what was left in it, set below).
+  if (d.pap) packWeaponState(nw);
   nw.mag = Math.max(0, Math.min(d.mag, nw.def.magazine));
   nw.reserve = Math.max(0, d.reserve);
   nw.creditTime = room.time;

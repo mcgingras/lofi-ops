@@ -53,6 +53,7 @@ onFeature('killstreaks.earned', (d) => {
 
 onFeature('killstreaks.called', (d) => {
   if (d.id === 'glitch') return; // glitch.ts announces it (by side) when the glitch state arrives
+  if (d.id === 'pack_a_punch') return; // packapunch.ts announces it when the upgrade lands, with the gun's new name
   const mine = d.owner === currentMatch()?.myId;
   const f = friendly(d.owner, d.team);
   const name = streakName(d.id);

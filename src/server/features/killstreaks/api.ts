@@ -36,6 +36,7 @@ import { callMortar } from './streaks/mortar';
 import { callNuke } from './streaks/nuke';
 import { callCarePackage } from './streaks/package';
 import { callMysteryBox } from './streaks/mysterybox';
+import { callPackAPunch, papBlocker } from './streaks/packapunch';
 import { callRadar } from './streaks/radar';
 import { callSam, callSentry } from './streaks/turrets';
 import type { CallArgs } from './streaks/types';
@@ -64,6 +65,7 @@ export const STREAK_IMPLS: Record<string, Impl> = {
   rcxd: callRcxd,
   valkyrie: callValkyrieDrop,
   mystery_box: callMysteryBox,
+  pack_a_punch: callPackAPunch,
   attack_dogs: callDogs,
   nuke: callNuke,
   glitch: callGlitch,
@@ -216,11 +218,18 @@ export const botCallDelay = (skill: number) => 1.5 + (1 - skill) * 14 * (0.6 + M
  */
 export function botWants(room: Room, p: PlayerState, id: string, skill: number): boolean {
   const ctx = ksRoom(room);
+  // Pack-a-Punch on a gun that can't take it (already packed) never goes through, whatever the skill.
+  if (id === 'pack_a_punch' && papBlocker(ctx, p)) return false;
   if (skill < 0.5) return true;
   if (id === 'sam_turret') return enemyStreakTargets(room, p).some((t) => t.air);
   if (id === 'counter_uav') return ctx.actives.some((a) => !a.done && (a.streak === 'uav' || a.streak === 'blackbird') && room.isEnemy(a.owner, p)) || Math.random() < 0.02;
   // Glitch: when the enemy has something running to knock out, else now and then.
   if (id === 'glitch') return ctx.actives.some((a) => !a.done && room.isEnemy(a.owner, p)) || Math.random() < 0.15;
+  // Pack-a-Punch: only on a gun that can take it, and not with an enemy right in its face (the gun goes down).
+  if (id === 'pack_a_punch') {
+    const eye = { x: p.move.x, y: p.move.y + 1.5, z: p.move.z };
+    return !ctx.targetsFor(p, 'bot', eye, 20).length;
+  }
   if (id === 'rcxd' || id === 'chopper_gunner' || id === VALKYRIE_LAUNCHER) {
     // Not with an enemy right in its face.
     const eye = { x: p.move.x, y: p.move.y + 1.5, z: p.move.z };

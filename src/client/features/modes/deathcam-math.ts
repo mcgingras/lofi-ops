@@ -1,4 +1,5 @@
 /** Pure helpers of the per-death killcam playback: timeline, camera aim and the killer card text. */
+import { papName } from '../../../shared/defs/pack-a-punch';
 import { PLAYER } from '../../../shared/constants';
 import type { CamTrack, KillerCard } from '../../../shared/defs/deathcam';
 import type { Pose } from './killcam-math';
@@ -77,7 +78,8 @@ export function cardLines(card: KillerCard, names: { weapon: (id: string) => str
   const frac = card.maxHealth > 0 ? Math.max(0, Math.min(1, card.health / card.maxHealth)) : 0;
   return {
     rank: rank.toUpperCase(),
-    weapon: names.weapon(card.weapon).toUpperCase(),
+    // A Pack-a-Punched gun shows its upgraded name (Skullpiercer, not M16).
+    weapon: (card.pap ? papName(card.weapon) : names.weapon(card.weapon)).toUpperCase(),
     attachments: card.attachments.map((a) => names.attachment(a).toUpperCase()).join(' + '),
     health: card.health > 0 ? `${Math.round(frac * 100)}% HEALTH` : 'DEAD',
     healthFrac: frac,

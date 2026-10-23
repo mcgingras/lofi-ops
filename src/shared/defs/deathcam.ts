@@ -68,6 +68,8 @@ export interface KillerCard {
   weapon: string;
   /** Attachments on that weapon, if the killer was holding it. */
   attachments: string[];
+  /** The killer's weapon was Pack-a-Punched: the card shows its upgraded name (defs/pack-a-punch.ts `papName`). */
+  pap?: boolean;
   /** Killer's health when the kill happened (0 if they died in the trade). */
   health: number;
   maxHealth: number;

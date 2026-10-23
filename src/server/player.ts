@@ -33,6 +33,8 @@ export interface WeaponState {
   /** Shots fired in the current burst (burst weapons). */
   burstCount: number;
   lastShot: number;
+  /** Pack-a-Punched (killstreak, shared/defs/pack-a-punch.ts): `def` is the packed def. Set only by the server. */
+  pap?: boolean;
 }
 
 export interface MatchStats {

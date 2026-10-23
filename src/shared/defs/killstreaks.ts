@@ -5,7 +5,7 @@
  * STREAK button (4); selection cycles with 5.
  *
  * `targeting` says how a streak is aimed:
- *   none   - just called (Spy Plane, Counter-Spy Plane, Blackbird, Attack Dogs)
+ *   none   - just called (Spy Plane, Counter-Spy Plane, Blackbird, Attack Dogs, Pack-a-Punch)
  *   marker - a thrown marker (BO1 Care Package): STREAK raises the smoke canister, FIRE throws it,
  *            the drop comes where it settles (defs/care-marker.ts); bots pass a target instead.
  *            Valkyrie Rockets is one too: its crate holds the launcher (defs/valkyrie.ts)
@@ -69,6 +69,8 @@ export const KILLSTREAKS: KillstreakDef[] = [
   // Carried into place (defs/turret-place.ts); its targeting and numbers are in defs/sentry.ts.
   { id: 'sentry_gun', name: 'Sentry Gun', kills: 6, description: 'Carry it into place: an automated gun that guards the arc in front of it for 60 s.', unlockLevel: 14, kind: 'called', durationSec: SENTRY.durationSec, targeting: 'place', hp: SENTRY.hp, icon: 'ks_sentry' },
   { id: 'mortar', name: 'Mortar Team', kills: 6, description: 'Mark three spots on the map for a mortar barrage.', unlockLevel: 1, kind: 'called', targeting: 'map', mapPick: 'points', marks: 3, icon: 'ks_mortar' },
+  // BO1 Zombies' Pack-a-Punch as a self-use streak: upgrades the gun in your hands (defs/pack-a-punch.ts).
+  { id: 'pack_a_punch', name: 'Pack-a-Punch', kills: 6, description: 'Upgrade the gun in your hands: more damage, a bigger magazine and far more ammo, a quicker reload, an upgraded name and the Pack-a-Punch camo. It lasts while you keep that gun.', unlockLevel: 15, kind: 'passive', targeting: 'none', icon: 'ks_pap', noWager: true },
   { id: 'attack_helicopter', name: 'Attack Helicopter', kills: 7, description: 'Pick an area on the map: a helicopter patrols it and attacks enemies.', unlockLevel: 1, kind: 'called', durationSec: 60, targeting: 'map', mapPick: 'area', air: true, hp: 1500, icon: 'ks_heli' },
   // BO1 `m220_tow_drop_mp`: a supply drop whose crate holds the launcher (defs/valkyrie.ts).
   { id: 'valkyrie', name: 'Valkyrie Rockets', kills: 7, description: 'Throw the marker for a launcher with two rockets you fly yourself: steer with your view, boost, fire to detonate.', unlockLevel: 26, kind: 'controlled', targeting: 'marker', icon: 'ks_valkyrie' },
