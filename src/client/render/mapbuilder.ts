@@ -25,7 +25,8 @@ import { bindTexture, getTexture, unbindTexture } from './textures';
 
 // 3: meshes split per depth level (the bake buffer's vertex order changed).
 const BAKE_VERSION = 3;
-const sg = (v: number) => Math.min(56, Math.max(1, Math.round(v / 1.1)));
+/** Subdivisions of an edge of length `v`: one per `seg` metres (vertex lighting), 1..56. */
+const sg = (v: number, seg = 1.1) => Math.min(56, Math.max(1, Math.round(v / seg)));
 
 class Bucket {
   pos: number[] = [];
@@ -125,6 +126,11 @@ export class MapScene {
   private skyMat: LookMaterial;
   private bakes = new Map<string, Float32Array>();
   private signature: string;
+  /** Chunked maps: each mesh's footprint, for distance culling (`MapData.drawDistance`). */
+  private chunks: { mesh: THREE.Mesh; x: number; z: number; r: number }[] = [];
+  private cullAt = { x: Infinity, z: Infinity };
+  /** Extra draw distance (m) on top of `MapData.drawDistance` (Blackout: high up in the plane). */
+  drawBoost = 0;
 
   constructor(readonly map: MapData) {
     this.world = buildCollisionWorld(map);
@@ -153,26 +159,30 @@ export class MapScene {
     const map = this.map;
     const { level, drop, flush } = planDepth(map);
     const buckets = new Map<string, Bucket>();
+    // Big maps (Blackout): one mesh per material per chunk, so far chunks can be culled.
+    const chunk = map.chunk;
+    const chunkOf = (x: number, z: number) => (chunk ? `@${Math.floor(x / chunk)},${Math.floor(z / chunk)}` : '');
     /** The mesh for a material at the depth level of a face (and the layer of a flush decal). */
-    const bucket = (mat: string, src: FaceSource) => {
+    const bucket = (mat: string, src: FaceSource, at = '') => {
       const k = faceKey(src);
       const layer = flush.get(k);
-      const key = `${mat}#${level.get(k) ?? 0}${layer === undefined ? '' : `#${layer}`}`;
+      const key = `${mat}#${level.get(k) ?? 0}${layer === undefined ? '' : `#${layer}`}${at}`;
       let b = buckets.get(key);
       if (!b) buckets.set(key, (b = new Bucket()));
       return b;
     };
     map.brushes.forEach((br, i) => {
-      if (!br.noRender) this.addBrush(br, i, (mat, src) => (drop.has(faceKey(src)) ? null : bucket(mat, src)));
+      const at = chunkOf((br.min.x + br.max.x) / 2, (br.min.z + br.max.z) / 2);
+      if (!br.noRender) this.addBrush(br, i, (mat, src) => (drop.has(faceKey(src)) ? null : bucket(mat, src, at)));
     });
-    map.decals.forEach((d, i) => this.addDecal(d, bucket(d.mat, { kind: 'decal', i })));
+    map.decals.forEach((d, i) => this.addDecal(d, bucket(d.mat, { kind: 'decal', i }, chunkOf(d.x, d.z))));
     map.props.forEach((p, i) => {
       if (p.kind === 'cylinder') {
         const geo = new THREE.CylinderGeometry(p.r, p.r, p.len, p.sides, Math.max(1, Math.round(p.len / 1.2)));
         if (p.axis === 'z') geo.rotateX(Math.PI / 2);
         else if (p.axis === 'x') geo.rotateZ(Math.PI / 2);
         geo.translate(p.x, p.y, p.z);
-        appendGeometry(bucket(p.mat, { kind: 'cap', i, end: 0 }), geo);
+        appendGeometry(bucket(p.mat, { kind: 'cap', i, end: 0 }, chunkOf(p.x, p.z)), geo);
         geo.dispose();
       } else if (p.kind === 'glow') {
         const m = new THREE.SpriteMaterial({ map: getTexture('glow'), color: new THREE.Color(p.color[0], p.color[1], p.color[2]), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false });
@@ -190,7 +200,7 @@ export class MapScene {
     });
     for (const [key, b] of buckets) {
       if (!b.count) continue;
-      const [matId, lv, layer] = key.split('#') as [string, string, string | undefined];
+      const [matId, lv, layer] = key.split('@')[0]!.split('#') as [string, string, string | undefined];
       const mat = this.makeMat(matId, Number(lv));
       if (!mat) continue;
       // Flush decals: after the world, in stacking order, without writing depth (planDepth `flush`).
@@ -208,6 +218,7 @@ export class MapScene {
       mesh.name = key;
       if (layer !== undefined) mesh.renderOrder = 1 + Number(layer);
       this.root.add(mesh);
+      if (chunk && geo.boundingSphere) this.chunks.push({ mesh, x: geo.boundingSphere.center.x, z: geo.boundingSphere.center.z, r: geo.boundingSphere.radius });
       if (mat.vertexColors) {
         const color = new THREE.BufferAttribute(new Float32Array(pos.length), 3);
         color.array.fill(0.6);
@@ -277,7 +288,8 @@ export class MapScene {
       if (hide?.includes(f)) continue;
       const face = boxFace(f, w, h, d);
       const mat = br.faceMats?.[f] ?? br.mat;
-      quad(bucket(mat, { kind: 'brush', i, part: f }), face.o, face.u, face.v, sg(face.uw), sg(face.vh), raw ? 1 : face.uw, raw ? 1 : face.vh, xf, nxf);
+      const seg = this.map.materials[mat]?.segment;
+      quad(bucket(mat, { kind: 'brush', i, part: f }), face.o, face.u, face.v, sg(face.uw, seg), sg(face.vh, seg), raw ? 1 : face.uw, raw ? 1 : face.vh, xf, nxf);
     }
   }
 
@@ -350,6 +362,18 @@ export class MapScene {
     const on = Math.floor(time * 1.2) % 2 === 0;
     for (const { sprite, prop } of this.glows) if (prop.beacon) sprite.visible = on;
     this.sky.position.set(cam.x, cam.y, cam.z);
+    // Chunked maps: hide chunks beyond the draw distance (the fog has ended before it).
+    if (this.chunks.length && Math.hypot(cam.x - this.cullAt.x, cam.z - this.cullAt.z) > 4) {
+      this.cullAt = { x: cam.x, z: cam.z };
+      const far = (this.map.drawDistance ?? 400) + this.drawBoost;
+      for (const c of this.chunks) c.mesh.visible = Math.hypot(c.x - cam.x, c.z - cam.z) - c.r < far;
+      for (const g of this.glows) g.sprite.visible = Math.hypot(g.prop.x - cam.x, g.prop.z - cam.z) < far && (!g.prop.beacon || on);
+    }
+  }
+
+  /** Chunks drawn now (tests, the FPS overlay). */
+  visibleChunks(): number {
+    return this.chunks.filter((c) => c.mesh.visible).length;
   }
 
   /** Light for a dynamic object (players, viewmodel) at a point. */

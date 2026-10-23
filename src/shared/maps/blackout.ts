@@ -385,6 +385,27 @@ export function buildBlackout(): MapData {
     return g !== null && world.free(sp.x, g, sp.z);
   };
   for (let i = ffa.length - 1; i >= 0; i--) if (!ok(ffa[i]!)) ffa.splice(i, 1);
+  // One material per distinct look: towns share many (same texture, tint and scale), and every
+  // material is a draw call per chunk on the client.
+  const canon = new Map<string, string>();
+  const rename = new Map<string, string>();
+  const merged: Record<string, MaterialDef> = {};
+  for (const [id, def] of Object.entries(materials)) {
+    const key = JSON.stringify(def, Object.keys(def).sort());
+    const to = canon.get(key);
+    if (to) rename.set(id, to);
+    else {
+      canon.set(key, id);
+      merged[id] = def;
+    }
+  }
+  const re = (id: string) => rename.get(id) ?? id;
+  for (const b of brushes) {
+    b.mat = re(b.mat);
+    if (b.faceMats) for (const f of Object.keys(b.faceMats) as (keyof typeof b.faceMats)[]) b.faceMats[f] = re(b.faceMats[f]!);
+  }
+  for (const d of decals) d.mat = re(d.mat);
+  for (const p of props) if (p.kind === 'cylinder') p.mat = re(p.mat);
   const groups = new Set(lights.map((l) => l.group));
   const lightOn = (k: number) => Object.fromEntries([...groups].map((g) => [g, k]));
 
@@ -392,7 +413,7 @@ export function buildBlackout(): MapData {
     id: 'blackout',
     name: 'Blackout',
     bounds: { min: { x: -H - 1, y: -8, z: -H - 1 }, max: { x: H + 1, y: wallTop, z: H + 1 } },
-    materials,
+    materials: merged,
     brushes,
     decals,
     props,
@@ -400,12 +421,12 @@ export function buildBlackout(): MapData {
     spawns: { teams: [ffa.slice(0, Math.ceil(ffa.length / 2)), ffa.slice(Math.ceil(ffa.length / 2))], ffa },
     objectives: {},
     times: [
-      { id: 'day', name: 'Overcast Day', clock: '13:20', sky: 'skyGrey', unlit: [1, 1, 1], skyRot: 0, sunDir: unitVec(0.45, 0.8, 0.35), sun: [1.05, 1.0, 0.9], amb: [0.5, 0.52, 0.55], fog: [0.66, 0.7, 0.72], fogNear: 70, fogFar: 230, lights: lightOn(0.25), glow: 0.2 },
-      { id: 'dusk', name: 'Dusk', clock: '19:05', sky: 'skyDusk', unlit: [1, 0.86, 0.76], skyRot: Math.PI, sunDir: unitVec(-0.8, 0.32, 0.3), sun: [1.1, 0.62, 0.4], amb: [0.3, 0.27, 0.34], fog: [0.58, 0.44, 0.42], fogNear: 60, fogFar: 210, lights: lightOn(1), glow: 0.8 },
+      { id: 'day', name: 'Overcast Day', clock: '13:20', sky: 'skyGrey', unlit: [1, 1, 1], skyRot: 0, sunDir: unitVec(0.45, 0.8, 0.35), sun: [1.05, 1.0, 0.9], amb: [0.5, 0.52, 0.55], fog: [0.66, 0.7, 0.72], fogNear: 55, fogFar: 185, lights: lightOn(0.25), glow: 0.2 },
+      { id: 'dusk', name: 'Dusk', clock: '19:05', sky: 'skyDusk', unlit: [1, 0.86, 0.76], skyRot: Math.PI, sunDir: unitVec(-0.8, 0.32, 0.3), sun: [1.1, 0.62, 0.4], amb: [0.3, 0.27, 0.34], fog: [0.58, 0.44, 0.42], fogNear: 50, fogFar: 175, lights: lightOn(1), glow: 0.8 },
     ],
     defaultTime: 'day',
     hotspots,
-    chunk: 64,
-    drawDistance: 260,
+    chunk: 96,
+    drawDistance: 200,
   };
 }
