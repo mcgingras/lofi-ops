@@ -89,6 +89,24 @@ export interface MoveParams {
   canFire?: boolean;
   /** False while the player can't aim down sights (`canAds` modifier: frozen solid): ADS falls back to the hip. */
   canAds?: boolean;
+  /**
+   * Airborne physics override (Blackout's plane, freefall and parachute; set by the server through
+   * `room.moveParamsHook`). Only applies while not on the ground. Absent = normal jumping physics.
+   */
+  glide?: GlideParams;
+}
+
+/**
+ * Air physics while gliding: `gravity` (m/s^2) down to a fall speed of `terminal` (m/s; a faster
+ * fall is braked at `brake` m/s^2, the chute opening), full steering toward `speed` (m/s) at
+ * `accel` (m/s^2) from the movement keys. All zeros (the plane): velocity is kept as it is.
+ */
+export interface GlideParams {
+  gravity: number;
+  terminal: number;
+  speed: number;
+  accel: number;
+  brake: number;
 }
 
 export const DEFAULT_MOVE_PARAMS: MoveParams = { speed: 1, adsTime: 0.25, adsMove: MOVE.ads, sprint: 1, canSprint: true, jump: 1, canMove: true, canMantle: true, canProne: true };
@@ -271,7 +289,21 @@ function substep(world: CollisionWorld, s: MoveState, buttons: number, yaw: numb
   // Accelerate towards it (full on the ground, 30% in the air and only with input). A dive keeps
   // its momentum: no control in the air, a slide along the ground.
   const hasInput = f !== 0 || side !== 0;
-  if (s.dive > 0 || knocked) {
+  const glide = p.glide && !s.onGround ? p.glide : null;
+  if (glide && s.dive <= 0 && !knocked) {
+    // Gliding (plane / freefall / chute): steer toward `speed` in the wish direction, any time.
+    const gx = -sy * f + cy * side;
+    const gz = -cy * f - sy * side;
+    const accel = glide.accel * h;
+    const dvx = gx * glide.speed - s.vx;
+    const dvz = gz * glide.speed - s.vz;
+    const dl = Math.hypot(dvx, dvz);
+    if (accel > 0 && dl > 1e-9) {
+      const k = Math.min(1, accel / dl);
+      s.vx += dvx * k;
+      s.vz += dvz * k;
+    }
+  } else if (s.dive > 0 || knocked) {
     // Dive or knockback: the impulse carries the body; on the ground it slides to a stop.
     if (s.onGround) {
       const v = Math.hypot(s.vx, s.vz);
@@ -314,8 +346,10 @@ function substep(world: CollisionWorld, s: MoveState, buttons: number, yaw: numb
   moveAxis(world, s, 'z', s.vz * h, height, wasGround, legsYaw);
 
   // Vertical.
-  if (!s.onGround || jumped) s.vy -= MOVE.gravity * h;
-  else s.vy = 0;
+  if (!s.onGround || jumped) {
+    s.vy -= (glide ? glide.gravity : MOVE.gravity) * h;
+    if (glide && s.vy < -glide.terminal) s.vy = glide.brake > 0 ? Math.min(-glide.terminal, s.vy + (glide.brake + glide.gravity) * h) : -glide.terminal;
+  } else s.vy = 0;
   if (s.vy !== 0) {
     const startHits = world.overlapping(s.x, s.y, s.z, r, height, [] as Solid[]);
     const ny = s.y + s.vy * h;

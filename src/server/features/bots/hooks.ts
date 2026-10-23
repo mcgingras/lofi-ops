@@ -138,3 +138,19 @@ export function botStyleFor(room: Room, bot: PlayerState): BotModeStyle {
   }
   return extra ? { ...base, ...extra } : base;
 }
+
+/**
+ * A mode's own bot brain (Blackout: 99 bots on a map too big for the nav grid). When a mode has
+ * one, the roster gives its bots this brain instead of the default one (and skips the nav grid);
+ * skill, variance, names and backfill work as usual. `skill` is the bot's varied skill.
+ */
+export type BotBrainFactory = (room: Room, bot: PlayerState, skill: BotSkill) => import('../../player').BotBrain;
+const brainFactories = new Map<string, BotBrainFactory>();
+
+/** Register (or remove, with null) a mode's bot brain factory. */
+export function registerBotBrain(modeId: string, fn: BotBrainFactory | null): void {
+  if (fn) brainFactories.set(modeId, fn);
+  else brainFactories.delete(modeId);
+}
+
+export const botBrainFactory = (modeId: string): BotBrainFactory | undefined => brainFactories.get(modeId);

@@ -84,6 +84,19 @@ export const CORE_MODES: ModeDef[] = [
     teamNames: ZOMBIES_TEAM_NAMES,
     killXp: { kill: ZOMBIES_XP.kill, headshot: ZOMBIES_XP.headshot },
   },
+  {
+    // 100-player last man standing (BO4 Blackout); rules in src/server/features/blackout/.
+    id: 'blackout',
+    name: 'Blackout',
+    short: 'BR',
+    description: 'Battle royale, 100 players. Drop from the plane with a knife, loot guns, armour and heals, stay inside the circle. Last one standing wins.',
+    teams: false,
+    scoreLimit: 0,
+    timeLimitSec: 0,
+    respawn: false,
+    playlist: 'party',
+    maxPlayers: 100,
+  },
 ];
 
 export const MODES: ModeDef[] = [...CORE_MODES, ...WAGER_MODES];
