@@ -191,6 +191,11 @@ export class BlackoutGame {
     x.tacticalN = 0;
     this.board(p, this.t0 === null ? 0 : this.room.time - this.t0);
     this.dirty.add(p.id);
+    // Show the plane during the countdown too (everyone waits aboard it).
+    if (!this.planeEntity && this.t0 === null) {
+      const at = planeAt(this.plane, 0);
+      this.planeEntity = this.room.entities.add({ kind: PLANE_ENTITY, x: at.x, y: at.y, z: at.z, yaw: at.yaw, s: { t0: -1 } });
+    }
   }
 
   /** Put a player aboard the plane at flight time `t`. */
@@ -225,6 +230,7 @@ export class BlackoutGame {
     this.lootSpawned = spawnLoot(room, this.seed);
     this.lootVersion++;
     const at = planeAt(this.plane, 0);
+    if (this.planeEntity && room.entities.get(this.planeEntity.id)) room.entities.remove(this.planeEntity.id);
     this.planeEntity = room.entities.add({ kind: PLANE_ENTITY, x: at.x, y: at.y, z: at.z, yaw: at.yaw, s: { t0: Math.round(room.time * 1000) / 1000 } });
     this.pushAll();
   }
@@ -287,7 +293,11 @@ export class BlackoutGame {
 
   private tick(dt: number): void {
     const room = this.room;
-    if (room.phase !== 'playing' || this.t0 === null) return;
+    if (room.phase !== 'playing' || this.t0 === null) {
+      // The countdown: players are already aboard (the plane camera needs their stage).
+      if (this.dirty.size) this.push();
+      return;
+    }
     const t = room.time - this.t0;
     const pl = planeAt(this.plane, t);
     if (this.planeEntity) {

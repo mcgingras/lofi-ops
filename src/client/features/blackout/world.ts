@@ -195,10 +195,15 @@ function frame(m: Match): void {
   const st = bo.state;
   // ---- The circle's wall.
   const c = circleNow(m);
-  v.wall.visible = !!c && c.cur.r > 0.5;
+  // The wall fades in as you near it: far away (the first circle stands out past the sea) an
+  // additive band across the whole horizon read as a pink sky with a hard edge.
+  const edge = c ? Math.abs(Math.hypot(cam.position.x - c.cur.x, cam.position.z - c.cur.z) - c.cur.r) : Infinity;
+  const fade = Math.max(0, Math.min(1, 1 - (edge - 40) / 110));
+  v.wall.visible = !!c && c.cur.r > 0.5 && fade > 0;
   if (c) {
     v.wall.position.set(c.cur.x, 60, c.cur.z);
     v.wall.scale.set(c.cur.r, 200, c.cur.r);
+    v.wallMat.opacity = 0.22 * fade;
   }
 
   // ---- Cameras: behind the plane while aboard; behind the watched player after death.
