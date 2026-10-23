@@ -97,7 +97,8 @@ describe('bots: navigation grid', () => {
   it('never drops through a floor: every drop link falls through clear air (all maps)', () => {
     // Regression: upper floors (Nuketown houses, Rust/Terminal decks) used to get drop links straight
     // through their slab to the room below, and bots stood upstairs jumping on the spot forever.
-    for (const m of MAPS) {
+    // Blackout's island is too big for a nav grid (its bots steer instead: features/blackout/brain.ts).
+    for (const m of MAPS.filter((d) => d.size !== 'huge')) {
       const g = new NavGrid(getMapData(m.id));
       let drops = 0;
       for (const c of g.cells)

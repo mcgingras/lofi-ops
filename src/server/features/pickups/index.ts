@@ -20,11 +20,11 @@ import type { PlayerState } from '../../player';
 import type { Room } from '../../room';
 import { updateBotPickups, wireBotGoal } from './bots';
 import { carriesWeapon, dropOnDeath, dropsEnabled, dropsOf, justDropped, onTopOf, swapBlocker, swapFor, takeAmmo, updateDrops } from './drops';
-import { pickupsOf } from './state';
+import { pickupRulesOf, pickupsOf } from './state';
 
-export { dropsOf, spawnDrop, swapBlocker, swapFor, takeAmmo, dropOnDeath, GL_SLOT, type DropData, type DropEntity } from './drops';
+export { dropsOf, spawnDrop, swapBlocker, swapFor, takeAmmo, dropOnDeath, heldSlot, GL_SLOT, type DropData, type DropEntity } from './drops';
 export { ammoNeed, botPickupSkill, chooseDrop } from './bots';
-export { pickupsOf } from './state';
+export { pickupsOf, pickupRulesOf, setPickupRules, type PickupRules } from './state';
 
 /** The gun a human holding USE would swap for right now (also what the client prompt shows). */
 export function useTarget(room: Room, p: PlayerState) {
@@ -49,7 +49,8 @@ function updateHumanUse(room: Room, p: PlayerState, dt: number): void {
     return;
   }
   const target = useTarget(room, p);
-  if (!target || swapBlocker(room, p, target) !== null) {
+  const slot = pickupRulesOf(room)?.slotFor?.(p) ?? p.slot;
+  if (!target || swapBlocker(room, p, target, { slot }) !== null) {
     st.hold = 0;
     st.target = null;
     return;
@@ -61,7 +62,7 @@ function updateHumanUse(room: Room, p: PlayerState, dt: number): void {
   st.hold += dt;
   // Pack Rat: a tap (`pickupHoldMultiplier` 0).
   if (st.hold + 1e-6 >= PICKUP.holdSec * room.modifiers.mul('pickupHoldMultiplier', p)) {
-    swapFor(room, p, target);
+    swapFor(room, p, target, slot);
     st.hold = 0;
     st.target = null;
     st.needRelease = true;
@@ -74,7 +75,7 @@ function updateWalkOver(room: Room): void {
   for (const p of room.players.values()) {
     if (!p.alive) continue;
     for (const d of drops) {
-      if (!room.entities.get(d.id) || !carriesWeapon(p, d.data.weapon) || !onTopOf(p, d)) continue;
+      if (!onTopOf(p, d) || !room.entities.get(d.id) || !carriesWeapon(p, d.data.weapon)) continue;
       takeAmmo(room, p, d);
     }
   }
@@ -108,7 +109,7 @@ const feature: Feature = {
       if (!dropsEnabled(room)) return;
       for (const p of room.players.values()) if (!p.isBot) updateHumanUse(room, p, dt);
       if (tick % 6 === 0) updateWalkOver(room);
-      updateBotPickups(room, dt);
+      if (pickupRulesOf(room)?.bots !== false) updateBotPickups(room, dt);
     });
   },
 };

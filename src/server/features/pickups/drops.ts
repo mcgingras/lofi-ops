@@ -13,6 +13,7 @@ import { eyeOf } from '../../combat';
 import type { Entity } from '../../entities';
 import { makeWeapon, type PlayerState, type WeaponState } from '../../player';
 import type { Room } from '../../room';
+import { pickupRulesOf } from './state';
 
 /** The underbarrel launcher's slot (weapons feature): never dropped, never swapped from. */
 export const GL_SLOT = 2;
@@ -73,8 +74,10 @@ export function spawnDrop(room: Room, packedOrPlain: WeaponState, at: Vec3, vel:
   const w = packedOrPlain.pap ? plainCopy(packedOrPlain) : packedOrPlain;
   const id = w.def.base.id;
   if (!canDropWeapon(id) || w.mag + w.reserve <= 0) return null;
+  const rules = pickupRulesOf(room);
   const existing = dropsOf(room);
-  for (let i = 0; existing.length - i >= PICKUP.maxPerRoom; i++) room.entities.remove(existing[i]!.id);
+  const cap = rules?.cap ?? PICKUP.maxPerRoom;
+  for (let i = 0; existing.length - i >= cap; i++) room.entities.remove(existing[i]!.id);
   const data: DropData = {
     weapon: id,
     attachments: [...w.def.attachmentIds],
@@ -88,7 +91,7 @@ export function spawnDrop(room: Room, packedOrPlain: WeaponState, at: Vec3, vel:
     landed: false,
     born: room.time,
     // A dropped wonder weapon (Mystery Box) is gone sooner.
-    expires: room.time + (isWonderWeapon(id) ? WONDER_DROP_LIFE_SEC : PICKUP.lifeSec),
+    expires: rules?.keep ? Infinity : room.time + (isWonderWeapon(id) ? WONDER_DROP_LIFE_SEC : PICKUP.lifeSec),
     from: from?.id ?? null,
     reason,
   };

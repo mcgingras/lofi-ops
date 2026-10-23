@@ -13,8 +13,8 @@ import type { MatchPhase, MatchResults } from '../shared/events';
 import { buildCollisionWorld, type MapData } from '../shared/maps/types';
 import { bumpStat } from '../shared/profile';
 import type { CollisionWorld } from '../shared/collision';
-import { PlayerFlags, q3, stanceFlags, type FeatureId, type FeatureMessages, type InputCmd, type MeSnap, type PlayerSnap, type RoomSummary, type ServerMsg, type ServerMsgOf, type ShotSnap } from '../shared/protocol';
-import { copyMoveState, movePose } from '../shared/movement';
+import { PlayerFlags, q3, stanceFlags, type EntitySnap, type FeatureId, type FeatureMessages, type InputCmd, type MeSnap, type PlayerSnap, type RoomSummary, type ServerMsg, type ServerMsgOf, type ShotSnap } from '../shared/protocol';
+import { copyMoveState, movePose, type MoveParams } from '../shared/movement';
 import { EventBus, type ServerEvents } from './bus';
 import { damage as applyDamage, fire as doFire, kill as doKill, radiusDamage, spawn as doSpawn, updateCombat, type ShotRequest } from './combat';
 import { EntityStore } from './entities';
@@ -105,6 +105,13 @@ export class Room {
   endLock: MatchResults['reason'] | null = null;
   closed = false;
   private closing = false;
+  /**
+   * Mode hooks (set by mode rules in `setup`, cleared by `setMode`). `moveParamsHook` adds to a
+   * player's movement params (Blackout's glide physics, `me.params.glide`); `interest` trims what
+   * each viewer's snapshot carries (Blackout's 100 players: only players and entities near them).
+   */
+  moveParamsHook: ((p: PlayerState) => Partial<MoveParams> | null) | null = null;
+  interest: { players?(viewer: PlayerState, all: PlayerSnap[]): PlayerSnap[]; ents?(viewer: PlayerState, all: EntitySnap[]): EntitySnap[]; shots?(viewer: PlayerState, all: ShotSnap[]): ShotSnap[] } | null = null;
 
   private timers: Timer[] = [];
   private timerSeq = 0;
@@ -534,6 +541,8 @@ export class Room {
     if (!mode) throw new Error(`unknown mode: ${modeId}`);
     this.bus.offOwner(this.rules);
     this.modifiers.offOwner(this.rules);
+    this.moveParamsHook = null;
+    this.interest = null;
     this.mode = mode;
     this.rules = createRules(mode.id, mode.teams);
     this.setupRules();
@@ -667,9 +676,9 @@ export class Room {
         ack: p.lastSeq,
         phase: this.phase,
         me: this.meSnap(p),
-        players,
-        ents,
-        shots: shots.filter((x) => x.p !== p.id),
+        players: this.interest?.players ? this.interest.players(p, players) : players,
+        ents: this.interest?.ents ? this.interest.ents(p, ents) : ents,
+        shots: this.interest?.shots ? this.interest.shots(p, shots.filter((x) => x.p !== p.id)) : shots.filter((x) => x.p !== p.id),
         teams,
         timeLeft,
         radar: this.radarFor(p),

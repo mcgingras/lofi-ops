@@ -37,6 +37,7 @@ export function moveParamsFor(room: Room, p: PlayerState): MoveParams {
     ...(fireRate !== 1 ? { fireRate } : {}),
     ...(canFire ? {} : { canFire }),
     ...(canAds ? {} : { canAds }),
+    ...(room.moveParamsHook?.(p) ?? {}),
   };
 }
 

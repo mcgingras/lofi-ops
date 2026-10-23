@@ -14,5 +14,6 @@ import bots from './bots/index';
 import modes from './modes/index';
 import pickups from './pickups/index';
 import zombies from './zombies/index';
+import blackout from './blackout/index';
 
-export const FEATURES: Feature[] = [weapons, perks, killstreaks, progression, economy, frontend, bots, modes, pickups, zombies];
+export const FEATURES: Feature[] = [weapons, perks, killstreaks, progression, economy, frontend, bots, modes, pickups, zombies, blackout];

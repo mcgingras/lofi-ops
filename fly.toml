@@ -46,5 +46,5 @@ kill_timeout = "10s"
   destination = "/data"
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = "shared-cpu-2x"
+  memory = "1gb"

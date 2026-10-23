@@ -61,8 +61,8 @@ describe('jungle: registry and textures', () => {
     expect(def).toBeTruthy();
     expect(def.inspiredBy).toMatch(/Black Ops/);
     expect(def.size).toBe('medium');
-    // Zombies is only on maps with a Zombies layer (src/shared/maps/zombies/).
-    for (const mode of MODES) if (mode.id !== 'zombies') expect(def.modes).toContain(mode.id);
+    // Zombies is only on maps with a Zombies layer (src/shared/maps/zombies/); Blackout has its own map.
+    for (const mode of MODES) if (mode.id !== 'zombies' && mode.id !== 'blackout') expect(def.modes).toContain(mode.id);
   });
 
   it('every material has a client recipe (and every photo it develops is in assets/textures)', () => {

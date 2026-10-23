@@ -2,6 +2,7 @@
  * Map registry (owners: maps-bo, maps-mw2). `build()` returns MapData; use `getMapData(id)`, which
  * builds once and caches. `inspiredBy` keeps the original for any future rename.
  */
+import { buildBlackout } from '../maps/blackout';
 import { buildEstate } from '../maps/estate';
 import { buildAfghan } from '../maps/afghan';
 import { buildFiringRange } from '../maps/firingrange';
@@ -28,7 +29,8 @@ export interface MapDef {
   build(): MapData;
   /** Mode ids this map supports. */
   modes: string[];
-  size: 'small' | 'medium' | 'large';
+  /** `huge`: Blackout's 100-player map (tests that flood or nav-grid every map skip it or split it into regions). */
+  size: 'small' | 'medium' | 'large' | 'huge';
   /** Menu preview image (optional). */
   preview?: string;
 }
@@ -46,7 +48,7 @@ const mw2Modes = () => [...supported('tdm', 'ffa', 'dom', 'sd', 'hq', 'kc', 'inf
  * the wagers), `objectives.dom` A/B/C, `objectives.sd` A/B with `modeSpawns.sd`, and `objectives.hq`.
  * Taken from MODES so objective modes join the list as soon as the modes area registers them.
  */
-const BO_MODES = MODES.map((m) => m.id).filter((id) => id !== 'zombies');
+const BO_MODES = MODES.map((m) => m.id).filter((id) => id !== 'zombies' && id !== 'blackout');
 /** Maps with a Zombies layer (src/shared/maps/zombies/<id>.ts: wall-buys, box spots, perk machines, zombie spawns). */
 const withZombies = (modes: string[]) => [...modes, 'zombies'];
 
@@ -68,6 +70,8 @@ export const MAPS: MapDef[] = [
   { id: 'jungle', name: 'Jungle', inspiredBy: 'Call of Duty: Black Ops (2010), Jungle (mp_havoc): the river valley village, the Bridge, the Lookout and the Ruins', build: buildJungle, modes: BO_MODES, size: 'medium' },
   // Zombies only (no data for any other mode): only the Zombies map picker lists it.
   { id: 'nacht', name: 'Nacht der Untoten', inspiredBy: 'Call of Duty: World at War (2008), Nacht der Untoten (re-released in Black Ops): the abandoned bunker on the airfield', build: buildNacht, modes: ['zombies'], size: 'small' },
+  // Blackout only: the classic maps' landmarks stitched into one big island.
+  { id: 'blackout', name: 'Blackout', inspiredBy: 'Call of Duty: Black Ops 4 (2018), Blackout: the classic maps stitched into one big battle royale map', build: buildBlackout, modes: ['blackout'], size: 'huge' },
   { id: 'launch', name: 'Launch', inspiredBy: 'Call of Duty: Black Ops (2010), Launch: the Baikonur cosmodrome pad (rocket, flame trench, stair towers, the track, the Centrifuge, the Fuel Yard)', build: buildLaunch, modes: BO_MODES, size: 'large' },
 ];
 
