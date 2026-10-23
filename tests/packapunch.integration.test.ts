@@ -2,7 +2,8 @@
  * Pack-a-Punch over the real server and sockets: a client can't call it without the streak (the
  * RPC answers not_ready and nothing changes); with it, STREAK starts the upgrade, both players get
  * `killstreaks.pap`, the owner's snapshot then carries the packed gun (camo `pap`, the bigger
- * magazine, refilled), the enemy sees the camo on the owner's gun, and `killstreaks.packed` names it.
+ * magazine, refilled), the enemy sees the camo on the owner's gun, `killstreaks.packed` names it and
+ * the ladder push carries the buff's end time for the HUD countdown.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startServer, type GameServer } from '../src/server/app';
@@ -73,6 +74,9 @@ describe('Pack-a-Punch over the wire', () => {
       await a.waitFor('feat', (m) => m.id === 'killstreaks.pap', 3000);
       const packed = await a.waitFor('feat', (m) => m.id === 'killstreaks.packed', 3000);
       expect((packed.data as { name: string }).name).toBe(held.def.name);
+      // The HUD countdown: the ladder push carries when the 60 s buff runs out.
+      const st = await a.waitFor('feat', (m) => m.id === 'killstreaks.state' && typeof (m.data as { papUntil?: number }).papUntil === 'number', 3000);
+      expect((st.data as { papUntil: number }).papUntil).toBeCloseTo((packed.data as { until: number }).until, 2);
       const mine = await a.waitFor('snap', (s) => s.me?.weapons[A.slot]?.camo === PAP_CAMO, 3000);
       const w = mine.me!.weapons[A.slot]!;
       expect(w.mag).toBeGreaterThan(WEAPON_BY_ID.get(id)!.magazine);

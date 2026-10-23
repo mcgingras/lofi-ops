@@ -9,18 +9,20 @@
  *   core's own raise-after-switch pose is cancelled for that window so it doesn't snap), the
  *   machine jingle plays; as the gun comes back up, a ding and a toast with its new name. Other
  *   players hear the jingle where you stand, and an announcement names the upgraded gun.
+ * - The buff is timed (60 s, through death): a countdown sits left of the weapon name
+ *   (`ksClient.state.papUntil`); when it runs out (`killstreaks.papEnd`) a power-down cue and a toast.
  * - Prediction and HUD (bigger magazine, faster reload, the new name in the ammo box) come from
  *   `Match.weapon()`, which packs a weapon whose camo is `pap`.
  */
 import { PACK_A_PUNCH, PAP_CAMO, papDip } from '../../../shared/defs/pack-a-punch';
 import { sfx } from '../../game/audio';
 import type { Match } from '../../game/match';
-import { txt, unit, HUD_COLORS as C } from '../../hud/draw';
+import { textWidth, txt, unit, HUD_COLORS as C } from '../../hud/draw';
 import { onFeature, registerHudWidget, registerMatchHook } from '../../registry';
 import { getTexture, registerTexture } from '../../render/textures';
 import { currentMatch } from '../../state';
 import { PAP_CAMO_FPS, PAP_CAMO_SIZE, papCamoPixels } from './packapunch-camo';
-import { announce } from './store';
+import { announce, ksClient } from './store';
 
 export const PAP_TEXTURE = `camo.${PAP_CAMO}`;
 
@@ -41,8 +43,8 @@ registerTexture(PAP_TEXTURE, {
 export const papClient = {
   /** My upgrade in progress (room times from the server). */
   mine: null as { t0: number; dur: number; name: string; dinged: boolean } | null,
-  /** The toast: the new name, from local match time `t`. */
-  toast: null as { name: string; t: number } | null,
+  /** The toast: the new name (or the expiry), from local match time `t`. */
+  toast: null as { name: string; t: number; ended?: boolean } | null,
   camoStep: -1,
   pixels: null as Uint8ClampedArray | null,
 };
@@ -58,6 +60,19 @@ onFeature('killstreaks.pap', (d) => {
   const q = m.net.lastSnap?.players.find((p) => p.id === d.p);
   if (q) sfx.play('ks_pap_jingle', { at: { x: q.x, y: q.y + 1.2, z: q.z }, volume: 0.8 });
 });
+
+onFeature('killstreaks.papEnd', (d) => {
+  const m = currentMatch();
+  if (!m || d.p !== m.myId) return;
+  sfx.play('ks_pap_down', { volume: 0.9 });
+  papClient.toast = { name: 'Pack-a-Punch expired', t: m.time, ended: true };
+});
+
+/** Seconds of my Pack-a-Punch buff left (0 when none). */
+export function papSecondsLeft(m: Match): number {
+  const until = ksClient.state?.papUntil;
+  return until === undefined ? 0 : Math.max(0, until - m.serverTime);
+}
 
 onFeature('killstreaks.packed', (d) => {
   const m = currentMatch();
@@ -140,9 +155,32 @@ registerHudWidget(
     }
     const u = unit(H);
     const y = Math.round(H * 0.3);
+    if (s.ended) {
+      txt(g, s.name.toUpperCase(), W / 2, y + 12 * u, 12, C.dim, 'center', u);
+      return;
+    }
     txt(g, 'PACK-A-PUNCHED', W / 2, y, 8, C.paper, 'center', u);
     const col = Math.floor(age * 8) % 2 ? '#b46cff' : '#6ab8ff';
     txt(g, s.name.toUpperCase(), W / 2, y + 12 * u, 16, age < 0.15 ? '#f2d2ff' : col, 'center', u);
   },
   87,
+);
+
+// The countdown, left of the weapon name in the ammo box: "PAP 0:42", blinking in the last 10 s.
+registerHudWidget(
+  'killstreaks.papTimer',
+  (g, W, H) => {
+    const m = currentMatch();
+    if (!m || !m.alive || m.phase === 'ended') return;
+    const left = papSecondsLeft(m);
+    if (left <= 0) return;
+    const def = m.weapon();
+    const u = unit(H);
+    const nameW = def ? textWidth(g, def.name.toUpperCase(), 8, u) : 0;
+    const sec = Math.ceil(left);
+    const label = `PAP ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+    const warn = left < 10 && Math.floor(left * 4) % 2 === 0;
+    txt(g, label, W - 8 * u - nameW - 6 * u, H - 9 * u, 8, warn ? C.warn : Math.floor(m.time * 3) % 2 ? '#b46cff' : '#6ab8ff', 'right', u);
+  },
+  42,
 );

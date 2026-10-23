@@ -363,6 +363,7 @@ export const SFX_SYNTH_ONLY: Record<string, string> = {
   ks_mbox_whoosh: 'Mystery Box flying away: synthesized rising whoosh',
   ks_pap_jingle: 'Pack-a-Punch machine: an original synthesized clunk-and-arpeggio jingle (not the Zombies jingle)',
   ks_pap_ding: 'Pack-a-Punch done: a synthesized bell ding and shimmer',
+  ks_pap_down: 'Pack-a-Punch running out: a synthesized power-down whine and clunk',
   // Zombies (all original and synthesized).
   'zombies.round_start': 'Zombies round start stinger: an original synthesized bell toll and drone (no Zombies music)',
   'zombies.round_end': 'Zombies round end stinger: original synthesized bells',

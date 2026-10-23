@@ -91,6 +91,8 @@ export interface KillstreakExt {
   manual?: boolean;
   /** Bots: room time the automatic policy may call the next streak. */
   botNextCall?: number;
+  /** Pack-a-Punch: room time the buff runs out (every carried gun is packed until then; runs through death). */
+  papUntil?: number;
 }
 
 declare module '../../player' {

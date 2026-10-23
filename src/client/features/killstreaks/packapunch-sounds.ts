@@ -5,6 +5,7 @@
  *   (not the Zombies machine tune): two heavy mechanical clunks, a hum spinning up, then a bright
  *   rising toy-organ arpeggio over a low drone, ~1.3 s, so it ends as the gun comes back up.
  * - `ks_pap_ding`: the gun coming out: a bell strike with a glassy shimmer.
+ * - `ks_pap_down`: the buff running out: a falling power-down whine and a dull clunk.
  */
 import { sfx } from '../../game/audio';
 
@@ -65,3 +66,16 @@ sfx.register('ks_pap_ding', (ctx) =>
     return bell + strike + shimmer;
   }),
 );
+
+sfx.register('ks_pap_down', (ctx) => {
+  let ph = 0;
+  const dur = 0.9;
+  return tone(ctx, dur, (t, _i, sr) => {
+    const k = t / dur;
+    ph += (620 * Math.pow(1 - k, 1.6) + 50) / sr;
+    const whine = (Math.sin(2 * Math.PI * ph) * 0.5 + Math.sin(6 * Math.PI * ph) * 0.12) * (1 - k) * Math.min(1, t / 0.02);
+    const c = t - 0.62;
+    const clunk = c >= 0 && c < 0.2 ? Math.sin(2 * Math.PI * (80 - 100 * c) * c) * Math.exp(-c * 20) * 0.8 : 0;
+    return whine * 0.7 + clunk;
+  });
+});

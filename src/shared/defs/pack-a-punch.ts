@@ -1,16 +1,20 @@
 /**
- * Pack-a-Punch killstreak (owner: perks-streaks): BO1 Zombies' upgrade machine as a self-use
- * streak. Calling it upgrades the gun in your hands: the gun dips out of view, the machine's jingle
- * plays, and it comes back up "packed": more damage, a bigger magazine, far more reserve (refilled),
- * a quicker reload, a faster cycle for slow guns, BO1's upgraded name, and the animated purple and
- * blue Pack-a-Punch camo that everyone sees on it.
+ * Pack-a-Punch killstreak (owner: perks-streaks): BO1 Zombies' upgrade machine as a timed,
+ * self-use buff. Calling it dips your gun out of view while the machine's jingle plays; it comes
+ * back up "packed", and for `TIMED_WEAPON_BUFF_SEC` (60 s) every gun you carry is packed: more
+ * damage, a bigger magazine, far more reserve, a quicker reload, a faster cycle for slow guns,
+ * BO1's upgraded name, and the animated purple and blue Pack-a-Punch camo that everyone sees.
  *
  * Rules (server: killstreaks/streaks/packapunch.ts):
- * - The upgrade belongs to that weapon instance (`WeaponState.pap`): switching to your other gun
- *   and back keeps it; a dropped packed gun stays packed on the ground and for whoever takes it;
- *   a new life starts with fresh, unpacked guns.
- * - An already packed gun can't be packed again: the call is refused ("Already Pack-a-Punched")
- *   and the streak is kept (switch to your other gun to use it there).
+ * - The buff belongs to the player (`KillstreakExt.papUntil`, room time), not to a weapon. The
+ *   countdown runs through death: respawn inside the window and your new loadout is packed too,
+ *   as is any gun you pick up or swap to while it lasts.
+ * - Activation refills every carried gun to its packed magazine and reserve; a gun packed later
+ *   (respawn, pickup, Mystery Box) is filled when it gets packed.
+ * - When the time runs out every gun reverts (its own def and camo back) with its ammo clamped
+ *   to the normal magazine and reserve; the owner hears a power-down cue and gets a toast.
+ * - A gun dropped by a buffed player is never packed: it drops as the plain gun, ammo clamped.
+ * - Using it again while buffed resets the countdown to the full 60 s (and refills).
  * - Not in wager matches (One in the Chamber, Gun Game... hand out exact ammo and weapons).
  *
  * Generic on purpose: every weapon gets `PACK_A_PUNCH`'s multipliers unless `PAP_WEAPONS` overrides
@@ -23,14 +27,21 @@
  * prediction and HUD (the server only ever sets that camo together with the upgrade, and
  * `sanitizeLoadout` refuses it in a class: it is not a CAMOS entry).
  */
-import type { EffectiveWeapon } from './attachments';
+import { effectiveWeapon, type EffectiveWeapon } from './attachments';
 import { WEAPON_BY_ID, type WeaponDef } from './weapons';
 
 export const PAP_ID = 'pack_a_punch';
+/**
+ * How long a killstreak's timed weapon upgrade lasts (s): Pack-a-Punch's buff (and the Mystery
+ * Box's timed wonder weapon, owned elsewhere, uses the same 60 s).
+ */
+export const TIMED_WEAPON_BUFF_SEC = 60;
 /** The camo a packed weapon wears (client texture `camo.pap`, animated). Not a CAMOS entry: never sold, never in a class. */
 export const PAP_CAMO = 'pap';
 
 export const PACK_A_PUNCH = {
+  /** The buff lasts this long from the moment the upgrade lands (s); re-using it resets it. */
+  buffSec: TIMED_WEAPON_BUFF_SEC,
   /** Default damage multiplier (BO1 roughly doubles; halved toward 100-health players). */
   damageMult: 1.5,
   /** Magazine and reserve multipliers (rounded; a burst gun's magazine stays a multiple of its burst). */
@@ -176,6 +187,8 @@ export interface PackableState {
   mag: number;
   reserve: number;
   pap?: boolean;
+  /** The camo it wore before it was packed (given back when it reverts). */
+  papCamo?: string;
 }
 
 /**
@@ -185,10 +198,36 @@ export interface PackableState {
 export function packWeaponState(w: PackableState): boolean {
   if (w.pap || !isPackable(w.def.base.id)) return false;
   w.def = packDef(w.def);
+  w.papCamo = w.camo;
   w.camo = PAP_CAMO;
   w.pap = true;
   w.mag = w.def.magazine;
   w.reserve = w.def.reserve;
+  return true;
+}
+
+/** Fill a packed weapon to its packed magazine and reserve. */
+export function refillPacked(w: PackableState): void {
+  if (!w.pap) return;
+  w.mag = w.def.magazine;
+  w.reserve = w.def.reserve;
+}
+
+/** The plain def of a (packed) weapon: its base with its attachments, nothing packed. */
+export const unpackedDef = (def: EffectiveWeapon): EffectiveWeapon => effectiveWeapon(def.base, def.attachmentIds);
+
+/**
+ * Revert a packed weapon in place: its own def and camo back, ammo clamped to the normal magazine
+ * and reserve. Returns false if it wasn't packed.
+ */
+export function unpackWeaponState(w: PackableState): boolean {
+  if (!w.pap) return false;
+  w.def = unpackedDef(w.def);
+  w.camo = w.papCamo ?? 'none';
+  w.mag = Math.min(w.mag, w.def.magazine);
+  w.reserve = Math.min(w.reserve, w.def.reserve);
+  delete w.pap;
+  delete w.papCamo;
   return true;
 }
 

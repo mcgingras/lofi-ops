@@ -60,8 +60,6 @@ const REASONS: Record<string, string> = {
   nuke_active: 'A Tactical Nuke is already inbound',
   disabled: 'Not in wager matches',
   glitched: 'Systems corrupted',
-  already_packed: 'Already Pack-a-Punched',
-  no_weapon: 'Nothing to Pack-a-Punch',
 };
 
 function notify(room: Room, p: PlayerState, reason: string) {

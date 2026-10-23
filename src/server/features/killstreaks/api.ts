@@ -36,7 +36,7 @@ import { callMortar } from './streaks/mortar';
 import { callNuke } from './streaks/nuke';
 import { callCarePackage } from './streaks/package';
 import { callMysteryBox } from './streaks/mysterybox';
-import { callPackAPunch, papBlocker } from './streaks/packapunch';
+import { callPackAPunch, papBlocker, papLeft } from './streaks/packapunch';
 import { callRadar } from './streaks/radar';
 import { callSam, callSentry } from './streaks/turrets';
 import type { CallArgs } from './streaks/types';
@@ -218,8 +218,8 @@ export const botCallDelay = (skill: number) => 1.5 + (1 - skill) * 14 * (0.6 + M
  */
 export function botWants(room: Room, p: PlayerState, id: string, skill: number): boolean {
   const ctx = ksRoom(room);
-  // Pack-a-Punch on a gun that can't take it (already packed) never goes through, whatever the skill.
-  if (id === 'pack_a_punch' && papBlocker(ctx, p)) return false;
+  // Pack-a-Punch: not while it is running, nor with plenty of buff left (re-using it only resets the clock).
+  if (id === 'pack_a_punch' && (papBlocker(ctx, p) || papLeft(room, p) > PAP_RENEW_SEC)) return false;
   if (skill < 0.5) return true;
   if (id === 'sam_turret') return enemyStreakTargets(room, p).some((t) => t.air);
   if (id === 'counter_uav') return ctx.actives.some((a) => !a.done && (a.streak === 'uav' || a.streak === 'blackbird') && room.isEnemy(a.owner, p)) || Math.random() < 0.02;
@@ -237,6 +237,9 @@ export function botWants(room: Room, p: PlayerState, id: string, skill: number):
   }
   return true;
 }
+
+/** Bots renew a running Pack-a-Punch only when it has at most this long left (s). */
+const PAP_RENEW_SEC = 10;
 
 /** Automatic streak use for bots (every few ticks from the feature). */
 export function botAutoStreaks(room: Room, p: PlayerState): void {

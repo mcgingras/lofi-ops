@@ -1,16 +1,17 @@
 /**
  * Pack-a-Punch killstreak, rules level (a Yard TDM room stepped tick by tick): the def and the
  * packed numbers (damage, magazine and reserve, reload, cycle rate, names, wonder weapons by the
- * generic rules); calling it (the gun goes down, the upgrade lands out of view, refilled); the
- * damage multiplier through real hitscan and `damage`; already packed refused; dying before it
- * lands refunds it; a dropped packed gun stays packed for whoever takes it; a new life clears it;
- * the client can't fake it (no camo in a class, no call without the streak); bots use it.
+ * generic rules); calling it (the gun goes down, the buff lands out of view, every carried gun
+ * packed and refilled); the damage multiplier through real hitscan and `damage`; the 60 s buff
+ * running through death and respawn, re-use resetting it, expiry reverting the guns with ammo
+ * clamped; dying before it lands refunds it; dropped guns are never packed while a buffed taker's
+ * pickup is; the client can't fake it (no camo in a class, no call without the streak); bots use it.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { botWants, callKillstreak } from '../src/server/features/killstreaks/api';
 import killstreaks, { onStreakPressed } from '../src/server/features/killstreaks/index';
 import { grant, ksOf } from '../src/server/features/killstreaks/state';
-import { papTarget } from '../src/server/features/killstreaks/streaks/packapunch';
+import { papActive, papLeft, papTarget } from '../src/server/features/killstreaks/streaks/packapunch';
 import perks from '../src/server/features/perks/index';
 import pickups, { dropsOf } from '../src/server/features/pickups/index';
 import { spawnDrop, swapFor } from '../src/server/features/pickups/drops';
@@ -24,7 +25,7 @@ import { Store } from '../src/server/store';
 import { PLAYER, TICK_DT, type Team } from '../src/shared/constants';
 import { effectiveWeapon } from '../src/shared/defs/attachments';
 import { KILLSTREAK_BY_ID, streakAllowedIn } from '../src/shared/defs/killstreaks';
-import { isPackable, PACK_A_PUNCH, packDef, packWeaponState, papDamageMult, papDip, papName, PAP_CAMO, PAP_ID, PAP_WEAPONS } from '../src/shared/defs/pack-a-punch';
+import { isPackable, PACK_A_PUNCH, packDef, packWeaponState, papDamageMult, papDip, papName, PAP_CAMO, PAP_ID, PAP_WEAPONS, TIMED_WEAPON_BUFF_SEC, unpackWeaponState } from '../src/shared/defs/pack-a-punch';
 import { WEAPON_BY_ID, WEAPONS } from '../src/shared/defs/weapons';
 import { cloneLoadout, DEFAULT_LOADOUTS, sanitizeLoadout, type Loadout } from '../src/shared/loadout';
 import { createMoveState } from '../src/shared/movement';
@@ -138,6 +139,12 @@ describe('Pack-a-Punch defs and numbers', () => {
     expect(packWeaponState(w)).toBe(false);
     expect(w.def.magazine).toBe(mag);
     expect(packWeaponState(makeWeapon({ weapon: 'knife', attachments: [], camo: 'none' }, 'knife'))).toBe(false);
+    // Reverting gives the plain def and its own camo back, ammo clamped to the normal limits.
+    expect(unpackWeaponState(w)).toBe(true);
+    expect(w).toMatchObject({ camo: 'tiger', mag: WEAPON_BY_ID.get('mp5k')!.magazine, reserve: WEAPON_BY_ID.get('mp5k')!.reserve });
+    expect(w.pap).toBeUndefined();
+    expect(w.def.name).toBe('MP5K');
+    expect(unpackWeaponState(w)).toBe(false);
   });
 
   it('the viewmodel dips out, stays out while it is packed, and comes back', () => {
@@ -173,6 +180,10 @@ describe('Pack-a-Punch in a room', () => {
     expect(w.camo).toBe(PAP_CAMO);
     expect(w.mag).toBe(Math.round(base.mag * PACK_A_PUNCH.magMult));
     expect(w.reserve).toBe(Math.round(base.reserve * PACK_A_PUNCH.reserveMult));
+    // The buff is the player's: 60 s, and the pistol is packed too.
+    expect(TIMED_WEAPON_BUFF_SEC).toBe(60);
+    expect(papLeft(room, a)).toBeCloseTo(PACK_A_PUNCH.buffSec, 0);
+    expect(a.weapons[1]!.def.name).toBe('Mustang & Sally');
     // Everyone sees the camo on the world model (the snapshot's camo of the gun in hand).
     expect((room as unknown as { playerSnap(p: PlayerState): { c: string } }).playerSnap(a).c).toBe(PAP_CAMO);
     expect(room.fire(a, { dir: { x: 0, y: 0, z: -1 } }).ok).toBe(false);
@@ -218,7 +229,7 @@ describe('Pack-a-Punch in a room', () => {
     v.health = 100;
     expect(room.damage({ victim: v, attacker: a, amount: 20, weapon: 'ak47', part: 'torso', means: 'bullet', from: null, distance: 5 })).toBeCloseTo(30);
     v.health = 100;
-    expect(room.damage({ victim: v, attacker: a, amount: 20, weapon: 'm1911', part: 'torso', means: 'bullet', from: null, distance: 5 })).toBeCloseTo(20);
+    expect(room.damage({ victim: v, attacker: a, amount: 20, weapon: 'mp5k', part: 'torso', means: 'bullet', from: null, distance: 5 })).toBeCloseTo(20);
     v.health = 100;
     expect(room.damage({ victim: v, attacker: a, amount: 20, weapon: 'ak47', part: 'torso', means: 'killstreak', from: null, distance: 5 })).toBeCloseTo(20);
     a.health = 100;
@@ -265,24 +276,24 @@ describe('Pack-a-Punch in a room', () => {
     expect(room.damage({ victim: v, attacker: a, amount: 40, weapon: 'raygun', part: 'torso', means: 'explosive', from: null, distance: 3 })).toBeCloseTo(60);
   });
 
-  it('already packed: refused and the streak is kept (the other gun can still take it)', () => {
+  it('re-using it while buffed resets the clock to 60 s and refills', () => {
     const room = setup();
     const a = botP(room, 0);
     packNow(room, a);
-    grant(room, a, PAP_ID);
-    expect(callKillstreak(room, a, PAP_ID)).toEqual({ ok: false, reason: 'already_packed' });
-    expect(ksOf(a).ready).toContain(PAP_ID);
-    // Switching to the pistol and back keeps the primary packed (it belongs to the weapon).
+    steps(room, 30);
+    expect(papLeft(room, a)).toBeLessThan(31);
+    a.weapons[0]!.mag = 1;
+    packNow(room, a);
+    expect(papLeft(room, a)).toBeCloseTo(PACK_A_PUNCH.buffSec - 0.1 - (PACK_A_PUNCH.durationSec - PACK_A_PUNCH.applyAt), 1);
+    expect(a.weapons[0]!.mag).toBe(a.weapons[0]!.def.magazine);
+    // Switching guns keeps both packed (the buff is the player's).
     switchWeapon(room, a, 1);
     expect(papTarget(a)).toBe(a.weapons[1]);
-    a.swapEnd = 0;
-    expect(callKillstreak(room, a, PAP_ID)).toEqual({ ok: true });
-    steps(room, PACK_A_PUNCH.durationSec);
-    expect(a.weapons[1]!.def.name).toBe('Mustang & Sally');
-    expect(a.weapons[0]!.pap).toBe(true);
+    steps(room, 0.5);
+    expect(a.weapons.slice(0, 2).every((w) => w.pap)).toBe(true);
   });
 
-  it('dying before it lands gives the streak back; a new life starts with unpacked guns', () => {
+  it('dying before it lands gives the streak back', () => {
     const room = setup();
     const a = botP(room, 0);
     const k = botP(room, 1);
@@ -292,43 +303,83 @@ describe('Pack-a-Punch in a room', () => {
     room.damage({ victim: a, attacker: k, amount: 500, weapon: 'ak47', part: 'torso', means: 'bullet', from: null, distance: 5 });
     steps(room, 0.1);
     expect(a.alive).toBe(false);
+    expect(papActive(room, a)).toBe(false);
     expect(ksOf(a).ready).toContain(PAP_ID);
-    room.spawn(a);
-    packNow(room, a);
-    expect(a.weapons[0]!.pap).toBe(true);
-    room.damage({ victim: a, attacker: k, amount: 500, weapon: 'ak47', part: 'torso', means: 'bullet', from: null, distance: 5 });
-    room.spawn(a);
-    expect(a.weapons.some((w) => w.pap || w.camo === PAP_CAMO)).toBe(false);
-    expect(a.weapons[0]!.def.name).toBe('AK-47');
   });
 
-  it('a dropped packed gun stays packed, and whoever takes it gets the upgrade (with the ammo left in it)', () => {
+  it('the buff runs through death: die at 20 s, respawn packed with ~40 s left; at 60 s the guns revert, ammo clamped', () => {
+    const room = setup();
+    const a = botP(room, 0);
+    const k = botP(room, 1);
+    const ends: string[] = [];
+    room.bus.on('killstreaks.papEnd', (e) => ends.push(e.player.id));
+    packNow(room, a);
+    steps(room, 20 - (PACK_A_PUNCH.buffSec - papLeft(room, a)));
+    expect(papLeft(room, a)).toBeCloseTo(40, 1);
+    room.damage({ victim: a, attacker: k, amount: 500, weapon: 'ak47', part: 'torso', means: 'bullet', from: null, distance: 5 });
+    expect(a.alive).toBe(false);
+    steps(room, 0.5);
+    room.spawn(a);
+    // The fresh loadout comes up packed (and full), with the clock still running.
+    expect(a.weapons.slice(0, 2).every((w) => w.pap && w.camo === PAP_CAMO)).toBe(true);
+    expect(a.weapons[0]!.mag).toBe(a.weapons[0]!.def.magazine);
+    expect(papLeft(room, a)).toBeCloseTo(39.5, 1);
+    // A full packed magazine and reserve in it when time runs out.
+    const w = a.weapons[0]!;
+    steps(room, papLeft(room, a) - 1);
+    expect(w.pap).toBe(true);
+    w.mag = w.def.magazine;
+    w.reserve = w.def.reserve;
+    steps(room, 1.1);
+    expect(papActive(room, a)).toBe(false);
+    expect(ends).toEqual([a.id]);
+    expect(w.pap).toBeUndefined();
+    expect(w.camo).toBe('none');
+    expect(w.def.name).toBe('AK-47');
+    expect(w.mag).toBe(WEAPON_BY_ID.get('ak47')!.magazine);
+    expect(w.reserve).toBe(WEAPON_BY_ID.get('ak47')!.reserve);
+    // Damage is back to normal.
+    k.health = 100;
+    expect(room.damage({ victim: k, attacker: a, amount: 20, weapon: 'ak47', part: 'torso', means: 'bullet', from: null, distance: 5 })).toBeCloseTo(20);
+    // And it stays off through the next life.
+    room.damage({ victim: a, attacker: k, amount: 500, weapon: 'ak47', part: 'torso', means: 'bullet', from: null, distance: 5 });
+    room.spawn(a);
+    steps(room, 0.2);
+    expect(a.weapons.some((x) => x.pap || x.camo === PAP_CAMO)).toBe(false);
+  });
+
+  it('a gun dropped by a buffed player is plain; a buffed player who picks a gun up gets it packed and filled', () => {
     const room = setup();
     const a = botP(room, 0, 'ak47');
     const b = botP(room, 0, 'mp5k');
     packNow(room, a);
     const w = a.weapons[0]!;
-    w.mag = 33;
-    w.reserve = 200;
+    w.mag = 40;
+    w.reserve = 250;
     const drop = spawnDrop(room, w, { x: 0, y: 0, z: 20 }, { x: 0, y: 0, z: 0 }, a, null, 'swap')!;
-    expect(drop.data.pap).toBe(true);
-    expect(drop.s.c).toBe(PAP_CAMO);
+    expect(drop.s.c).toBe('none');
+    expect({ mag: drop.data.mag, reserve: drop.data.reserve }).toEqual({ mag: WEAPON_BY_ID.get('ak47')!.magazine, reserve: WEAPON_BY_ID.get('ak47')!.reserve });
+    expect(w.pap).toBe(true); // the gun still in A's hands is untouched
     drop.data.landed = true;
+    // B has no buff: the AK is a plain AK.
     swapFor(room, b, drop, 0);
-    const got = b.weapons[0]!;
+    steps(room, 0.1);
+    expect(b.weapons[0]!.pap).toBeFalsy();
+    expect(b.weapons[0]!.def.name).toBe('AK-47');
+    // A (buffed) takes B's MP5K: packed on the next tick, filled.
+    const mp = dropsOf(room).find((d) => d.data.weapon === 'mp5k')!;
+    mp.data.landed = true;
+    mp.data.mag = 3;
+    swapFor(room, a, mp, 0);
+    steps(room, 0.1);
+    const got = a.weapons[0]!;
+    expect(got.def.base.id).toBe('mp5k');
     expect(got.pap).toBe(true);
-    expect(got.def.name).toBe("Reznov's Revenge");
-    expect(got.def.magazine).toBe(w.def.magazine);
-    expect({ mag: got.mag, reserve: got.reserve }).toEqual({ mag: 33, reserve: 200 });
-    // B's own MP5K went down unpacked.
-    expect(dropsOf(room).find((d) => d.data.weapon === 'mp5k')?.data.pap).toBeUndefined();
-    // And the damage goes with it.
-    const v = botP(room, 1);
-    v.health = 100;
-    expect(room.damage({ victim: v, attacker: b, amount: 20, weapon: 'ak47', part: 'torso', means: 'bullet', from: null, distance: 5 })).toBeCloseTo(30);
+    expect(got.def.name).toBe('MP115 Kollider');
+    expect(got.mag).toBe(got.def.magazine);
     // The killcam card names the upgraded gun.
-    expect(killerCard(b, 'ak47').pap).toBe(true);
-    expect(killerCard(a, 'm1911').pap).toBeUndefined();
+    expect(killerCard(a, 'mp5k').pap).toBe(true);
+    expect(killerCard(b, 'ak47').pap).toBeUndefined();
   });
 
   it('the server is authoritative: the camo is not a class camo, and no call without the streak', () => {
@@ -348,7 +399,7 @@ describe('Pack-a-Punch in a room', () => {
     expect(callKillstreak(room, a, PAP_ID)).toEqual({ ok: false, reason: 'not_ready' });
   });
 
-  it('bots use it on their own, never on a gun already packed', () => {
+  it('bots use it on their own, and only renew it near the end', () => {
     const room = setup();
     const b = botP(room, 0);
     ksOf(b).manual = false;
@@ -360,5 +411,7 @@ describe('Pack-a-Punch in a room', () => {
     grant(room, b, PAP_ID);
     expect(botWants(room, b, PAP_ID, 1)).toBe(false);
     expect(botWants(room, b, PAP_ID, 0.1)).toBe(false);
+    ksOf(b).papUntil = room.time + 5;
+    expect(botWants(room, b, PAP_ID, 1)).toBe(true);
   });
 });

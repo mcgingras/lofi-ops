@@ -90,6 +90,7 @@ export const IN_GAME_VOLUME: Record<string, number> = {
   ks_mbox_whoosh: 1.4,
   ks_pap_jingle: 0.9,
   ks_pap_ding: 0.9,
+  ks_pap_down: 0.9,
   'modes.good': 0.55,
   'modes.bad': 0.55,
   'modes.horn': 0.55,
