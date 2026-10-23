@@ -18,6 +18,7 @@ import { MATCHMAKING_WAIT_SEC, skillFor, type BotSkill, type BotsState, type Lob
 import type { PlayerState } from '../../player';
 import type { Room } from '../../room';
 import { Brain, streaksEarnedAt, type BrainWorld } from './brain';
+import { botBrainFactory } from './hooks';
 import { chooseBotLoadout, pickBotName } from './loadout';
 import { navFor } from './nav';
 import { PathUsage } from './roles';
@@ -287,8 +288,14 @@ export class RoomBots {
     const skill = this.skillFor(p);
     const brain = new Brain(skill, this.world);
     this.brains.set(p.id, brain);
-    if (!p.brain) p.brain = brain;
     if (!p.nextLoadout) p.nextLoadout = chooseBotLoadout(skillRating(skill));
+    // A mode with its own brains (Blackout): no default brain, no nav grid for its map.
+    const own = botBrainFactory(this.room.mode.id);
+    if (own) {
+      if (!p.brain) p.brain = own(this.room, p, skill);
+      return brain;
+    }
+    if (!p.brain) p.brain = brain;
     // Warm the nav grid for this map (built once, shared), and the team path usage for it.
     navFor(this.room.map);
     if (!this.world.usage || this.usageMap !== this.room.map) {

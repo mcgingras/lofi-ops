@@ -31,6 +31,8 @@ export interface MaterialDef {
   fog?: boolean;
   /** Affine texture warp multiplier for the PS1 look toggle (default 1). */
   affine?: number;
+  /** Metres per vertex-lighting subdivision of faces with this material (default ~1.1; big open ground uses more). */
+  segment?: number;
 }
 
 /**
@@ -206,6 +208,13 @@ export interface MapData {
   defaultTime: string;
   /** Places bots like to roam to (optional). */
   hotspots?: Vec3[];
+  /**
+   * Big maps (Blackout): split the renderer's merged meshes into square chunks of this size (m),
+   * so they are culled by distance and frustum. Absent: one mesh per material (the default).
+   */
+  chunk?: number;
+  /** Camera far plane for this map (m); the fog should end before it. Default: the renderer's. */
+  drawDistance?: number;
 }
 
 // ---------------------------------------------------------------------------------------------

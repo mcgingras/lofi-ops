@@ -13,10 +13,19 @@ const smooth = (x: number, a: number, b: number) => {
   return t * t * (3 - 2 * t);
 };
 
+/** Cell size (m) of the bake's spatial buckets for ground AO solids and lights. */
+const BAKE_CELL = 8;
+/** Ground AO only reaches this far (smooth(best, 0, 1.7)): solids further away change nothing. */
+const AO_REACH = 1.75;
+
 export class Baker {
-  /** Solids standing on the ground (for ground AO). */
+  /** Solids standing on the ground (for ground AO), by cell. */
   private standing: Solid[];
+  private standingCells = new Map<number, Solid[]>();
   private lights: MapLight[];
+  /** Lights whose radius reaches into each cell, in map order (so sums match an unbucketed bake). */
+  private lightCells = new Map<number, MapLight[]>();
+  private readonly noLights: MapLight[] = [];
 
   constructor(
     private world: CollisionWorld,
@@ -24,7 +33,22 @@ export class Baker {
   ) {
     this.standing = world.solids.filter((s) => s.sight && s.min.y < 0.1 && s.max.y > 0.1);
     this.lights = map.lights;
+    const key = (cx: number, cz: number) => (cx + 32768) * 65536 + (cz + 32768);
+    const add = <T>(cells: Map<number, T[]>, x0: number, x1: number, z0: number, z1: number, v: T) => {
+      for (let cx = Math.floor(x0 / BAKE_CELL); cx <= Math.floor(x1 / BAKE_CELL); cx++)
+        for (let cz = Math.floor(z0 / BAKE_CELL); cz <= Math.floor(z1 / BAKE_CELL); cz++) {
+          const k = key(cx, cz);
+          const l = cells.get(k);
+          if (l) l.push(v);
+          else cells.set(k, [v]);
+        }
+    };
+    for (const s of this.standing) add(this.standingCells, s.min.x - AO_REACH, s.max.x + AO_REACH, s.min.z - AO_REACH, s.max.z + AO_REACH, s);
+    for (const L of this.lights) add(this.lightCells, L.x - L.radius, L.x + L.radius, L.z - L.radius, L.z + L.radius, L);
+    this.cellKey = (x, z) => key(Math.floor(x / BAKE_CELL), Math.floor(z / BAKE_CELL));
   }
+
+  private cellKey: (x: number, z: number) => number;
 
   private blocked(o: Vec3, d: Vec3, maxT: number): boolean {
     return maxT > 0 && this.world.raycast(o, d, maxT, 'sight') !== null;
@@ -32,7 +56,7 @@ export class Baker {
 
   private groundAO(p: Vec3): number {
     let best = 9;
-    for (const b of this.standing) {
+    for (const b of this.standingCells.get(this.cellKey(p.x, p.z)) ?? this.noLights as unknown as Solid[]) {
       if (b.min.y > p.y + 0.1) continue;
       const dx = Math.max(b.min.x - p.x, 0, p.x - b.max.x);
       const dz = Math.max(b.min.z - p.z, 0, p.z - b.max.z);
@@ -56,7 +80,7 @@ export class Baker {
       g += T.sun[1] * sd;
       b += T.sun[2] * sd;
     }
-    for (const L of this.lights) {
+    for (const L of this.lightCells.get(this.cellKey(p.x, p.z)) ?? this.noLights) {
       const k = T.lights[L.group] ?? 0;
       if (!k) continue;
       let dx = L.x - p.x;

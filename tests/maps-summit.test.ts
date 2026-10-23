@@ -48,8 +48,8 @@ describe('summit registry', () => {
     expect(def.inspiredBy).toMatch(/Black Ops/);
     expect(def.inspiredBy).toMatch(/Summit/);
     expect(def.size).toBe('medium');
-    // Zombies is only on maps with a Zombies layer (src/shared/maps/zombies/).
-    for (const m of MODES) if (m.id !== 'zombies') expect(def.modes).toContain(m.id);
+    // Zombies is only on maps with a Zombies layer (src/shared/maps/zombies/); Blackout has its own map.
+    for (const m of MODES) if (m.id !== 'zombies' && m.id !== 'blackout') expect(def.modes).toContain(m.id);
     expect(map.times.map((t) => t.id)).toEqual(['day', 'dusk']);
   });
 });

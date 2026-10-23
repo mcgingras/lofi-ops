@@ -5,6 +5,7 @@
  * ('barracks', 'store', 'wager'); a placeholder shows until they exist.
  */
 import { PLAYLISTS, playlistMode } from '../../../shared/frontend/playlists';
+import { playBlackout } from '../blackout/menu';
 import { net, type NetStatus } from '../../net';
 import { onDevelopProgress } from '../../render/textures';
 import { menuItems, registerScreen } from '../../registry';
@@ -70,7 +71,7 @@ registerScreen('menu', (root) => {
       const n = population[p.id] ?? 0;
       return h(
         'button',
-        { class: 'fe-li', type: 'button', disabled: !mode || !online, title: p.description, onclick: () => void busy(quickPlay(p.id)) },
+        { class: 'fe-li', type: 'button', disabled: !mode || !online, title: p.description, onclick: () => void busy(p.id === 'blackout' ? playBlackout() : quickPlay(p.id)) },
         p.name,
         h('small', {}, mode ? (n > 0 ? `${n} playing` : p.description) : 'Coming soon'),
       );
@@ -99,7 +100,7 @@ registerScreen('menu', (root) => {
   }, true);
   // Feature entries this menu already has (Barracks, Store, Wager, Play with Bots, the Quick Play
   // playlists) would show up twice, the Quick Play ones bypassing matchmaking: leave them out.
-  const covered = (id: string) => id.startsWith('core.') || id.startsWith('modes.') || ['bots.play', 'economy.wager', 'economy.store', 'progression.barracks'].includes(id);
+  const covered = (id: string) => id.startsWith('core.') || id.startsWith('modes.') || ['bots.play', 'economy.wager', 'economy.store', 'progression.barracks', 'blackout.play'].includes(id);
   const extra = [...menuItems.values()].filter((it) => !covered(it.id)).sort((a, b) => (a.order ?? 50) - (b.order ?? 50));
   const navEl = h(
     'nav',

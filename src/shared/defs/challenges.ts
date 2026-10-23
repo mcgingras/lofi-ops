@@ -321,6 +321,10 @@ export const MODE_CHALLENGE_TEMPLATES: Record<string, ModeTemplate[]> = {
     { key: 'horde', name: 'Undead Exterminator', desc: 'Kill {n} zombies.', metric: 'kills', ladder: L([100, 1000, 5000], [500, 3000, 10000], [50, 300, 1000]) },
     { key: 'headshots', name: 'Brain Surgeon', desc: 'Get {n} headshots in {mode}.', metric: 'headshots', ladder: L([100, 500, 2500], [1000, 3000, 8000], [100, 300, 800]) },
   ],
+  blackout: [
+    { key: 'drops', name: 'Airborne', desc: 'Drop into {n} {mode} matches.', metric: 'obj.placement', ladder: L([5, 25, 100], [1000, 3000, 8000], [100, 300, 800]) },
+    { key: 'knife', name: 'Bare Knuckles', desc: 'Get {n} melee kills in {mode}.', metric: 'kills', ladder: L([5, 25, 100], [1000, 2500, 6000], [100, 250, 600]), extra: { means: 'melee' } },
+  ],
   oitc: [
     { key: 'survive', name: 'Survivor', desc: 'Outlast enemies {n} times in {mode}.', metric: 'obj.survive', ladder: L([5, 25, 100], [1000, 3000, 6000], [100, 300, 600]) },
     { key: 'melee', name: 'Pistol Whipped', desc: 'Get {n} melee kills in {mode}.', metric: 'kills', ladder: L([10, 50, 150], [1000, 2500, 5000], [100, 250, 500]), extra: { means: 'melee' } },

@@ -55,7 +55,8 @@ describe('maps-bo registry', () => {
       const def = MAP_BY_ID.get(id)!;
       expect(def, id).toBeTruthy();
       expect(def.inspiredBy).toMatch(/Black Ops/);
-      for (const mode of MODES) expect(def.modes).toContain(mode.id);
+      // Blackout has its own island map.
+      for (const mode of MODES) if (mode.id !== 'blackout') expect(def.modes).toContain(mode.id);
     }
     expect(MAP_BY_ID.get('nuketown')!.size).toBe('small');
     expect(MAP_BY_ID.get('firingrange')!.size).toBe('medium');
