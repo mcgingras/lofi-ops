@@ -9,8 +9,9 @@
  *
  * The owner holds USE at the box (MYSTERY_BOX.reach) to open it: the lid opens and weapons cycle
  * for ~3 s, landing on a wonder weapon the owner doesn't carry (`rollWonder`, never a teddy bear).
- * A fresh USE press then takes it into the hand they hold, and their old gun drops (pickups'
- * `spawnDrop`, like a swap). Untaken, it sinks back after MYSTERY_BOX.offerSec; then, or after a
+ * A fresh USE press then takes it into the hand they hold, on loan for WONDER_LOAN.sec: the old
+ * gun is put away and comes back when the loan ends (`giveWonder` / `endLoan`; the clock runs
+ * through death, the owner respawns holding it, and it never drops at the body meanwhile). Untaken, it sinks back after MYSTERY_BOX.offerSec; then, or after a
  * take, the box flies up the beam and is gone. An unopened box leaves after `idleSec`.
  *
  * Enemies see the beam and the box but can't open it or take its weapon; nor can teammates (it's
@@ -20,15 +21,14 @@
  */
 import { MARKER, markerBody, markerStep, resolveDrop } from '../../../../shared/defs/care-marker';
 import { KS_ENTITY } from '../../../../shared/defs/killstreaks';
-import { BOX_CYCLE_SEC, BOX_PHASE, MYSTERY_BOX, MYSTERY_BOX_ENTITY, MYSTERY_BOX_ID, rollWonder, type BoxPhase } from '../../../../shared/defs/mystery-box';
+import { BOX_CYCLE_SEC, BOX_PHASE, MYSTERY_BOX, MYSTERY_BOX_ENTITY, MYSTERY_BOX_ID, rollWonder, WONDER_LOAN, type BoxPhase } from '../../../../shared/defs/mystery-box';
 import { Buttons } from '../../../../shared/input';
 import type { Vec3 } from '../../../../shared/math';
 import type { Body } from '../../../../shared/projectile';
 import { forceSlot } from '../../../combat';
 import type { Entity } from '../../../entities';
-import { makeWeapon, type PlayerState } from '../../../player';
+import { makeWeapon, type PlayerState, type WeaponState } from '../../../player';
 import type { Room } from '../../../room';
-import { spawnDrop } from '../../pickups/drops';
 import type { Active, KsRoom } from '../world';
 import type { CallArgs } from './types';
 
@@ -85,28 +85,76 @@ export function boxClaimsUse(ctx: KsRoom, p: PlayerState): boolean {
   return boxesOf(ctx).some((b) => b.owner === p && (b.phase === BOX_PHASE.idle || b.phase === BOX_PHASE.open || b.phase === BOX_PHASE.offer) && inBoxReach(b, p));
 }
 
+/** A Mystery Box loan on a player: the wonder weapon, the slot it took, when it ends, and what it replaced. */
+export interface WonderLoan {
+  weapon: WeaponState;
+  slot: number;
+  until: number;
+  /** The gun it replaced (comes back when the loan ends), and the underbarrel launcher slot it took with it. */
+  stash: WeaponState | null;
+  gl: WeaponState | null;
+}
+
+declare module '../../../player' {
+  interface PlayerExt {
+    wonderLoan?: WonderLoan;
+  }
+}
+
+/** The loan running on `p` (null when none). */
+export const loanOf = (p: PlayerState): WonderLoan | null => p.ext.wonderLoan ?? null;
+
+/** Put `w` into `p`'s slot `slot`, dropping the launcher slot when no carried gun has the launcher any more. */
+function seat(room: Room, p: PlayerState, slot: number, w: WeaponState): WeaponState | null {
+  const gl = p.weapons[2]?.def.base.id === 'gl' ? p.weapons[2]! : null;
+  w.creditTime = room.time;
+  p.weapons[slot] = w;
+  if (gl && !p.weapons.slice(0, 2).some((x) => x.def.attachmentIds.includes('gl'))) {
+    p.weapons.splice(2, 1);
+    return gl;
+  }
+  return null;
+}
+
 /**
- * Put a wonder weapon in `p`'s hands: it replaces the gun they hold (the primary if the underbarrel
- * launcher is up), which drops at their feet with its ammo, like a weapon pickup swap.
+ * Put a wonder weapon in `p`'s hands on loan (WONDER_LOAN.sec): it replaces the gun they hold (the
+ * primary if the underbarrel launcher is up); that gun is put away and comes back when the loan ends.
  */
 export function giveWonder(room: Room, p: PlayerState, weaponId: string): void {
+  // A second box while a loan runs: the first loan ends now (its gun gives way to the new one).
+  if (loanOf(p)) endLoan(room, p, false);
   if (p.slot >= 2) forceSlot(room, p, 0);
   const slot = p.slot;
-  const old = p.weapons[slot];
-  const gl = p.weapons[2]?.def.base.id === 'gl' ? p.weapons[2]! : null;
+  const old = p.weapons[slot] ?? null;
   const nw = makeWeapon({ weapon: weaponId, attachments: [], camo: 'none' }, weaponId);
-  nw.creditTime = room.time;
-  p.weapons[slot] = nw;
+  const gl = seat(room, p, slot, nw);
   p.reloadEnd = 0;
   p.swapEnd = room.time + ((nw.def.swapMs ?? 500) / 1000) * room.modifiers.mul('swapMultiplier', p);
-  // The launcher slot only stays while a carried gun has the launcher.
-  const oldHadGl = !!old?.def.attachmentIds.includes('gl');
-  if (gl && !p.weapons.slice(0, 2).some((w) => w.def.attachmentIds.includes('gl'))) p.weapons.splice(2, 1);
-  if (old) {
-    const fwd = { x: -Math.sin(p.yaw), z: -Math.cos(p.yaw) };
-    spawnDrop(room, old, p.move, { x: fwd.x * 1.2 + p.move.vx * 0.3, y: 1.5, z: fwd.z * 1.2 + p.move.vz * 0.3 }, p, oldHadGl ? gl : null, 'swap');
-  }
+  p.ext.wonderLoan = { weapon: nw, slot, until: room.time + WONDER_LOAN.sec, stash: old, gl };
+  room.sendFeature(p, 'killstreaks.wonderLoan', { w: weaponId, until: r3(room.time + WONDER_LOAN.sec) });
   room.bus.emit('weaponSwitch', { player: p, slot, weapon: weaponId });
+}
+
+/** End `p`'s loan: the wonder weapon goes, the gun it replaced comes back and the primary is put in hand (when alive). */
+export function endLoan(room: Room, p: PlayerState, toPrimary = true): void {
+  const loan = loanOf(p);
+  if (!loan) return;
+  delete p.ext.wonderLoan;
+  const at = p.weapons.indexOf(loan.weapon);
+  if (at >= 0 && at < 2) {
+    const fallback = at === 0 ? (p.loadout?.primary ?? { weapon: 'ak47', attachments: [], camo: 'none' }) : (p.loadout?.secondary ?? { weapon: 'm1911', attachments: [], camo: 'none' });
+    const back = loan.stash ?? makeWeapon(fallback, at === 0 ? 'primary' : 'secondary');
+    seat(room, p, at, back);
+    if (back.def.attachmentIds.includes('gl') && p.weapons.length === 2) p.weapons.push(loan.gl ?? makeWeapon({ weapon: 'gl', attachments: [], camo: back.camo }, 'gl'));
+    if (p.alive && toPrimary) {
+      p.reloadEnd = 0;
+      if (p.slot === 0) {
+        p.swapEnd = room.time + ((p.weapons[0]!.def.swapMs ?? 500) / 1000) * room.modifiers.mul('swapMultiplier', p);
+        room.bus.emit('weaponSwitch', { player: p, slot: 0, weapon: p.weapons[0]!.def.base.id });
+      } else forceSlot(room, p, 0);
+    }
+  }
+  room.sendFeature(p, 'killstreaks.wonderLoan', { w: null, until: 0, ...(p.alive && toPrimary ? { slot: 0 } : {}) });
 }
 
 /** Where a bot's box comes down: a couple of metres in front of it (never on its own head). */
@@ -275,7 +323,48 @@ declare module '../../../../shared/events' {
   }
 }
 
-/** Per room: the box claims USE from weapon pickups while its owner stands at it. */
+/**
+ * Per room: the box claims USE from weapon pickups while its owner stands at it; loans run out
+ * (through death too), come back at respawn while they run, and never drop at the body.
+ */
 export function wireMysteryBox(room: Room, ctx: KsRoom): void {
   room.modifiers.add('useClaimed', (p) => (boxClaimsUse(ctx, p) ? true : undefined), 'killstreaks.mysterybox');
+  room.modifiers.add('keepsWeapon', (p, w) => {
+    const loan = loanOf(p);
+    return loan && loan.weapon === w && room.time < loan.until ? true : undefined;
+  }, 'killstreaks.mysterybox');
+  room.bus.on('tick', () => {
+    for (const p of room.players.values()) {
+      const loan = loanOf(p);
+      if (!loan) continue;
+      // Swapped away for a gun off the floor: the loan is over (the dropped wonder weapon is a pickup).
+      if (p.alive && !p.weapons.includes(loan.weapon)) {
+        delete p.ext.wonderLoan;
+        room.sendFeature(p, 'killstreaks.wonderLoan', { w: null, until: 0 });
+      } else if (room.time >= loan.until) endLoan(room, p);
+    }
+  });
+  // Respawning while the loan runs: the wonder weapon is back in its slot, in hand (the fresh gun
+  // the class gave that slot is what returns when it ends). Low priority: after the weapons
+  // feature's spawn handler (launcher slot).
+  room.bus.on(
+    'spawn',
+    ({ player }) => {
+      const loan = loanOf(player);
+      if (!loan) return;
+      if (room.time >= loan.until) {
+        delete player.ext.wonderLoan;
+        room.sendFeature(player, 'killstreaks.wonderLoan', { w: null, until: 0 });
+        return;
+      }
+      loan.stash = player.weapons[loan.slot] ?? null;
+      loan.gl = seat(room, player, loan.slot, loan.weapon);
+      if (loan.slot !== player.slot) forceSlot(room, player, loan.slot);
+      room.sendFeature(player, 'killstreaks.wonderLoan', { w: loan.weapon.def.base.id, until: r3(loan.until), slot: loan.slot });
+    },
+    { priority: -20 },
+  );
+  room.bus.on('matchStart', () => {
+    for (const p of room.players.values()) delete p.ext.wonderLoan;
+  });
 }

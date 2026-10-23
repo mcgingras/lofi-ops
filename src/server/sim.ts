@@ -24,6 +24,8 @@ const FIRE_WAIT = 1;
 export function moveParamsFor(room: Room, p: PlayerState): MoveParams {
   const w = currentWeapon(p);
   const fireRate = room.modifiers.mul('fireRateMultiplier', p);
+  const canFire = room.modifiers.any('canFire', p) !== false;
+  const canAds = room.modifiers.any('canAds', p) !== false;
   return {
     ...DEFAULT_MOVE_PARAMS,
     speed: (w?.def.moveMult ?? 1) * room.modifiers.mul('speedMultiplier', p),
@@ -33,6 +35,8 @@ export function moveParamsFor(room: Room, p: PlayerState): MoveParams {
     canSprint: room.modifiers.any('canSprint', p) !== false,
     canMove: p.alive && room.phase === 'playing',
     ...(fireRate !== 1 ? { fireRate } : {}),
+    ...(canFire ? {} : { canFire }),
+    ...(canAds ? {} : { canAds }),
   };
 }
 

@@ -12,9 +12,15 @@
  *   glowing on top (they drop out on a reload like BO1's tubes), twin prongs with insulators.
  * - Winter's Howl: chrome body, a glowing coolant canister underneath, a frosted barrel that flares
  *   into an icy nozzle ringed with frost.
+ * - Scavenger: a long olive-black bolt-action rifle with a fat scope, a bolt handle that cycles, a
+ *   finned launcher muzzle holding a glowing red-tipped bolt, and a red sensor light.
+ * - 31-79 JGb215 (Baby Gun): a stubby cream-and-copper toy-like blaster with a bulbous glass
+ *   chamber of pink glow, a ringed dish emitter and a little crank on the side.
+ * - Wave Gun: two blue-steel Zap pistols with glowing blue coils and forked emitters; aiming snaps
+ *   the left one in against the right, joining them into the Wave Gun.
  */
 import * as THREE from 'three';
-import { registerViewmodel } from '../../../render/models/viewmodels';
+import { registerViewmodel, type ViewmodelAnimState } from '../../../render/models/viewmodels';
 import { FURNITURE, GUNS, type GunBuild, type Kit } from '../gunkit';
 import { buildWeaponViewmodel } from '../viewmodels';
 
@@ -156,7 +162,99 @@ function wintershowl(k: Kit): GunBuild {
   return { muzzle: V(0, 0.01, -0.4), sightY: 0.085, adsZ: -0.42, grip: V(0.005, -0.1, 0.08), fore: V(-0.012, -0.06, -0.12), parts: {}, pistol: false };
 }
 
-export const WONDER_GUNS = { raygun, thundergun, wunderwaffe, wintershowl } as const;
+function scavenger(k: Kit): GunBuild {
+  const body = k.mat('wonder.scav', { rep: 0.3 });
+  const red = glow(k, 'wonder.red');
+  const dark = k.M.metal;
+  // Receiver, long fluted barrel, thumbhole stock.
+  k.box(0.07, 0.085, 0.34, body, 0, 0, 0);
+  k.box(0.085, 0.07, 0.36, body, 0, -0.03, -0.3);
+  k.cyl(0.02, 0.4, dark, 0, 0.01, -0.58, 8);
+  for (let i = 0; i < 3; i++) k.box(0.044, 0.006, 0.3, dark, 0, 0.01 + (i - 1) * 0.012, -0.58);
+  k.box(0.08, 0.07, 0.28, body, 0, -0.035, 0.27);
+  k.box(0.08, 0.16, 0.08, body, 0, -0.07, 0.44);
+  k.box(0.05, 0.12, 0.06, body, 0, -0.1, 0.12, -0.3);
+  k.box(0.08, 0.02, 0.18, body, 0, -0.14, 0.22);
+  // The launcher muzzle: a fat finned can with the next bolt's glowing red tip poking out.
+  k.cyl(0.042, 0.12, dark, 0, 0.01, -0.82, 8);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    k.box(0.006, 0.05, 0.1, body, Math.cos(a) * 0.05, 0.01 + Math.sin(a) * 0.05, -0.82, 0, 0, a);
+  }
+  k.cyl(0.012, 0.03, red, 0, 0.01, -0.89, 6);
+  // Big scope, a red sensor light under it, a box magazine.
+  const sightY = k.scope(-0.05, 0.045, 0.36, 0.036, true);
+  k.box(0.02, 0.016, 0.02, red, 0.04, 0.05, -0.2);
+  k.box(0.05, 0.1, 0.07, dark, 0, -0.09, -0.04);
+  // The bolt handle (cycles after each shot).
+  const bolt = k.group(0.04, 0.02, 0.08);
+  k.box(0.06, 0.012, 0.012, dark, 0.03, 0, 0, 0, 0, 0, bolt);
+  k.cyl(0.014, 0.022, red, 0.065, 0, 0, 6, bolt, 'x');
+  return { muzzle: V(0, 0.01, -0.9), sightY, adsZ: -0.42, grip: V(0.005, -0.11, 0.13), fore: V(-0.012, -0.08, -0.32), parts: { bolt }, pistol: false };
+}
+
+function babygun(k: Kit): GunBuild {
+  const cream = k.mat('wonder.cream', { rep: 0.3 });
+  const copper = k.mat('wonder.copper', { rep: 0.3 });
+  const glass = k.mat('wonder.glass', { rep: 0.1 });
+  const pink = glow(k, 'wonder.pink');
+  const dark = k.M.metal;
+  // A stubby rounded body.
+  k.box(0.075, 0.09, 0.24, cream, 0, 0, 0);
+  k.cyl(0.05, 0.24, cream, 0, 0.02, 0, 8);
+  k.box(0.08, 0.02, 0.24, copper, 0, -0.045, 0);
+  // The glass chamber on top glowing pink, copper caps.
+  k.cyl(0.045, 0.14, glass, 0, 0.09, -0.02, 8);
+  k.cyl(0.036, 0.13, pink, 0, 0.09, -0.02, 8);
+  for (const z of [0.055, -0.095]) k.cyl(0.05, 0.02, copper, 0, 0.09, z, 8);
+  // Short barrel and the ringed dish emitter.
+  k.cyl(0.026, 0.12, copper, 0, 0.01, -0.17, 8);
+  for (const [z, r] of [[-0.2, 0.034], [-0.23, 0.04], [-0.26, 0.046]] as const) k.cyl(r, 0.008, cream, 0, 0.01, z, 8);
+  k.cyl(0.07, 0.04, copper, 0, 0.01, -0.29, 8, k.root, 'z', 0.03);
+  k.cyl(0.055, 0.006, pink, 0, 0.01, -0.31, 8);
+  // A crank on the right, grip and trigger guard.
+  k.cyl(0.03, 0.012, copper, 0.05, 0.0, 0.03, 8, k.root, 'x');
+  k.box(0.01, 0.05, 0.01, dark, 0.06, -0.02, 0.03);
+  k.box(0.045, 0.12, 0.06, cream, 0, -0.1, 0.07, -0.3);
+  k.box(0.012, 0.02, 0.07, dark, 0, -0.06, 0.0);
+  // A front handle and a notch sight.
+  k.box(0.035, 0.08, 0.04, copper, 0, -0.08, -0.12, 0.2);
+  k.box(0.02, 0.014, 0.014, dark, 0, 0.145, 0.04);
+  return { muzzle: V(0, 0.01, -0.32), sightY: 0.15, adsZ: -0.38, grip: V(0.005, -0.1, 0.07), fore: V(-0.012, -0.1, -0.12), parts: {}, pistol: false };
+}
+
+/** One Zap pistol into `parent`: blue-steel body, glowing coils, a forked emitter. */
+function zapPistol(k: Kit, parent: THREE.Object3D, body: THREE.Material, zap: THREE.Material): void {
+  const dark = k.M.metal;
+  k.box(0.042, 0.06, 0.2, body, 0, 0.01, -0.04, 0, 0, 0, parent);
+  for (let i = 0; i < 4; i++) k.cyl(0.03, 0.01, zap, 0, 0.012, -0.08 - i * 0.022, 8, parent);
+  k.cyl(0.014, 0.08, dark, 0, 0.012, -0.17, 6, parent);
+  for (const x of [-0.016, 0.016]) k.box(0.008, 0.03, 0.05, body, x, 0.012, -0.22, 0, 0, 0, parent);
+  k.cyl(0.008, 0.01, zap, 0, 0.012, -0.24, 6, parent);
+  k.box(0.036, 0.1, 0.05, body, 0, -0.065, 0.04, 0.22, 0, 0, parent);
+  k.box(0.01, 0.02, 0.05, dark, 0, -0.035, -0.02, 0, 0, 0, parent);
+  k.box(0.02, 0.012, 0.012, dark, 0, 0.048, 0.04, 0, 0, 0, parent);
+}
+
+function wavegun(k: Kit): GunBuild {
+  const body = k.mat('wonder.zapbody', { rep: 0.3 });
+  const zap = glow(k, 'wonder.zap');
+  zapPistol(k, k.root, body, zap);
+  const offhand = k.group(-0.3, 0, 0);
+  zapPistol(k, offhand, body, zap);
+  // Aiming snaps the left pistol in against the right, side by side: the joined Wave Gun.
+  const home = offhand.position.clone();
+  const joined = V(-0.046, 0, 0);
+  let t = 0;
+  const animate = (s: ViewmodelAnimState) => {
+    t += (s.ads - t) * Math.min(1, s.dt * 14);
+    offhand.position.lerpVectors(home, joined, t);
+    if (s.sinceShot < 0.12 && t < 0.5 && Math.floor(s.time * 20) % 2 === 0) offhand.position.y += 0.01;
+  };
+  return { muzzle: V(0, 0.012, -0.25), sightY: 0.055, adsZ: -0.34, grip: V(0, -0.085, 0.06), fore: V(-0.03, -0.075, 0.02), parts: { offhand }, pistol: true, animate };
+}
+
+export const WONDER_GUNS = { raygun, thundergun, wunderwaffe, wintershowl, scavenger, babygun, wavegun } as const;
 
 for (const [id, build] of Object.entries(WONDER_GUNS)) {
   GUNS[id] = (k) => build(k);

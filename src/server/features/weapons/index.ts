@@ -2,7 +2,8 @@
  * Server side of the 'weapons' feature area. See docs/features/weapons.md.
  *
  *   setup: the underbarrel grenade launcher behaviour (weapon id `gl`) and the Mystery Box's wonder
- *          weapons (`wonder/`: Ray Gun, Thundergun, Wunderwaffe DG-2, Winter's Howl).
+ *          weapons (`wonder/`: Ray Gun, Thundergun, Wunderwaffe DG-2, Winter's Howl, Scavenger,
+ *          31-79 JGb215, Wave Gun; dev-only `weapons.wonderCheat` with LOFI_CHEATS=1).
  *   room:  primary attachment count (1 + `attachmentSlotsOffset(p, loadout)`, Warlord) at
  *          `beforeSpawn`; equipment (count + `equipmentCountOffset`, Warlord Pro) and the GL slot
  *          at `spawn`; Scavenger Pro refills (`perks.resupply`); knife on the MELEE edge (timing x
@@ -27,6 +28,7 @@ import { onReload, updateShells } from './reload';
 import { updateTomahawks } from './tomahawk';
 import { wext } from './state';
 import { registerWonderBehaviors, wireWonder } from './wonder/index';
+import { registerWonderCheat } from './wonder/cheat';
 
 export { melee, meleeTarget } from './melee';
 export { startThrow, flashedAmount, stunnedAmount, explode, spawnNade } from './equipment';
@@ -53,6 +55,7 @@ const feature: Feature = {
   setup(api) {
     api.registerWeaponBehavior('gl', GL_BEHAVIOR);
     registerWonderBehaviors(api.registerWeaponBehavior);
+    registerWonderCheat(api);
   },
   room(room) {
     // Idempotent: also here so rooms built without the app (unit tests) get the launcher.
@@ -81,6 +84,8 @@ const feature: Feature = {
 
     room.bus.on('buttons', ({ player, pressed }) => {
       if (!player.alive || room.phase !== 'playing') return;
+      // Hands taken (frozen solid by Winter's Howl, swelling under the Wave Gun): no knife, no throw.
+      if (room.modifiers.any('canFire', player) === false) return;
       if (pressed & Buttons.MELEE) melee(room, player);
       if (pressed & Buttons.LETHAL) startThrow(room, player, 'lethal');
       else if (pressed & Buttons.TACTICAL) startThrow(room, player, 'tactical');

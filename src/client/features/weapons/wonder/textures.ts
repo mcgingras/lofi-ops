@@ -77,6 +77,9 @@ for (const [id, base, hi] of [
   ['wonder.bulb', '#9ae8ff', '#ffffff'],
   ['wonder.ice', '#7ad8ff', '#e8fbff'],
   ['wonder.amber', '#ffb43a', '#fff0b0'],
+  ['wonder.red', '#ff3a2a', '#ffd0b0'],
+  ['wonder.pink', '#ff6ae0', '#ffe0f8'],
+  ['wonder.zap', '#4ab4ff', '#e8f6ff'],
 ] as const) {
   registerTexture(id, {
     w: 8,
@@ -92,6 +95,42 @@ for (const [id, base, hi] of [
     photo: 'none',
   });
 }
+
+/** Scavenger: matte olive-black composite with chipped edges. */
+registerTexture('wonder.scav', {
+  w: 16,
+  h: 16,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#2e3328', 0.14);
+    g.fillStyle = '#4a5240';
+    for (let i = 0; i < 6; i++) g.fillRect(Math.floor(R.rnd() * w), Math.floor(R.rnd() * h), 2, 1);
+  },
+  photo: 'none',
+});
+
+/** Baby Gun: cream enamel over a toy-like body, a stripe of teal. */
+registerTexture('wonder.cream', {
+  w: 16,
+  h: 16,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#d8ccaa', 0.1);
+    g.fillStyle = '#3aa8a0';
+    g.fillRect(0, 6, w, 2);
+  },
+  photo: 'none',
+});
+
+/** Zap Guns: dark gunmetal blue with a bright seam. */
+registerTexture('wonder.zapbody', {
+  w: 16,
+  h: 16,
+  draw(g, w, h, R) {
+    grain(g, R, 0, 0, w, h, '#2a3646', 0.12);
+    g.fillStyle = '#6a8aa8';
+    g.fillRect(0, 3, w, 1);
+  },
+  photo: 'none',
+});
 
 /** Clear-ish glass (bulb shells, tube covers). */
 registerTexture('wonder.glass', {

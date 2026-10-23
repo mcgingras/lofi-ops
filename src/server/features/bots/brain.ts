@@ -639,6 +639,8 @@ export class Brain implements BotBrain {
    * head shows over cover, else centre mass with a per-engagement offset across the torso.
    */
   private aimPoint(eye: Vec3, t: PlayerState): Vec3 {
+    // Shrunk by the Baby Gun: the tiny body down by the feet (any hit there kills; higher passes over).
+    if (t.ext.wonder?.shrunkEntity != null) return { x: t.move.x, y: t.move.y + 0.4, z: t.move.z };
     if (this.seen === 'head') return eyePointOf(t);
     if (this.aim.head) return headOf(t);
     const c = chestOf(t);

@@ -6,7 +6,7 @@
  * Combination rules by key:
  *   - `...Multiplier`, `damageTaken`, `damageDealt`: product of all results (undefined counts as 1)
  *   - `...Offset`: sum (undefined counts as 0)
- *   - boolean keys (`radarVisible`, `radarJammed`, `canSprint`): any `false` wins, else any `true`, else undefined
+ *   - boolean keys (`radarVisible`, `radarJammed`, `canSprint`, `canFire`, `canAds`): any `false` wins, else any `true`, else undefined
  *
  * Add new keys from a feature by declaration merging:
  *   declare module '../../modifiers' { interface ModifierMap { myMultiplier: (p: PlayerState) => number | undefined } }
@@ -53,6 +53,14 @@ export interface ModifierMap {
   radarJammed: (viewer: PlayerState) => boolean | undefined;
   /** May this player sprint now? false = no (sprint stamina / Marathon, last stand, driving a streak). */
   canSprint: (p: PlayerState) => boolean | undefined;
+  /**
+   * May this player use their hands now: fire, throw, melee? false = no (frozen solid by Winter's
+   * Howl, swelling under the Wave Gun). Core `fire()` refuses (`reason: 'hands'`); sent as
+   * `me.params.canFire` so the client's trigger holds too.
+   */
+  canFire: (p: PlayerState) => boolean | undefined;
+  /** May this player aim down sights? false = no (frozen solid). Sent as `me.params.canAds`; movement lowers the sights. */
+  canAds: (p: PlayerState) => boolean | undefined;
   /**
    * Does another USE action own this player's USE key right now (a care package in reach, planting
    * or defusing, reviving, driving a streak)? true = weapon pickups stand aside.
