@@ -38,6 +38,8 @@ export interface KillstreakStateMsg {
    * time). Valkyrie: `hold` once the rocket blew up (the camera stays on the blast, white, until then).
    */
   control: { id: string; entity: number; until: number; hold?: { until: number; x: number; y: number; z: number } } | null;
+  /** Pack-a-Punch buff: room time it runs out (absent when not buffed). The HUD counts down to it. */
+  papUntil?: number;
 }
 
 export interface KillstreakFx {
@@ -76,6 +78,15 @@ declare module '../protocol' {
     'killstreaks.called': { id: string; owner: string; team: Team | null };
     'killstreaks.ended': { id: string; owner: string; team: Team | null; destroyed: boolean; by?: string | null };
     'killstreaks.fx': KillstreakFx;
+    /**
+     * Pack-a-Punch started for player `p` (everyone gets it: the owner's gun dips, the jingle plays
+     * where they stand): weapon `w` becomes `name` at room time `t0 + at`; the gun is down `dur` s.
+     */
+    'killstreaks.pap': { p: string; w: string; name: string; t0: number; dur: number; at: number };
+    /** Pack-a-Punch landed: player `p`'s `w` is now `name` (the toast and the ding); the buff runs out at room time `until`. */
+    'killstreaks.packed': { p: string; w: string; name: string; until: number };
+    /** Player `p`'s Pack-a-Punch buff ran out: their guns are plain again (the power-down cue and toast). */
+    'killstreaks.papEnd': { p: string };
     /** Care Package contents for the player standing at it. */
     'killstreaks.crate': { entity: number; contents: string; progress: number } | null;
     /** Players whose perks change what others hear/see (Ninja footsteps, Ghost Pro name tags). */

@@ -11,6 +11,7 @@ import { effectiveWeapon, type EffectiveWeapon } from '../../shared/defs/attachm
 import { getMapData, MAP_BY_ID } from '../../shared/defs/maps';
 import { MODE_BY_ID } from '../../shared/defs/modes';
 import { WEAPON_BY_ID } from '../../shared/defs/weapons';
+import { isPackable, packDef, PAP_CAMO } from '../../shared/defs/pack-a-punch';
 import { shotSeed, spreadDegrees, spreadDirection, stanceSpread } from '../../shared/ballistics';
 import { playerHitboxes, rayHitboxes } from '../../shared/collision';
 import { PRONE, type Team } from '../../shared/constants';
@@ -190,16 +191,18 @@ export class Match {
     return team === null || mine === null || team !== mine;
   }
 
-  /** The effective weapon in a slot (attachments applied). */
+  /** The effective weapon in a slot (attachments applied; Pack-a-Punched when the server says so by its camo). */
   weapon(slot = this.slot): EffectiveWeapon | null {
     const w = this.me?.weapons[slot];
     if (!w) return null;
-    const key = `${w.id}|${w.attachments.join(',')}`;
+    const packed = w.camo === PAP_CAMO && isPackable(w.id);
+    const key = `${w.id}|${w.attachments.join(',')}${packed ? '|pap' : ''}`;
     let e = this.weaponCache.get(key);
     if (!e) {
       const def = WEAPON_BY_ID.get(w.id);
       if (!def) return null;
       e = effectiveWeapon(def, w.attachments);
+      if (packed) e = packDef(e);
       this.weaponCache.set(key, e);
     }
     return e;

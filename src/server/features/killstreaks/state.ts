@@ -48,6 +48,7 @@ export function stateMsg(room: Room, p: PlayerState): KillstreakStateMsg {
     carry: ks.carry ? { id: ks.carry.id, moved: !!ks.carry.turret } : null,
     launcher: ks.launcher ? { left: ks.launcher.left, ready: ks.launcher.ready, fired: ks.launcher.fired } : null,
     control: ks.control ? { ...ks.control, ...(ks.control.hold ? { hold: { ...ks.control.hold } } : {}) } : null,
+    ...(ks.papUntil !== undefined && ks.papUntil > room.time ? { papUntil: Math.round(ks.papUntil * 1000) / 1000 } : {}),
   };
 }
 
@@ -112,5 +113,6 @@ export function resetPlayer(room: Room, p: PlayerState): void {
   ks.carry = null;
   ks.control = null;
   ks.botNextCall = undefined;
+  ks.papUntil = undefined;
   markDirty(room, p);
 }

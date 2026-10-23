@@ -7,6 +7,7 @@
  * last stand and driving a streak own the key, so the prompt stays hidden then and a hold that
  * started on one of them never shows the swap prompt until the key is let go.
  */
+import { PAP_CAMO, papName } from '../../../shared/defs/pack-a-punch';
 import * as THREE from 'three';
 import { ATTACHMENT_BY_ID } from '../../../shared/defs/attachments';
 import { CRATE_REACH, KS_ENTITY } from '../../../shared/defs/killstreaks';
@@ -108,7 +109,7 @@ registerHudWidget(
     // Pack Rat: a tap swaps (on a pad X stays tap-to-reload, so it still reads HOLD there).
     const tap = iHave('pack_rat') && inputDevice() !== 'pad';
     const holdSec = PICKUP.holdSec * (iHave('pack_rat') ? PACK_RAT.holdMul : 1);
-    txt(g, `${tap ? 'PRESS' : 'HOLD'} ${useKey()} TO SWAP FOR ${weaponName(s.w)}`, cx, y, 8, blink(m.time, 1, 0.7) || held ? C.hi : C.paper, 'center', u);
+    txt(g, `${tap ? 'PRESS' : 'HOLD'} ${useKey()} TO SWAP FOR ${s.c === PAP_CAMO ? papName(s.w).toUpperCase() : weaponName(s.w)}`, cx, y, 8, blink(m.time, 1, 0.7) || held ? C.hi : C.paper, 'center', u);
     const atts = dropAttachments(s).map((a) => (ATTACHMENT_BY_ID.get(a)?.name ?? a).toUpperCase());
     txt(g, [...atts, `${s.m}/${s.r}`].join('  ·  '), cx, y + 10 * u, 6, C.dim, 'center', u);
     if (held && ui.holdT > 0 && holdSec > 0) {

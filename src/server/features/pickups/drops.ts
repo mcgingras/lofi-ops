@@ -5,6 +5,7 @@
  * clears them too).
  */
 import { canDropWeapon, dropScore, PICKUP, PICKUP_ENTITY, type DropSnapState } from '../../../shared/defs/pickups';
+import { unpackedDef } from '../../../shared/defs/pack-a-punch';
 import { isWonderWeapon } from '../../../shared/defs/weapons';
 import { WONDER_DROP_LIFE_SEC } from '../../../shared/defs/wonder';
 import type { Vec3 } from '../../../shared/math';
@@ -65,8 +66,11 @@ export const dropsEnabled = (room: Room) => !room.mode.wager;
  * Put a gun on the ground at `at` (feet), tossed with `vel`. Copies its ammo, attachments and camo.
  * Returns the entity, or null for weapons that never drop or are completely empty.
  */
-export function spawnDrop(room: Room, w: WeaponState, at: Vec3, vel: Vec3, from: PlayerState | null, gl: WeaponState | null, reason: 'death' | 'swap'): DropEntity | null {
+export function spawnDrop(room: Room, packedOrPlain: WeaponState, at: Vec3, vel: Vec3, from: PlayerState | null, gl: WeaponState | null, reason: 'death' | 'swap'): DropEntity | null {
   if (!dropsEnabled(room)) return null;
+  // Pack-a-Punch is its owner's timed buff, not the gun's: a packed gun drops as the plain gun
+  // (its own camo back, ammo clamped to the normal magazine and reserve).
+  const w = packedOrPlain.pap ? plainCopy(packedOrPlain) : packedOrPlain;
   const id = w.def.base.id;
   if (!canDropWeapon(id) || w.mag + w.reserve <= 0) return null;
   const existing = dropsOf(room);
@@ -92,6 +96,12 @@ export function spawnDrop(room: Room, w: WeaponState, at: Vec3, vel: Vec3, from:
   const e = room.entities.add({ kind: PICKUP_ENTITY, x: at.x, y: at.y + PICKUP.dropHeight, z: at.z, yaw: (from?.yaw ?? 0) + (Math.random() - 0.5) * 0.6, s: { ...s }, data }) as DropEntity;
   room.bus.emit('pickups.dropped', { player: from, weapon: id, entity: e.id, reason });
   return e;
+}
+
+/** The plain version of a Pack-a-Punched gun, for dropping it. */
+function plainCopy(w: WeaponState): WeaponState {
+  const def = unpackedDef(w.def);
+  return { ...w, def, camo: w.papCamo ?? 'none', mag: Math.min(w.mag, def.magazine), reserve: Math.min(w.reserve, def.reserve), pap: undefined, papCamo: undefined };
 }
 
 /** The gun a player holds right now (the launcher slot counts as the gun it hangs under). */

@@ -3,7 +3,8 @@
  *
  *   Spy Plane 3, RC-XD 3, Counter-Spy Plane 4, SAM Turret 4, Care Package 5, Napalm Strike 5,
  *   Sentry Gun 6, Mortar Team 6, Attack Helicopter 7, Valkyrie Rockets 7, Blackbird 8,
- *   Rolling Thunder 8, Chopper Gunner 9, Attack Dogs 11; plus MW2's Tactical Nuke 25 (streaks/nuke.ts).
+ *   Rolling Thunder 8, Chopper Gunner 9, Attack Dogs 11; plus MW2's Tactical Nuke 25 (streaks/nuke.ts),
+ *   the Mystery Box 7 (streaks/mysterybox.ts) and Pack-a-Punch 6 (streaks/packapunch.ts).
  *
  * Kills toward streaks reset on death; kills made by killstreaks don't count (except toward streaks
  * with `countsStreakKills`, the nuke); Hardline makes each a
@@ -33,6 +34,7 @@ import { closeMap, openMap, submitMapTarget, tickMap } from './mapmode';
 import { flushState, grant, ksOf, markDirty, onKill, resetPlayer, stateMsg } from './state';
 import { crateInReach, onUsePressed } from './streaks/package';
 import { wireMysteryBox } from './streaks/mysterybox';
+import { wirePackAPunch } from './streaks/packapunch';
 import { registerNukeModifiers } from './streaks/nuke';
 import { registerRadarModifiers } from './streaks/radar';
 import { pushGlitch, registerGlitchModifiers } from './streaks/glitch';
@@ -216,6 +218,7 @@ const feature: Feature = {
     registerNukeModifiers(room, ctx);
     registerGlitchModifiers(room, ctx);
     wireMysteryBox(room, ctx);
+    wirePackAPunch(room);
     // Driving a streak or holding the radio (tactical map): the body stands still with its weapon
     // down; designating: no sprint.
     room.modifiers.add('speedMultiplier', (p) => (p.ext.killstreaks?.control || p.ext.killstreaks?.map ? 0 : undefined), 'killstreaks.control');

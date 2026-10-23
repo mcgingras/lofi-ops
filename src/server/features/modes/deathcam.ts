@@ -53,6 +53,7 @@ export function killerCard(a: PlayerState, weapon: string): KillerCard {
     prestige: a.profile?.prestige ?? 0,
     weapon,
     attachments: held ? [...held.def.attachmentIds] : [],
+    ...(held?.pap ? { pap: true } : {}),
     health: a.alive ? Math.max(1, Math.ceil(a.health)) : 0,
     maxHealth: Math.round(a.maxHealth),
     streak: a.stats.streak,
