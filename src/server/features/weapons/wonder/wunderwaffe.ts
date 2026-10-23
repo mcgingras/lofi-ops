@@ -5,66 +5,17 @@
  * line between them (`chainTargets`), one every `hopDelay`. Every hop is lethal and its own
  * `fire` event (killcam arcs) and `arc` effect.
  */
-import { rayHitboxes } from '../../../../shared/collision';
 import { shotSeed, spreadDegrees, spreadDirection, stanceSpread } from '../../../../shared/ballistics';
 import { WUNDERWAFFE, chainTargets } from '../../../../shared/defs/wonder';
 import { normalize, type Vec3 } from '../../../../shared/math';
-import { moveHitboxes } from '../../../../shared/movement';
 import type { WeaponBehavior } from '../../../combat';
 import type { PlayerState } from '../../../player';
 import type { Room } from '../../../room';
-import { chest, emitFire, targetsOf, v3, wonderFx } from './common';
-
-/** Distance from point `p` to the segment origin + dir * [0, len]. */
-function offRay(o: Vec3, dir: Vec3, len: number, p: Vec3): { along: number; off: number } {
-  const dx = p.x - o.x;
-  const dy = p.y - o.y;
-  const dz = p.z - o.z;
-  const along = Math.max(0, Math.min(len, dx * dir.x + dy * dir.y + dz * dir.z));
-  return { along, off: Math.hypot(dx - dir.x * along, dy - dir.y * along, dz - dir.z * along) };
-}
+import { chest, emitFire, lineStrike, targetsOf, v3, wonderFx } from './common';
 
 /** Who the bolt strikes first and where it ends: a body on (or next to) the line, else whoever stands at the impact. */
 export function firstStrike(room: Room, p: PlayerState, o: Vec3, dir: Vec3): { victim: PlayerState | null; end: Vec3 } {
-  const W = WUNDERWAFFE;
-  const wall = room.world.raycast(o, dir, W.range, 'bullets');
-  let maxT = wall ? wall.t : W.range;
-  let victim: PlayerState | null = null;
-  const enemies = targetsOf(room, p);
-  for (const q of enemies) {
-    const h = rayHitboxes(o, dir, moveHitboxes(q.move, q.yaw), maxT);
-    if (h) {
-      maxT = h.t;
-      victim = q;
-    }
-  }
-  if (!victim) {
-    // Forgiving aim: the nearest body whose chest is right beside the line, in sight.
-    let best = Infinity;
-    for (const q of enemies) {
-      const c = chest(q);
-      const r = offRay(o, dir, maxT, c);
-      if (r.off <= W.aimRadius && r.along < best && room.world.lineOfSight(o, c, 'bullets')) {
-        best = r.along;
-        victim = q;
-      }
-    }
-  }
-  if (victim) return { victim, end: chest(victim) };
-  const end = { x: o.x + dir.x * maxT, y: o.y + dir.y * maxT, z: o.z + dir.z * maxT };
-  if (wall) {
-    // It struck the ground or a wall: it arcs to someone standing right there.
-    const back = { x: end.x - dir.x * 0.1, y: end.y - dir.y * 0.1, z: end.z - dir.z * 0.1 };
-    let bd: number = W.splashR;
-    for (const q of enemies) {
-      const c = chest(q);
-      const d = Math.min(Math.hypot(c.x - back.x, c.y - back.y, c.z - back.z), Math.hypot(q.move.x - back.x, q.move.y + 0.3 - back.y, q.move.z - back.z));
-      if (d <= bd && room.world.lineOfSight(back, c, 'bullets')) {
-        bd = d;
-        victim = q;
-      }
-    }
-  }
+  const { victim, end } = lineStrike(room, p, o, dir, WUNDERWAFFE);
   return { victim, end };
 }
 

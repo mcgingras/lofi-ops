@@ -99,8 +99,8 @@ function scene(n: number, mates = 0) {
 // ---------------------------------------------------------------------------------------------
 
 describe('wonder weapon defs', () => {
-  it('four wonder weapons with BO1-ish loads, all flagged', () => {
-    expect([...WONDER_WEAPON_IDS]).toEqual(['raygun', 'thundergun', 'wunderwaffe', 'wintershowl']);
+  it('seven wonder weapons with BO1-ish loads, all flagged', () => {
+    expect([...WONDER_WEAPON_IDS]).toEqual(['raygun', 'thundergun', 'wunderwaffe', 'wintershowl', 'scavenger', 'babygun', 'wavegun']);
     for (const id of WONDER_WEAPON_IDS) {
       const w = WEAPON_BY_ID.get(id)!;
       expect(w.wonder, id).toBe(true);
@@ -112,6 +112,9 @@ describe('wonder weapon defs', () => {
     expect(WEAPON_BY_ID.get('thundergun')).toMatchObject({ magazine: 2, reserve: 12 });
     expect(WEAPON_BY_ID.get('wunderwaffe')).toMatchObject({ magazine: 3, reserve: 9 });
     expect(WEAPON_BY_ID.get('wintershowl')).toMatchObject({ magazine: 6, reserve: 24 });
+    expect(WEAPON_BY_ID.get('scavenger')).toMatchObject({ magazine: 2, reserve: 12, mode: 'bolt', scope: true });
+    expect(WEAPON_BY_ID.get('babygun')).toMatchObject({ magazine: 4, reserve: 16 });
+    expect(WEAPON_BY_ID.get('wavegun')).toMatchObject({ magazine: 16, reserve: 96, mode: 'auto' });
     expect(isWonderWeapon('ak47')).toBe(false);
   });
 

@@ -23,6 +23,7 @@ import { onFeature, registerEntityRenderer, registerMatchHook, registerShotFx } 
 import { getTexture } from '../../../render/textures';
 import { currentMatch } from '../../../state';
 import { blastJolt, equipState } from '../equipment';
+import { bodyLook } from './bodies';
 
 const GREEN = 0x5cff4a;
 const CYAN = 0x9ae8ff;
@@ -528,6 +529,8 @@ registerEntityRenderer(WONDER_ENTITY.frost, (e, m) => {
         sh.scale.y = 0.18 + 0.2 * f;
       });
       block.visible = f >= 1;
+      // The soldier itself goes pale blue as the frost takes (bodies.ts), solid ice when frozen.
+      if (v?.alive && victim !== m.myId) bodyLook(victim, { ice: f >= 1 ? 1 : 0.25 + 0.6 * f });
       block.scale.y = 1.95 * crouch;
       block.position.y = 0.97 * crouch;
       mist -= dt;
@@ -573,3 +576,26 @@ registerMatchHook('weapons.wonder', {
 
 /** The particle / bolt / ring helpers, for the Mystery Box's call-in (killstreaks client). */
 export { emit as fxEmit, lightning as fxLightning, ring as fxRing };
+
+/**
+ * The effect kit for the other wonder weapon effects (fx-more.ts: Scavenger, Baby Gun, Wave Gun):
+ * particles, rings, lightning, timed objects, the local muzzle, and hiding a body that burst.
+ */
+export const fxKit = {
+  emit,
+  ring,
+  lightning,
+  localMuzzle,
+  spriteMat,
+  /** Add a timed object to the scene (stepped each frame with k 0..1, removed at the end). */
+  timed(obj: THREE.Object3D, life: number, step: (k: number, dt: number) => void, dispose?: () => void): void {
+    if (!scene) return;
+    scene.add(obj);
+    transients.push({ obj, age: 0, life, step, dispose });
+  },
+  /** The body of `id` vanished (shattered, popped, squashed): hide its corpse. */
+  hideBody(id: string, now: number): void {
+    shattered.set(id, now);
+  },
+  hasScene: () => scene !== null,
+};

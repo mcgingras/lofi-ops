@@ -3,7 +3,9 @@
  * marker canister (STREAK raises it, FIRE throws it, `s.mb` marks the box's); the call-in
  * timeline (a box entity at the drop spot that lands on time and crushes an enemy under it); the
  * owner opening it by holding USE (enemies can't); the cycle always landing on a wonder weapon the
- * owner doesn't carry; taking it with a fresh USE press (it replaces the gun in hand, which drops);
+ * owner doesn't carry; taking it with a fresh USE press (it replaces the gun in hand, which is put
+ * away); the 60 s loan (it runs through death, comes back at respawn, never drops, and ends with the
+ * old gun back and the primary in hand);
  * the offer timing out and the box sinking/flying away; an unopened box leaving; USE claimed from
  * weapon pickups; and bots calling and using it through the killstreak API.
  */
@@ -11,18 +13,18 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { callKillstreak, suggestTarget } from '../src/server/features/killstreaks/api';
 import killstreaks, { onStreakPressed, throwMarker } from '../src/server/features/killstreaks/index';
 import { grant, ksOf } from '../src/server/features/killstreaks/state';
-import { boxesOf, type MysteryBox } from '../src/server/features/killstreaks/streaks/mysterybox';
+import { boxesOf, loanOf, type MysteryBox } from '../src/server/features/killstreaks/streaks/mysterybox';
 import { ksRoom } from '../src/server/features/killstreaks/world';
 import perks from '../src/server/features/perks/index';
 import pickups, { dropsOf } from '../src/server/features/pickups/index';
 import weapons from '../src/server/features/weapons/index';
 import { Lobby } from '../src/server/lobby';
-import type { PlayerState } from '../src/server/player';
+import { makeWeapon, type PlayerState } from '../src/server/player';
 import type { Room } from '../src/server/room';
 import { Store } from '../src/server/store';
 import { TICK_DT, type Team } from '../src/shared/constants';
 import { KILLSTREAK_BY_ID, KS_ENTITY } from '../src/shared/defs/killstreaks';
-import { BOX_CYCLE_SEC, BOX_CYCLE_WAITS, BOX_PHASE, cycleModel, cycleStepAt, cycleTimes, MYSTERY_BOX, MYSTERY_BOX_ENTITY, rollWonder, boxHeight } from '../src/shared/defs/mystery-box';
+import { BOX_CYCLE_SEC, BOX_CYCLE_WAITS, BOX_PHASE, cycleModel, cycleStepAt, cycleTimes, MYSTERY_BOX, MYSTERY_BOX_ENTITY, rollWonder, boxHeight, WONDER_LOAN } from '../src/shared/defs/mystery-box';
 import { isWonderWeapon } from '../src/shared/defs/weapons';
 import { WONDER_WEAPON_IDS } from '../src/shared/defs/wonder';
 import { Buttons } from '../src/shared/input';
@@ -88,9 +90,9 @@ function landedBox(room: Room, owner: PlayerState, x = 0, z = 20): MysteryBox {
 }
 
 describe('Mystery Box defs and maths', () => {
-  it('is a 7-kill marker streak, separate from the Care Package', () => {
+  it('is a 5-kill marker streak, separate from the Care Package', () => {
     const d = KILLSTREAK_BY_ID.get('mystery_box')!;
-    expect(d).toMatchObject({ kills: 7, targeting: 'marker', name: 'Mystery Box' });
+    expect(d).toMatchObject({ kills: 5, targeting: 'marker', name: 'Mystery Box' });
     expect(d.unlockLevel).toBeGreaterThan(1);
     expect(d.id).not.toBe('care_package');
   });
@@ -213,14 +215,73 @@ describe('Mystery Box in a room', () => {
     expect(b.taken).toBe(true);
     expect(a.weapons[a.slot]!.def.base.id).toBe(b.weapon);
     expect(a.weapons[a.slot]!.mag).toBeGreaterThan(0);
-    // The old gun dropped at their feet, like a weapon pickup swap.
-    expect(dropsOf(room).some((d) => d.data.weapon === held && d.data.from === a.id)).toBe(true);
+    // The old gun is put away for the loan (no drop at their feet).
+    expect(dropsOf(room).some((d) => d.data.weapon === held)).toBe(false);
+    expect(loanOf(a)?.stash?.def.base.id).toBe(held);
     expect(b.phase).toBe(BOX_PHASE.leave);
     // It flies away up the beam and is gone; the streak ends.
     drive(room, a, 0, MYSTERY_BOX.closeSec + MYSTERY_BOX.leaveSec + 0.2);
     expect(room.entities.get(b.ent.id)).toBeUndefined();
     expect(ksRoom(room).activeKind('mystery_box')).toHaveLength(0);
     expect(boxesOf(ksRoom(room))).toHaveLength(0);
+  });
+
+  it('the wonder weapon is a 60 s loan: it runs through death, comes back at respawn, never drops, then the old gun returns', () => {
+    const room = setup();
+    const a = human(room, 0);
+    const foe = human(room, 1);
+    place(a, -6, 20);
+    place(foe, 10, 26);
+    const loans: { w: string | null; until: number; slot?: number }[] = [];
+    a.session = { sendFeature: (id: string, d: unknown) => id === 'killstreaks.wonderLoan' && loans.push(d as (typeof loans)[number]), send: () => {} } as unknown as PlayerState['session'];
+    const primary = a.weapons[0]!.def.base.id;
+    const b = landedBox(room, a);
+    place(a, b.ent.x - 1, b.ent.z);
+    drive(room, a, Buttons.USE, MYSTERY_BOX.openHoldSec + 0.05);
+    drive(room, a, 0, BOX_CYCLE_SEC + 0.1);
+    drive(room, a, Buttons.USE, 0.05);
+    expect(b.taken).toBe(true);
+    const wonder = b.weapon!;
+    const takenAt = room.time;
+    expect(WONDER_LOAN.sec).toBe(60);
+    expect(Math.abs(loanOf(a)!.until - (takenAt + WONDER_LOAN.sec))).toBeLessThan(0.1);
+    expect(loans.at(-1)).toMatchObject({ w: wonder });
+    // Killed holding it: no pickup at the body, and they respawn holding it.
+    room.kill(a, foe, { weapon: 'ak47', means: 'bullet', part: 'torso' });
+    expect(dropsOf(room).some((d) => d.data.weapon === wonder)).toBe(false);
+    drive(room, a, 0, 0.2);
+    for (let i = 0; i < 10 / TICK_DT && !a.alive; i++) drive(room, a, 0, TICK_DT);
+    expect(a.alive).toBe(true);
+    drive(room, a, 0, 0.1);
+    expect(a.weapons[a.slot]!.def.base.id).toBe(wonder);
+    expect(loanOf(a)).not.toBeNull();
+    // The clock kept running through the death: it ends 60 s after the take.
+    drive(room, a, 0, takenAt + WONDER_LOAN.sec - room.time - 0.2);
+    expect(a.weapons.some((w) => w.def.base.id === wonder)).toBe(true);
+    drive(room, a, 0, 0.4);
+    expect(loanOf(a)).toBeNull();
+    expect(a.weapons.some((w) => w.def.base.id === wonder)).toBe(false);
+    expect(a.slot).toBe(0);
+    expect(a.weapons[0]!.def.base.id).toBe(primary);
+    expect(loans.at(-1)).toMatchObject({ w: null, slot: 0 });
+    // Killed after it ran out: an ordinary drop.
+    room.kill(a, foe, { weapon: 'ak47', means: 'bullet', part: 'torso' });
+    expect(dropsOf(room).some((d) => d.data.weapon === primary)).toBe(true);
+  });
+
+  it('a wonder weapon swapped off for a gun on the floor ends the loan (and drops as a pickup)', () => {
+    const room = setup();
+    const a = human(room, 0);
+    place(a, -6, 20);
+    const b = landedBox(room, a);
+    place(a, b.ent.x - 1, b.ent.z);
+    drive(room, a, Buttons.USE, MYSTERY_BOX.openHoldSec + 0.05);
+    drive(room, a, 0, BOX_CYCLE_SEC + 0.1);
+    drive(room, a, Buttons.USE, 0.05);
+    expect(loanOf(a)).not.toBeNull();
+    a.weapons[a.slot] = makeWeapon({ weapon: 'mp5k', attachments: [], camo: 'none' }, 'primary');
+    drive(room, a, 0, 0.05);
+    expect(loanOf(a)).toBeNull();
   });
 
   it('untaken, the weapon sinks back after the offer and the box leaves', () => {

@@ -109,11 +109,22 @@ export function heldSlot(p: PlayerState): number {
   return p.slot >= GL_SLOT ? 0 : p.slot;
 }
 
-/** On death: the gun in their hands falls at the body. */
+declare module '../../modifiers' {
+  interface ModifierMap {
+    /**
+     * Does `p` keep this gun through death (no drop at the body)? true = keep (any). The Mystery
+     * Box's timed wonder weapon: its owner respawns holding it while the timer runs.
+     */
+    keepsWeapon: (p: PlayerState, w: WeaponState) => boolean | undefined;
+  }
+}
+
+/** On death: the gun in their hands falls at the body (unless a feature says they keep it). */
 export function dropOnDeath(room: Room, victim: PlayerState): DropEntity | null {
   const slot = heldSlot(victim);
   const w = victim.weapons[slot];
   if (!w) return null;
+  if (room.modifiers.any('keepsWeapon', victim, w) === true) return null;
   const m = victim.move;
   const a = Math.random() * Math.PI * 2;
   const vel = { x: m.vx * 0.4 + Math.cos(a) * 0.6, y: 1.2 + Math.random() * 0.8, z: m.vz * 0.4 + Math.sin(a) * 0.6 };

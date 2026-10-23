@@ -30,6 +30,7 @@ import { ViewmodelRig } from '../../game/viewmodel';
 import { entityRenderers, shotFxs, type EntityView } from '../../registry';
 import { getTexture } from '../../render/textures';
 import { aimAt, eyeOf, trackPose } from './deathcam-math';
+import { WONDER_ENTITY } from '../../../shared/defs/wonder';
 import { deathEffects, killProjectile, posesAt, projectileAt, replayGun, type DeathFx, type Pose } from './killcam-math';
 import { ReplayActors } from './replay';
 
@@ -256,7 +257,7 @@ export class ReplayView {
         if (!pr.done && pts.length && t > pts.at(-1)!.t) {
           pr.done = true;
           const last = pts.at(-1)!;
-          if (pr.track.kind === NADE_ENTITY && !['flashbang', 'concussion'].includes(pr.track.sub) && t - last.t < 0.5) this.blast(m, last);
+          if (((pr.track.kind === NADE_ENTITY && !['flashbang', 'concussion'].includes(pr.track.sub)) || pr.track.kind === WONDER_ENTITY.scav) && t - last.t < 0.5) this.blast(m, last);
         }
         continue;
       }
