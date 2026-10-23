@@ -36,6 +36,7 @@ New USE actions elsewhere: register `room.modifiers.add('useClaimed', (p) => inR
 
 - `death` (playing phase, drops enabled): `dropOnDeath`. `tick`: `updateDrops` (fall: gravity 18, horizontal stop on a wall, land on `world.groundBelow`; despawn), human USE holds (`updateHumanUse`: `useTarget` → `swapBlocker` → `swapFor`), walk-over ammo every 6 ticks, bots.
 - Validation in `swapBlocker(room, p, drop, {slot?})`: playing phase, alive, drop exists and landed, slot 0/1, not a weapon you carry, not just dropped by you, USE not claimed, in reach, line of sight from the eye (`players` mask). Weapon stats always come from the server's `WEAPON_BY_ID` + `effectiveWeapon` (`makeWeapon`); only ids, ammo and camo are copied.
+- Pack-a-Punch (killstreak, a timed buff on the player): `spawnDrop` always drops the plain gun, its own camo back and its ammo clamped to the normal magazine and reserve; a buffed player who takes a gun gets it packed by the killstreaks feature.
 - Entities: kind `pickups_weapon`, `s = { w, a, c, l, m, r, o }` (weapon, attachments csv, camo, landed, mag, reserve, who dropped it); server data in `entity.data` (`DropData`).
 - Events (declared in drops.ts): `pickups.dropped {player, weapon, entity, reason}`, `pickups.swapped {player, taken, dropped, slot}`, `pickups.ammo {player, weapon, amount}`. A swap of the gun in hand also emits core `weaponSwitch`.
 - Feature messages: `pickups.swapped {taken, dropped, slot}`, `pickups.ammo {weapon, amount}` (to the player).
