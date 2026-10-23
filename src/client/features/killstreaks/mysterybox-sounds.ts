@@ -10,6 +10,7 @@
  * - `ks_mbox_beam`: the beam of light shooting up, a rising hum.
  * - `ks_mbox_open`: the lid creaking open with a shimmer.
  * - `ks_mbox_whoosh`: the box flying off up the beam.
+ * - `ks_mbox_byebye`: the loaned wonder weapon taken back, a goofy "bye-bye" and a cackle.
  */
 import { sfx } from '../../game/audio';
 
@@ -111,5 +112,32 @@ sfx.register('ks_mbox_whoosh', (ctx) => {
     y += (noise() - y) * (0.05 + 0.3 * k);
     ph += (300 + 900 * k) / sr;
     return (y * 1.6 + Math.sin(2 * Math.PI * ph) * 0.15) * Math.sin(k * Math.PI) * 0.8;
+  });
+});
+
+/**
+ * The box taking its weapon back: a goofy, original synthesized "bye-bye" (two falling vowel-ish
+ * syllables from a buzzy voice through two formants) and a little cackle after.
+ */
+sfx.register('ks_mbox_byebye', (ctx) => {
+  let ph = 0;
+  let y1 = 0;
+  let y2 = 0;
+  // [start, length, pitch from, pitch to]: "bah-", "-bye", then three "ha"s.
+  const syl: [number, number, number, number][] = [[0, 0.22, 260, 230], [0.26, 0.4, 300, 150], [0.75, 0.09, 330, 320], [0.88, 0.09, 310, 300], [1.01, 0.12, 290, 250]];
+  return tone(ctx, 1.25, (t, _i, sr) => {
+    const s = syl.find(([a, l]) => t >= a && t < a + l);
+    if (!s) return 0;
+    const k = (t - s[0]) / s[1];
+    const f = s[2] + (s[3] - s[2]) * k;
+    ph += f / sr;
+    const buzz = (ph % 1) * 2 - 1;
+    // Two one-pole resonators (the "a" to "i" of bye) shape the buzz into a voice.
+    const f1 = 700 - 300 * k;
+    const f2 = 1200 + 900 * k;
+    y1 += (buzz - y1) * Math.min(1, (f1 / sr) * 6);
+    y2 += (buzz - y2) * Math.min(1, (f2 / sr) * 6);
+    const env = Math.min(1, k / 0.08) * Math.min(1, (1 - k) / 0.2);
+    return (y1 * 0.6 + (buzz - y2) * 0.25 + noise() * 0.02) * env;
   });
 });

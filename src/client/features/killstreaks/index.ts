@@ -27,6 +27,7 @@ import './valkyrie';
 import './glitch';
 // After those too: the Mystery Box's sky flicker uses `renderer.white` only when nobody else does.
 import './mysterybox';
+import './mysterybox-loan';
 
 export { ksClient, streakName } from './store';
 export { tacmapOpen } from './tacmap';

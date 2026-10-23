@@ -369,6 +369,7 @@ export const SFX_SYNTH_ONLY: Record<string, string> = {
   ks_mbox_beam: 'Mystery Box light beam: synthesized rising hum',
   ks_mbox_open: 'Mystery Box lid: synthesized creak and shimmer',
   ks_mbox_whoosh: 'Mystery Box flying away: synthesized rising whoosh',
+  ks_mbox_byebye: 'Mystery Box loan running out: an original synthesized "bye-bye" and cackle',
   // Zombies (all original and synthesized).
   'zombies.round_start': 'Zombies round start stinger: an original synthesized bell toll and drone (no Zombies music)',
   'zombies.round_end': 'Zombies round end stinger: original synthesized bells',

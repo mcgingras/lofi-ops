@@ -15,8 +15,14 @@
  * settles a beam of light shoots up, the sky flickers, lightning strikes the spot and the box rides
  * the beam down and crashes in with a burst of light and sparks (crushing anyone under it). The
  * owner holds USE at the box to open it, then USE again takes the weapon into the hand they hold
- * (their old gun drops, like a weapon pickup). Enemies see the beam and the box but can't open it
- * or take its weapon. After a take, or a timeout, the box flies up the beam and is gone.
+ * (their old gun is put away). Enemies see the beam and the box but can't open it or take its
+ * weapon. After a take, or a timeout, the box flies up the beam and is gone.
+ *
+ * The wonder weapon is on loan: it lasts WONDER_LOAN.sec (60 s) from the take, and the clock keeps
+ * running through death (the owner respawns holding it, and it never drops as a pickup while the
+ * clock runs). When it runs out the gun is taken away and the old one comes back, primary in hand.
+ * The HUD counts it down beside the weapon name, ticks through the last WONDER_LOAN.warnSec and the
+ * box laughs "bye-bye" as it goes.
  */
 import { WONDER_WEAPON_IDS, type WonderWeaponId } from './wonder';
 
@@ -60,6 +66,19 @@ export const MYSTERY_BOX = {
   /** Box size (m): BO1's chest is long and narrow. */
   size: { w: 1.25, h: 0.55, d: 0.6 },
 } as const;
+
+/** The Mystery Box's wonder weapon is a loan: seconds it lasts (running through death) and the warning at the end. */
+export const WONDER_LOAN = { sec: 60, warnSec: 5 } as const;
+
+/** Seconds left on a loan ending at `until` (room time), never negative. */
+export const loanLeft = (until: number, now: number): number => Math.max(0, until - now);
+
+declare module '../protocol' {
+  interface FeatureMessages {
+    /** To the owner: their Mystery Box wonder weapon `w` is on loan until room time `until` (`w` null: the loan is over); `slot`: the server put this slot in hand (follow it). */
+    'killstreaks.wonderLoan': { w: string | null; until: number; slot?: number };
+  }
+}
 
 /** BO1's waits between the 40 weapon changes, a fifth quicker. The last change shows the result. */
 export const BOX_CYCLE_WAITS: readonly number[] = [...Array(20).fill(0.04), ...Array(10).fill(0.08), ...Array(5).fill(0.16), ...Array(3).fill(0.24)].map((w) => Math.round(w * 1000) / 1000);

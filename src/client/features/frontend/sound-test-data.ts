@@ -89,6 +89,7 @@ export const IN_GAME_VOLUME: Record<string, number> = {
   ks_mbox_jingle: 1.2,
   ks_mbox_tick: 0.6,
   ks_mbox_thunder: 2.2,
+  ks_mbox_byebye: 1.1,
   ks_mbox_land: 1.6,
   ks_mbox_beam: 1.2,
   ks_mbox_open: 1,
