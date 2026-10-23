@@ -143,7 +143,7 @@ export function fire(room: Room, p: PlayerState, req: ShotRequest): FireResult {
   const walls = first.walls.flatMap((w) => [w.point, w.exit]);
   const wire = walls.flatMap((v) => [q3(v.x), q3(v.y), q3(v.z)]);
   room.recordShot({ p: p.id, o: [q3(origin.x), q3(origin.y), q3(origin.z)], e: [q3(end.x), q3(end.y), q3(end.z)], w: def.base.id, ...(hitAny ? { h: 1 as const } : {}), ...(wire.length ? { x: wire } : {}) });
-  room.bus.emit('fire', { player: p, weapon: def.base.id, origin, dir, hits, end, walls });
+  room.bus.emit('fire', { player: p, weapon: def.base.id, origin, dir, hits, end, walls, time: viewTime });
   if (w.mag <= 0) startReload(room, p);
   return { ok: true };
 }
@@ -277,7 +277,9 @@ export function kill(room: Room, victim: PlayerState, attacker: PlayerState | nu
     attackerStreak: credited ? attacker.stats.streak : 0,
     penetrated,
   });
-  room.broadcast({ t: 'killfeed', attacker: attacker?.id ?? null, victim: victim.id, weapon: how.weapon, headshot, means: how.means, attackerTeam: attacker?.team ?? null, victimTeam: victim.team, ...(penetrated ? { pen: true } : {}) });
+  // A Pack-a-Punched gun shows its upgraded name in the killfeed (the attacker still carries it packed).
+  const pap = !!attacker?.weapons.some((w) => w.pap && w.def.base.id === how.weapon);
+  room.broadcast({ t: 'killfeed', attacker: attacker?.id ?? null, victim: victim.id, weapon: how.weapon, headshot, means: how.means, attackerTeam: attacker?.team ?? null, victimTeam: victim.team, ...(penetrated ? { pen: true } : {}), ...(pap ? { pap: true } : {}) });
   victim.session?.send({ t: 'died', attacker: attacker?.id ?? null, weapon: how.weapon, respawnAt: victim.respawnAt });
   room.broadcastScore();
 }

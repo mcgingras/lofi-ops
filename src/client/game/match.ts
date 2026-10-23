@@ -50,6 +50,8 @@ export interface KillfeedEntry {
   victimTeam: Team | null;
   /** Through a wall (bullet penetration). */
   pen?: boolean;
+  /** The gun was Pack-a-Punched: show its upgraded name. */
+  pap?: boolean;
 }
 
 export interface DeathInfo {
@@ -208,6 +210,15 @@ export class Match {
     return e;
   }
 
+  /**
+   * Knock the view (radians, added to the recoil offset, which recovers at the held weapon's rate):
+   * a feature's hit reaction (Pack-a-Punch's staggering rounds).
+   */
+  kick(pitch: number, yaw: number): void {
+    this.recoil.pitch += pitch;
+    this.recoil.yaw += yaw;
+  }
+
   /** Displayed ammo for a slot (server value minus shots it hasn't processed, reload predicted). */
   ammo(slot = this.slot): { mag: number; reserve: number } {
     const w = this.me?.weapons[slot];
@@ -360,7 +371,7 @@ export class Match {
         this.results = m.results;
       }),
       s.on('killfeed', (m) => {
-        this.killfeed.unshift({ t: this.time, attacker: m.attacker, victim: m.victim, weapon: m.weapon, headshot: m.headshot, means: m.means, attackerTeam: m.attackerTeam, victimTeam: m.victimTeam, ...(m.pen ? { pen: true } : {}) });
+        this.killfeed.unshift({ t: this.time, attacker: m.attacker, victim: m.victim, weapon: m.weapon, headshot: m.headshot, means: m.means, attackerTeam: m.attackerTeam, victimTeam: m.victimTeam, ...(m.pen ? { pen: true } : {}), ...(m.pap ? { pap: true } : {}) });
         if (this.killfeed.length > 6) this.killfeed.length = 6;
       }),
       s.on('hit', (m) => {

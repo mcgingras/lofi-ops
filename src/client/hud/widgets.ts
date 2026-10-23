@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { EQUIPMENT_BY_ID } from '../../shared/defs/equipment';
 import { KILLSTREAK_BY_ID } from '../../shared/defs/killstreaks';
 import { teamNamesFor } from '../../shared/defs/modes';
+import { papName } from '../../shared/defs/pack-a-punch';
 import { WEAPON_BY_ID } from '../../shared/defs/weapons';
 import { TEAM_NAMES } from '../../shared/constants';
 import { inputDevice } from '../game/gamepad';
@@ -291,7 +292,7 @@ registerHudWidget(
       let x = W - 8 * u;
       const vw = txt(g, m.nameOf(f.victim), x, y, 8, victimCol, 'right', u);
       x -= vw + 4 * u;
-      const wtxt = `[${weaponName(f.weapon).toUpperCase()}${f.headshot ? ' HS' : ''}]`;
+      const wtxt = `[${(f.pap ? papName(f.weapon) : weaponName(f.weapon)).toUpperCase()}${f.headshot ? ' HS' : ''}]`;
       const ww = txt(g, wtxt, x, y, 8, C.paper, 'right', u);
       x -= ww + 4 * u;
       const icon = killfeedIcons.get(f.weapon);

@@ -104,8 +104,8 @@ export interface RoomEvents<P> {
   /** After health was reduced. `health` is what's left (0 = this damage killed). */
   damage: DamageInfo<P> & { health: number };
   death: DeathEvent<P>;
-  /** A shot was fired (one per trigger pull; pellets share it). */
-  fire: { player: P; weapon: string; origin: Vec3; dir: Vec3; hits: { victim: P; part: HitPart; damage: number; penetrated?: boolean }[]; end: Vec3; walls?: Vec3[] };
+  /** A shot was fired (one per trigger pull; pellets share it). `time`: the room time hitscan was checked at (lag compensation; core hitscan only). */
+  fire: { player: P; weapon: string; origin: Vec3; dir: Vec3; hits: { victim: P; part: HitPart; damage: number; penetrated?: boolean }[]; end: Vec3; walls?: Vec3[]; time?: number };
   reload: { player: P; weapon: string; empty: boolean };
   weaponSwitch: { player: P; slot: number; weapon: string };
   /** Edge-triggered buttons per applied input command (melee, lethal, streak use...). */
