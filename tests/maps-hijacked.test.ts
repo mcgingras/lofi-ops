@@ -41,8 +41,8 @@ describe('hijacked registry and textures', () => {
     const def = MAP_BY_ID.get('hijacked')!;
     expect(def.inspiredBy).toMatch(/Black Ops II/);
     expect(def.size).toBe('small');
-    // Zombies is only on maps with a Zombies layer (src/shared/maps/zombies/).
-    for (const mode of MODES) if (mode.id !== 'zombies') expect(def.modes).toContain(mode.id);
+    // Zombies is only on maps with a Zombies layer (src/shared/maps/zombies/); Blackout has its own map.
+    for (const mode of MODES) if (mode.id !== 'zombies' && mode.id !== 'blackout') expect(def.modes).toContain(mode.id);
   });
 
   it('every material and sky has a client recipe, and every photo they need is in assets/textures', () => {

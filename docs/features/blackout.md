@@ -118,7 +118,7 @@ names and backfill work as usual.
     recoil, flinch) with real hitscan `room.fire`.
   - Far bots plan and probe less, and never trace shots. Fights between far bots are resolved by
     the game every 0.5 s (`farFights`). Each far bot on the ground picks the nearest far bot
-    within 45 m. The pair decides to fight 55 % of the time, re-rolled with one cached line of
+    within 45 m. The pair decides to fight 28 % of the time (near bots 20 %), re-rolled with one cached line of
     sight check every 2 s. Damage is the gun's damage at that range x fire rate x a hit chance
     falling with distance and growing with aim skill, credited as a real kill. Ammo is spent. A
     knife hits within 2 m on 4 % of the checks. Nobody fights in their first 4 s on the ground.

@@ -39,7 +39,7 @@ export const MAX_ON_HUMAN = 3;
 /** How far a bot looks for loot (m) and how long it gives a loot goal (s). */
 const LOOT_RANGE = 45;
 /** Odds that a bot takes on another bot it sees (re-rolled every few seconds; far fights use the same). */
-export const FIGHT_ODDS = 0.35;
+export const FIGHT_ODDS = 0.28;
 /** Near bots see and shoot for real (hitscan, the aim controller), which kills faster: lower odds. */
 export const NEAR_FIGHT_ODDS = 0.2;
 
