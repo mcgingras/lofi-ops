@@ -6,6 +6,7 @@
  */
 import { rayHitboxes, type HitPart } from '../../../../shared/collision';
 import { shotSeed, spreadDegrees, spreadDirection, stanceSpread } from '../../../../shared/ballistics';
+import { papWonder } from '../../../../shared/defs/pack-a-punch';
 import { RAYGUN, raygunSplash, WONDER_ENTITY } from '../../../../shared/defs/wonder';
 import { normalize, type Vec3 } from '../../../../shared/math';
 import { moveHitboxes } from '../../../../shared/movement';
@@ -19,6 +20,8 @@ interface BoltData {
   vel: Vec3;
   owner: string;
   born: number;
+  /** Fired from a Pack-a-Punched gun with red bolts (Porter's X2): drawn red. */
+  red?: boolean;
 }
 
 /**
@@ -53,8 +56,9 @@ export const raygunBehavior: WeaponBehavior = {
     const spread = spreadDegrees(weapon.def, player.move.ads, moving, room.modifiers.mul('spreadMultiplier', player) * stanceSpread(player.move));
     const aim = boltLead(room, player, shot.origin, shot.dir);
     const dir = spreadDirection(aim, spread, shotSeed(player.seed, shot.shot, 0));
-    const data: BoltData = { vel: { x: dir.x * RAYGUN.speed, y: dir.y * RAYGUN.speed, z: dir.z * RAYGUN.speed }, owner: player.id, born: room.time };
-    room.entities.add({ kind: WONDER_ENTITY.bolt, x: shot.origin.x, y: shot.origin.y, z: shot.origin.z, yaw: Math.atan2(-dir.x, -dir.z), owner: player.id, team: player.team, s: { b: Math.round(room.time * 1000) / 1000, pt: Math.round(Math.asin(dir.y) * 100) / 100 }, data });
+    const red = !!weapon.pap && !!papWonder('raygun').red;
+    const data: BoltData = { vel: { x: dir.x * RAYGUN.speed, y: dir.y * RAYGUN.speed, z: dir.z * RAYGUN.speed }, owner: player.id, born: room.time, ...(red ? { red } : {}) };
+    room.entities.add({ kind: WONDER_ENTITY.bolt, x: shot.origin.x, y: shot.origin.y, z: shot.origin.z, yaw: Math.atan2(-dir.x, -dir.z), owner: player.id, team: player.team, s: { b: Math.round(room.time * 1000) / 1000, pt: Math.round(Math.asin(dir.y) * 100) / 100, ...(red ? { u: 1 } : {}) }, data });
     // The killcam and stats see the pull now, ending where the bolt would land on a straight line.
     const wall = room.world.raycast(shot.origin, dir, RAYGUN.speed * RAYGUN.life, 'bullets');
     let t = wall ? wall.t : RAYGUN.speed * RAYGUN.life;
@@ -83,7 +87,7 @@ export function raygunSplashAt(room: Room, at: Vec3, owner: PlayerState | null, 
 function impact(room: Room, e: Entity, b: BoltData, at: Vec3, victim: { q: PlayerState; part: HitPart } | null) {
   room.entities.remove(e.id);
   const owner = room.players.get(b.owner) ?? null;
-  wonderFx(room, { k: 'splash', p: b.owner, x: Math.round(at.x * 100) / 100, y: Math.round(at.y * 100) / 100, z: Math.round(at.z * 100) / 100 });
+  wonderFx(room, { k: 'splash', p: b.owner, x: Math.round(at.x * 100) / 100, y: Math.round(at.y * 100) / 100, z: Math.round(at.z * 100) / 100, ...(b.red ? { u: 1 as const } : {}) });
   if (victim) {
     const dist = owner ? Math.hypot(owner.move.x - at.x, owner.move.z - at.z) : 0;
     room.damage({ victim: victim.q, attacker: owner, amount: RAYGUN.direct, weapon: 'raygun', part: victim.part, means: 'bullet', from: owner ? { x: owner.move.x, y: at.y, z: owner.move.z } : at, distance: dist });

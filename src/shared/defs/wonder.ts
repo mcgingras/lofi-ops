@@ -318,16 +318,17 @@ export const WONDER_DROP_LIFE_SEC = 20;
  * One-shot effects for everyone (`weapons.wonderFx`): the Ray Gun's splash, the Thundergun's
  * blast, a lightning arc (one per hop), a frost blast and a shatter, the Scavenger's explosion, the
  * Baby Gun's beam and a kick, a zap bolt (`s` = which pistol: 0 right, 1 left), the Wave Gun's
- * beam and a pop. `p` = shooter id.
+ * beam and a pop. `p` = shooter id. `u` = a Pack-a-Punched look: the X2's splash is red, the Zeus
+ * Cannon's blast and the Hyena's explosion scale by it.
  */
 export type WonderFx =
-  | { k: 'splash'; p: string; x: number; y: number; z: number }
-  | { k: 'blast'; p: string; o: [number, number, number]; d: [number, number, number] }
+  | { k: 'splash'; p: string; x: number; y: number; z: number; u?: 1 }
+  | { k: 'blast'; p: string; o: [number, number, number]; d: [number, number, number]; u?: number }
   | { k: 'arc'; p: string; o: [number, number, number]; e: [number, number, number]; hop: number; hit: boolean }
   | { k: 'frost'; p: string; o: [number, number, number]; d: [number, number, number] }
   | { k: 'shatter'; p: string; v: string; x: number; y: number; z: number }
   | { k: 'fling'; v: string; x: number; y: number; z: number }
-  | { k: 'boom'; p: string; x: number; y: number; z: number }
+  | { k: 'boom'; p: string; x: number; y: number; z: number; u?: number }
   | { k: 'shrink'; p: string; o: [number, number, number]; e: [number, number, number]; hit: boolean }
   | { k: 'kick'; p: string | null; v: string; x: number; y: number; z: number }
   | { k: 'zap'; p: string; o: [number, number, number]; e: [number, number, number]; hit: boolean; s: number }

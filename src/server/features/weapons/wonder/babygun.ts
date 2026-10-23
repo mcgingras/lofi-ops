@@ -9,6 +9,7 @@
  * into them kicks them to death (`kick` effect, credited to the kicker as a Baby Gun kill).
  */
 import { shotSeed, spreadDegrees, spreadDirection, stanceSpread } from '../../../../shared/ballistics';
+import { papWonder } from '../../../../shared/defs/pack-a-punch';
 import { BABY_GUN, WONDER_ENTITY } from '../../../../shared/defs/wonder';
 import type { Vec3 } from '../../../../shared/math';
 import type { WeaponBehavior } from '../../../combat';
@@ -36,7 +37,8 @@ export const babygunBehavior: WeaponBehavior = {
     const spread = spreadDegrees(weapon.def, player.move.ads, moving, room.modifiers.mul('spreadMultiplier', player) * stanceSpread(player.move));
     const dir = spreadDirection(shot.dir, spread, shotSeed(player.seed, shot.shot, 0));
     const o = shot.origin;
-    const B = BABY_GUN;
+    // Packed (Fractalizer): the pulse reaches everyone within `shrinkR` of where it lands.
+    const B = weapon.pap ? { ...BABY_GUN, splashR: Math.max(BABY_GUN.splashR, papWonder('babygun').shrinkR ?? 0) } : BABY_GUN;
     const strike = lineStrike(room, player, o, dir, B);
     const caught = new Set<PlayerState>();
     if (strike.victim) caught.add(strike.victim);
