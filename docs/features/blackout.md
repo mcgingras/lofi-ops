@@ -44,7 +44,7 @@ scripts/blackout-sim.ts            bot behaviour over a bots-only match
 | Plane | Everyone spawns aboard (`rules.spawnPoints` = the line's start). The line is random per match and seeded: it crosses the island and passes within a third of the half-size of the centre. It flies at 150 m and 18 m/s, about 30 s to cross. The doors open after 2 s. Anyone still aboard is pushed out 2 s before the end. While aboard you are alive, can't be hurt, and fly with the plane: `glide` all zeros keeps the velocity, so the client predicts it exactly. |
 | Drop | Jumping keeps the plane's heading at up to 14 m/s. In freefall gravity is 22, the fall is capped at 44 m/s, and you steer at up to 16 m/s. The chute opens at 38 m above the ground, or earlier with Space (above 8 m). It brakes the fall to 6 m/s and steers at up to 11 m/s. Touching the ground lands you. No shooting or ADS in the air. |
 | Loadout | A knife in both slots. No perks, streaks or equipment. The slots fill from the floor. |
-| Loot | Spots on the map's floors, about one per 75 m² of town, indoors first and 2.5 m apart, plus about 90 on open ground. Each gets an item with 82 % chance, so about 640 items per match, capped at 1100 loot entities. Rolls are 45 % weapons: rarity common / rare / legendary (60/30/10) with 0 / 1 / 2 attachments, and a 3 % Ray Gun chance on legendary rolls. The rest are items: ammo by type (pistol, smg, rifle, sniper, shells), armour level 1-3, bandages, med kits and frags. Guns are `pickups_weapon` drops that never expire (`setPickupRules(room, { keep, cap })`). Items are `blackout_loot` entities. The dead drop their other gun, a heal and their vest. |
+| Loot | Spots on the map's floors, about one per 75 m² of town, indoors first and 2.5 m apart, plus about 90 on open ground. Each gets an item with 82 % chance, so about 640 items per match (the benchmark seed: 644), capped at 1100 loot entities. Rolls are 45 % weapons: rarity common / rare / legendary (60/30/10) with 0 / 1 / 2 attachments, and a 3 % Ray Gun chance on legendary rolls. The rest are items: ammo by type (pistol, smg, rifle, sniper, shells), armour level 1-3, bandages, med kits and frags. Guns are `pickups_weapon` drops that never expire (`setPickupRules(room, { keep, cap })`). Items are `blackout_loot` entities. The dead drop their other gun, a heal and their vest. |
 | Armour | 50 points per level. It soaks 65 % of bullet, blast, knife and fire damage while it lasts, but never the circle's. |
 | Health | 100, no regeneration (`regenDelayMultiplier` 1e6). Bandage: +25 over 2.5 s, carry 6. Med kit: +100 over 5 s, carry 2. |
 | Circle | It starts covering the whole island, then runs 7 phases of wait-then-shrink over 13.1 min: radii 210, 135, 85, 52, 30, 14, 0 m; damage 1, 2, 4, 6, 9, 13, 20 HP/s; 30 HP/s once closed. Each next circle lies inside the last, its centre seeded. Damage is applied once a second to everyone outside. |
@@ -144,9 +144,13 @@ The server runs at 60 Hz with 20 Hz snapshots, as in every mode.
   - Soldiers beyond 70 m are one instanced box; beyond 160 m they are not drawn.
   - Map chunks are culled beyond the draw distance.
   - Loot items are a box and a glow.
-- **Measured.** `npx tsx scripts/blackout-bench.ts` (1 fake human + 99 bots, a whole match) and
-  `tests/blackout.test.ts` "a full room" (40 s on a CI budget). The numbers are in the report of
-  the commit that added this file (tick ms, snapshot bytes, memory).
+- **Measured** (`npx tsx scripts/blackout-bench.ts`: 1 fake human + 99 bots, a whole match, Apple-silicon laptop, quiet machine):
+  - Tick: 0.93 ms on average over the whole match. The first 3 minutes, with 60-100 alive, average 1.4-5.2 ms (p95 2.6-20 ms; the worst single tick 150 ms, a GC pause). Blackout's own per-tick work is 0.01-0.2 ms; the rest is the core simulation of 100 bodies and the other features.
+  - Snapshots to the human: 4.4-10.5 KB each, 87-205 KB/s. Join and kill bursts come on top: the 100-player `roster` is about 400 KB once at the start, and `score` is about 6 KB per kill (core broadcasts).
+  - Memory: RSS about 370 MB. The V8 heap swings 70-240 MB with garbage collection; the live heap is about 70-90 MB, of which about 37 MB is map data.
+  - On a loaded machine (load average 300) the same run averaged 5-11 ms with 300-900 ms spikes. A shared vCPU is closer to that than to the laptop, so a 1 GB shared-cpu-2x or a performance-1x is recommended for this mode (docs/DEPLOY.md is unchanged).
+  - Client: headless Chrome with SwiftShader (software GL) draws Blackout at 11-14 fps, the same as Nuketown in FFA on the same setup (13 fps). Up to about 1200 chunk meshes are visible, against 87 on Nuketown, so a real GPU's draw-call budget is the thing to watch.
+  - `tests/blackout.test.ts` "a full room" times 40 s of a 100-player match against a CI budget (average under 20 ms).
 
 ## Core touch points (minimal, called out)
 
