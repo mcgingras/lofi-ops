@@ -14,7 +14,7 @@
  * - Prediction and HUD (bigger magazine, faster reload, the new name in the ammo box) come from
  *   `Match.weapon()`, which packs a weapon whose camo is `pap`.
  */
-import { PACK_A_PUNCH, PAP_CAMO, papDip } from '../../../shared/defs/pack-a-punch';
+import { PACK_A_PUNCH, PAP_CAMO, papDip, papEffectText } from '../../../shared/defs/pack-a-punch';
 import { sfx } from '../../game/audio';
 import type { Match } from '../../game/match';
 import { textWidth, txt, unit, HUD_COLORS as C } from '../../hud/draw';
@@ -42,9 +42,9 @@ registerTexture(PAP_TEXTURE, {
 
 export const papClient = {
   /** My upgrade in progress (room times from the server). */
-  mine: null as { t0: number; dur: number; name: string; dinged: boolean } | null,
-  /** The toast: the new name (or the expiry), from local match time `t`. */
-  toast: null as { name: string; t: number; ended?: boolean } | null,
+  mine: null as { t0: number; dur: number; name: string; fx: string; dinged: boolean } | null,
+  /** The toast: the new name and its signature effect (or the expiry), from local match time `t`. */
+  toast: null as { name: string; fx?: string; t: number; ended?: boolean } | null,
   camoStep: -1,
   pixels: null as Uint8ClampedArray | null,
 };
@@ -53,7 +53,7 @@ onFeature('killstreaks.pap', (d) => {
   const m = currentMatch();
   if (!m) return;
   if (d.p === m.myId) {
-    papClient.mine = { t0: d.t0, dur: d.dur, name: d.name, dinged: false };
+    papClient.mine = { t0: d.t0, dur: d.dur, name: d.name, fx: d.w ? papEffectText(d.w) : '', dinged: false };
     sfx.play('ks_pap_jingle', { volume: 0.9 });
     return;
   }
@@ -78,7 +78,8 @@ onFeature('killstreaks.packed', (d) => {
   const m = currentMatch();
   if (!m || d.p === m.myId) return; // mine: the toast as the gun comes back up
   const f = !m.isEnemy(d.p);
-  announce(`${f ? 'Friendly' : 'Enemy'} ${m.nameOf(d.p)}: ${d.name}`, f ? 'friend' : 'enemy');
+  const fx = d.w ? papEffectText(d.w) : '';
+  announce(`${f ? 'Friendly' : 'Enemy'} ${m.nameOf(d.p)}: ${d.name}${fx ? ` (${fx})` : ''}`, f ? 'friend' : 'enemy');
 });
 
 /** Repaint the camo texture when its animation step changes. */
@@ -110,7 +111,7 @@ function dipViewmodel(m: Match): void {
   if (!s.dinged && t >= s.dur - PACK_A_PUNCH.raiseSec) {
     s.dinged = true;
     sfx.play('ks_pap_ding', { volume: 0.9 });
-    papClient.toast = { name: s.name, t: m.time };
+    papClient.toast = { name: s.name, ...(s.fx ? { fx: s.fx } : {}), t: m.time };
   }
   const g = m.viewmodel.root.children[0];
   if (!g || t < 0 || t > s.dur) return;
@@ -141,7 +142,7 @@ registerMatchHook('killstreaks.pap', {
   },
 });
 
-// The toast: "PACK-A-PUNCHED" over the new name, the name flickering purple and blue.
+// The toast: "PACK-A-PUNCHED" over the new name (flickering purple and blue) and its effect.
 registerHudWidget(
   'killstreaks.papToast',
   (g, W, H) => {
@@ -162,6 +163,8 @@ registerHudWidget(
     txt(g, 'PACK-A-PUNCHED', W / 2, y, 8, C.paper, 'center', u);
     const col = Math.floor(age * 8) % 2 ? '#b46cff' : '#6ab8ff';
     txt(g, s.name.toUpperCase(), W / 2, y + 12 * u, 16, age < 0.15 ? '#f2d2ff' : col, 'center', u);
+    // Its signature effect underneath: "INCENDIARY ROUNDS".
+    if (s.fx) txt(g, s.fx.toUpperCase(), W / 2, y + 31 * u, 8, C.paper, 'center', u);
   },
   87,
 );

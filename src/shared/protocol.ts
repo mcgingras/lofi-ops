@@ -236,7 +236,7 @@ export interface ServerMessages {
     /** True when the recipient's radar is jammed. */
     jammed: boolean;
   };
-  killfeed: { attacker: string | null; victim: string; weapon: string; headshot: boolean; means: string; attackerTeam: Team | null; victimTeam: Team | null; pen?: boolean };
+  killfeed: { attacker: string | null; victim: string; weapon: string; headshot: boolean; means: string; attackerTeam: Team | null; victimTeam: Team | null; pen?: boolean; pap?: boolean };
   /** To the shooter: hitmarker. */
   hit: { victim: string; part: string; damage: number; kill: boolean; pen?: boolean };
   /** To the victim: damage direction. */

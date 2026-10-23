@@ -35,6 +35,9 @@ import { flushState, grant, ksOf, markDirty, onKill, resetPlayer, stateMsg } fro
 import { crateInReach, onUsePressed } from './streaks/package';
 import { wireMysteryBox } from './streaks/mysterybox';
 import { wirePackAPunch } from './streaks/packapunch';
+import { igniteBurn, shatterTarget } from './streaks/packapunch-effects';
+import { WEAPON_BY_ID } from '../../../shared/defs/weapons';
+import { makeWeapon } from '../../player';
 import { registerNukeModifiers } from './streaks/nuke';
 import { registerRadarModifiers } from './streaks/radar';
 import { pushGlitch, registerGlitchModifiers } from './streaks/glitch';
@@ -204,8 +207,17 @@ const feature: Feature = {
         const p = ctx.player;
         const room = ctx.room;
         if (!p || !room) throw new RpcError('not_in_match');
-        const d = (data ?? {}) as { id?: unknown; bots?: unknown };
+        const d = (data ?? {}) as { id?: unknown; bots?: unknown; weapon?: unknown; selfFx?: unknown };
         if (typeof d.id === 'string' && KILLSTREAK_BY_ID.has(d.id)) grant(room, p, d.id);
+        if (typeof d.weapon === 'string' && WEAPON_BY_ID.get(d.weapon)?.slot === 'primary') {
+          p.weapons[0] = makeWeapon({ weapon: d.weapon, attachments: [], camo: 'none' }, d.weapon);
+          if (p.weapons.length > 2) p.weapons.length = 2;
+          p.slot = 0;
+          p.swapEnd = room.time + 0.3;
+          p.reloadEnd = 0;
+        }
+        if (d.selfFx === 'burn') igniteBurn(room, p, p, 'ak47', { kind: 'burn', damage: 1, sec: 8 });
+        if (d.selfFx === 'shatter') shatterTarget(room, p, p, { kind: 'shatter', mult: 1, sec: 8 });
         const n = typeof d.bots === 'number' ? Math.min(8, Math.max(0, Math.floor(d.bots))) : 0;
         for (let i = 0; i < n; i++) room.addBot({ team: room.mode.teams ? (p.team === 0 ? 1 : 0) : null });
         return { ready: [...ksOf(p).ready] };

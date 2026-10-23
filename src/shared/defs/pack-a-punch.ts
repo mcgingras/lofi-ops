@@ -28,7 +28,11 @@
  * `sanitizeLoadout` refuses it in a class: it is not a CAMOS entry).
  */
 import { effectiveWeapon, type EffectiveWeapon } from './attachments';
+import './pap-effects';
+import type { PapEffect, PapEffectKind, PapEffectOf } from './pap-effects';
 import { WEAPON_BY_ID, type WeaponDef } from './weapons';
+
+export type { PapEffect, PapEffectKind } from './pap-effects';
 
 export const PAP_ID = 'pack_a_punch';
 /**
@@ -63,70 +67,97 @@ export const PACK_A_PUNCH = {
 } as const;
 
 /** Small explosive rounds (Cobra's explosive tips, Mustang & Sally): a blast where the bullet stops. */
-export interface PapExplosive {
-  radius: number;
-  /** Damage at the centre and at the edge, before the upgrade's damage multiplier. */
-  max: number;
-  min: number;
-}
+export type PapExplosive = Omit<PapEffectOf<'explosive'>, 'kind'>;
 
 /**
- * Per-weapon Pack-a-Punch: the upgraded name and anything that differs from `PACK_A_PUNCH`. `tweak`
- * is a hook for changes the numbers can't express (it gets the packed def and returns overrides).
+ * Per-weapon Pack-a-Punch: the upgraded name, its signature `effect` (defs/pap-effects.ts) with a
+ * one-line `effectText` for menus and the toast, and anything that differs from `PACK_A_PUNCH`.
+ * `tweak` is a hook for changes the numbers can't express (it gets the packed def and returns
+ * overrides; the stat-only effects, laser / akimbo / flechette / double-tap, live there so the
+ * client's prediction follows them).
  */
 export interface PapOverride {
   name?: string;
+  effect?: PapEffect;
+  effectText?: string;
   damage?: number;
   mag?: number;
   reserve?: number;
   reload?: number;
   /** Cycle-rate multiplier (default: `slowRpmMult` for slow guns, else 1). */
   rpm?: number;
-  explosive?: PapExplosive;
   tweak?: (packed: EffectiveWeapon) => Partial<WeaponDef>;
 }
 
 /**
  * Upgraded names: BO1's where the gun was in BO1 Zombies (from memory of the Pack-a-Punch list),
- * invented in the same spirit for the rest (the MW2 guns, the AK-47, the ASP).
+ * invented in the same spirit for the rest (the MW2 guns, the AK-47, the ASP). Effects: one each,
+ * varied on purpose (see defs/pap-effects.ts for what each kind does).
  */
 export const PAP_WEAPONS: Record<string, PapOverride> = {
   // Assault rifles
-  m16: { name: 'Skullpiercer' },
-  famas: { name: 'G16-GL35' },
-  ak47: { name: "Reznov's Revenge" },
-  commando: { name: 'Predator' },
-  galil: { name: 'Lamentation' },
-  aug: { name: 'AUG-50M3' },
-  acr: { name: 'ACR Annihilator' },
-  m16a4: { name: 'Skullsplitter' },
+  m16: { name: 'Skullpiercer', effect: { kind: 'pierce', bodies: 1, keep: 0.8 }, effectText: 'piercing rounds', tweak: () => ({ penetration: 'large' }) },
+  famas: { name: 'G16-GL35', effect: { kind: 'launcher', weapon: 'gl', rounds: 3 }, effectText: 'underbarrel grenade launcher' },
+  ak47: { name: "Reznov's Revenge", effect: { kind: 'burn', damage: 15, sec: 2 }, effectText: 'incendiary rounds' },
+  commando: { name: 'Predator', effect: { kind: 'mark', sec: 5 }, effectText: 'marks targets through walls' },
+  galil: { name: 'Lamentation', effect: { kind: 'ricochet', keep: 0.5, range: 40 }, effectText: 'ricochet rounds' },
+  aug: { name: 'AUG-50M3', effect: { kind: 'launcher', weapon: 'masterkey', rounds: 4 }, effectText: 'underbarrel shotgun' },
+  acr: { name: 'ACR Annihilator', effect: { kind: 'stagger', kickDeg: 2.6, botFlinch: 3.5, botAimDeg: 3, sec: 0.6 }, effectText: 'staggering rounds' },
+  m16a4: { name: 'Skullsplitter', effect: { kind: 'headblast', radius: 3, max: 50, min: 15 }, effectText: 'exploding headshots' },
   // SMGs
-  mp5k: { name: 'MP115 Kollider' },
-  ak74u: { name: 'AK74fu2' },
-  mpl: { name: 'MPL-LF' },
+  mp5k: { name: 'MP115 Kollider', effect: { kind: 'zap', chance: 0.25, damage: 15, range: 4 }, effectText: 'chain zap' },
+  ak74u: {
+    name: 'AK74fu2',
+    effect: { kind: 'laser' },
+    effectText: 'laser: no hipfire spread, no recoil',
+    tweak: (d) => ({ spread: { hip: d.spread.ads, ads: d.spread.ads, move: 0 }, recoil: { vertical: 0, horizontal: 0, recovery: d.recoil.recovery } }),
+  },
+  mpl: {
+    name: 'MPL-LF',
+    effect: { kind: 'akimbo' },
+    effectText: 'dual wield',
+    damage: 1.25,
+    mag: 2,
+    rpm: 1.6,
+    tweak: (d) => ({ spread: { hip: d.spread.hip * 1.2, ads: d.spread.hip * 1.2, move: d.spread.move } }),
+  },
   // LMG
-  rpk: { name: 'R115 Resonator' },
+  rpk: { name: 'R115 Resonator', effect: { kind: 'shockwave', radius: 3, push: 6, slow: 0.6, sec: 1.5 }, effectText: 'kills release a shockwave' },
   // Snipers
-  l96a1: { name: 'Iceburg' },
-  dragunov: { name: 'D115 Disassembler' },
-  intervention: { name: 'Divine Intervention' },
+  l96a1: { name: 'Iceburg', effect: { kind: 'frost', frozenSec: 1 }, effectText: 'frost rounds' },
+  dragunov: { name: 'D115 Disassembler', effect: { kind: 'shatter', mult: 1.25, sec: 4 }, effectText: 'shatter rounds: +25% damage taken' },
+  intervention: { name: 'Divine Intervention', effect: { kind: 'collateral' }, effectText: 'collateral: through every body' },
   // Shotguns
-  olympia: { name: 'Hades', mag: 1 },
-  stakeout: { name: 'Raid' },
-  spas12: { name: 'SPAZ-24' },
+  olympia: { name: 'Hades', mag: 1, effect: { kind: 'burn', damage: 15, sec: 2 }, effectText: "dragon's breath" },
+  stakeout: {
+    name: 'Raid',
+    effect: { kind: 'flechette' },
+    effectText: 'flechettes: tight spread, long reach',
+    tweak: (d) => ({
+      spread: { hip: d.spread.hip * 0.4, ads: d.spread.ads * 0.38, move: d.spread.move * 0.6 },
+      damage: { ...d.damage, nearRange: d.damage.nearRange * 2.2, farRange: d.damage.farRange * 2.2 },
+      range: (d.range ?? 40) * 1.75,
+    }),
+  },
+  spas12: { name: 'SPAZ-24', effect: { kind: 'knockback', range: 8, push: 8, up: 2.5, sec: 0.35 }, effectText: 'knockback' },
   // Pistols: BO1's Mustang & Sally fire small grenades, the Cobra explosive tips. Both modest here.
-  m1911: { name: 'Mustang & Sally', damage: 1.25, explosive: { radius: 3, max: 30, min: 10 } },
-  python: { name: 'Cobra', damage: 1.4, mag: 2, explosive: { radius: 2.5, max: 18, min: 6 } },
-  asp: { name: 'Basilisk' },
+  m1911: { name: 'Mustang & Sally', damage: 1.25, effect: { kind: 'explosive', radius: 3, max: 30, min: 10 }, effectText: 'explosive rounds' },
+  python: { name: 'Cobra', damage: 1.4, mag: 2, effect: { kind: 'explosive', radius: 2.5, max: 18, min: 6 }, effectText: 'explosive tips' },
+  asp: {
+    name: 'Basilisk',
+    effect: { kind: 'doubletap' },
+    effectText: 'double-tap',
+    // Two rounds per pull, fast; the magazine keeps whole pairs.
+    tweak: (d) => ({ mode: 'burst', burst: 2, burstDelayMs: 140, rpm: Math.max(d.rpm, 1100), magazine: d.magazine + (d.magazine % 2) }),
+  },
   // Wonder weapons (BO1's upgraded magazines: X2 40, Zeus Cannon 4, DG-3 JZ 6).
-  raygun: { name: "Porter's X2 Ray Gun", mag: 2, reserve: 3 },
-  thundergun: { name: 'Zeus Cannon', mag: 2, reserve: 2 },
-  wunderwaffe: { name: 'Wunderwaffe DG-3 JZ', mag: 2, reserve: 2 },
-  wintershowl: { name: "Winter's Fury" },
-  // Wonder weapons another branch adds (names ready for when their ids land).
-  scavenger: { name: 'Hyena Infra-Dead' },
-  babygun: { name: 'Fractalizer' },
-  wavegun: { name: 'Max Wave Gun' },
+  raygun: { name: "Porter's X2 Ray Gun", mag: 2, reserve: 3, effect: { kind: 'wonder', red: true }, effectText: 'red bolts' },
+  thundergun: { name: 'Zeus Cannon', mag: 2, reserve: 2, effect: { kind: 'wonder', radiusMult: 1.5 }, effectText: 'a wider blast' },
+  wunderwaffe: { name: 'Wunderwaffe DG-3 JZ', mag: 2, reserve: 2, effect: { kind: 'wonder', hops: 4 }, effectText: '4 arcs' },
+  wintershowl: { name: "Winter's Fury", effect: { kind: 'wonder', freezeAll: true }, effectText: 'one blast freezes solid' },
+  scavenger: { name: 'Hyena Infra-Dead', effect: { kind: 'wonder', radiusMult: 1.4 }, effectText: 'a bigger blast' },
+  babygun: { name: 'Fractalizer', effect: { kind: 'wonder', shrinkR: 3 }, effectText: 'shrinks everyone near the hit' },
+  wavegun: { name: 'Max Wave Gun', effect: { kind: 'wonder', arcs: 3 }, effectText: 'zaps arc to 3' },
 };
 
 /** The upgraded name of a weapon (fallback: "<name> Upgraded"). */
@@ -144,8 +175,32 @@ export function isPackable(id: string): boolean {
 /** The damage multiplier a packed weapon deals. */
 export const papDamageMult = (id: string): number => PAP_WEAPONS[id]?.damage ?? PACK_A_PUNCH.damageMult;
 
-/** Explosive rounds of a packed weapon, if it has them. */
-export const papExplosive = (id: string): PapExplosive | null => PAP_WEAPONS[id]?.explosive ?? null;
+/** The signature effect of a packed weapon (null for a weapon without a row). */
+export const papEffect = (id: string): PapEffect | null => PAP_WEAPONS[id]?.effect ?? null;
+
+/** A packed weapon's effect if it is of kind `kind`. */
+export function papEffectOf<K extends PapEffectKind>(id: string, kind: K): PapEffectOf<K> | null {
+  const e = PAP_WEAPONS[id]?.effect;
+  return e && e.kind === kind ? (e as PapEffectOf<K>) : null;
+}
+
+/** The menu / toast one-liner of a packed weapon's effect ('' when none). */
+export const papEffectText = (id: string): string => PAP_WEAPONS[id]?.effectText ?? '';
+
+/** The toast line: "Reznov's Revenge: incendiary rounds" (just the name without an effect). */
+export function papToastLine(id: string): string {
+  const t = papEffectText(id);
+  return t ? `${papName(id)}: ${t}` : papName(id);
+}
+
+/** Explosive rounds of a packed weapon, if it has them (the `explosive` effect). */
+export function papExplosive(id: string): PapExplosive | null {
+  const e = papEffectOf(id, 'explosive');
+  return e ? { radius: e.radius, max: e.max, min: e.min } : null;
+}
+
+/** The wonder weapon touches of a packed wonder weapon (`{}` when it has none). */
+export const papWonder = (id: string): Omit<PapEffectOf<'wonder'>, 'kind'> => papEffectOf(id, 'wonder') ?? {};
 
 /** The cycle-rate multiplier of a packed weapon. */
 export function papRpmMult(def: Pick<WeaponDef, 'id' | 'rpm'>): number {

@@ -6,6 +6,7 @@
  * frozen shatters them (a kill). Frost thaws after a pause. Each frosted player carries a
  * `weapons.frost` entity (`s.p` their id, `s.f` frost) so everyone sees the ice.
  */
+import { papWonder } from '../../../../shared/defs/pack-a-punch';
 import { WINTERS_HOWL, WONDER_ENTITY, frostAdded, inTube } from '../../../../shared/defs/wonder';
 import type { HitPart } from '../../../../shared/collision';
 import type { WeaponBehavior } from '../../../combat';
@@ -16,8 +17,11 @@ import { bodyPoints, chest, emitFire, targetsOf, v3, wonderFx, wonderOf } from '
 /** Frost on `q` right now (0..1). */
 export const frostOf = (q: PlayerState): number => q.ext.wonder?.frost ?? 0;
 
-/** One blast landing on `q` from `by` at distance `d`: frost, or a shatter if they were frozen solid. Returns damage dealt. */
-export function frostHit(room: Room, q: PlayerState, by: PlayerState, d: number, from: { x: number; y: number; z: number }): number {
+/**
+ * One blast landing on `q` from `by` at distance `d`: frost, or a shatter if they were frozen solid.
+ * `full` (Winter's Fury, packed): the blast freezes solid at any distance. Returns damage dealt.
+ */
+export function frostHit(room: Room, q: PlayerState, by: PlayerState, d: number, from: { x: number; y: number; z: number }, full = false): number {
   const w = wonderOf(q);
   if (w.frost >= 1) {
     const c = chest(q);
@@ -25,7 +29,7 @@ export function frostHit(room: Room, q: PlayerState, by: PlayerState, d: number,
     if (!q.alive) wonderFx(room, { k: 'shatter', p: by.id, v: q.id, x: Math.round(c.x * 100) / 100, y: Math.round(c.y * 100) / 100, z: Math.round(c.z * 100) / 100 });
     return dealt;
   }
-  w.frost = Math.min(1, w.frost + frostAdded(d) * room.modifiers.mul('frostMultiplier', q));
+  w.frost = Math.min(1, w.frost + (full ? 1 : frostAdded(d)) * room.modifiers.mul('frostMultiplier', q));
   w.frostAt = room.time;
   if (w.frost >= 1) w.frozenUntil = room.time + WINTERS_HOWL.frozenSec;
   syncFrostEntity(room, q);
@@ -33,10 +37,11 @@ export function frostHit(room: Room, q: PlayerState, by: PlayerState, d: number,
 }
 
 export const winterBehavior: WeaponBehavior = {
-  fire(room, player, _weapon, shot) {
+  fire(room, player, weapon, shot) {
     const o = shot.origin;
     const dir = shot.dir;
     const W = WINTERS_HOWL;
+    const full = !!weapon.pap && !!papWonder('wintershowl').freezeAll;
     wonderFx(room, { k: 'frost', p: player.id, o: v3(o), d: v3(dir) });
     const hits: { victim: PlayerState; part: HitPart; damage: number }[] = [];
     for (const q of targetsOf(room, player)) {
@@ -46,7 +51,7 @@ export const winterBehavior: WeaponBehavior = {
         if (tube && (best === null || tube.dist < best) && room.world.lineOfSight(o, pt, 'bullets')) best = tube.dist;
       }
       if (best === null) continue;
-      hits.push({ victim: q, part: 'torso', damage: frostHit(room, q, player, best, o) });
+      hits.push({ victim: q, part: 'torso', damage: frostHit(room, q, player, best, o, full) });
     }
     const wall = room.world.raycast(o, dir, W.range, 'bullets');
     const t = wall ? wall.t : W.range;

@@ -11,6 +11,7 @@ import { shotSeed, spreadDegrees, spreadDirection, stanceSpread } from '../../..
 import { SCAVENGER, WONDER_ENTITY } from '../../../../shared/defs/wonder';
 import { normalize, type Vec3 } from '../../../../shared/math';
 import { moveHitboxes } from '../../../../shared/movement';
+import { papWonder } from '../../../../shared/defs/pack-a-punch';
 import type { WeaponBehavior } from '../../../combat';
 import type { Entity } from '../../../entities';
 import type { PlayerState } from '../../../player';
@@ -21,6 +22,8 @@ interface ScavData {
   vel: Vec3;
   owner: string;
   born: number;
+  /** Packed (Hyena Infra-Dead): the blast radius multiplier. */
+  wide?: number;
   /** Room time it stuck (fuse running), the body it is in and where on them. */
   stuckAt: number | null;
   stuckTo: string | null;
@@ -61,7 +64,8 @@ export const scavengerBehavior: WeaponBehavior = {
     const spread = spreadDegrees(weapon.def, player.move.ads, moving, room.modifiers.mul('spreadMultiplier', player) * stanceSpread(player.move));
     const dir = spreadDirection(scavengerAim(room, player, shot.origin, shot.dir), spread, shotSeed(player.seed, shot.shot, 0));
     const S = SCAVENGER;
-    const data: ScavData = { vel: { x: dir.x * S.speed, y: dir.y * S.speed, z: dir.z * S.speed }, owner: player.id, born: room.time, stuckAt: null, stuckTo: null, offset: null };
+    const wide = weapon.pap ? (papWonder('scavenger').radiusMult ?? 1) : 1;
+    const data: ScavData = { vel: { x: dir.x * S.speed, y: dir.y * S.speed, z: dir.z * S.speed }, owner: player.id, born: room.time, stuckAt: null, stuckTo: null, offset: null, ...(wide !== 1 ? { wide } : {}) };
     room.entities.add({ kind: WONDER_ENTITY.scav, x: shot.origin.x, y: shot.origin.y, z: shot.origin.z, yaw: Math.atan2(-dir.x, -dir.z), owner: player.id, team: player.team, s: { k: 0, pt: r2(Math.asin(dir.y)) }, data });
     // The killcam and stats see the pull now, ending where the bolt would stop on a straight line.
     const reach = S.speed * S.life;
@@ -82,9 +86,9 @@ export function detonate(room: Room, e: Entity): void {
   const owner = room.players.get(b.owner) ?? null;
   const host = b.stuckTo ? room.players.get(b.stuckTo) : undefined;
   const at = { x: e.x, y: e.y, z: e.z };
-  wonderFx(room, { k: 'boom', p: b.owner, x: r2(at.x), y: r2(at.y), z: r2(at.z) });
+  wonderFx(room, { k: 'boom', p: b.owner, x: r2(at.x), y: r2(at.y), z: r2(at.z), ...(b.wide ? { u: b.wide } : {}) });
   if (host?.alive) room.damage({ victim: host, attacker: owner, amount: SCAVENGER.stuckDamage, weapon: 'scavenger', part: 'torso', means: 'explosive', from: at, distance: 0 });
-  const B = SCAVENGER.blast;
+  const B = { ...SCAVENGER.blast, r: SCAVENGER.blast.r * (b.wide ?? 1) };
   room.radiusDamage(at, B.r, B.max, B.min, { attacker: owner, weapon: 'scavenger', means: 'explosive', hitSelf: true });
   room.bus.emit('weapons.detonated', { player: owner, equipment: 'scavenger', effect: 'frag', x: at.x, y: at.y, z: at.z, radius: B.r, max: B.max, min: B.min });
 }

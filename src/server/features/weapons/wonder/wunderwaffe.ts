@@ -6,6 +6,7 @@
  * `fire` event (killcam arcs) and `arc` effect.
  */
 import { shotSeed, spreadDegrees, spreadDirection, stanceSpread } from '../../../../shared/ballistics';
+import { papWonder } from '../../../../shared/defs/pack-a-punch';
 import { WUNDERWAFFE, chainTargets } from '../../../../shared/defs/wonder';
 import { normalize, type Vec3 } from '../../../../shared/math';
 import type { WeaponBehavior } from '../../../combat';
@@ -42,7 +43,8 @@ export const wunderwaffeBehavior: WeaponBehavior = {
     // Plan the chain now (who stands near whom at the strike), deliver it hop by hop.
     const cands = targetsOf(room, player).map((q) => ({ q, at: chest(q) }));
     const first = cands.find((c) => c.q === victim) ?? { q: victim, at: chest(victim) };
-    const chain = chainTargets(first, cands, WUNDERWAFFE.hops, WUNDERWAFFE.hopRange, (a, b) => room.world.lineOfSight(a, b, 'bullets'));
+    const hops = weapon.pap ? (papWonder('wunderwaffe').hops ?? WUNDERWAFFE.hops) : WUNDERWAFFE.hops;
+    const chain = chainTargets(first, cands, hops, WUNDERWAFFE.hopRange, (a, b) => room.world.lineOfSight(a, b, 'bullets'));
     zap(room, player, victim, o, 0);
     let prev = first.at;
     chain.forEach((c, i) => {

@@ -16,8 +16,9 @@
  *
  * Packed damage is one `damageDealt` modifier: damage credited to a weapon id the attacker carries
  * packed is multiplied by `papDamageMult` (hitscan, projectiles and wonder weapons alike; never
- * the attacker's own splash). Explosive rounds (Cobra, Mustang & Sally) burst where a packed
- * pistol's bullet stops (`fire` event).
+ * the attacker's own splash, never effect damage). Explosive rounds (Cobra, Mustang & Sally) burst
+ * where a packed pistol's bullet stops (`fire` event); every other signature effect (burn, pierce,
+ * ricochet, zap, frost, the underbarrel extras...) is in packapunch-effects.ts.
  */
 import { PACK_A_PUNCH, PAP_ID, isPackable, packWeaponState, papDamageMult, papExplosive, papName, refillPacked, unpackWeaponState } from '../../../../shared/defs/pack-a-punch';
 import type { Vec3 } from '../../../../shared/math';
@@ -26,6 +27,7 @@ import type { PlayerState, WeaponState } from '../../../player';
 import type { Room } from '../../../room';
 import { grant, ksOf, markDirty } from '../state';
 import type { Active, KsRoom } from '../world';
+import { dropPapExtras, inPapFx, syncPapExtras, wirePapEffects } from './packapunch-effects';
 import type { CallArgs } from './types';
 
 /** The underbarrel launcher's slot: never packed; packing with it up packs the gun it hangs under. */
@@ -51,17 +53,19 @@ export function papBlocker(ctx: KsRoom, p: PlayerState): string | null {
   return null;
 }
 
-/** Pack every carried gun that isn't yet (each is filled as it gets packed). Returns how many. */
-function packCarried(p: PlayerState): number {
+/** Pack every carried gun that isn't yet (each is filled as it gets packed), with its underbarrel extra. Returns how many. */
+function packCarried(room: Room, p: PlayerState): number {
   let n = 0;
   for (const w of carried(p)) if (packWeaponState(w)) n++;
+  syncPapExtras(room, p);
   return n;
 }
 
-/** Revert every packed gun `p` carries (ammo clamped). Returns how many. */
-function unpackCarried(p: PlayerState): number {
+/** Revert every packed gun `p` carries (ammo clamped) and take back the underbarrel extras. Returns how many. */
+function unpackCarried(room: Room, p: PlayerState): number {
   let n = 0;
   for (const w of p.weapons) if (unpackWeaponState(w)) n++;
+  dropPapExtras(room, p);
   return n;
 }
 
@@ -70,6 +74,7 @@ export function startPapBuff(room: Room, p: PlayerState): void {
   const ks = ksOf(p);
   ks.papUntil = room.time + PACK_A_PUNCH.buffSec;
   for (const w of carried(p)) if (!packWeaponState(w)) refillPacked(w);
+  syncPapExtras(room, p);
   markDirty(room, p);
   const held = papTarget(p);
   const id = held && isPackable(held.def.base.id) ? held.def.base.id : (carried(p).find((w) => w.pap)?.def.base.id ?? '');
@@ -82,7 +87,7 @@ export function startPapBuff(room: Room, p: PlayerState): void {
 export function endPapBuff(room: Room, p: PlayerState): void {
   const ks = ksOf(p);
   ks.papUntil = undefined;
-  unpackCarried(p);
+  unpackCarried(room, p);
   markDirty(room, p);
   room.bus.emit('killstreaks.papEnd', { player: p });
   room.sendFeature(null, 'killstreaks.papEnd', { p: p.id });
@@ -141,23 +146,30 @@ export function tickPap(room: Room, p: PlayerState): void {
   const until = p.ext.killstreaks?.papUntil;
   if (until !== undefined && room.time >= until) endPapBuff(room, p);
   else if (until !== undefined) {
-    if (p.alive) packCarried(p);
-  } else if (p.weapons.some((w) => w.pap)) unpackCarried(p); // packed without the buff (match reset): plain again
+    if (p.alive) packCarried(room, p);
+  } else if (p.weapons.some((w) => w.pap || w.papExtra || w.papTopped)) unpackCarried(room, p); // packed without the buff (match reset): plain again
 }
 
-/** Per room: the buff upkeep, the packed damage multiplier and explosive rounds. */
+/** Per room: the buff upkeep, the packed damage multiplier, explosive rounds and the other signature effects. */
 export function wirePackAPunch(room: Room): void {
+  wirePapEffects(room);
   room.bus.on('tick', () => {
     for (const p of room.players.values()) tickPap(room, p);
   });
-  // A respawn inside the window comes up packed straight away.
-  room.bus.on('spawn', ({ player }) => {
-    if (papActive(room, player)) packCarried(player);
-  });
+  // A respawn inside the window comes up packed straight away (after the weapons feature gave
+  // the class its underbarrel launcher, so a packed launcher gun tops that up).
+  room.bus.on(
+    'spawn',
+    ({ player }) => {
+      if (papActive(room, player)) packCarried(room, player);
+    },
+    { priority: -20 },
+  );
   room.modifiers.add(
     'damageDealt',
     (attacker, info) => {
-      if (info.victim === attacker || info.means === 'killstreak' || info.means === 'melee') return undefined;
+      // Effect damage (burn, zaps, head blasts) is final: never scaled.
+      if (info.victim === attacker || info.means === 'killstreak' || info.means === 'melee' || inPapFx()) return undefined;
       return packedCarried(attacker, info.weapon) ? papDamageMult(info.weapon) : undefined;
     },
     'killstreaks.pack_a_punch',

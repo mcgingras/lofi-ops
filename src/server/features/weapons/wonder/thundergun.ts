@@ -5,6 +5,7 @@
  * own prediction replays it). Out to THUNDERGUN.knockRange they are shoved for 15. A launch
  * remembers the shooter: a fall out of the map within `creditSec` is their kill (`creditEdgeKills`).
  */
+import { papWonder } from '../../../../shared/defs/pack-a-punch';
 import { THUNDERGUN, inTube, thunderDamage, thunderLaunch } from '../../../../shared/defs/wonder';
 import type { HitPart } from '../../../../shared/collision';
 import { applyKnock } from '../../../../shared/movement';
@@ -14,12 +15,14 @@ import type { Room } from '../../../room';
 import { bodyPoints, chest, emitFire, targetsOf, v3, wonderFx, wonderOf } from './common';
 
 export const thundergunBehavior: WeaponBehavior = {
-  fire(room, player, _weapon, shot) {
+  fire(room, player, weapon, shot) {
     const o = shot.origin;
     const dir = shot.dir;
-    const T = THUNDERGUN;
+    // Packed (Zeus Cannon): a wider tube.
+    const wide = weapon.pap ? (papWonder('thundergun').radiusMult ?? 1) : 1;
+    const T = { ...THUNDERGUN, r0: THUNDERGUN.r0 * wide, r1: THUNDERGUN.r1 * wide };
     const hits: { victim: PlayerState; part: HitPart; damage: number }[] = [];
-    wonderFx(room, { k: 'blast', p: player.id, o: v3(o), d: v3(dir) });
+    wonderFx(room, { k: 'blast', p: player.id, o: v3(o), d: v3(dir), ...(wide !== 1 ? { u: wide } : {}) });
     for (const q of targetsOf(room, player)) {
       // Any of feet / chest / head inside the tube, and a clear line to it (BO1's DamageConeTrace).
       let best: { along: number; off: number; dist: number } | null = null;

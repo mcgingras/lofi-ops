@@ -19,7 +19,7 @@ import { babygunBehavior, updateShrunk, wireShrink } from './babygun';
 import { clearSwell, updateSwell, wavegunBehavior, wireWave } from './wavegun';
 
 export { wonderBotDecision, wonderBotStyle, WONDER_BOT_STYLE, type WonderBotStyle } from './bots';
-export { frostOf } from './wintershowl';
+export { frostOf, syncFrostEntity } from './wintershowl';
 export { launch } from './thundergun';
 export { isShrunk, isSwelling, wonderOf } from './common';
 

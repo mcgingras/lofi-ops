@@ -66,8 +66,11 @@ declare module '../protocol' {
     'killstreaks.mapCancel': { req: Record<string, never>; res: { ok: boolean } };
     /** Current streak state (also pushed as `killstreaks.state`). */
     'killstreaks.state': { req: Record<string, never>; res: KillstreakStateMsg | null };
-    /** Dev only (server started with LOFI_CHEATS=1): grant a ready streak and/or add enemy bots. */
-    'killstreaks.cheat': { req: { id?: string; bots?: number }; res: { ready: string[] } };
+    /**
+     * Dev only (server started with LOFI_CHEATS=1): grant a ready streak and/or add enemy bots; `weapon`
+     * puts that gun in the primary slot; `selfFx` puts a Pack-a-Punch status on yourself (browser checks).
+     */
+    'killstreaks.cheat': { req: { id?: string; bots?: number; weapon?: string; selfFx?: 'burn' | 'shatter' }; res: { ready: string[] } };
     /** Perk ids the caller has the Pro version of (create-a-class shows them). */
     'perks.pro': { req: Record<string, never>; res: { pro: string[]; progress: Record<string, number> } };
   }

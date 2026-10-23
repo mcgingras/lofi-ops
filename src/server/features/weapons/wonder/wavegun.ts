@@ -8,6 +8,7 @@
  * `s.p` id, `s.t` pop time; slowed, hands taken) and pops for `damage` (a kill).
  */
 import { shotSeed, spreadDegrees, spreadDirection, stanceSpread } from '../../../../shared/ballistics';
+import { papWonder } from '../../../../shared/defs/pack-a-punch';
 import { WAVE_GUN, WONDER_ENTITY } from '../../../../shared/defs/wonder';
 import type { HitPart } from '../../../../shared/collision';
 import type { WeaponBehavior } from '../../../combat';
@@ -50,23 +51,29 @@ export const wavegunBehavior: WeaponBehavior = {
     if (v) {
       const dist = Math.hypot(player.move.x - v.move.x, player.move.z - v.move.z);
       hits.push({ victim: v, part: strike.part, damage: room.damage({ victim: v, attacker: player, amount: Z.damage, weapon: 'wavegun', part: strike.part, means: 'wonder', from: o, distance: dist }) });
-      // A small arc off the victim to the nearest other enemy beside them.
-      const from = chest(v);
-      let best: PlayerState | null = null;
-      let bd: number = Z.arcR;
-      for (const q of targetsOf(room, player)) {
-        if (q === v) continue;
-        const c = chest(q);
-        const d = Math.hypot(c.x - from.x, c.y - from.y, c.z - from.z);
-        if (d <= bd && room.world.lineOfSight(from, c, 'bullets')) {
-          bd = d;
-          best = q;
+      // A small arc off the victim to the nearest other enemy beside them (packed, the Max Wave
+      // Gun: it keeps arcing, each from the last one hit, up to `arcs`).
+      const arcs = weapon.pap ? (papWonder('wavegun').arcs ?? 1) : 1;
+      const struck = new Set<PlayerState>([v]);
+      let from = chest(v);
+      for (let i = 0; i < arcs; i++) {
+        let best: PlayerState | null = null;
+        let bd: number = Z.arcR;
+        for (const q of targetsOf(room, player)) {
+          if (struck.has(q)) continue;
+          const c = chest(q);
+          const d = Math.hypot(c.x - from.x, c.y - from.y, c.z - from.z);
+          if (d <= bd && room.world.lineOfSight(from, c, 'bullets')) {
+            bd = d;
+            best = q;
+          }
         }
-      }
-      if (best) {
+        if (!best) break;
+        struck.add(best);
         const to = chest(best);
-        wonderFx(room, { k: 'arc', p: player.id, o: v3(from), e: v3(to), hop: 1, hit: true });
+        wonderFx(room, { k: 'arc', p: player.id, o: v3(from), e: v3(to), hop: i + 1, hit: true });
         hits.push({ victim: best, part: 'torso', damage: room.damage({ victim: best, attacker: player, amount: Z.arcDamage, weapon: 'wavegun', part: 'torso', means: 'wonder', from, distance: dist + bd }) });
+        from = to;
       }
     }
     emitFire(room, player, 'wavegun', o, dir, strike.end, hits);
@@ -114,7 +121,21 @@ export function updateSwell(room: Room): void {
       clearSwell(room, q);
       wonderFx(room, { k: 'pop', p: by?.id ?? null, v: q.id, x: r2(c.x), y: r2(c.y), z: r2(c.z) });
       room.damage({ victim: q, attacker: by, amount: WAVE_GUN.wave.damage, weapon: 'wavegun', part: 'torso', means: 'wonder', from: c, distance: by ? Math.hypot(by.move.x - q.move.x, by.move.z - q.move.z) : 0 });
+      if (by) popBurst(room, by, q, c);
     }
+  }
+}
+
+/** A pop bursts over the shooter's enemies near the body: `popMax` at the body to `popMin` at `popR`. */
+function popBurst(room: Room, by: PlayerState, popped: PlayerState, c: { x: number; y: number; z: number }): void {
+  const W = WAVE_GUN.wave;
+  for (const q of targetsOf(room, by)) {
+    if (q === popped) continue;
+    const at = chest(q);
+    const d = Math.hypot(at.x - c.x, at.y - c.y, at.z - c.z);
+    if (d > W.popR || !room.world.lineOfSight(c, at, 'bullets')) continue;
+    const amount = W.popMax + (W.popMin - W.popMax) * (d / W.popR);
+    room.damage({ victim: q, attacker: by, amount, weapon: 'wavegun', part: 'torso', means: 'wonder', from: c, distance: Math.hypot(by.move.x - q.move.x, by.move.z - q.move.z) });
   }
 }
 

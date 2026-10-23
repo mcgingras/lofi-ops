@@ -7,7 +7,8 @@
  * tactical map (radio + overhead map) for Napalm, Mortar Team, Rolling Thunder and the Attack Helicopter,
  * the Tactical Nuke (laptop, countdown, flash, mushroom cloud: nuke.ts), and the Mystery Box
  * (beam, lightning, the box, its weapon cycle and prompts: mysterybox.ts), and Pack-a-Punch
- * (the animated camo, the dip, the jingle and the toast: packapunch.ts).
+ * (the animated camo, the dip, the jingle and the toast: packapunch.ts; the signature effects:
+ * packapunch-fx.ts).
  */
 import './textures';
 import './sounds';
@@ -29,6 +30,7 @@ import './glitch';
 // After those too: the Mystery Box's sky flicker uses `renderer.white` only when nobody else does.
 import './mysterybox';
 import './packapunch';
+import './packapunch-fx';
 import './mysterybox-loan';
 
 export { ksClient, streakName } from './store';

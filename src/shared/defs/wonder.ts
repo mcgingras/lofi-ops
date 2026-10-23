@@ -291,14 +291,15 @@ export const BABY_GUN = {
 /**
  * Wave Gun (Zap Guns). BO1 (Moon): the dual-wield Zap Guns fire quick electric bolts; aiming down
  * sights snaps them together into the Wave Gun, a slow microwave shot that makes zombies swell
- * and burst. Here: hip fire alternates zap bolts from each pistol at 300 rpm, instant out to 35 m,
- * 34 each (three kill) and a small arc for 20 to one enemy within 2.5 m of the victim. Aimed, the
- * same trigger fires the Wave Gun at x0.2 the rate (60 rpm): out to 50 m, a body within 0.5 m of
- * the line swells for 0.7 s (slowed to x0.3, hands taken) and pops (a kill).
+ * and burst. Here: hip fire alternates zap bolts from each pistol at 450 rpm, instant out to 40 m,
+ * 50 each (two kill) and an arc for 35 to one enemy within 4 m of the victim. Aimed, the same
+ * trigger fires the Wave Gun at x0.45 the rate (about 200 rpm): out to 60 m, a body within 0.8 m
+ * of the line swells for 0.45 s (slowed to x0.3, hands taken) and pops (a kill), and the pop
+ * bursts over everyone within `popR` (`popMax` at the body to `popMin` at the edge).
  */
 export const WAVE_GUN = {
-  zap: { range: 35, damage: 34, aimRadius: 0.25, arcR: 2.5, arcDamage: 20 },
-  wave: { range: 50, aimRadius: 0.5, swellSec: 0.7, damage: 300, fireRate: 0.2, slow: 0.3 },
+  zap: { range: 40, damage: 50, aimRadius: 0.35, arcR: 4, arcDamage: 35 },
+  wave: { range: 60, aimRadius: 0.8, swellSec: 0.45, damage: 300, fireRate: 0.45, slow: 0.3, popR: 3.5, popMax: 120, popMin: 30 },
   /** ADS above this counts as aimed (the guns are together). */
   adsAt: 0.5,
 } as const;
@@ -318,16 +319,17 @@ export const WONDER_DROP_LIFE_SEC = 20;
  * One-shot effects for everyone (`weapons.wonderFx`): the Ray Gun's splash, the Thundergun's
  * blast, a lightning arc (one per hop), a frost blast and a shatter, the Scavenger's explosion, the
  * Baby Gun's beam and a kick, a zap bolt (`s` = which pistol: 0 right, 1 left), the Wave Gun's
- * beam and a pop. `p` = shooter id.
+ * beam and a pop. `p` = shooter id. `u` = a Pack-a-Punched look: the X2's splash is red, the Zeus
+ * Cannon's blast and the Hyena's explosion scale by it.
  */
 export type WonderFx =
-  | { k: 'splash'; p: string; x: number; y: number; z: number }
-  | { k: 'blast'; p: string; o: [number, number, number]; d: [number, number, number] }
+  | { k: 'splash'; p: string; x: number; y: number; z: number; u?: 1 }
+  | { k: 'blast'; p: string; o: [number, number, number]; d: [number, number, number]; u?: number }
   | { k: 'arc'; p: string; o: [number, number, number]; e: [number, number, number]; hop: number; hit: boolean }
   | { k: 'frost'; p: string; o: [number, number, number]; d: [number, number, number] }
   | { k: 'shatter'; p: string; v: string; x: number; y: number; z: number }
   | { k: 'fling'; v: string; x: number; y: number; z: number }
-  | { k: 'boom'; p: string; x: number; y: number; z: number }
+  | { k: 'boom'; p: string; x: number; y: number; z: number; u?: number }
   | { k: 'shrink'; p: string; o: [number, number, number]; e: [number, number, number]; hit: boolean }
   | { k: 'kick'; p: string | null; v: string; x: number; y: number; z: number }
   | { k: 'zap'; p: string; o: [number, number, number]; e: [number, number, number]; hit: boolean; s: number }

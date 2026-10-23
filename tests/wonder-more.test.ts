@@ -229,7 +229,7 @@ describe('31-79 JGb215 (Baby Gun)', () => {
 // ---------------------------------------------------------------------------------------------
 
 describe('Wave Gun (Zap Guns)', () => {
-  it('from the hip: zap bolts, three kill, with a small arc to a neighbour; nothing past 35 m', () => withSeed(3, () => {
+  it('from the hip: zap bolts, two kill, with an arc to a neighbour; nothing past 40 m', () => withSeed(3, () => {
     const room = setup();
     const a = actor(room, 0);
     const v = actor(room, 1);
@@ -238,7 +238,7 @@ describe('Wave Gun (Zap Guns)', () => {
     place(a, -24, LANE_Z, -Math.PI / 2);
     place(v, -9, LANE_Z);
     place(n, -9, LANE_Z + 1.5);
-    place(far, 15, LANE_Z + 3);
+    place(far, 20, LANE_Z + 3);
     arm(a, 'wavegun');
     a.move.ads = 0;
     const at = dirTo(eye(a), chest(v));
@@ -250,7 +250,7 @@ describe('Wave Gun (Zap Guns)', () => {
     steps(room, 0.25);
     shoot(room, a, dirTo(eye(a), chest(v)));
     expect(v.alive).toBe(false);
-    // 39 m off: the zap fizzles before it.
+    // 44 m off: the zap fizzles before it.
     steps(room, 0.25);
     shoot(room, a, dirTo(eye(a), chest(far)));
     expect(far.health).toBe(far.maxHealth);
@@ -280,6 +280,27 @@ describe('Wave Gun (Zap Guns)', () => {
     expect(v.alive).toBe(false);
     expect(dead[0]).toMatchObject({ victim: v, attacker: a, weapon: 'wavegun', means: 'wonder' });
     expect(room.entities.byKind(WONDER_ENTITY.swell)).toHaveLength(0);
+  });
+
+  it('aimed: the pop bursts over enemies beside the swollen body, falling off with distance', () => {
+    const room = setup();
+    const a = actor(room, 0);
+    const v = actor(room, 1);
+    const near = actor(room, 1);
+    const out = actor(room, 1);
+    place(a, -24, LANE_Z, -Math.PI / 2);
+    place(v, 15, LANE_Z);
+    place(near, 16.5, LANE_Z);
+    place(out, 15 + WAVE_GUN.wave.popR + 1, LANE_Z);
+    arm(a, 'wavegun');
+    a.move.ads = 1;
+    shoot(room, a, dirTo(eye(a), chest(v)));
+    steps(room, WAVE_GUN.wave.swellSec + 0.05);
+    expect(v.alive).toBe(false);
+    const W = WAVE_GUN.wave;
+    const taken = near.maxHealth - (near.alive ? near.health : 0);
+    expect(taken).toBeGreaterThanOrEqual(Math.min(near.maxHealth, W.popMin));
+    expect(out.health).toBe(out.maxHealth);
   });
 });
 
