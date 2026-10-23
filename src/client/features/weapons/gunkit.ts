@@ -8,7 +8,7 @@
  * moving parts (bolt, pump, magazine, slide, barrels, cylinder) for animation.
  */
 import * as THREE from 'three';
-import { worldUV } from '../../render/models/viewmodels';
+import { worldUV, type ViewmodelAnimState } from '../../render/models/viewmodels';
 
 export type MatFn = (texture: string, o?: { rep?: number; tint?: number; emissive?: number }) => THREE.Material;
 
@@ -37,6 +37,11 @@ export interface GunBuild {
   pistol: boolean;
   /** No ADS pose (dual wield). */
   noAds?: boolean;
+  /**
+   * The model's own per-frame animation in the first-person viewmodel, after the rig's (the Wave
+   * Gun snapping its two pistols together as it aims). Third person and dropped guns never call it.
+   */
+  animate?(s: ViewmodelAnimState): void;
 }
 
 /** Adds meshes to a parent. */

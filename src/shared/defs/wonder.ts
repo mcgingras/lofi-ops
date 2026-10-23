@@ -3,16 +3,17 @@
  * `wonder: true` entries in defs/weapons.ts). Only the Mystery Box killstreak hands them out
  * (defs/mystery-box.ts); dropped ones can be picked up like any gun and despawn sooner.
  *
- * Sources: the Call of Duty Wiki pages (Ray Gun, Thundergun, Wunderwaffe DG-2, Winter's Howl) and
- * the T5 script dump (plutoniummod/t5-scripts `ZM/Common/maps/_zombiemode_weap_thundergun.gsc`,
- * `_tesla.gsc`, `_freezegun.gsc`). BO1 numbers are for zombies with thousands of health; here they
+ * Sources: the Call of Duty Wiki pages (Ray Gun, Thundergun, Wunderwaffe DG-2, Winter's Howl,
+ * Scavenger, 31-79 JGb215, Wave Gun) and the T5 script dump (plutoniummod/t5-scripts
+ * `ZM/Common/maps/_zombiemode_weap_thundergun.gsc`, `_tesla.gsc`, `_freezegun.gsc`, and the Shangri-La
+ * / Moon `_zombiemode_weap_shrink_ray.gsc`, `_zombiemode_weap_microwavegun.gsc`). BO1 numbers are for zombies with thousands of health; here they
  * are retuned for 100-health players: strong and fun, never a kill from across the map.
  *
  * Pure tuning and maths, shared by the server behaviours, the client effects, bots and tests.
  */
 import type { Vec3 } from '../math';
 
-export const WONDER_WEAPON_IDS = ['raygun', 'thundergun', 'wunderwaffe', 'wintershowl'] as const;
+export const WONDER_WEAPON_IDS = ['raygun', 'thundergun', 'wunderwaffe', 'wintershowl', 'scavenger', 'babygun', 'wavegun'] as const;
 export type WonderWeaponId = (typeof WONDER_WEAPON_IDS)[number];
 
 /**
@@ -233,15 +234,91 @@ export function blastsToFreeze(d: number, frostMultiplier = 1): number {
   return per > 0 ? Math.ceil(1 / per - 1e-9) : Infinity;
 }
 
-/** Entity kinds: a Ray Gun bolt in flight, and the frost on a player (`s.p` id, `s.f` amount). */
-export const WONDER_ENTITY = { bolt: 'weapons.raybolt', frost: 'weapons.frost' } as const;
+/**
+ * Scavenger. BO1 (Call of the Dead): a bolt-action explosive sniper, 2 rounds a magazine; its bolt
+ * sticks in whatever it hits and blows up a moment later with a huge blast. Here: a fast bolt
+ * (140 m/s, a little drop) that dies after 0.5 s (70 m: no kills across the map). It sticks to
+ * the world or a body (40 on impact) and goes off 1 s later: a direct-hit stick always kills whoever
+ * carries it, and the blast (BO1 radius damage through core `radiusDamage`) kills inside ~4.5 m and
+ * wounds out to 6.5 m, the shooter included.
+ */
+export const SCAVENGER = {
+  speed: 140,
+  gravity: 2.5,
+  /** Seconds a bolt flies before it fizzles (speed x life = its reach). */
+  life: 0.5,
+  /** Body hit forgiveness around the bolt (m). */
+  radius: 0.06,
+  impact: 40,
+  fuseSec: 1.0,
+  /** Blast: radius (m), damage at the centre and at the edge (linear, BO1 radius damage). */
+  blast: { r: 6.5, max: 250, min: 40 },
+  /** Whoever the bolt is stuck in takes this on detonation (a kill through anything). */
+  stuckDamage: 1000,
+} as const;
+
+/** Scavenger blast damage at `d` metres before exposure (0 beyond the radius). */
+export function scavengerBlast(d: number): number {
+  const b = SCAVENGER.blast;
+  if (d > b.r) return 0;
+  return b.max + (b.min - b.max) * Math.max(0, d) / b.r;
+}
+
+/**
+ * 31-79 JGb215 (the Baby Gun). BO1 (Shangri-La): shrinks zombies, which squeak and can be kicked
+ * to death, and grow back after a while. Here: an instant shrink beam out to 30 m (a body within
+ * 0.45 m of the line counts, and anyone within 1.6 m of where it lands is caught too). Shrunk for
+ * 6 s: you are drawn tiny, run x1.45, squeak, and your guns do a tenth of their damage; any hit on
+ * you kills (bullets have to hit the tiny body: the legs box), and an enemy who walks into you
+ * kicks you to death. A second Baby Gun shot on a shrunk player kills them.
+ */
+export const BABY_GUN = {
+  range: 30,
+  aimRadius: 0.45,
+  splashR: 1.6,
+  shrinkSec: 6,
+  /** Shrunk: movement x`speed`, damage dealt x`damageDealt`, drawn at `scale`. */
+  speed: 1.45,
+  damageDealt: 0.1,
+  scale: 0.45,
+  /** An enemy this close (m, horizontal; `kickDy` height) kicks a shrunk player to death. */
+  kickR: 0.75,
+  kickDy: 1.0,
+  /** What "any hit kills" deals. */
+  killDamage: 2000,
+} as const;
+
+/**
+ * Wave Gun (Zap Guns). BO1 (Moon): the dual-wield Zap Guns fire quick electric bolts; aiming down
+ * sights snaps them together into the Wave Gun, a slow microwave shot that makes zombies swell
+ * and burst. Here: hip fire alternates zap bolts from each pistol at 300 rpm, instant out to 35 m,
+ * 34 each (three kill) and a small arc for 20 to one enemy within 2.5 m of the victim. Aimed, the
+ * same trigger fires the Wave Gun at x0.2 the rate (60 rpm): out to 50 m, a body within 0.5 m of
+ * the line swells for 0.7 s (slowed to x0.3, hands taken) and pops (a kill).
+ */
+export const WAVE_GUN = {
+  zap: { range: 35, damage: 34, aimRadius: 0.25, arcR: 2.5, arcDamage: 20 },
+  wave: { range: 50, aimRadius: 0.5, swellSec: 0.7, damage: 300, fireRate: 0.2, slow: 0.3 },
+  /** ADS above this counts as aimed (the guns are together). */
+  adsAt: 0.5,
+} as const;
+
+/**
+ * Entity kinds: a Ray Gun bolt in flight; the frost on a player (`s.p` id, `s.f` amount); a
+ * Scavenger bolt (`s.k` 1 once stuck, `s.p` the player it is stuck in, `s.f` room time it goes off,
+ * `s.pt` pitch); a shrunk player (`s.p` id, `s.u` room time they grow back); a swelling player
+ * (`s.p` id, `s.t` room time they pop).
+ */
+export const WONDER_ENTITY = { bolt: 'weapons.raybolt', frost: 'weapons.frost', scav: 'weapons.scavbolt', shrunk: 'weapons.shrunk', swell: 'weapons.swell' } as const;
 
 /** Dropped wonder weapons despawn this soon (s; other guns: PICKUP.lifeSec). */
 export const WONDER_DROP_LIFE_SEC = 20;
 
 /**
  * One-shot effects for everyone (`weapons.wonderFx`): the Ray Gun's splash, the Thundergun's
- * blast, a lightning arc (one per hop), a frost blast and a shatter. `p` = shooter id.
+ * blast, a lightning arc (one per hop), a frost blast and a shatter, the Scavenger's explosion, the
+ * Baby Gun's beam and a kick, a zap bolt (`s` = which pistol: 0 right, 1 left), the Wave Gun's
+ * beam and a pop. `p` = shooter id.
  */
 export type WonderFx =
   | { k: 'splash'; p: string; x: number; y: number; z: number }
@@ -249,7 +326,13 @@ export type WonderFx =
   | { k: 'arc'; p: string; o: [number, number, number]; e: [number, number, number]; hop: number; hit: boolean }
   | { k: 'frost'; p: string; o: [number, number, number]; d: [number, number, number] }
   | { k: 'shatter'; p: string; v: string; x: number; y: number; z: number }
-  | { k: 'fling'; v: string; x: number; y: number; z: number };
+  | { k: 'fling'; v: string; x: number; y: number; z: number }
+  | { k: 'boom'; p: string; x: number; y: number; z: number }
+  | { k: 'shrink'; p: string; o: [number, number, number]; e: [number, number, number]; hit: boolean }
+  | { k: 'kick'; p: string | null; v: string; x: number; y: number; z: number }
+  | { k: 'zap'; p: string; o: [number, number, number]; e: [number, number, number]; hit: boolean; s: number }
+  | { k: 'wave'; p: string; o: [number, number, number]; e: [number, number, number]; hit: boolean }
+  | { k: 'pop'; p: string | null; v: string; x: number; y: number; z: number };
 
 declare module '../protocol' {
   interface FeatureMessages {

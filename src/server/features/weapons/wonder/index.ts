@@ -1,7 +1,8 @@
 /**
  * BO1 Zombies wonder weapons on the server (weapons feature; tuning in shared/defs/wonder.ts):
- * the four weapon behaviours, and per room the Ray Gun bolts, frost (slow, thaw, the ice
- * entity), Thundergun edge-kill credit, and the frost movement modifiers. Only the Mystery Box
+ * the seven weapon behaviours, and per room the Ray Gun and Scavenger bolts, frost (slow, thaw,
+ * the trigger, the ice entity), Thundergun edge-kill credit, the Baby Gun's shrink (kicks, any hit
+ * kills) and the Wave Gun's swell, with their modifiers. Only the Mystery Box
  * killstreak hands these guns out (killstreaks/streaks/mysterybox.ts); dropped ones are ordinary
  * pickups that despawn sooner (pickups feature).
  */
@@ -13,18 +14,24 @@ import { raygunBehavior, updateBolts } from './raygun';
 import { creditEdgeKills, thundergunBehavior } from './thundergun';
 import { updateFrost, winterBehavior } from './wintershowl';
 import { wunderwaffeBehavior } from './wunderwaffe';
+import { scavengerBehavior, updateScavBolts } from './scavenger';
+import { babygunBehavior, updateShrunk, wireShrink } from './babygun';
+import { clearSwell, updateSwell, wavegunBehavior, wireWave } from './wavegun';
 
 export { wonderBotDecision, wonderBotStyle, WONDER_BOT_STYLE, type WonderBotStyle } from './bots';
 export { frostOf } from './wintershowl';
 export { launch } from './thundergun';
-export { wonderOf } from './common';
+export { isShrunk, isSwelling, wonderOf } from './common';
 
-/** Register the four behaviours (idempotent: setup and every room both call it). */
+/** Register the seven behaviours (idempotent: setup and every room both call it). */
 export function registerWonderBehaviors(register: ServerApi['registerWeaponBehavior']): void {
   register('raygun', raygunBehavior);
   register('thundergun', thundergunBehavior);
   register('wunderwaffe', wunderwaffeBehavior);
   register('wintershowl', winterBehavior);
+  register('scavenger', scavengerBehavior);
+  register('babygun', babygunBehavior);
+  register('wavegun', wavegunBehavior);
 }
 
 export function wireWonder(room: Room): void {
@@ -33,21 +40,26 @@ export function wireWonder(room: Room): void {
     creditEdgeKills(room);
     updateBolts(room, dt);
     updateFrost(room, dt);
+    updateScavBolts(room, dt);
+    updateShrunk(room);
+    updateSwell(room);
   });
-  room.bus.on('death', ({ victim }) => {
-    const w = victim.ext.wonder;
+  const reset = (p: PlayerState) => {
+    const w = p.ext.wonder;
     if (!w) return;
     w.frost = 0;
     w.frozenUntil = 0;
     w.knockBy = null;
-  });
-  room.bus.on('spawn', ({ player }) => {
-    const w = player.ext.wonder;
-    if (!w) return;
-    w.frost = 0;
-    w.frozenUntil = 0;
-    w.knockBy = null;
-  });
+    w.shrunkUntil = 0;
+    w.shrunkBy = null;
+    if (w.shrunkEntity !== null) room.entities.remove(w.shrunkEntity);
+    w.shrunkEntity = null;
+    clearSwell(room, p);
+  };
+  room.bus.on('death', ({ victim }) => reset(victim));
+  room.bus.on('spawn', ({ player }) => reset(player));
+  wireShrink(room);
+  wireWave(room);
   // Frost: slower legs (and no sprint once half frozen); the turn slow is the victim's client.
   const frost = (p: PlayerState) => (p.alive ? (p.ext.wonder?.frost ?? 0) : 0);
   room.modifiers.add('speedMultiplier', (p) => {

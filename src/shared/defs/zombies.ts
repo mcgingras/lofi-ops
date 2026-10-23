@@ -475,7 +475,7 @@ export function rollBoxWeapon(carried: readonly string[], rnd: number, pool = bo
  */
 export const ZOMBIE_DAMAGE = {
   byClass: { ar: 2.6, smg: 2.5, lmg: 2.6, sniper: 4, shotgun: 3, pistol: 2.2, launcher: 3, special: 6 } as Record<string, number>,
-  byWeapon: { m1911: 0.5, raygun: 6, thundergun: 40, wunderwaffe: 40, wintershowl: 30, gl: 3 } as Record<string, number>,
+  byWeapon: { m1911: 0.5, raygun: 6, thundergun: 40, wunderwaffe: 40, wintershowl: 30, scavenger: 20, babygun: 1, wavegun: 10, gl: 3 } as Record<string, number>,
   explosive: 2.5,
 } as const;
 

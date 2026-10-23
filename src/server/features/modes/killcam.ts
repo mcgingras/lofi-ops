@@ -33,7 +33,7 @@ const KEEP_SEC = 8;
 const RATE = 20;
 
 /** Entity kinds recorded as projectiles (drawn in replays; grenade and launcher kills follow them). */
-export const PROJECTILE_KINDS: ReadonlySet<string> = new Set([NADE_ENTITY, TOMAHAWK_ENTITY, BOLT_ENTITY, BLADE_ENTITY, WONDER_ENTITY.bolt, KS_ENTITY.missile]);
+export const PROJECTILE_KINDS: ReadonlySet<string> = new Set([NADE_ENTITY, TOMAHAWK_ENTITY, BOLT_ENTITY, BLADE_ENTITY, WONDER_ENTITY.bolt, WONDER_ENTITY.scav, KS_ENTITY.missile]);
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 

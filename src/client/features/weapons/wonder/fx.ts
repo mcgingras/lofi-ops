@@ -576,3 +576,26 @@ registerMatchHook('weapons.wonder', {
 
 /** The particle / bolt / ring helpers, for the Mystery Box's call-in (killstreaks client). */
 export { emit as fxEmit, lightning as fxLightning, ring as fxRing };
+
+/**
+ * The effect kit for the other wonder weapon effects (fx-more.ts: Scavenger, Baby Gun, Wave Gun):
+ * particles, rings, lightning, timed objects, the local muzzle, and hiding a body that burst.
+ */
+export const fxKit = {
+  emit,
+  ring,
+  lightning,
+  localMuzzle,
+  spriteMat,
+  /** Add a timed object to the scene (stepped each frame with k 0..1, removed at the end). */
+  timed(obj: THREE.Object3D, life: number, step: (k: number, dt: number) => void, dispose?: () => void): void {
+    if (!scene) return;
+    scene.add(obj);
+    transients.push({ obj, age: 0, life, step, dispose });
+  },
+  /** The body of `id` vanished (shattered, popped, squashed): hide its corpse. */
+  hideBody(id: string, now: number): void {
+    shattered.set(id, now);
+  },
+  hasScene: () => scene !== null,
+};

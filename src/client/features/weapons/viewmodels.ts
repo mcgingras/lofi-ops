@@ -213,6 +213,7 @@ export function buildWeaponViewmodel(c: ViewmodelCtx, model: string): ViewmodelS
     // Pistol slide blowback.
     if (p.slide && slideHome) p.slide.position.z = slideHome.z + (s.sinceShot < 0.09 ? 0.035 * (1 - s.sinceShot / 0.09) : 0);
     if (p.offhand) p.offhand.position.y = s.sinceShot < 0.12 && Math.floor(s.time * 20) % 2 === 0 ? 0.01 : 0;
+    build.animate?.(s);
 
     actions(s);
   };

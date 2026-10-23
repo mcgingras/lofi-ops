@@ -88,8 +88,8 @@ export function cycleTimes(openAt: number): number[] {
   return out;
 }
 
-/** Models that flash past during the cycle: the four wonder weapons and a handful of ordinary guns. */
-export const BOX_CYCLE_MODELS = ['raygun', 'ak47', 'thundergun', 'olympia', 'wunderwaffe', 'python', 'wintershowl', 'spas12', 'rpk', 'l96a1', 'mpl', 'galil'] as const;
+/** Models that flash past during the cycle: the seven wonder weapons and a handful of ordinary guns. */
+export const BOX_CYCLE_MODELS = ['raygun', 'ak47', 'thundergun', 'olympia', 'wunderwaffe', 'python', 'wintershowl', 'spas12', 'scavenger', 'rpk', 'babygun', 'l96a1', 'wavegun', 'mpl', 'galil'] as const;
 
 /** Tiny deterministic generator so the client's cycle matches between viewers. */
 export function seeded(seed: number): () => number {
