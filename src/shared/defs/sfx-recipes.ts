@@ -372,6 +372,12 @@ export const SFX_SYNTH_ONLY: Record<string, string> = {
   ks_pap_jingle: 'Pack-a-Punch machine: an original synthesized clunk-and-arpeggio jingle (not the Zombies jingle)',
   ks_pap_ding: 'Pack-a-Punch done: a synthesized bell ding and shimmer',
   ks_pap_down: 'Pack-a-Punch running out: a synthesized power-down whine and clunk',
+  ks_pap_zing: 'Pack-a-Punch piercing round: a synthesized falling whizz',
+  ks_pap_rico: 'Pack-a-Punch ricochet: a synthesized ringing pwing',
+  ks_pap_pulse: 'Pack-a-Punch shockwave: a synthesized deep whoomp and rush',
+  ks_pap_shatter: 'Pack-a-Punch shatter rounds: a synthesized glassy crack',
+  ks_pap_mark: 'Pack-a-Punch marked target: a synthesized double radar ping',
+  ks_pap_freeze: 'Pack-a-Punch frost round: a synthesized ice crackle',
   ks_mbox_byebye: 'Mystery Box loan running out: an original synthesized "bye-bye" and cackle',
   // Zombies (all original and synthesized).
   'zombies.round_start': 'Zombies round start stinger: an original synthesized bell toll and drone (no Zombies music)',

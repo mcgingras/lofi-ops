@@ -43,9 +43,9 @@ const add = (a: Vec3, d: Vec3, k: number): Vec3 => ({ x: a.x + d.x * k, y: a.y +
 // ---------------------------------------------------------------------------------------------
 
 /** The Scavenger's blast: a fireball, a smoke column, a ground ring, a shake and ringing close in. */
-function scavBoom(m: Match, at: Vec3): void {
+function scavBoom(m: Match, at: Vec3, wide = 1): void {
   const E = fxKit.emit;
-  const R = SCAVENGER.blast.r;
+  const R = SCAVENGER.blast.r * wide;
   E(at, { color: 0xffffff, life: 0.12, size: 2.5, size1: 3.5 });
   E(at, { color: FIRE, life: 0.45, size: 1.5, size1: R * 1.1 });
   for (let i = 0; i < 26; i++) E(at, { color: i % 2 ? FIRE : 0xffd060, life: 0.5 + Math.random() * 0.4, size: 0.3, size1: 0.05, vel: { x: rnd(12), y: 2 + Math.random() * 10, z: rnd(12) }, grav: 12, drag: 1 });
@@ -274,7 +274,7 @@ onFeature('weapons.wonderFx', (fx: WonderFx) => {
   if (!m || !fxKit.hasScene()) return;
   switch (fx.k) {
     case 'boom':
-      scavBoom(m, fx);
+      scavBoom(m, fx, fx.u ?? 1);
       break;
     case 'shrink':
       if (fx.p !== m.myId) {

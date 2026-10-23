@@ -6,6 +6,15 @@
  *   rising toy-organ arpeggio over a low drone, ~1.3 s, so it ends as the gun comes back up.
  * - `ks_pap_ding`: the gun coming out: a bell strike with a glassy shimmer.
  * - `ks_pap_down`: the buff running out: a falling power-down whine and a dull clunk.
+ *
+ * The signature effects' cues (packapunch-fx.ts; burn reuses `ks_fire`, the zap the wonder arc's
+ * `weapons.wonder.zap`, the exploding headshot `ks_boom`):
+ * - `ks_pap_zing`: a piercing round going on through a body: a bright falling whizz.
+ * - `ks_pap_rico`: a ricochet: the classic "pwing", a ringing tone bending down over a tick.
+ * - `ks_pap_pulse`: the Resonator's shockwave: a deep whoomp with a rushing tail.
+ * - `ks_pap_shatter`: armour breaking (shatter rounds): a glassy crack and tinkle.
+ * - `ks_pap_mark`: a target marked: a short double radar ping (for the marker only).
+ * - `ks_pap_freeze`: a frost round freezing someone solid: a crunchy ice crackle over a cold ring.
  */
 import { sfx } from '../../game/audio';
 
@@ -79,3 +88,66 @@ sfx.register('ks_pap_down', (ctx) => {
     return whine * 0.7 + clunk;
   });
 });
+
+sfx.register('ks_pap_zing', (ctx) => {
+  let ph = 0;
+  const dur = 0.32;
+  return tone(ctx, dur, (t, _i, sr) => {
+    const k = t / dur;
+    ph += (4200 * Math.pow(1 - k, 1.4) + 900) / sr;
+    const env = Math.min(1, t / 0.004) * Math.pow(1 - k, 2);
+    return (Math.sin(2 * Math.PI * ph) * 0.35 + noise() * 0.12 * Math.exp(-t * 30)) * env;
+  });
+});
+
+sfx.register('ks_pap_rico', (ctx) => {
+  let ph = 0;
+  const dur = 0.6;
+  return tone(ctx, dur, (t, _i, sr) => {
+    const k = t / dur;
+    ph += (2900 - 1500 * k + 60 * Math.sin(t * 90)) / sr;
+    const tick = t < 0.01 ? noise() * (1 - t / 0.01) * 0.8 : 0;
+    return tick + Math.sin(2 * Math.PI * ph) * 0.45 * Math.exp(-t * 5.5) * Math.min(1, t / 0.006);
+  });
+});
+
+sfx.register('ks_pap_pulse', (ctx) => {
+  let lp = 0;
+  return tone(ctx, 0.9, (t) => {
+    lp += (noise() - lp) * 0.06;
+    const boom = Math.sin(2 * Math.PI * (70 - 40 * Math.min(1, t / 0.5)) * t) * Math.exp(-t * 6) * 0.9;
+    const rush = lp * Math.exp(-t * 3) * 1.4 * Math.min(1, t / 0.05);
+    return boom + rush;
+  });
+});
+
+sfx.register('ks_pap_shatter', (ctx) =>
+  tone(ctx, 0.7, (t) => {
+    const crack = t < 0.03 ? noise() * (1 - t / 0.03) : 0;
+    let tink = 0;
+    for (const [at, f] of [[0.02, 3100], [0.07, 4400], [0.13, 3700], [0.21, 5200], [0.3, 4000]] as const) {
+      const k = t - at;
+      if (k > 0) tink += Math.sin(2 * Math.PI * f * k) * Math.exp(-k * 28) * 0.3;
+    }
+    return crack * 0.8 + tink;
+  }),
+);
+
+sfx.register('ks_pap_mark', (ctx) =>
+  tone(ctx, 0.36, (t) => {
+    let s = 0;
+    for (const at of [0, 0.14]) {
+      const k = t - at;
+      if (k > 0) s += Math.sin(2 * Math.PI * 1760 * k) * Math.exp(-k * 22) * Math.min(1, k / 0.003) * 0.4;
+    }
+    return s;
+  }),
+);
+
+sfx.register('ks_pap_freeze', (ctx) =>
+  tone(ctx, 0.8, (t) => {
+    const crunch = noise() * Math.exp(-t * 7) * (0.5 + 0.5 * Math.sign(Math.sin(t * 260))) * 0.5;
+    const ring = (Math.sin(2 * Math.PI * 2093 * t) + Math.sin(2 * Math.PI * 2637 * t) * 0.6) * 0.12 * Math.exp(-t * 3) * Math.min(1, t / 0.02);
+    return crunch + ring;
+  }),
+);

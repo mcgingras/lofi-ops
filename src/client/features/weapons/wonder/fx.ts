@@ -15,6 +15,7 @@
  */
 import * as THREE from 'three';
 import { rayHitboxes, playerHitboxes } from '../../../../shared/collision';
+import { PAP_CAMO, papWonder } from '../../../../shared/defs/pack-a-punch';
 import { RAYGUN, THUNDERGUN, WINTERS_HOWL, WONDER_ENTITY, WUNDERWAFFE, type WonderFx } from '../../../../shared/defs/wonder';
 import type { Vec3 } from '../../../../shared/math';
 import { sfx } from '../../../game/audio';
@@ -26,6 +27,10 @@ import { blastJolt, equipState } from '../equipment';
 import { bodyLook } from './bodies';
 
 const GREEN = 0x5cff4a;
+/** Porter's X2 Ray Gun (Pack-a-Punched): red bolts. */
+const X2_RED = 0xff3a2a;
+/** Is my gun in hand Pack-a-Punched (camo `pap`)? A Ray Gun's bolts are red, a Thundergun's blast wider. */
+const myRaygunRed = (m: Match) => m.me?.weapons[m.slot]?.camo === PAP_CAMO;
 const CYAN = 0x9ae8ff;
 const ICE = 0xbfeeff;
 const AIR = 0xe8f0ff;
@@ -131,11 +136,11 @@ function basis(d: Vec3): [Vec3, Vec3] {
 // ---------------------------------------------------------------------------------------------
 
 /** Ray Gun impact: a green flash, a ring on the ground, a spray of sparks. */
-function splash(at: Vec3): void {
-  emit(at, { color: GREEN, life: 0.35, size: 0.6, size1: 2.6 });
+function splash(at: Vec3, color = GREEN): void {
+  emit(at, { color, life: 0.35, size: 0.6, size1: 2.6 });
   emit(at, { color: 0xffffff, life: 0.12, size: 0.8, size1: 1.2 });
-  for (let i = 0; i < 16; i++) emit(at, { color: GREEN, life: 0.4 + Math.random() * 0.3, size: 0.12, size1: 0.04, vel: { x: rnd(5), y: 1 + Math.random() * 4, z: rnd(5) }, grav: 9, drag: 1 });
-  ring(at, { x: 0, y: 1, z: 0 }, GREEN, 0.3, 3.2, 0.4);
+  for (let i = 0; i < 16; i++) emit(at, { color, life: 0.4 + Math.random() * 0.3, size: 0.12, size1: 0.04, vel: { x: rnd(5), y: 1 + Math.random() * 4, z: rnd(5) }, grav: 9, drag: 1 });
+  ring(at, { x: 0, y: 1, z: 0 }, color, 0.3, 3.2, 0.4);
   currentMatch()?.effects.puff('dust', at, undefined, 4);
 }
 
@@ -165,13 +170,13 @@ function ring(at: Vec3, normal: Vec3, color: number, r0: number, r1: number, lif
 }
 
 /** Thundergun: rolling rings of compressed air down the tube, dust off the ground, a shake. */
-function blast(m: Match, o: Vec3, dir: Vec3, local: boolean): void {
+function blast(m: Match, o: Vec3, dir: Vec3, local: boolean, wide = 1): void {
   const d = unit(dir);
-  for (let i = 0; i < 3; i++) ring(add(o, d, 1.2 + i * 0.6), d, 0x8a96a8, 0.25 + i * 0.1, THUNDERGUN.r1 * 1.2, 0.3 + i * 0.08, { dir: d, dist: THUNDERGUN.range * (0.6 + i * 0.12) });
+  for (let i = 0; i < 3; i++) ring(add(o, d, 1.2 + i * 0.6), d, 0x8a96a8, 0.25 + i * 0.1, THUNDERGUN.r1 * 1.2 * wide, 0.3 + i * 0.08, { dir: d, dist: THUNDERGUN.range * (0.6 + i * 0.12) });
   const [a, b] = basis(d);
-  for (let i = 0; i < 22; i++) {
+  for (let i = 0; i < 22 * wide; i++) {
     const along = 1.5 + Math.random() * 2;
-    const spread = 0.35;
+    const spread = 0.35 * wide;
     const v = unit({ x: d.x + a.x * rnd(spread) + b.x * rnd(spread), y: d.y + a.y * rnd(spread) + b.y * rnd(spread), z: d.z + a.z * rnd(spread) + b.z * rnd(spread) });
     emit(add(o, d, along), { color: 0x5a6070, life: 0.3 + Math.random() * 0.2, size: 0.2, size1: 0.9, vel: { x: v.x * 22, y: v.y * 22, z: v.z * 22 }, drag: 3 });
   }
@@ -337,12 +342,12 @@ onFeature('weapons.wonderFx', (fx: WonderFx) => {
   const mine = 'p' in fx && fx.p === m.myId;
   switch (fx.k) {
     case 'splash':
-      splash(fx);
+      splash(fx, fx.u ? X2_RED : GREEN);
       sfx.play('weapons.wonder.splash', { at: fx, volume: 1.3 });
       break;
     case 'blast':
       if (!mine) {
-        blast(m, t3(fx.o), t3(fx.d), false);
+        blast(m, t3(fx.o), t3(fx.d), false, fx.u ?? 1);
         sfx.gunshot('thundergun', t3(fx.o));
       }
       break;
@@ -375,9 +380,10 @@ registerShotFx('raygun', {
   local(m, origin, dir) {
     if (!scene) return;
     const from = localMuzzle(m, dir);
-    emit(from, { color: GREEN, life: 0.08, size: 0.35 });
+    const color = myRaygunRed(m) ? X2_RED : GREEN;
+    emit(from, { color, life: 0.08, size: 0.35 });
     const life = localBoltSec(m);
-    const core = new THREE.Sprite(spriteMat('wonder.glow', GREEN, true));
+    const core = new THREE.Sprite(spriteMat('wonder.glow', color, true));
     core.scale.setScalar(0.45);
     scene.add(core);
     // Converge from the muzzle onto the aim line within a few metres.
@@ -390,7 +396,7 @@ registerShotFx('raygun', {
         const p = add(origin, dir, RAYGUN.speed * t + 0.6);
         const blend = Math.min(1, t / 0.08);
         core.position.set(from.x + (p.x - from.x) * blend, from.y + (p.y - from.y) * blend, from.z + (p.z - from.z) * blend);
-        if (Math.random() < 0.7) emit({ x: core.position.x, y: core.position.y, z: core.position.z }, { color: GREEN, life: 0.18, size: 0.22, size1: 0.05 });
+        if (Math.random() < 0.7) emit({ x: core.position.x, y: core.position.y, z: core.position.z }, { color, life: 0.18, size: 0.22, size1: 0.05 });
       },
     });
   },
@@ -425,7 +431,7 @@ registerShotFx('raygun', {
 
 registerShotFx('thundergun', {
   local(m, _origin, dir) {
-    blast(m, localMuzzle(m, dir), dir, true);
+    blast(m, localMuzzle(m, dir), dir, true, myRaygunRed(m) ? (papWonder('thundergun').radiusMult ?? 1) : 1);
   },
   replay(m, _shooter, from, to) {
     blast(m, from, unit({ x: to.x - from.x, y: to.y - from.y, z: to.z - from.z }), true);
@@ -475,7 +481,9 @@ registerShotFx('wintershowl', {
 
 registerEntityRenderer(WONDER_ENTITY.bolt, (e, m) => {
   const root = new THREE.Group();
-  const core = new THREE.Sprite(spriteMat('wonder.glow', GREEN, true));
+  // `s.u`: fired from Porter's X2 (packed): red.
+  const color = e.s?.u ? X2_RED : GREEN;
+  const core = new THREE.Sprite(spriteMat('wonder.glow', color, true));
   core.scale.setScalar(0.8);
   const hot = new THREE.Sprite(spriteMat('wonder.glow', 0xeaffd8, true));
   hot.scale.setScalar(0.28);
@@ -489,7 +497,7 @@ registerEntityRenderer(WONDER_ENTITY.bolt, (e, m) => {
       root.visible = !own || m.serverTime - born >= localBoltSec(m);
       if (!root.visible) return;
       core.scale.setScalar(0.75 + Math.sin(m.time * 40) * 0.08);
-      emit({ x: root.position.x, y: root.position.y, z: root.position.z }, { color: GREEN, life: 0.25, size: 0.4, size1: 0.05 });
+      emit({ x: root.position.x, y: root.position.y, z: root.position.z }, { color, life: 0.25, size: 0.4, size1: 0.05 });
     },
   };
 });
