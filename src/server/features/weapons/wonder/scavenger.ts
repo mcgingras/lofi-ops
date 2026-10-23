@@ -137,11 +137,16 @@ export function updateScavBolts(room: Room, dt: number): void {
         victim = { q, part: h.part };
       }
     }
-    // Stop a hair short of a wall so the bolt shows in its face, not inside the brush.
-    const t = victim ? maxT : wall ? Math.max(0, wall.t - 0.04) : L;
+    const t = victim ? maxT : wall ? wall.t : L;
     e.x = from.x + dir.x * t;
     e.y = from.y + dir.y * t;
     e.z = from.z + dir.z * t;
+    if (!victim && wall) {
+      // Stand it off the surface along its normal, so the blast's traces start in the open.
+      e.x += wall.normal.x * 0.08;
+      e.y += wall.normal.y * 0.08;
+      e.z += wall.normal.z * 0.08;
+    }
     e.yaw = Math.atan2(-dir.x, -dir.z);
     e.s = { ...e.s, pt: r2(Math.asin(Math.max(-1, Math.min(1, dir.y)))) };
     if (victim || wall) stick(room, e, b, victim);
