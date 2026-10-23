@@ -102,7 +102,12 @@ onFeature('killstreaks.papFx', (fx: PapFx) => {
       const b = t3(fx.b);
       m.effects.tracer(a, b);
       m.effects.puff('spark', a, { x: 0, y: 1, z: 0 }, 8);
-      fxKit.lightning(a, b, 0xffe0a0, 0.12, 0.012);
+      fxKit.lightning(a, b, 0xffe0a0, 0.22, 0.02);
+      // A spark trail along the bounce so it reads at a glance.
+      for (let i = 1; i <= 8; i++) {
+        const k = i / 8;
+        fxKit.emit({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k }, { color: 0xffd070, life: 0.25 + k * 0.15, size: 0.12, size1: 0.02 });
+      }
       if (fx.hit) m.effects.puff('blood', b, { x: 0, y: 1, z: 0 }, 6);
       sfx.play('ks_pap_rico', { at: a, volume: 0.9 });
       break;
@@ -164,8 +169,8 @@ function updateBodies(m: Match, dt: number): void {
     bodyLook(id, { heat: 0.55 + 0.15 * Math.sin(m.time * 23) });
     if (!puff) continue;
     const h = 1.7 - 0.6 * v.crouch;
-    for (let i = 0; i < 2; i++) {
-      fxKit.emit({ x: v.x + rnd(0.25), y: v.y + 0.2 + Math.random() * h, z: v.z + rnd(0.25) }, { color: FIRE[(Math.random() * 3) | 0]!, life: 0.3 + Math.random() * 0.25, size: 0.22, size1: 0.05, vel: { x: rnd(0.3), y: 1.6 + Math.random(), z: rnd(0.3) } });
+    for (let i = 0; i < 3; i++) {
+      fxKit.emit({ x: v.x + rnd(0.28), y: v.y + 0.15 + Math.random() * h, z: v.z + rnd(0.28) }, { color: FIRE[(Math.random() * 3) | 0]!, life: 0.35 + Math.random() * 0.3, size: 0.38, size1: 0.08, vel: { x: rnd(0.3), y: 1.8 + Math.random(), z: rnd(0.3) } });
     }
     if (Math.random() < 0.3) fxKit.emit({ x: v.x + rnd(0.2), y: v.y + h, z: v.z + rnd(0.2) }, { tex: 'puff', color: 0x2a2624, additive: false, life: 0.9, size: 0.2, size1: 0.6, vel: { x: rnd(0.3), y: 1.2, z: rnd(0.3) } });
   }
@@ -294,9 +299,9 @@ const CRACKS: [number, number][][] = (() => {
     const pts: [number, number][] = [[x0, y0]];
     let x = x0;
     let y = y0;
-    const dx = (0.5 - x0) * 0.2;
-    const dy = (0.5 - y0) * 0.2;
-    for (let i = 0; i < 5; i++) {
+    const dx = (0.5 - x0) * 0.11;
+    const dy = (0.5 - y0) * 0.11;
+    for (let i = 0; i < 3; i++) {
       x += dx * (0.6 + r() * 0.8) + (r() - 0.5) * 0.06;
       y += dy * (0.6 + r() * 0.8) + (r() - 0.5) * 0.06;
       pts.push([x, y]);
@@ -317,22 +322,34 @@ registerHudWidget(
     const m = currentMatch();
     if (!m || !m.alive) return;
     const u = unit(H);
-    // On fire: a flickering orange edge (dithered, opaque pixels only).
+    // On fire: a flickering orange edge: a solid rim, then dithered flame pixels thinning inward
+    // (opaque pixels only: the HUD composites where alpha > 0.5).
     if (isBurning(m, m.myId)) {
       const k = Math.min(1, (m.time - papFxState.burnAt) / 0.15);
-      const depth = Math.round((10 + 4 * Math.sin(m.time * 19)) * u * k);
+      const frame = Math.floor(m.time * 14);
+      const rim = 2 * u;
       const cols = ['#ff8a20', '#ffb040', '#ff5a10'];
+      const c0 = cols[frame % 3]!;
+      rect(g, 0, 0, W, rim, c0);
+      rect(g, 0, H - rim, W, rim, c0);
+      rect(g, 0, 0, rim, H, c0);
+      rect(g, W - rim, 0, rim, H, c0);
       const step = 2 * u;
-      for (let d = 0; d < depth; d += step) {
-        const c = cols[(Math.floor(m.time * 12) + d / step) % 3 | 0]!;
-        const gap = (d / depth) * 4 + 1; // sparser further in
-        for (let x = (d / step) % 2 ? step : 0; x < W; x += step * gap) {
-          rect(g, x, d, u, u, c);
-          rect(g, x, H - d - u, u, u, c);
+      const depth = Math.round((12 + 4 * Math.sin(m.time * 17)) * u * k);
+      for (let d = rim; d < depth; d += step) {
+        const density = 1 - d / depth;
+        const lay = d / step;
+        for (let i = 0; i * step < W; i++) {
+          const h1 = ((i * 73856093) ^ (lay * 19349663) ^ (frame * 83492791)) >>> 0;
+          if ((h1 % 1000) / 1000 < density * 0.7) rect(g, i * step, d, step, step, cols[h1 % 3]!);
+          const h2 = (h1 * 2654435761) >>> 0;
+          if ((h2 % 1000) / 1000 < density * 0.7) rect(g, i * step, H - d - step, step, step, cols[h2 % 3]!);
         }
-        for (let y = (d / step) % 2 ? step : 0; y < H; y += step * gap) {
-          rect(g, d, y, u, u, c);
-          rect(g, W - d - u, y, u, u, c);
+        for (let j = 0; j * step < H; j++) {
+          const h1 = ((j * 2971215073) ^ (lay * 433494437) ^ (frame * 1597334677)) >>> 0;
+          if ((h1 % 1000) / 1000 < density * 0.7) rect(g, d, j * step, step, step, cols[h1 % 3]!);
+          const h2 = (h1 * 2246822519) >>> 0;
+          if ((h2 % 1000) / 1000 < density * 0.7) rect(g, W - d - step, j * step, step, step, cols[h2 % 3]!);
         }
       }
     }
