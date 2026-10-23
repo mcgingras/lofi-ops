@@ -166,35 +166,45 @@ export function chainTargets<T extends { at: Vec3 }>(first: T, candidates: reado
 
 /**
  * Winter's Howl. BO1 (`_zombiemode_weap_freezegun.gsc`): a 600-unit cone (120-unit cylinder),
- * 1000 to 500 damage by distance; slowed zombies freeze and a frozen one shatters. Here frost
- * stacks: each blast adds frost (1 within 4 m, down to 0.5 at 12 m); frost slows movement and
- * turning more and more, at 1 you are frozen solid (x0.2 speed, x0.25 turn) and the next blast
- * shatters you (a kill). Frost starts thawing 1.5 s after the last blast. A blast also bites for 20.
+ * 1000 to 500 damage by distance; slowed zombies freeze and a frozen one shatters. Here: a wide
+ * frost blast out to 19 m. Frost stacks: one blast inside 7 m freezes solid, out to 19 m it adds
+ * 0.5 (two blasts freeze at any range). Frost takes the fight out of you as it builds: slower legs
+ * and turning, a slower trigger (x1 to x0.35) and wilder spread (x1 to x3); frozen solid you cannot
+ * move, turn, fire, aim down sights, throw or knife (bots stop dead). The next blast shatters a
+ * frozen player (a kill). Frozen holds 2.5 s, then frost thaws at 0.5/s (from 1.5 s after the last
+ * blast). Each blast also bites for 25.
+ *
+ * Plain numbers (no derived fields) so a generic upgrade (damage or magazine multiplier) can scale
+ * the table: `damage` / `shatterDamage` are the damage, frost and reach are the behaviour.
  */
 export const WINTERS_HOWL = {
-  range: 12,
-  r0: 0.7,
-  r1: 2.0,
-  damage: 20,
+  range: 19,
+  /** Cone radius at the nozzle and at `range` (m): wide and forgiving. */
+  r0: 0.9,
+  r1: 3.0,
+  damage: 25,
+  /** Frost added: `frostNear` inside `nearRange` (freezes solid), falling to `frostFar` at `range`. */
   frostNear: 1,
   frostFar: 0.5,
-  nearRange: 4,
+  nearRange: 7,
   /** Frost thaws at `thaw` per second once `thawDelay` has passed since the last blast. */
   thawDelay: 1.5,
-  thaw: 0.4,
+  thaw: 0.5,
   /** Frozen solid (frost >= 1) holds at least this long before thawing starts. */
   frozenSec: 2.5,
-  /** Movement and turn multipliers: partial frost scales toward the frozen values. */
-  slow: { speed: 0.55, turn: 0.45 },
-  frozen: { speed: 0.2, turn: 0.25 },
+  /** Movement and turn multipliers: partial frost scales toward `slow`; frozen solid is `frozen`. */
+  slow: { speed: 0.5, turn: 0.4 },
+  frozen: { speed: 0, turn: 0 },
+  /** Partial frost on the trigger: fire rate toward x`fireRate`, spread toward x`spread`. */
+  suppress: { fireRate: 0.35, spread: 3 },
   shatterDamage: 400,
 } as const;
 
-/** Frost a Winter's Howl blast adds at `d` metres. */
+/** Frost a Winter's Howl blast adds at `d` metres (0 beyond its range). */
 export function frostAdded(d: number): number {
   const w = WINTERS_HOWL;
+  if (d > w.range) return 0;
   if (d <= w.nearRange) return w.frostNear;
-  if (d >= w.range) return w.frostFar;
   return w.frostNear + (w.frostFar - w.frostNear) * ((d - w.nearRange) / (w.range - w.nearRange));
 }
 
@@ -204,6 +214,23 @@ export function frostSlow(frost: number): { speed: number; turn: number } {
   if (frost <= 0) return { speed: 1, turn: 1 };
   if (frost >= 1) return { ...w.frozen };
   return { speed: 1 - (1 - w.slow.speed) * frost, turn: 1 - (1 - w.slow.turn) * frost };
+}
+
+/**
+ * What frost does to the trigger: fire rate and spread multipliers, and whether the hands work at
+ * all (frozen solid: no fire, ADS, throw or knife).
+ */
+export function frostSuppress(frost: number): { fireRate: number; spread: number; hands: boolean } {
+  const s = WINTERS_HOWL.suppress;
+  if (frost >= 1) return { fireRate: s.fireRate, spread: s.spread, hands: false };
+  const f = Math.max(0, frost);
+  return { fireRate: 1 - (1 - s.fireRate) * f, spread: 1 + (s.spread - 1) * f, hands: true };
+}
+
+/** Blasts it takes to freeze someone solid at `d` metres (from no frost; Infinity out of range). */
+export function blastsToFreeze(d: number, frostMultiplier = 1): number {
+  const per = frostAdded(d) * frostMultiplier;
+  return per > 0 ? Math.ceil(1 / per - 1e-9) : Infinity;
 }
 
 /** Entity kinds: a Ray Gun bolt in flight, and the frost on a player (`s.p` id, `s.f` amount). */

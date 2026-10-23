@@ -23,6 +23,7 @@ import { onFeature, registerEntityRenderer, registerMatchHook, registerShotFx } 
 import { getTexture } from '../../../render/textures';
 import { currentMatch } from '../../../state';
 import { blastJolt, equipState } from '../equipment';
+import { bodyLook } from './bodies';
 
 const GREEN = 0x5cff4a;
 const CYAN = 0x9ae8ff;
@@ -528,6 +529,8 @@ registerEntityRenderer(WONDER_ENTITY.frost, (e, m) => {
         sh.scale.y = 0.18 + 0.2 * f;
       });
       block.visible = f >= 1;
+      // The soldier itself goes pale blue as the frost takes (bodies.ts), solid ice when frozen.
+      if (v?.alive && victim !== m.myId) bodyLook(victim, { ice: f >= 1 ? 1 : 0.25 + 0.6 * f });
       block.scale.y = 1.95 * crouch;
       block.position.y = 0.97 * crouch;
       mist -= dt;

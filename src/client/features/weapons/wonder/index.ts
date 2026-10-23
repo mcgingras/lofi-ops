@@ -5,10 +5,12 @@
  * Their sounds are registered from ../sounds.ts (so the sound tests see them).
  */
 import './textures';
+import './bodies';
 import './models';
 import './fx';
 import './hud';
 
 export { WONDER_GUNS } from './models';
 export { myFrost } from './hud';
+export { bodyLook, lookOf, type BodyLook } from './bodies';
 export { fxEmit, fxLightning, fxRing } from './fx';

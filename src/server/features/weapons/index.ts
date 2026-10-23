@@ -81,6 +81,8 @@ const feature: Feature = {
 
     room.bus.on('buttons', ({ player, pressed }) => {
       if (!player.alive || room.phase !== 'playing') return;
+      // Hands taken (frozen solid by Winter's Howl, swelling under the Wave Gun): no knife, no throw.
+      if (room.modifiers.any('canFire', player) === false) return;
       if (pressed & Buttons.MELEE) melee(room, player);
       if (pressed & Buttons.LETHAL) startThrow(room, player, 'lethal');
       else if (pressed & Buttons.TACTICAL) startThrow(room, player, 'tactical');

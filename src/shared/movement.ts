@@ -85,6 +85,10 @@ export interface MoveParams {
   canProne?: boolean;
   /** Fire rate multiplier (`fireRateMultiplier` modifier, Zombies' Double Tap); not movement, but it rides along in `me.params`. */
   fireRate?: number;
+  /** False while the player's hands are taken (`canFire` modifier: frozen solid); the client's trigger holds. Rides along like `fireRate`. */
+  canFire?: boolean;
+  /** False while the player can't aim down sights (`canAds` modifier: frozen solid): ADS falls back to the hip. */
+  canAds?: boolean;
 }
 
 export const DEFAULT_MOVE_PARAMS: MoveParams = { speed: 1, adsTime: 0.25, adsMove: MOVE.ads, sprint: 1, canSprint: true, jump: 1, canMove: true, canMantle: true, canProne: true };
@@ -240,7 +244,7 @@ function substep(world: CollisionWorld, s: MoveState, buttons: number, yaw: numb
   const sprint = move && p.canSprint && !knocked && has(buttons, Buttons.SPRINT) && !adsHeld && f >= MOVE.sprintMinForward && !s.crouched && !lowStance && s.dive <= 0 && s.ads <= MOVE.sprintMaxAds && (s.onGround || s.sprinting);
   s.sprinting = sprint;
   s.sinceSprint = sprint ? 0 : s.sinceSprint + h;
-  updateAds(s, adsHeld && !sprint, h, p);
+  updateAds(s, adsHeld && !sprint && p.canAds !== false, h, p);
 
   // Mantle (BO1): jump held, standing, moving forward into a ledge you can't step onto.
   if (jumpDown && f > 0 && !knocked && p.canMantle !== false && !s.crouched && !s.prone && s.proneT <= 0 && s.dive <= 0) {
@@ -604,7 +608,7 @@ function stepMantle(s: MoveState, h: number, adsHeld: boolean, p: MoveParams) {
   }
   s.sprinting = false;
   s.sinceSprint += h;
-  updateAds(s, adsHeld, h, p);
+  updateAds(s, adsHeld && p.canAds !== false, h, p);
   if (m.t < m.dur) return;
   s.x = m.to.x;
   s.y = m.to.y;

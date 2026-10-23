@@ -79,6 +79,8 @@ export function fire(room: Room, p: PlayerState, req: ShotRequest): FireResult {
   if (p.move.sprinting || p.move.sinceSprint + 0.05 < sprintOut) return { ok: false, reason: 'sprinting' };
   // Mantling, diving, or going to / getting up from prone: the weapon is down.
   if (moveBusy(p.move)) return { ok: false, reason: 'stance' };
+  // Hands taken (frozen solid, swelling): no trigger at all (the `canFire` modifier).
+  if (room.modifiers.any('canFire', p) === false) return { ok: false, reason: 'hands' };
 
   // Rate: a token bucket refilling at the weapon's rate, a little slack for network bunching.
   const interval = shotInterval(def) / room.modifiers.mul('fireRateMultiplier', p);

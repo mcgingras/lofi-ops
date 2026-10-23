@@ -767,7 +767,8 @@ export class Match {
     const wantShot = def.mode === 'auto' ? trigger : def.mode === 'burst' ? this.burstLeft > 0 : pressed;
     if (!wantShot) return;
     // Mantling, diving, going prone or getting up: the weapon is down (the server refuses too).
-    if (reloading || switching || sprintBlocked || moveBusy(st)) {
+    // Hands taken (frozen solid: `me.params.canFire`), the weapon down: the server refuses too.
+    if (reloading || switching || sprintBlocked || moveBusy(st) || this.me?.params.canFire === false) {
       if (def.mode !== 'burst') return;
       return;
     }
