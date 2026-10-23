@@ -17,6 +17,7 @@ import { LOOT_ENTITY } from '../src/shared/defs/blackout';
 import { PICKUP_ENTITY } from '../src/shared/defs/pickups';
 import { lootSpots } from '../src/server/features/blackout/loot';
 import { bx } from '../src/server/features/blackout/state';
+import { focusOf } from '../src/server/features/blackout/interest';
 import { blackoutRoom, stats, stepTimed, type BlackoutHarness } from './blackout-harness';
 
 let h: BlackoutHarness | null = null;
@@ -341,8 +342,10 @@ describe('blackout: interest management', () => {
     const last = snaps[snaps.length - 1];
     const me = h.humans[0]!.player;
     expect(last.players.length).toBeLessThanOrEqual(BLACKOUT.interest.maxPlayers + 1);
-    for (const p of last.players) expect(Math.hypot(p.x - me.move.x, p.z - me.move.z)).toBeLessThanOrEqual(BLACKOUT.interest.playerRadius + 3);
-    for (const e of last.ents) if (e.kind !== 'blackout_plane') expect(Math.hypot(e.x - me.move.x, e.z - me.move.z)).toBeLessThanOrEqual(BLACKOUT.interest.entityRadius + 3);
+    // Measured from where they look from: themselves, or whoever they spectate once dead.
+    const f = focusOf(room, me);
+    for (const p of last.players) if (p.id !== me.id) expect(Math.hypot(p.x - f.x, p.z - f.z)).toBeLessThanOrEqual(BLACKOUT.interest.playerRadius + 3);
+    for (const e of last.ents) if (e.kind !== 'blackout_plane') expect(Math.hypot(e.x - f.x, e.z - f.z)).toBeLessThanOrEqual(BLACKOUT.interest.entityRadius + 3);
     expect(last.ents.length).toBeLessThan(room.entities.size / 3);
     // The alive count goes out in blackout.state.
     const state = h.humans[0]!.socket.msgs.map((m) => JSON.parse(m)).filter((m) => m.t === 'feat' && m.id === 'blackout.state').at(-1);
@@ -431,14 +434,13 @@ describe('blackout: bots', () => {
     const near = bots.filter((p) => game.isNear(p));
     const far = bots.filter((p) => !game.isNear(p));
     expect(far.length).toBeGreaterThan(0);
-    for (const p of far) {
-      const d = Math.min(...room.humans().map((hm) => Math.hypot(hm.move.x - p.move.x, hm.move.z - p.move.z)));
-      expect(d).toBeGreaterThan(BLACKOUT.lod.nearDist - 15);
-    }
-    for (const p of near) {
-      const d = Math.min(...room.humans().map((hm) => Math.hypot(hm.move.x - p.move.x, hm.move.z - p.move.z)));
-      expect(d).toBeLessThan(BLACKOUT.lod.nearDist + 15);
-    }
+    // The level of detail is measured from where each human looks from (themselves, or whoever
+    // they spectate: a smaller radius then), refreshed every 6 ticks.
+    const hm = room.humans()[0]!;
+    const f = focusOf(room, hm);
+    const R = hm.alive ? BLACKOUT.lod.nearDist : BLACKOUT.lod.nearDist * 0.5;
+    for (const p of far) expect(Math.hypot(f.x - p.move.x, f.z - p.move.z)).toBeGreaterThan(R - 15);
+    for (const p of near) expect(Math.hypot(f.x - p.move.x, f.z - p.move.z)).toBeLessThan(R + 15);
   }, 60_000);
 });
 
