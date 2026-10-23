@@ -2,7 +2,7 @@
  * Zombies through the real server and real sockets: one click solo (`zombies.solo` starts its own
  * lobby), the state push (round 1, 500 points, the M1911), the round-start event, zombies in the
  * roster on team 1, points for a shot over the wire (+10 / +60 popups), a wall-buy by holding USE,
- * and game over with the results (`results.ext.zombies.round`).
+ * and game over with the results (`results.ext.zombies.round`); solo's default bot partner.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startServer, type GameServer } from '../src/server/app';
@@ -36,7 +36,7 @@ describe('Zombies over real sockets', () => {
   it('solo in one click: rounds, points over the wire, a wall-buy, game over and results', async () => {
     const { client: a, welcome } = await FakeClient.connect(server.url, 'Solo');
     clients.push(a);
-    a.send({ t: 'rpc', id: 'zombies.solo', data: { map: 'nuketown' }, rid: 1 });
+    a.send({ t: 'rpc', id: 'zombies.solo', data: { map: 'nuketown', allies: 0 }, rid: 1 });
     const res = await a.waitFor('rpcResult', (m) => m.rid === 1);
     expect(res.ok).toBe(true);
     const roomId = (res.data as { roomId: string }).roomId;
@@ -114,4 +114,20 @@ describe('Zombies over real sockets', () => {
     const prof = await a.waitFor('profile', () => true, 5000);
     expect(prof.profile.stats['zombies.bestRound']).toBe(g.survived);
   }, 60000);
+
+  it('solo plays with a bot partner by default: two survivors in the state, the ally flagged', async () => {
+    const { client: a, welcome } = await FakeClient.connect(server.url, 'Duo');
+    clients.push(a);
+    a.send({ t: 'rpc', id: 'zombies.solo', data: { map: 'nuketown' }, rid: 2 });
+    const res = await a.waitFor('rpcResult', (m) => m.rid === 2);
+    expect(res.ok).toBe(true);
+    a.send({ t: 'joinRoom', roomId: (res.data as { roomId: string }).roomId });
+    await a.waitFor('joined');
+    const st = await feat<ZombiesStatePayload>(a, 'zombies.state', (s) => s.players.length === 2, 20000);
+    const ally = st.players.find((p) => p.id !== welcome.sessionId)!;
+    expect(ally.bot).toBe(true);
+    expect(ally.points).toBe(500);
+    expect(st.solo).toBe(false);
+    expect(st.players.find((p) => p.id === welcome.sessionId)!.bot).toBeUndefined();
+  }, 30000);
 });

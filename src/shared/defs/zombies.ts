@@ -475,17 +475,266 @@ export function rollBoxWeapon(carried: readonly string[], rnd: number, pool = bo
  */
 export const ZOMBIE_DAMAGE = {
   byClass: { ar: 2.6, smg: 2.5, lmg: 2.6, sniper: 4, shotgun: 3, pistol: 2.2, launcher: 3, special: 6 } as Record<string, number>,
-  byWeapon: { m1911: 0.6, raygun: 6, thundergun: 40, wunderwaffe: 40, wintershowl: 30, gl: 3 } as Record<string, number>,
+  byWeapon: { m1911: 0.5, raygun: 6, thundergun: 40, wunderwaffe: 40, wintershowl: 30, gl: 3 } as Record<string, number>,
   explosive: 2.5,
 } as const;
 
-export function zombieDamageMult(weapon: string, means: string): number {
+export function zombieDamageMult(weapon: string, means: string, difficulty: ZombiesDifficulty = 'classic'): number {
   if (means === 'melee') return 1;
   const w = WEAPON_BY_ID.get(weapon);
-  const byW = ZOMBIE_DAMAGE.byWeapon[weapon];
+  const byW = ZOMBIES_DIFFICULTY[difficulty].damageByWeapon[weapon] ?? ZOMBIE_DAMAGE.byWeapon[weapon];
   if (byW !== undefined) return byW;
   if (w) return ZOMBIE_DAMAGE.byClass[w.class] ?? 2.5;
   return means === 'explosive' ? ZOMBIE_DAMAGE.explosive : 1;
+}
+
+/**
+ * Hit-part multipliers against zombies (BO1's `_zm` weapon files, as the Call of Duty Wiki lists
+ * them per weapon: "Upgraded Weapons/Black Ops", `regmultiplier`). Our guns carry multiplayer
+ * multipliers (heads x1.4, shotguns x1) which made a headshot on a zombie barely count; BO1
+ * Zombies hits the head x3-x10. `head` and `torso` replace the weapon's own (`torso` only where
+ * BO1 lists a chest multiplier above 1); limbs keep theirs.
+ *   ARs and SMGs (M16, Famas, Commando, Galil, AUG, AK-74u, MP5K, MPL, Spectre...) head x4;
+ *   RPK / HK21 x3; M1911 x3.5, chest x1.25; CZ75 x3.5; Python head and chest x1.5;
+ *   Dragunov x10, chest x1.5; L96A1 x10; shotguns none (N/A); the wonder weapons none.
+ */
+export const ZOMBIE_PARTS = {
+  byClass: {
+    ar: { head: 4 },
+    smg: { head: 4 },
+    lmg: { head: 3 },
+    sniper: { head: 10 },
+    pistol: { head: 3.5 },
+    shotgun: { head: 1 },
+    launcher: { head: 1 },
+    special: { head: 1 },
+  } as Record<string, { head: number; torso?: number }>,
+  byWeapon: {
+    m1911: { head: 3.5, torso: 1.25 },
+    python: { head: 1.5, torso: 1.5 },
+    dragunov: { head: 10, torso: 1.5 },
+    rpk: { head: 3 },
+  } as Record<string, { head: number; torso?: number }>,
+} as const;
+
+/**
+ * Factor on a gun's damage against a zombie for the part it hit: BO1's zombie multiplier over the
+ * weapon's own (which `fire()` already applied). 1 for anything but bullets.
+ */
+export function zombiePartMult(weapon: string, part: 'head' | 'torso' | 'legs' | null | undefined, means: string): number {
+  if (means !== 'bullet' || !part || part === 'legs') return 1;
+  const w = WEAPON_BY_ID.get(weapon);
+  if (!w) return 1;
+  const zm = ZOMBIE_PARTS.byWeapon[weapon] ?? ZOMBIE_PARTS.byClass[w.class];
+  if (!zm) return 1;
+  const own = part === 'head' ? w.multipliers.head : w.multipliers.torso;
+  const want = part === 'head' ? zm.head : (zm.torso ?? own);
+  return own > 0 ? want / own : 1;
+}
+
+/** Damage one bullet of `weapon` does to a zombie at point blank on `part` (tests, docs). */
+export function zombieBulletDamage(weapon: string, part: 'head' | 'torso' | 'legs', difficulty: ZombiesDifficulty = 'classic'): number {
+  const w = WEAPON_BY_ID.get(weapon);
+  if (!w) return 0;
+  const own = part === 'head' ? w.multipliers.head : part === 'torso' ? w.multipliers.torso : w.multipliers.limb;
+  return w.damage.near * own * zombieDamageMult(weapon, 'bullet', difficulty) * zombiePartMult(weapon, part, 'bullet');
+}
+
+// ---------------------------------------------------------------------------------------------
+// Difficulty: Casual (the default) and Classic (BO1, every number above)
+// ---------------------------------------------------------------------------------------------
+
+export type ZombiesDifficulty = 'casual' | 'classic';
+export const ZOMBIES_DIFFICULTIES: readonly ZombiesDifficulty[] = ['casual', 'classic'];
+export const ZOMBIES_DEFAULT_DIFFICULTY: ZombiesDifficulty = 'casual';
+
+export interface ZombiesDifficultyTuning {
+  /** Menu name, HUD / results label, menu blurb. */
+  name: string;
+  label: string;
+  blurb: string;
+  /** Zombie health for rounds 1..n (index 0 = round 1); later rounds use BO1's `zombieHealth`. */
+  earlyHealth: readonly number[];
+  /** Round size: BO1's count x `countScale` up to `countRampFrom`, ramping linearly to x1 at `countFullAt`. */
+  countScale: number;
+  countRampFrom: number;
+  countFullAt: number;
+  /** AI partners add to the player count for the round size (BO1 counts every player). */
+  alliesCount: boolean;
+  /** Zombie swipe damage and the gap between swipes (s). */
+  swipeDamage: number;
+  swipeEvery: number;
+  /** Co-op bleed-out (s). */
+  bleedOutSec: number;
+  /** Per-weapon damage factors against zombies, over `ZOMBIE_DAMAGE.byWeapon`. */
+  damageByWeapon: Record<string, number>;
+  /** Hellhound rounds: dog count and dog health factors. */
+  dogCount: number;
+  dogHealth: number;
+}
+
+/**
+ * Casual: the early rounds forgive (100-health round-1 zombies, a one-shot M1911 headshot in
+ * rounds 1-2, 3 swipes to down you, 8 with Juggernog), joining BO1's curves by round 9 (health)
+ * and round 12 (round size). Classic: BO1 exactly.
+ */
+export const ZOMBIES_DIFFICULTY: Record<ZombiesDifficulty, ZombiesDifficultyTuning> = {
+  casual: {
+    name: 'Casual',
+    label: 'CASUAL',
+    blurb: 'Softer early rounds, fewer zombies, 3 swipes to go down. Joins BO1 by round 12.',
+    earlyHealth: [100, 140, 220, 330, 450, 600, 750, 900],
+    countScale: 0.6,
+    countRampFrom: 5,
+    countFullAt: 12,
+    alliesCount: false,
+    swipeDamage: 34,
+    swipeEvery: 1.3,
+    bleedOutSec: 45,
+    damageByWeapon: { m1911: 1.0 },
+    dogCount: 0.6,
+    dogHealth: 0.75,
+  },
+  classic: {
+    name: 'Classic (BO1)',
+    label: 'CLASSIC',
+    blurb: 'Black Ops 1 numbers: 2 swipes down you, the M1911 takes six to the body in round 1.',
+    earlyHealth: [],
+    countScale: 1,
+    countRampFrom: 5,
+    countFullAt: 12,
+    alliesCount: true,
+    swipeDamage: ZOMBIES.swipeDamage,
+    swipeEvery: ZOMBIES.swipeEvery,
+    bleedOutSec: ZOMBIES.bleedOutSec,
+    damageByWeapon: {},
+    dogCount: 1,
+    dogHealth: 1,
+  },
+};
+
+/** A requested difficulty, or the default (Casual). */
+export const zombiesDifficulty = (d: unknown): ZombiesDifficulty => (ZOMBIES_DIFFICULTIES.includes(d as ZombiesDifficulty) ? (d as ZombiesDifficulty) : ZOMBIES_DEFAULT_DIFFICULTY);
+
+/** Zombie health in a round at a difficulty (Classic: `zombieHealth`). */
+export function zombieHealthFor(round: number, difficulty: ZombiesDifficulty): number {
+  const early = ZOMBIES_DIFFICULTY[difficulty].earlyHealth;
+  return round >= 1 && round <= early.length ? early[round - 1]! : zombieHealth(round);
+}
+
+/** The round-size factor at a difficulty (1 for Classic). */
+export function roundSizeScale(round: number, difficulty: ZombiesDifficulty): number {
+  const t = ZOMBIES_DIFFICULTY[difficulty];
+  if (round <= t.countRampFrom) return t.countScale;
+  if (round >= t.countFullAt) return 1;
+  return t.countScale + ((1 - t.countScale) * (round - t.countRampFrom)) / (t.countFullAt - t.countRampFrom);
+}
+
+/** Players the round size counts: everyone in Classic (BO1), humans only in Casual. */
+export const roundSizePlayers = (humans: number, allies: number, difficulty: ZombiesDifficulty): number => Math.max(1, humans + (ZOMBIES_DIFFICULTY[difficulty].alliesCount ? allies : 0));
+
+/** Zombies in a round at a difficulty, for `humans` players and `allies` AI partners. */
+export function zombiesForRoundAt(round: number, humans: number, allies: number, difficulty: ZombiesDifficulty): number {
+  const n = zombiesForRound(round, roundSizePlayers(humans, allies, difficulty));
+  if (difficulty === 'classic') return n;
+  return Math.max(1, Math.round(n * roundSizeScale(round, difficulty)));
+}
+
+/** Hellhounds in the `dogRound`-th dog round at a difficulty. */
+export function dogsForRoundAt(dogRound: number, humans: number, allies: number, difficulty: ZombiesDifficulty): number {
+  const n = dogsForRound(dogRound, roundSizePlayers(humans, allies, difficulty));
+  if (difficulty === 'classic') return n;
+  return Math.max(1, Math.round(n * ZOMBIES_DIFFICULTY[difficulty].dogCount));
+}
+
+export const dogHealthAt = (dogRound: number, difficulty: ZombiesDifficulty): number => Math.round(dogHealth(dogRound) * ZOMBIES_DIFFICULTY[difficulty].dogHealth);
+
+/** Swipes that down a survivor with `health` (100, 250 with Juggernog). */
+export const swipesToDown = (health: number, difficulty: ZombiesDifficulty): number => Math.ceil(health / ZOMBIES_DIFFICULTY[difficulty].swipeDamage);
+
+// ---------------------------------------------------------------------------------------------
+// The zombie's pose (client look.ts) kept inside its hitboxes
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Hitboxes are the standing player's (`playerHitboxes`: the head is a 0.3 m box on top of the
+ * feet, 1.44-1.8 m). The old shamble leaned the whole soldier up to 0.37 rad about the feet, which
+ * drew the head 0.3-0.65 m in front of its hitbox: aimed at the drawn head from anywhere but dead
+ * ahead, a shot passed beside the head box (a miss or a torso hit). The pose now leans about the
+ * hips, a little, with the head nodding and lolling, so the drawn head stays inside the head box
+ * at every speed and phase (tests/zombies.headshots.test.ts).
+ *
+ * Soldier geometry (src/client/render/models/soldier.ts): hips at 0.96, the neck pivot at 1.58,
+ * the head box centred 0.19 above it and 0.01 forward.
+ */
+export const ZOMBIE_POSE = {
+  hip: 0.96,
+  neck: 1.58,
+  headUp: 0.19,
+  headFwd: 0.01,
+  /** Forward lean (rad): base + per m/s, capped. */
+  leanBase: 0.05,
+  leanPerMs: 0.01,
+  leanMax: 0.09,
+  /** Side-to-side lurch (rad) and the head's loll (rad) and nod (rad, + = chin down). */
+  lurch: 0.04,
+  headRoll: 0.18,
+  headNod: 0.12,
+  /** Climbing out of the ground: seconds, and the part of it spent crouched (the server crouches the body). */
+  riseSec: 1.1,
+  riseCrouchSec: 0.55,
+  /** How far below the ground the climb starts (on top of the crouch). */
+  riseDrop: 0.9,
+} as const;
+
+export interface ZombiePoseAngles {
+  /** Body lean forward (rad, about the hips) and roll (rad, + leans to its left). */
+  lean: number;
+  roll: number;
+  /** Head nod (rad, + = chin down) and roll (rad). */
+  nod: number;
+  headRoll: number;
+}
+
+/** The shamble at `speed` m/s and walk-cycle `phase` (radians). */
+export function zombiePose(speed: number, phase: number): ZombiePoseAngles {
+  const P = ZOMBIE_POSE;
+  return {
+    lean: Math.min(P.leanMax, P.leanBase + speed * P.leanPerMs),
+    roll: Math.sin(phase) * P.lurch,
+    nod: P.headNod,
+    headRoll: Math.sin(phase * 0.5) * P.headRoll,
+  };
+}
+
+/**
+ * Centre of the drawn head relative to the feet, in the body's frame: `x` to its right, `y` up,
+ * `z` ahead (Three.js Euler XYZ, as look.ts sets it: the body turns about the hips, the head about
+ * the neck).
+ */
+export function zombieHeadCenter(a: ZombiePoseAngles): { x: number; y: number; z: number } {
+  const P = ZOMBIE_POSE;
+  // Head frame: nod about x, then roll about z (Euler XYZ applies z first, then x).
+  let x = 0;
+  let y: number = P.headUp;
+  let z: number = P.headFwd;
+  [x, y] = [x * Math.cos(a.headRoll) - y * Math.sin(a.headRoll), x * Math.sin(a.headRoll) + y * Math.cos(a.headRoll)];
+  [y, z] = [y * Math.cos(a.nod) - z * Math.sin(a.nod), y * Math.sin(a.nod) + z * Math.cos(a.nod)];
+  // Body frame, relative to the hip pivot.
+  y += P.neck - P.hip;
+  [x, y] = [x * Math.cos(a.roll) - y * Math.sin(a.roll), x * Math.sin(a.roll) + y * Math.cos(a.roll)];
+  [y, z] = [y * Math.cos(a.lean) - z * Math.sin(a.lean), y * Math.sin(a.lean) + z * Math.cos(a.lean)];
+  // Model space faces +z with +x on its left (the soldier is turned by yaw + PI): report x as "right".
+  return { x: -x, y: y + P.hip, z };
+}
+
+/** The old shamble (before the fix), for the test that shows why head shots missed. */
+export function legacyZombieHeadCenter(speed: number): { x: number; y: number; z: number } {
+  const lean = 0.12 + Math.min(0.25, speed * 0.04);
+  // Lean about the feet, head tilted back 0.2.
+  const y0 = ZOMBIE_POSE.neck + 0.19 * Math.cos(-0.2);
+  const z0 = 0.01 + 0.19 * Math.sin(-0.2);
+  return { x: 0, y: y0 * Math.cos(lean) - z0 * Math.sin(lean), z: y0 * Math.sin(lean) + z0 * Math.cos(lean) };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -525,21 +774,122 @@ export const ZM_ENTITY = {
   boxSpot: 'zm_boxspot',
   /** A power-up on the ground: `s = { k: id, t0: dropped at, te: gone at }`. */
   powerup: 'zm_powerup',
-  /** A boarded window: `s = { b: boards up (0..6), w, h }`, yaw = facing inside. */
+  /** A boarded window: `s = { b: boards up (0..6), w, h, sl: sill }` at the opening's centre on the wall line, yaw = facing inside. */
   barrier: 'zm_barrier',
+  /** A buyable door / debris pile: `s = { c: cost, k: kind, w, h, o?: room time it opened, l?: chalk label }`, yaw = its front. */
+  door: 'zm_door',
 } as const;
 
+/**
+ * Barriers (BO1 `_zombiemode_blockers.gsc`, `_zombiemode_spawner.gsc` `tear_into_building`): six
+ * boards; a zombie at the window pulls one off per tear animation and climbs in once all are down.
+ * A survivor holding USE at the window puts one back per second (`blocker_trigger_think`: `wait(1)`
+ * per chunk) for 10 points (`zombie_cost` default 10), paid only while the round's running total
+ * stays under `rebuild_barrier_cap_per_round` = min(50 x round, 500) (`round_think`); the total
+ * resets each round (`rebuild_barrier_reward_reset`).
+ */
 export const BARRIER = {
   boards: 6,
-  /** A zombie tears a board off every this many seconds while at the window. */
-  tearSec: 1.1,
-  /** Holding USE rebuilds a board every this many seconds. */
-  rebuildSec: 0.75,
-  /** Rebuild reach. */
+  /** A zombie tears a board off every this many seconds while at the window (the tear animations run ~1.2-1.8 s). */
+  tearSec: 1.5,
+  /** Zombies tearing at one window at once (BO1 has three attack spots per window). */
+  tearers: 3,
+  /** Climbing over the sill once the boards are gone. */
+  climbSec: 1.3,
+  /** Holding USE rebuilds a board every this many seconds (Speed Cola: half, BO1 `has_perk`). */
+  rebuildSec: 1.0,
+  /** Rebuild reach from the window's inside stand point. */
   reach: 1.8,
+  /** How close a zombie must be to its outside point to tear. */
+  tearReach: 0.7,
+  /** A zombie at the window swipes a survivor this close (through the boards' gaps). */
+  swipeReach: 1.9,
+  /** Points per board rebuilt. */
+  points: 10,
   /** BO1: board points per round capped at min(50 x round, 500). */
   capPerRound: (round: number) => Math.min(50 * round, 500),
+  /** Default sill height and stand-off from the wall line. */
+  sill: 0.9,
+  standOff: 0.8,
 } as const;
+
+/** What a rebuilt board pays (`blocker_trigger_think`): the running total goes up first, the points are paid only while it stays under the cap. */
+export function boardReward(totalBefore: number, round: number): { total: number; pay: number } {
+  const total = totalBefore + BARRIER.points;
+  return { total, pay: total < BARRIER.capPerRound(round) ? BARRIER.points : 0 };
+}
+
+/** A barrier's inside and outside stand points (`yaw` faces inside). */
+export function barrierPoints(b: { x: number; y: number; z: number; yaw: number; outY?: number; reach?: number }): { inside: Vec3; outside: Vec3 } {
+  const k = b.reach ?? BARRIER.standOff;
+  const fx = -Math.sin(b.yaw);
+  const fz = -Math.cos(b.yaw);
+  return { inside: { x: b.x + fx * k, y: b.y, z: b.z + fz * k }, outside: { x: b.x - fx * k, y: b.outY ?? b.y, z: b.z - fz * k } };
+}
+
+/** Doors and debris: hold USE to buy (BO1 `door_think` / `debris_think`). */
+export const DOORS = {
+  /** Reach from the gap's centre (either side). */
+  reach: 2.2,
+  /** The clearing animation (the debris drops away, the door swings). */
+  openSec: 1.0,
+} as const;
+
+// ---------------------------------------------------------------------------------------------
+// AI allies ("partners"): bot survivors for solo (and co-op bot fill)
+// ---------------------------------------------------------------------------------------------
+
+export type AllyDifficulty = 'recruit' | 'regular' | 'veteran';
+export const ALLY_DIFFICULTIES: readonly AllyDifficulty[] = ['recruit', 'regular', 'veteran'];
+
+export interface AllyTuning {
+  /** The bots' skill preset it aims and notices with (src/shared/defs/bots.ts). */
+  preset: 'recruit' | 'regular' | 'veteran';
+  /** Chance an engagement goes for the head (zombies walk straight at you: heads are the play). */
+  headAim: number;
+  /** Zombies within `reviveClear` m of it (or of the downed) it will revive through; more and it clears them (or backs off) first. */
+  reviveSwarm: number;
+  /** Bleed-out seconds left under which it revives whatever the swarm. */
+  reviveUrgentSec: number;
+  /** How readily it spends: the points it keeps in hand after a buy (and the box chance per break). */
+  buyReserve: number;
+  boxChance: number;
+}
+
+export const ZOMBIES_ALLY = {
+  /** Solo: allies by default and at most (humans + allies <= 4). */
+  defaultCount: 1,
+  maxCount: 3,
+  defaultDifficulty: 'regular' as AllyDifficulty,
+  /** Stay this far from the player it follows (m): closer and it gives room, further and it catches up. */
+  followMin: 6,
+  followMax: 15,
+  followIdeal: 9,
+  /** Out of the player's line of fire: never within this angle (rad) of where they face, inside `fireLaneRange` m. */
+  fireLaneHalf: 0.45,
+  fireLaneRange: 25,
+  /** Reviving: zombies within this of it or the downed player count against `reviveSwarm` (they'd land a swipe during the hold). */
+  reviveClear: 6,
+  /** Overwhelmed: this many zombies within `swarmRadius` m. */
+  swarmRadius: 3.5,
+  overwhelmed: 3,
+  /** Power-ups: only these close (m). */
+  powerupReach: 6,
+  /** Buying trips: at most this far (m), only with no zombie within `buySafe` m. */
+  buyReach: 28,
+  buySafe: 9,
+  /** Text callouts: at most one every this many seconds per kind. */
+  calloutEvery: 6,
+  tuning: {
+    recruit: { preset: 'recruit', headAim: 0.25, reviveSwarm: 1, reviveUrgentSec: 7, buyReserve: 600, boxChance: 0.1 },
+    regular: { preset: 'regular', headAim: 0.55, reviveSwarm: 1, reviveUrgentSec: 10, buyReserve: 300, boxChance: 0.2 },
+    veteran: { preset: 'veteran', headAim: 0.85, reviveSwarm: 2, reviveUrgentSec: 14, buyReserve: 100, boxChance: 0.3 },
+  } as Record<AllyDifficulty, AllyTuning>,
+} as const;
+
+/** Clamp a requested ally count (solo: 0..3). */
+export const allyCount = (n: unknown): number => (typeof n === 'number' && Number.isFinite(n) ? Math.max(0, Math.min(ZOMBIES_ALLY.maxCount, Math.round(n))) : ZOMBIES_ALLY.defaultCount);
+export const allyDifficulty = (d: unknown): AllyDifficulty => (ALLY_DIFFICULTIES.includes(d as AllyDifficulty) ? (d as AllyDifficulty) : ZOMBIES_ALLY.defaultDifficulty);
 
 export type ZombiesPhase = 'pre' | 'active' | 'break' | 'over';
 
@@ -559,6 +909,8 @@ export interface ZombiesPlayerInfo {
   revives: number;
   /** Solo Quick Revive lives left (shown on the machine). */
   drinking?: number;
+  /** An AI ally (a "partner" bot). */
+  bot?: boolean;
 }
 
 /** `zombies.state`, pushed to every human on change (and every second). */
@@ -581,9 +933,11 @@ export interface ZombiesStatePayload {
   soloLives: number;
   /** Highest round reached at game over (null while playing). */
   survived: number | null;
+  /** The game's difficulty (HUD label, the bleed-out bar). */
+  difficulty: ZombiesDifficulty;
 }
 
-export type ZombiesEventKind = 'round_start' | 'round_end' | 'dog_round' | 'powerup' | 'perk' | 'buy' | 'ammo' | 'box' | 'teddy' | 'box_move' | 'down' | 'revived' | 'bleedout' | 'game_over' | 'points' | 'nope' | 'board';
+export type ZombiesEventKind = 'round_start' | 'round_end' | 'dog_round' | 'powerup' | 'perk' | 'buy' | 'ammo' | 'box' | 'teddy' | 'box_move' | 'down' | 'revived' | 'bleedout' | 'game_over' | 'points' | 'nope' | 'board' | 'callout' | 'door';
 
 /** `zombies.event`: announcer lines, point popups, stingers. */
 export interface ZombiesEventPayload {
@@ -604,7 +958,9 @@ declare module '../protocol' {
     'zombies.event': ZombiesEventPayload;
   }
   interface RpcMap {
-    'zombies.solo': { req: { map?: string }; res: { roomId: string; code: string } };
-    'zombies.coop': { req: { map?: string }; res: { roomId: string; code: string } };
+    /** `allies`: AI partners 0..3 (default 1), `allyDifficulty` their skill (default regular); `difficulty` default Casual. */
+    'zombies.solo': { req: { map?: string; allies?: number; allyDifficulty?: AllyDifficulty; difficulty?: ZombiesDifficulty }; res: { roomId: string; code: string } };
+    /** `difficulty`: the host's choice for the lobby's games (default Casual). */
+    'zombies.coop': { req: { map?: string; difficulty?: ZombiesDifficulty }; res: { roomId: string; code: string } };
   }
 }

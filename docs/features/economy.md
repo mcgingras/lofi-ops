@@ -7,7 +7,8 @@ Owner: economy. Branch `feature/economy`.
 | Piece | Where |
 |---|---|
 | Earning rules, ante tiers, payouts, the 4 wager ModeDefs, wager mode data | `src/shared/defs/economy.ts` |
-| 16 camos as texture recipes (Woodland, Dusty, Desert, Digital, Tiger, Berlin, Warsaw, Siberia, Yukon, Flora, Blossom, Red Tiger, Gold, Ice, Dragon + None) | `src/shared/defs/camos.ts` |
+| 16 camos as texture recipes (Woodland, Dusty, Desert, Digital, Tiger, Berlin, Warsaw, Siberia, Yukon, Flora, Blossom, Red Tiger, Gold, Ice, Dragon + None), plus the MW2 collection (`MW2_CAMOS`, 8) | `src/shared/defs/camos.ts` |
+| MW2 camo per-weapon challenge rules (`weaponCamoProgress`, `camoFitsWeapon`, `mw2CamoProgress`, `mw2CamosUnlockedBetween`) | `src/shared/defs/camo-unlocks.ts` |
 | Store catalog, reticles, emblem backgrounds, ownership keys, purchase/gate rules, class enforcement (pure, shared) | `src/shared/defs/store.ts` |
 | Wire types (RPCs, feature pushes, `results.ext.economy`) | `src/shared/defs/economy-net.ts` |
 | Crossbow + ballistic knife defs (wager only) | `src/shared/defs/wager-weapons.ts` |
@@ -16,7 +17,7 @@ Owner: economy. Branch `feature/economy`.
 | Wager matchmaking, bot backfill, escrow, payouts, live HUD state | `src/server/features/economy/wager.ts` |
 | Wager mode rules | `src/server/features/economy/modes/{oitc,gungame,sharpshooter,sticks,common}.ts` |
 | Client: camo recipes + `camoPreview`, STORE screen, WAGER screen, HUD widgets, wager viewmodels, bolt/tomahawk views, third-person camo | `src/client/features/economy/*` |
-| Tests | `tests/economy.test.ts` (rules), `tests/economy-wager.test.ts` (modes incl. Sticks and Stones ammo, bolts, blades, tomahawk, bankrupt payouts; escrow, bots; room-level), `tests/economy.integration.test.ts` and `tests/sticks.integration.test.ts` (real server + sockets) |
+| Tests | `tests/camos-mw2.test.ts` and `tests/camos-mw2-paint.client.test.ts` (MW2 collection), `tests/economy.test.ts` (rules), `tests/economy-wager.test.ts` (modes incl. Sticks and Stones ammo, bolts, blades, tomahawk, bankrupt payouts; escrow, bots; room-level), `tests/economy.integration.test.ts` and `tests/sticks.integration.test.ts` (real server + sockets) |
 
 ## Earning CoD Points (BO1-like)
 
@@ -29,10 +30,36 @@ Everything that changes CP goes through `ledger.ts`, which keeps `profile.ext.ec
 - Weapons: unlock by `WeaponDef.unlockLevel`, then cost `price ?? 1,500`. Attachments: bought per weapon (`att.<weapon>.<att>`), need the weapon usable, plus `unlockKills` (weapon kills stat) if set; `price ?? 1,000`. Camos: level/prestige gate + price (Gold level 44, 50,000; Ice prestige 1; Dragon prestige 3). Reticles and emblem backgrounds: level/prestige + price, then `economy.equip`.
 - Starter items are free: everything in `DEFAULT_LOADOUTS`, camo `none`, reticle `dot`, background `plain`, any def priced 0.
 - Camos are bought once and work on every weapon (simplified from BO1's per-weapon camos); the per-weapon choice is `WeaponLoadout.camo`.
+- The MW2 collection is the exception; see **MW2 camos** below. Any camo check goes through `canUseCamo(profile, camo, weapon)` (`store.ts`).
 - Prestige: level gates apply again after a prestige (BO1); prestige-gated items stay open at higher prestige.
 - The server validates every purchase (`economy.buy`), checks the balance at the moment of spending and saves immediately.
 - Screen layout (BO1 style: a gun list grouped by class, then each gun's page with its attachments; Camos / Reticles / Emblems tabs) is described in `frontend.md` under **Store**. The browsing model is `src/shared/frontend/store-browse.ts`; the rules above are unchanged.
 - **Spawn-time check** (`beforeSpawn`, priority -50, humans, non-wager modes): weapons/attachments/camos the profile can't use are replaced (weapon -> starter weapon for that slot, attachment dropped, camo -> none) with a one-time notice. Switch off with `economyConfig.enforceOwnership = false` (`src/server/features/economy/shop.ts`) if a sandbox playlist needs it.
+
+## MW2 camos
+
+Modern Warfare 2's eight camos as their own collection (`MW2_CAMOS` in `camos.ts`, ids `mw2_*`, `collection: 'mw2'`), shown under an **MW2** heading in the store's Camos tab, on each primary's gun page, and in the Create-a-Class camo picker. They sit next to the global camos with the same names (Woodland, Desert, Digital, Red Tiger) but are separate ids, labelled "Woodland (MW2)" (`camoName`) and painted with MW2's patterns.
+
+Unlocks are MW2's (CoD Wiki "Weapon Camouflage", MW2 section, and "Call of Duty: Modern Warfare 2 Challenges"): per weapon, primaries only (MW2 had no camos on secondaries), free once unlocked, never sold.
+
+| Camo | MW2 unlock (with that gun) | Pattern (`paint.ts`) |
+|---|---|---|
+| Desert | default | `erdl`: tan base, khaki and brown brush strokes, light sand flecks |
+| Arctic | default | `splinter`: white with light / mid grey slanted shards and dark flecks |
+| Woodland | Expert I: 5 headshots | `erdl`: ERDL leaves, light green base, dark green and tan leaves, black branches |
+| Digital | Expert II: 15 headshots | `marpat`: pixel clusters on a 2 px grid, greys (MW2's darker MARPAT) |
+| Urban | Expert III: 30 headshots | `erdl`: grey base, faded red and white leaves, black branches |
+| Blue Tiger | Expert IV: 75 headshots | `tigerstripe`: two blues, light base, dark ragged stripes in rows |
+| Red Tiger | Expert V: 150 headshots | `tigerstripe`: deep red, bold black stripes, a darker red under-stroke |
+| Fall | Expert VI: 250 headshots | `fall`: autumn foliage, brown base, rust patches, black twigs, orange / yellow / rust leaves and black leaf shadows |
+
+- The record is the combat record the progression tracker keeps: `stats['weapon.<id>.headshots']` (and `.kills`; `WeaponCamoChallenge` supports a kill count too, none of MW2's camos use one, MW2's kill challenges unlocked attachments). It is never reset, so unlocked camos stay unlocked (MW2 reset them on prestige; we don't).
+- The tracker pushes `progression.unlocked` ("AK-47 Woodland (MW2)", detail "Expert I") on the kill that crosses a threshold.
+- Rules: `canUseCamo` (store.ts) for `enforceLoadout` (spawn), `economy.setCamo` (checks the slot's gun; errors say what's missing: "camo locked: 5/15 AK-47 headshots") and Create-a-Class (`itemLock` / `validateLoadout`, so `frontend.saveLoadout` rejects locked ones with "Woodland (MW2) camo is locked (4/5 AK-47 headshots)").
+- Not in `storeCatalog()`; `economy.buy` of `camo.mw2_*` is `unknown`.
+- Bots: `pickBotCamo` (bots/loadout.ts) gives a bot's primary an MW2 camo about two times in three, from those a pretend headshot record (growing with skill) would have opened.
+- Pack Rat puts your slot's camo on a picked-up gun, MW2 camos included (the gun is a primary, so it fits).
+- Recipes are procedural (no downloads): each `camo.mw2_*` texture is the painted pattern (64 px lo-fi base) and, for the photo look, the pattern at 0.8 over a Poly Haven fabric photo with a CSS filter, through the developer like the other camos.
 
 ## Wager matches (screen `wager`, menu item "Wager Match")
 
@@ -67,7 +94,7 @@ HUD: `economy.lobby` (lobby card: mode, ante/pot, players, start countdown, bot 
 economy.state {}                                  -> EconomyState
 economy.buy { item: '<ownership key>' }           -> { codPoints, owned, item }   errors: level|prestige|weapon|kills|challenge|funds|owned|unknown
 economy.equip { kind: 'reticle'|'emblem', id }    -> { equipped }
-economy.setCamo { loadout, slot, camo }           -> { loadouts }   (ownership-checked)
+economy.setCamo { loadout, slot, camo }           -> { loadouts }   (canUseCamo with the slot's gun: ownership, or the MW2 challenge)
 economy.wagerQueue { mode, ante, bots? }          -> { roomId, practice }
 economy.wagerList {}                              -> { rooms: WagerRoomSummary[] }
 economy.wagerStart {}                             -> { ok }

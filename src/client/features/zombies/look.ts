@@ -8,6 +8,7 @@
  * Groans and growls come from the horde now and then, louder up close.
  */
 import * as THREE from 'three';
+import { ZOMBIE_POSE, zombiePose } from '../../../shared/defs/zombies';
 import { PlayerFlags } from '../../../shared/protocol';
 import { sfx } from '../../game/audio';
 import type { RemoteView } from '../../game/remotes';
@@ -24,6 +25,7 @@ import { isZombiesMatch, zm } from './store';
 /** Skin and cloth multiplier: desaturated green-grey. */
 const ZOMBIE_TINT = new THREE.Color(0.74, 0.86, 0.64);
 const EYE = 0xffb030;
+const hip = new THREE.Vector3();
 
 interface Dressed {
   soldier: Soldier;
@@ -131,6 +133,9 @@ function dress(v: RemoteView, dog: boolean, now: number): Dressed {
 }
 
 function undress(d: Dressed): void {
+  d.soldier.body.position.set(0, 0, 0);
+  d.soldier.body.rotation.set(0, 0, 0);
+  d.soldier.head.rotation.set(0, 0, 0);
   for (const e of d.extras) {
     e.removeFromParent();
     if (e instanceof THREE.Mesh) e.geometry.dispose();
@@ -208,7 +213,7 @@ registerMatchHook('zombies.look', {
         if (Math.hypot(cam.x - v.x, cam.z - v.z) < 12) sfx.play(d.dog ? 'zombies.growl' : 'zombies.swipe', { at: { x: v.x, y: v.y + 1.2, z: v.z }, volume: 0.9 });
       }
       d.firingWas = firing;
-      const rise = Math.max(0, Math.min(1, (now - d.riseAt) / 1.1));
+      const rise = Math.max(0, Math.min(1, (now - d.riseAt) / ZOMBIE_POSE.riseSec));
       if (d.dog) {
         const g = d.dog;
         g.kit.light(dt, m.map ? (x, y, z) => m.map!.lightAt(x, y, z) : null, s.root.position);
@@ -223,13 +228,16 @@ registerMatchHook('zombies.look', {
       } else {
         if (m.map) setDynLight(d.mats, m.map.lightAt(v.x, v.y + 1.2, v.z), 0.25);
         if (v.alive) {
-          // Shamble: a lurching limp, the head lolling, arms reaching out.
+          // Shamble: a lurching limp about the hips, the head nodding and lolling, arms reaching
+          // out. Kept small so the drawn head stays inside the head hitbox (ZOMBIE_POSE).
           d.phase += dt * (1.5 + speed * 1.6);
-          const lurch = Math.sin(d.phase);
-          s.body.rotation.z += lurch * 0.1;
-          s.body.rotation.x = 0.12 + Math.min(0.25, speed * 0.04);
-          s.head.rotation.z = Math.sin(d.phase * 0.5) * 0.25;
-          s.head.rotation.x = -0.2;
+          const pose = zombiePose(speed, d.phase);
+          s.body.rotation.set(pose.lean, 0, pose.roll);
+          // Pivot at the hips: move the body so the hip point stays put.
+          hip.set(0, ZOMBIE_POSE.hip, 0).applyEuler(s.body.rotation);
+          s.body.position.set(0, s.body.position.y + ZOMBIE_POSE.hip - hip.y, -hip.z);
+          s.body.position.x = -hip.x;
+          s.head.rotation.set(pose.nod, 0, pose.headRoll);
           const swipe = now - d.swipeAt;
           let ax: number;
           if (swipe < 0.55) {
@@ -237,16 +245,18 @@ registerMatchHook('zombies.look', {
             const k = swipe / 0.55;
             ax = k < 0.5 ? -0.1 - 1.1 * (k / 0.5) : -1.2 + 1.8 * ((k - 0.5) / 0.5);
           } else ax = -0.12 + Math.sin(d.phase * 0.7) * 0.07;
-          // Climbing out: up from below the ground, arms raised.
+          // Climbing out: up from below the ground, arms raised. The server crouches the body for
+          // the first part of it (riseCrouchSec), so the drawn head follows the hitbox up.
           if (rise < 1) {
-            s.root.position.y -= 1.7 * (1 - rise) * (1 - rise);
+            const k = Math.min(1, (now - d.riseAt) / ZOMBIE_POSE.riseCrouchSec);
+            s.root.position.y -= ZOMBIE_POSE.riseDrop * (1 - k) * (1 - k);
             ax = -1.3 * (1 - rise) + ax * rise;
           }
           if (d.arms) {
             d.arms.rotation.x = ax - s.body.rotation.x;
             d.arms.rotation.z = Math.sin(d.phase) * 0.06;
           }
-        }
+        } else s.body.position.set(0, s.body.position.y, 0);
         for (const e of d.eyes) e.visible = v.alive && !d.headless;
       }
       // Groans (zombies) and growls (dogs), now and then, from the ones near you.

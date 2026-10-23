@@ -52,7 +52,7 @@ Only humans with a profile, only while `playing` (match-end bonuses excepted), o
 
 **Challenges**: ~46 at the moment on this branch (it grows automatically as other areas fill their defs): career (21), per mode (wins, kills, matches, MVP or top 3, plus the objective templates in `MODE_CHALLENGE_TEMPLATES` for TDM, FFA, DOM, S&D, HQ, KC, OITC, Gun Game, Sharpshooter, Sticks and Stones; generated only for modes present in `MODES`), per weapon (kills x5 tiers, headshots x4, each attachment), per weapon class, per killstreak (earned, kills), and a generic Pro challenge per perk. Progress survives prestige; each tier pays once.
 
-**Combat record** (`profile.stats`, written by progression in addition to core's kills/deaths/wins/... keys): `shots`, `hits`, `weapon.<id>.kills|headshots|shots|hits` (core does not write the per-weapon keys despite the comment in `profile.ts`, so progression owns them), `longshots`, `firstBloods`, `revenges`, `doubleKills`, `tripleKills`, `meleeKills`, `streaksEarned`, `obj.<kind>`, `mode.<id>.obj.<kind>`, `mode.<id>.timePlayed`, `mode.<id>.bestStreak`.
+**Combat record** (`profile.stats`, written by progression in addition to core's kills/deaths/wins/... keys): `shots`, `hits`, `weapon.<id>.kills|headshots|shots|hits` (core does not write the per-weapon keys despite the comment in `profile.ts`, so progression owns them; economy's MW2 camos unlock from `weapon.<id>.headshots`, and the tracker pushes `progression.unlocked` "AK-47 Woodland (MW2)" on the kill that crosses a camo threshold), `longshots`, `firstBloods`, `revenges`, `doubleKills`, `tripleKills`, `meleeKills`, `streaksEarned`, `obj.<kind>`, `mode.<id>.obj.<kind>`, `mode.<id>.timePlayed`, `mode.<id>.bestStreak`.
 
 ## Wire
 

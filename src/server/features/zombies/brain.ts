@@ -12,7 +12,7 @@
  * - string pulling (walk straight to the farthest waypoint in reach) is re-checked every 0.3 s;
  * - target choice every 0.4 s, line of sight every 0.2 s, separation from the 24 others per tick.
  */
-import { ZOMBIES } from '../../../shared/defs/zombies';
+import { BARRIER, ZOMBIE_POSE, ZOMBIES } from '../../../shared/defs/zombies';
 import { Buttons } from '../../../shared/input';
 import { hashString, type Vec3 } from '../../../shared/math';
 import { PLAYER } from '../../../shared/constants';
@@ -41,6 +41,24 @@ export interface Horde {
   stats: { searches: number; expanded: number; deferred: number };
   /** Called when a swipe lands (the rules apply damage through the room so last stand can catch it). */
   hit(attacker: PlayerState, victim: PlayerState, amount: number, weapon: string): void;
+  /** Barriers (blockers.ts): a zombie still outside goes to its window first; null = hunt as usual. */
+  entry?: (self: PlayerState, now: number) => HordeEntry | null;
+  /** Path cost multiplier per nav cell (shut doors). */
+  pathCost?: (c: NavCell) => number;
+  /** Zombie swipe damage and gap (s): the game's difficulty (`ZOMBIES_DIFFICULTY`); BO1's when unset. */
+  swipe?: { damage: number; every: number };
+}
+
+/**
+ * Orders for a zombie outside a barrier: walk to `goal`; with `hold`, stand there facing `face`
+ * (tearing boards) and swipe `hit` if set; `script`: something else moves the body (the climb in).
+ */
+export interface HordeEntry {
+  goal: Vec3;
+  hold?: boolean;
+  face?: Vec3;
+  hit?: PlayerState | null;
+  script?: boolean;
 }
 
 export function createHorde(room: Room, hit: Horde['hit']): Horde {
@@ -105,6 +123,13 @@ export class ZombieBrain implements BotBrain {
     const idle = { buttons: dog ? Buttons.CROUCH : 0, yaw: this.yaw, pitch: 0, weaponSlot: 0 };
     if (this.horde.frozen) return idle;
     const pos = self.move;
+    // Climbing out of the ground: stand still, crouched for the first part (the client draws the
+    // climb; the crouched hitbox keeps the head where it is drawn).
+    const since = now - z.spawnedAt;
+    if (!dog && since < ZOMBIE_POSE.riseSec) return { buttons: since < ZOMBIE_POSE.riseCrouchSec ? Buttons.CROUCH : 0, yaw: this.yaw, pitch: 0, weaponSlot: 0 };
+    // Still outside a barrier: its window first (blockers.ts); climbing in is scripted.
+    const entry = this.horde.entry?.(self, now) ?? null;
+    if (entry?.script) return null;
 
     // ---- Target: the nearest survivor who is up (BO1 zombies leave downed players alone).
     if (!this.target || now >= this.targetAt || !this.horde.targets.includes(this.target)) {
@@ -121,14 +146,14 @@ export class ZombieBrain implements BotBrain {
       if (best !== this.target) this.wantPlan = true;
       this.target = best;
     }
-    const t = this.target;
-    if (!t) return idle;
-    const tp = t.move;
+    const t = entry ? (entry.hit ?? null) : this.target;
+    const tp = entry ? entry.goal : t?.move;
+    if (!tp) return idle;
     const dx = tp.x - pos.x;
     const dz = tp.z - pos.z;
     const d = Math.hypot(dx, dz);
     const dy = tp.y - pos.y;
-    if (d + Math.abs(dy) < z.bestDist - 0.5) {
+    if (!entry && d + Math.abs(dy) < z.bestDist - 0.5) {
       z.bestDist = d + Math.abs(dy);
       z.progressAt = now;
     }
@@ -140,13 +165,18 @@ export class ZombieBrain implements BotBrain {
     }
 
     // ---- Attack: wind up when in reach, land it if still in reach.
-    const reach = dog ? ZOMBIES.dogReach : ZOMBIES.swipeReach;
-    const inReach = d <= reach && Math.abs(dy) < ZOMBIES.swipeDy && this.los;
+    // At a window the victim is whoever stands on the other side (swiped through the boards).
+    const vd = entry ? (t ? flat(t.move, pos) : Infinity) : d;
+    const vdy = entry ? (t ? t.move.y - pos.y : Infinity) : dy;
+    const sees = entry ? true : this.los;
+    const reach = entry ? BARRIER.swipeReach : dog ? ZOMBIES.dogReach : ZOMBIES.swipeReach;
+    const inReach = !!t && vd <= reach && Math.abs(vdy) < ZOMBIES.swipeDy && sees;
     if (this.swingEnd !== null) {
       if (now >= this.swingEnd) {
         this.swingEnd = null;
-        this.nextSwing = now + (dog ? ZOMBIES.dogBiteEvery : ZOMBIES.swipeEvery) - ZOMBIES.swipeWindup;
-        if (d <= reach * 1.3 && Math.abs(dy) < ZOMBIES.swipeDy && this.los) this.horde.hit(self, t, dog ? ZOMBIES.dogBite : ZOMBIES.swipeDamage, dog ? 'hellhound' : 'zombie');
+        const swipe = this.horde.swipe;
+        this.nextSwing = now + (dog ? ZOMBIES.dogBiteEvery : (swipe?.every ?? ZOMBIES.swipeEvery)) - ZOMBIES.swipeWindup;
+        if (t && vd <= reach * 1.3 && Math.abs(vdy) < ZOMBIES.swipeDy && sees) this.horde.hit(self, t, dog ? ZOMBIES.dogBite : (swipe?.damage ?? ZOMBIES.swipeDamage), dog ? 'hellhound' : 'zombie');
       }
     } else if (inReach && now >= this.nextSwing) {
       this.swingEnd = now + (dog ? ZOMBIES.swipeWindup * 0.6 : ZOMBIES.swipeWindup);
@@ -160,7 +190,13 @@ export class ZombieBrain implements BotBrain {
     let wz = 0;
     let jump = false;
     const direct = this.los && d < 7 && Math.abs(dy) < 0.9;
-    if (direct) {
+    if (entry?.hold) {
+      // At the window: stay put (a nudge back onto the spot), tearing.
+      if (d > 0.25) {
+        wx = (dx / d) * 0.6;
+        wz = (dz / d) * 0.6;
+      }
+    } else if (direct) {
       if (d > 0.01) {
         wx = dx / d;
         wz = dz / d;
@@ -199,7 +235,7 @@ export class ZombieBrain implements BotBrain {
     // ---- Stuck: hop, then side-step and re-plan.
     if (now >= this.stuckCheck) {
       const moved = flat(pos, this.stuckAt);
-      const wanted = Math.hypot(wx, wz) > 0.3 && d > reach;
+      const wanted = Math.hypot(wx, wz) > 0.3 && d > reach && !entry?.hold;
       this.stuckT = wanted && moved < 0.2 ? this.stuckT + 0.5 : 0;
       this.stuckAt = { ...pos };
       this.stuckCheck = now + 0.5;
@@ -221,7 +257,18 @@ export class ZombieBrain implements BotBrain {
 
     const len = Math.hypot(wx, wz);
     let buttons = dog ? Buttons.CROUCH : 0;
-    if (len > 0.05) {
+    if (entry?.hold) {
+      // Face the window (or whoever it is swiping), shuffle back onto the spot without turning.
+      const fp = t && (inReach || this.swingEnd !== null) ? t.move : (entry.face ?? tp);
+      this.yaw = turn(this.yaw, Math.atan2(-(fp.x - pos.x), -(fp.z - pos.z)), 5.5 * dt);
+      if (len > 0.05) {
+        const off = angleDiff(Math.atan2(-wx / len, -wz / len), this.yaw);
+        if (Math.abs(off) < 1.2) buttons |= Buttons.FORWARD;
+        else if (Math.abs(off) > 1.9) buttons |= Buttons.BACK;
+        if (off > 0.4 && off < 2.7) buttons |= Buttons.LEFT;
+        else if (off < -0.4 && off > -2.7) buttons |= Buttons.RIGHT;
+      }
+    } else if (len > 0.05) {
       // Face where we walk; turn to the target when swiping.
       const want = inReach || this.swingEnd !== null ? Math.atan2(-dx, -dz) : Math.atan2(-wx / len, -wz / len);
       this.yaw = turn(this.yaw, want, (dog ? 9 : 5.5) * dt);
@@ -253,7 +300,7 @@ export class ZombieBrain implements BotBrain {
     b.used++;
     const nav = this.horde.nav;
     const before = nav.expanded;
-    const path = nav.path(from, { x: to.x, y: to.y, z: to.z }, Math.min(SEARCH_LIMIT, left));
+    const path = nav.path(from, { x: to.x, y: to.y, z: to.z }, Math.min(SEARCH_LIMIT, left), this.horde.pathCost ? { cost: this.horde.pathCost } : {});
     const used = nav.expanded - before;
     b.expanded += used;
     this.horde.stats.searches++;

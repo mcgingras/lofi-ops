@@ -264,6 +264,25 @@ describe('Pack Rat', () => {
     expect(room.modifiers.mul('pickupHoldMultiplier', h)).toBe(0);
   });
 
+  it('MW2 camos work too: the picked-up gun wears your MW2 camo', () => {
+    const room = setup();
+    const h = human(room, 0, loadout(['pack_rat'], 'mw2_red_tiger'));
+    place(h, -1, 5);
+    floorGun(room, -1, 4, 'famas', 20, 60, 'mw2_fall');
+    drive(room, h, Buttons.USE, TICK_DT, yawTo(h, -1, 4), -0.9);
+    expect(h.weapons[0]!.def.base.id).toBe('famas');
+    expect(h.weapons[0]!.camo).toBe('mw2_red_tiger');
+  });
+
+  it('without Pack Rat a picked-up gun keeps its own MW2 camo', () => {
+    const room2 = setup();
+    const k = human(room2, 0, loadout([], 'mw2_red_tiger'));
+    place(k, -1, 5);
+    floorGun(room2, -1, 4, 'famas', 20, 60, 'mw2_fall');
+    drive(room2, k, Buttons.USE, PICKUP.holdSec + 0.05, yawTo(k, -1, 4), -0.9);
+    expect(k.weapons[0]!.camo).toBe('mw2_fall');
+  });
+
   it('without Pack Rat a tap does nothing and the gun keeps its own camo', () => {
     const room = setup();
     const h = human(room, 0, loadout([], 'tiger'));

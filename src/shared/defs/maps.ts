@@ -10,6 +10,7 @@ import { buildHijacked } from '../maps/hijacked';
 import { buildHighrise } from '../maps/highrise';
 import { buildJungle } from '../maps/jungle';
 import { buildLaunch } from '../maps/launch';
+import { buildNacht } from '../maps/nacht';
 import { buildNuketown } from '../maps/nuketown';
 import { buildRust } from '../maps/rust';
 import { buildScrapyard } from '../maps/scrapyard';
@@ -65,6 +66,8 @@ export const MAPS: MapDef[] = [
   { id: 'summit', name: 'Summit', inspiredBy: 'Call of Duty: Black Ops (2010), Summit: the Soviet listening post on a Ural mountaintop (Control room, Gallery, Tower, Cable Car and Gondola, Catwalk)', build: buildSummit, modes: BO_MODES, size: 'medium' },
   { id: 'hijacked', name: 'Hijacked', inspiredBy: 'Call of Duty: Black Ops II (2012), Hijacked: the superyacht at sea (bow, stern pool, cabins, central deck, below-deck passage)', build: buildHijacked, modes: BO_MODES, size: 'small' },
   { id: 'jungle', name: 'Jungle', inspiredBy: 'Call of Duty: Black Ops (2010), Jungle (mp_havoc): the river valley village, the Bridge, the Lookout and the Ruins', build: buildJungle, modes: BO_MODES, size: 'medium' },
+  // Zombies only (no data for any other mode): only the Zombies map picker lists it.
+  { id: 'nacht', name: 'Nacht der Untoten', inspiredBy: 'Call of Duty: World at War (2008), Nacht der Untoten (re-released in Black Ops): the abandoned bunker on the airfield', build: buildNacht, modes: ['zombies'], size: 'small' },
   { id: 'launch', name: 'Launch', inspiredBy: 'Call of Duty: Black Ops (2010), Launch: the Baikonur cosmodrome pad (rocket, flame trench, stair towers, the track, the Centrifuge, the Fuel Yard)', build: buildLaunch, modes: BO_MODES, size: 'large' },
 ];
 

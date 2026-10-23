@@ -4,7 +4,8 @@
  */
 import { CAMO_BY_ID } from '../../../shared/defs/camos';
 import { isWagerMode } from '../../../shared/defs/economy';
-import { canUse, EMBLEM_BACKGROUND_BY_ID, keyOf, LOCK_TEXT, purchase, RETICLE_BY_ID, enforceLoadout } from '../../../shared/defs/store';
+import { weaponCamoProgress } from '../../../shared/defs/camo-unlocks';
+import { canUse, canUseCamo, EMBLEM_BACKGROUND_BY_ID, keyOf, LOCK_TEXT, purchase, RETICLE_BY_ID, enforceLoadout } from '../../../shared/defs/store';
 import type { Profile } from '../../../shared/profile';
 import type { ServerApi } from '../../feature';
 import type { PlayerState } from '../../player';
@@ -50,7 +51,12 @@ export function registerShopRpcs(api: ServerApi): void {
     if (typeof d.loadout !== 'number' || !Number.isInteger(d.loadout) || d.loadout < 0 || d.loadout >= prof.loadouts.length) throw new RpcError('bad_request', 'loadout index');
     if (d.slot !== 'primary' && d.slot !== 'secondary') throw new RpcError('bad_request', 'slot');
     if (typeof d.camo !== 'string' || !CAMO_BY_ID.has(d.camo)) throw new RpcError('unknown', 'no such camo');
-    if (!canUse(prof, keyOf.camo(d.camo))) throw new RpcError('locked', 'camo not owned');
+    const weapon = prof.loadouts[d.loadout]![d.slot].weapon;
+    if (!canUseCamo(prof, d.camo, weapon)) {
+      // MW2 camos unlock per weapon: say what's missing ("3/5 ACR headshots").
+      const mw2 = weaponCamoProgress(prof, d.camo, weapon);
+      throw new RpcError('locked', mw2 ? `camo locked: ${mw2.progress}` : 'camo not owned');
+    }
     prof.loadouts[d.loadout]![d.slot].camo = d.camo;
     api.store.save(prof);
     return { loadouts: prof.loadouts };

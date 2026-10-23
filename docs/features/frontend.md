@@ -41,8 +41,8 @@ If a screen owned by another area (`barracks`, `store`, `wager`) isn't registere
 **Create a Class** (`create-a-class` screen):
 - Classes: progression's `usableClassCount` (the 3 default classes plus one slot each at levels 4, 10, 20, 30, 40 and prestige 2, 4, 6, 8, 10), the same count the spawn honours. Editing needs Create-a-Class (level 4); before that the screen is read-only and `frontend.saveLoadout` returns `locked`. You can add new classes and rename them, and **Equip** one for the next spawn (`frontend.selectClass` refuses classes the spawn would not use).
 - Primary and attachments. You get one attachment, or two with Warlord or any perk def with `attachmentSlots`. Only one attachment per attachment slot type. Picking (`toggleAttachment` in `shared/frontend/loadout-rules.ts`): clicking an equipped attachment takes off only that one, a pick of the same slot type swaps it, and on a full weapon the oldest pick makes room. Taking Warlord off keeps the first attachment. The spawn honours the same count (the weapons feature's trim reads Warlord through `attachmentSlotsOffset`).
-- Camo per weapon (economy's `CAMOS`), secondary with one attachment, lethal, tactical, one perk per tier, and three killstreaks sorted by kill count.
-- Locked items are greyed out and show what unlocks them ("Level 12", "30 kills with FAMAS (4/30), then 1,000 CP in the Store", "Store: 500 CP"...). Weapons, attachments and camos the store sells must be bought (economy's `canUse`), because the economy's spawn check would otherwise swap them out.
+- Camo per weapon (economy's `CAMOS`), secondary with one attachment, lethal, tactical, one perk per tier, and three killstreaks sorted by kill count. The camo picker shows the CoD Points camos, then an **MW2** heading with the MW2 collection and this gun's challenge state ("MW2 · 4/8 unlocked · headshots with the M16A4"; each card "Expert III · 30 headshots" and, when locked, "Locked: 22/30 M16A4 headshots"). Secondaries say MW2 camos are primaries only. Swatches are the painted pattern (`camoPreview`), tiled. The class row names MW2 camos "Woodland (MW2)" (`camoName`).
+- Locked items are greyed out and show what unlocks them ("Level 12", "30 kills with FAMAS (4/30), then 1,000 CP in the Store", "Store: 500 CP", "3/5 AK-47 headshots"...). Weapons, attachments and camos the store sells must be bought (economy's `canUse`), because the economy's spawn check would otherwise swap them out. MW2 camos follow their per-weapon challenge only (`camo-unlocks.ts`, the same rule as `canUseCamo`).
 - Live 3D turntable of the weapon. It uses the real viewmodel builder, attachments and camo, look materials, and a low-res render upscaled with nearest filtering. Drag it to spin.
 - Stat bars: damage, range, fire rate, accuracy, mobility. Hovering a weapon, attachment or camo shows the change in green or red.
 - Every edit is validated locally with the server's rules and then saved.
@@ -61,7 +61,8 @@ If a screen owned by another area (`barracks`, `store`, `wager`) isn't registere
   - the unlock level and price, and the gun's own Buy / Owned / Locked button.
   - every attachment the gun takes. Each row shows the slot, name, description, unlock state ("Unlocked (20 kills)", "40 kills with AK-47 (26/40)" with a progress bar, "Buy the ACR first", "Owned"), price and a Buy button.
   - Hovering or focusing an attachment shows it on the turntable and shows the stat change in green or red.
-- **Camos** are global (bought once, usable on every gun), so they keep their own tab. The gun page links to it ("Browse camos"). **Reticles** and **Emblems** are unchanged apart from tidying.
+  - primaries: an **MW2 camos** block ("4/8 MW2 camos · headshots with the M16A4 · free once unlocked"). Each row: the swatch, the name, the challenge ("Expert III · 30 headshots"), then "Unlocked" / "Free · unlocked" or "Urban: 22/30 M16A4 headshots" with a progress bar, and a Preview button that puts the camo on the turntable (press again to clear). Data: `BrowseGun.mw2Camos` / `mw2CamosUnlocked` from `store-browse.ts`.
+- **Camos tab.** The CoD Points camos (global: bought once, usable on every gun) under a "CoD Points" heading, then an **MW2** heading with the eight MW2 camos (`mw2CamoSummary`): the challenge, "Unlocked on 3/18 guns" (Desert and Arctic: "Every primary"), and the locked gun closest to it ("Closest: 14/15 FAMAS headshots"), whose button opens that gun's page. The gun page links here ("Browse camos"). **Reticles** and **Emblems** are unchanged apart from tidying.
 - **Purchases** still go through `economy.buy` (and `economy.equip`), with the same prices, rules and balance update. Lock states come from economy's `owns` / `gateReason` / `lockReason`.
 - **Focus.** Every card and row has exactly one focusable action button under a stable `data-k`: Buy, or an `aria-disabled` Owned / Locked / price button that explains itself in the status line when pressed. Re-renders (a purchase, a profile push) keep the focused control focused.
 - **Controller** (padnav):
@@ -152,7 +153,7 @@ The client joins a lobby by getting a ticket and then calling `navigate('match',
 - A `barracks` screen id is expected.
 
 **economy**:
-- Priced camos need to be in `profile.owned`.
+- Priced camos need to be in `profile.owned`. MW2 camos (`collection: 'mw2'`) are never owned or sold: they open per weapon from `stats['weapon.<id>.headshots']`.
 - `wager` and `store` screen ids are expected.
 - Wager modes are hidden from the private lobby mode list.
 

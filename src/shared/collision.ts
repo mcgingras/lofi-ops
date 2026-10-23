@@ -29,6 +29,11 @@ export interface Solid {
   clip?: boolean;
   /** The source brush's tag (`perimeter`, `roof`, `stairs`, ...). */
   tag?: string;
+  /**
+   * A switchable solid (Zombies doors / debris): it only counts while the world's `gateOn(gate)`
+   * says the gate is shut. Worlds without a `gateOn` treat every gate as open.
+   */
+  gate?: string;
 }
 
 export type RayMask = 'bullets' | 'sight' | 'players';
@@ -208,10 +213,14 @@ export function raySpan(o: Vec3, d: Vec3, s: Solid): { t0: number; t1: number } 
 
 /**
  * The collision world. Build once per map (`buildCollisionWorld(mapData)` in maps/types.ts) and
- * share it; it is immutable after construction.
+ * share it; its solids are immutable after construction. The one switch is `gateOn`: solids with a
+ * `gate` only count while it returns true for their gate (null = every gate open). A feature that
+ * opens gates per room gives the room its own world (`new CollisionWorld(mapSolids(map))`).
  */
 export class CollisionWorld {
   readonly solids: readonly Solid[];
+  /** Is this gate shut (its solids collide)? Null: every gated solid is ignored. */
+  gateOn: ((gate: string) => boolean) | null = null;
   private grid = new Map<number, number[]>();
   private rays: RayGrid | undefined;
   private stamp = 0;
@@ -243,7 +252,9 @@ export class CollisionWorld {
         for (const i of list) {
           if (this.marks[i] === st) continue;
           this.marks[i] = st;
-          out.push(this.solids[i]!);
+          const s = this.solids[i]!;
+          if (s.gate !== undefined && !this.gateOn?.(s.gate)) continue;
+          out.push(s);
         }
       }
     return out;
@@ -307,6 +318,7 @@ export class CollisionWorld {
       this.marks[i] = st;
       const s = this.solids[i]!;
       if (!s[mask]) return;
+      if (s.gate !== undefined && !this.gateOn?.(s.gate)) return;
       const box = rayAABB(o, d, s.min, s.max, bestT);
       if (!box) return;
       if (s.ramp) {

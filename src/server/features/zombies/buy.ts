@@ -18,6 +18,7 @@ import { Buttons } from '../../../shared/input';
 import type { Entity } from '../../entities';
 import { forceSlot } from '../../combat';
 import { makeWeapon, type PlayerState } from '../../player';
+import type { DoorState } from './blockers';
 import type { ZombiesGame } from './game';
 import { survivorOf } from './state';
 
@@ -36,7 +37,7 @@ interface PerkMachine {
   ent: Entity;
   id: PerkColaId;
 }
-type Target = { kind: 'wall'; wall: WallBuy } | { kind: 'perk'; perk: PerkMachine } | { kind: 'box' };
+type Target = { kind: 'wall'; wall: WallBuy } | { kind: 'perk'; perk: PerkMachine } | { kind: 'box' } | { kind: 'door'; door: DoorState };
 
 interface BoxState {
   ent: Entity | null;
@@ -139,8 +140,14 @@ export class Buyables {
     const b = this.box.ent;
     if (b) {
       const d = Math.hypot(m.x - b.x, m.z - b.z);
-      if (d <= REACH.box && Math.abs(m.y - b.y) < BOX.dy && d < bd) best = { kind: 'box' };
+      if (d <= REACH.box && Math.abs(m.y - b.y) < BOX.dy && d < bd) {
+        bd = d;
+        best = { kind: 'box' };
+      }
     }
+    // Doors and debris (blockers.ts).
+    const door = this.game.blockers.doorTarget(p);
+    if (door && Math.hypot(m.x - door.spec.x, m.z - door.spec.z) < bd) best = { kind: 'door', door };
     return best;
   }
 
@@ -166,13 +173,13 @@ export class Buyables {
         if (this.box.user === p) this.box.released = true;
         continue;
       }
-      if (!g.isUp(p) || s.useLatched || s.drinkingUntil > now || p.isBot) continue;
+      if (!g.isUp(p) || s.useLatched || s.drinkingUntil > now) continue;
       const t = this.targetOf(p);
       if (!t) {
         s.useHold = 0;
         continue;
       }
-      const id = t.kind === 'wall' ? t.wall.ent.id : t.kind === 'perk' ? t.perk.ent.id : (this.box.ent?.id ?? -1);
+      const id = t.kind === 'wall' ? t.wall.ent.id : t.kind === 'perk' ? t.perk.ent.id : t.kind === 'door' ? (t.door.ent?.id ?? -2) : (this.box.ent?.id ?? -1);
       if (s.useTarget !== id) {
         s.useTarget = id;
         s.useHold = 0;
@@ -183,6 +190,7 @@ export class Buyables {
       s.useHold = 0;
       if (t.kind === 'wall') this.buyWall(p, t.wall);
       else if (t.kind === 'perk') this.buyPerk(p, t.perk);
+      else if (t.kind === 'door') this.game.blockers.buyDoor(p, t.door);
       else this.useBox(p);
     }
     this.boxTick(now);

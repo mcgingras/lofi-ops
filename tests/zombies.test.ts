@@ -13,6 +13,7 @@ import progressionFeature from '../src/server/features/progression/index';
 import weaponsFeature from '../src/server/features/weapons/index';
 import { PATH_SEARCHES_PER_TICK } from '../src/server/features/zombies/brain';
 import type { ZombiesGame } from '../src/server/features/zombies/game';
+import { setZombiesDifficulty } from '../src/server/features/zombies/game';
 import { zombiesGameOf, ZombiesRules } from '../src/server/features/zombies/index';
 import { survivorOf, undeadOf } from '../src/server/features/zombies/state';
 import { Lobby } from '../src/server/lobby';
@@ -73,10 +74,12 @@ afterEach(() => {
   store = undefined;
 });
 
-function setup(map = 'nuketown'): { room: Room; g: ZombiesGame } {
+/** A Zombies room; these tests check BO1's rules, so Classic unless asked (Casual: tests/zombies.difficulty.test.ts). */
+function setup(map = 'nuketown', difficulty: 'casual' | 'classic' = 'classic'): { room: Room; g: ZombiesGame } {
   store = new Store(':memory:');
   lobby = new Lobby({ store, features: [weaponsFeature, perksFeature, progressionFeature, botsFeature], log: () => {}, autoTick: false });
   const room = lobby.createRoom({ mode: 'zombies', map, closeWhenEmpty: false });
+  setZombiesDifficulty(room, difficulty);
   return { room, g: zombiesGameOf(room)! };
 }
 const steps = (room: Room, seconds: number, each?: () => void) => {
@@ -671,7 +674,7 @@ describe('zombie AI', () => {
 // ---------------------------------------------------------------------------------------------
 
 describe('Zombies listing', () => {
-  it('a party playlist, the mode def, three maps with layers, challenges', () => {
+  it('a party playlist, the mode def, four maps with layers, challenges', () => {
     const mode = MODE_BY_ID.get('zombies')!;
     expect(mode).toMatchObject({ teams: true, teamsByRules: true, respawn: false, maxPlayers: 4, timeLimitSec: 0 });
     expect(mode.killXp).toBeDefined();
@@ -679,7 +682,7 @@ describe('Zombies listing', () => {
     expect(pl.category).toBe('party');
     expect(playlistMode(pl)).toBe('zombies');
     const maps = mapsForMode('zombies').map((m) => m.id).sort();
-    expect(maps).toEqual(['firingrange', 'nuketown', 'yard']);
+    expect(maps).toEqual(['firingrange', 'nacht', 'nuketown', 'yard']);
     for (const id of maps) expect(zombiesLayer(id)).not.toBeNull();
     const ids = CHALLENGES.map((c) => c.id);
     for (const id of ['zombies_round', 'zombies_horde', 'zombies_headshots']) expect(ids).toContain(id);

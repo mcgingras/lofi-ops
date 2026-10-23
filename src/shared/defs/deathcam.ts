@@ -84,6 +84,32 @@ export interface PackedClip {
   f: number[][];
   /** Shots: [ms since t0, player index, end x, y, z (cm), 1 if it hit a player, then x, y, z (cm) per wall point]. */
   s: number[][];
+  /** Gear table (see gearKey): the weapons held in the clip. */
+  w?: string[];
+  /** Gear changes: [ms since t0, player index, index into `w`] (each player's first row is what they held at the start). */
+  g?: number[][];
+  /** Frost changes (Winter's Howl): [ms since t0, player index, frost %]. */
+  x?: number[][];
+  /** Team per player index at the kill (-1 = none / FFA). */
+  tm?: number[];
+  /** Projectile string table (kinds and sub-kinds). */
+  pk?: string[];
+  /** Projectiles: [entity id, kind (index into `pk`), owner (player index, -1 none), sub-kind (index into `pk`)]. */
+  pj?: number[][];
+  /** Projectile positions: [ms since t0, entity id, x, y, z (cm)]. */
+  pe?: number[][];
+}
+
+/** The weapon a replayed player holds: `weaponId|camo|attachment,attachment` ('' when empty-handed). */
+export function gearKey(weapon: string, camo = 'none', attachments: readonly string[] = []): string {
+  return weapon ? `${weapon}|${camo || 'none'}|${attachments.join(',')}` : '';
+}
+
+/** Inverse of gearKey (null when empty-handed). */
+export function parseGear(key: string | undefined): { weapon: string; camo: string; attachments: string[] } | null {
+  if (!key) return null;
+  const [weapon = '', camo = 'none', att = ''] = key.split('|');
+  return weapon ? { weapon, camo: camo || 'none', attachments: att ? att.split(',') : [] } : null;
 }
 
 export interface DeathcamShot {
@@ -122,9 +148,13 @@ export interface DeathcamPayload {
 const cm = (v: number) => Math.round(v * 100);
 const mr = (v: number) => Math.round(v * 1000);
 
-/** Quantise and delta-code frames (and shots) for the wire. */
-export function packClip(frames: readonly KillcamFrame[], shots: readonly DeathcamShot[] = []): PackedClip {
+/**
+ * Quantise and delta-code frames (and shots) for the wire. Gear and frost go as changes, projectiles
+ * as a table plus positions; `teams` tags each player with their team at the kill.
+ */
+export function packClip(frames: readonly KillcamFrame[], shots: readonly DeathcamShot[] = [], teams?: ReadonlyMap<string, number | null>): PackedClip {
   const t0 = frames[0]?.t ?? 0;
+  const ms = (t: number) => Math.round((t - t0) * 1000);
   const ids: string[] = [];
   const index = new Map<string, number>();
   const last = new Map<number, number[]>();
@@ -137,24 +167,109 @@ export function packClip(frames: readonly KillcamFrame[], shots: readonly Deathc
     }
     return i;
   };
+  const gearTable: string[] = [];
+  const gearIndex = new Map<string, number>();
+  const heldBy = new Map<number, number>();
+  const frostBy = new Map<number, number>();
+  const g: number[][] = [];
+  const x: number[][] = [];
+  const strs: string[] = [];
+  const str = (v: string) => {
+    const i = strs.indexOf(v);
+    return i >= 0 ? i : strs.push(v) - 1;
+  };
+  const pj: number[][] = [];
+  const pe: number[][] = [];
+  const seen = new Set<number>();
   const f = frames.map((fr) => {
-    const row = [Math.round((fr.t - t0) * 1000)];
+    const t = ms(fr.t);
+    const row = [t];
     for (const p of fr.p) {
       const i = idx(p[0]);
       const q = [cm(p[1]), cm(p[2]), cm(p[3]), mr(p[4]), mr(p[5]), p[6], Math.round(p[7] ?? 100)];
       const prev = last.get(i) ?? [0, 0, 0, 0, 0, 0, 0];
       row.push(i, q[0]! - prev[0]!, q[1]! - prev[1]!, q[2]! - prev[2]!, q[3]! - prev[3]!, q[4]! - prev[4]!, q[5]!, q[6]! - prev[6]!);
       last.set(i, q);
+      const key = p[8];
+      if (key !== undefined) {
+        let k = gearIndex.get(key);
+        if (k === undefined) {
+          k = gearTable.push(key) - 1;
+          gearIndex.set(key, k);
+        }
+        if (heldBy.get(i) !== k) {
+          heldBy.set(i, k);
+          g.push([t, i, k]);
+        }
+      }
+      const frost = Math.round(p[9] ?? 0);
+      if ((frostBy.get(i) ?? 0) !== frost) {
+        frostBy.set(i, frost);
+        x.push([t, i, frost]);
+      }
+    }
+    for (const e of fr.e ?? []) {
+      if (!seen.has(e[0])) {
+        seen.add(e[0]);
+        pj.push([e[0], str(e[1]), e[2] ? idx(e[2]) : -1, str(e[6])]);
+      }
+      pe.push([t, e[0], cm(e[3]), cm(e[4]), cm(e[5])]);
     }
     return row;
   });
-  const s = shots.map((x) => [Math.round((x.t - t0) * 1000), idx(x.id), cm(x.end[0]), cm(x.end[1]), cm(x.end[2]), x.hit ? 1 : 0, ...(x.pen ?? []).flatMap((p) => [cm(p[0]), cm(p[1]), cm(p[2])])]);
-  return { t0, ids, f, s };
+  const s = shots.map((sh) => [ms(sh.t), idx(sh.id), cm(sh.end[0]), cm(sh.end[1]), cm(sh.end[2]), sh.hit ? 1 : 0, ...(sh.pen ?? []).flatMap((p) => [cm(p[0]), cm(p[1]), cm(p[2])])]);
+  const out: PackedClip = { t0, ids, f, s };
+  if (gearTable.length) {
+    out.w = gearTable;
+    out.g = g;
+  }
+  if (x.length) out.x = x;
+  if (teams) out.tm = ids.map((id) => teams.get(id) ?? -1);
+  if (pj.length) {
+    out.pk = strs;
+    out.pj = pj;
+    out.pe = pe;
+  }
+  return out;
+}
+
+/** A projectile's recorded flight (room time, metres). */
+export interface ProjectileTrack {
+  id: number;
+  kind: string;
+  /** Sub-kind (the grenade type: frag, semtex, gl...). */
+  sub: string;
+  owner: string | null;
+  points: { t: number; x: number; y: number; z: number }[];
+}
+
+/** A clip unpacked: frames (with gear and frost filled in), shots, and the side tables. */
+export interface UnpackedClip {
+  frames: KillcamFrame[];
+  shots: DeathcamShot[];
+  /** Per player: gear changes in time order (gearKey strings). */
+  gear: Map<string, { t: number; gear: string }[]>;
+  /** Per player: frost changes (%). */
+  frost: Map<string, { t: number; frost: number }[]>;
+  /** Team at the kill (null = none / not sent). */
+  teams: Map<string, number | null>;
+  projectiles: ProjectileTrack[];
+}
+
+/** The latest value of a time-ordered change list at time `t` (undefined before the first). */
+export function valueAt<T>(list: readonly ({ t: number } & T)[] | undefined, t: number): ({ t: number } & T) | undefined {
+  let cur: ({ t: number } & T) | undefined;
+  for (const x of list ?? []) {
+    if (x.t > t + 1e-6) break;
+    cur = x;
+  }
+  return cur;
 }
 
 /** Inverse of packClip (to cm / mrad precision). */
-export function unpackClip(c: PackedClip): { frames: KillcamFrame[]; shots: DeathcamShot[] } {
+export function unpackClip(c: PackedClip): UnpackedClip {
   const acc = new Map<number, number[]>();
+  const at = (ms: number) => c.t0 + ms / 1000;
   const frames = c.f.map((row) => {
     const p: KillcamFrame['p'] = [];
     for (let k = 1; k + 7 < row.length; k += 8) {
@@ -164,14 +279,52 @@ export function unpackClip(c: PackedClip): { frames: KillcamFrame[]; shots: Deat
       acc.set(i, q);
       p.push([c.ids[i] ?? '?', q[0]! / 100, q[1]! / 100, q[2]! / 100, q[3]! / 1000, q[4]! / 1000, q[5]!, q[6]!]);
     }
-    return { t: c.t0 + row[0]! / 1000, p };
+    return { t: at(row[0]!), p } as KillcamFrame;
   });
   const shots = c.s.map((s) => {
-    const shot: DeathcamShot = { t: c.t0 + s[0]! / 1000, id: c.ids[s[1]!] ?? '?', end: [s[2]! / 100, s[3]! / 100, s[4]! / 100], hit: s[5] === 1 };
+    const shot: DeathcamShot = { t: at(s[0]!), id: c.ids[s[1]!] ?? '?', end: [s[2]! / 100, s[3]! / 100, s[4]! / 100], hit: s[5] === 1 };
     const pen: [number, number, number][] = [];
     for (let k = 6; k + 2 < s.length; k += 3) pen.push([s[k]! / 100, s[k + 1]! / 100, s[k + 2]! / 100]);
     if (pen.length) shot.pen = pen;
     return shot;
   });
-  return { frames, shots };
+  const gear = new Map<string, { t: number; gear: string }[]>();
+  for (const [t, i, k] of c.g ?? []) {
+    const id = c.ids[i!] ?? '?';
+    const list = gear.get(id) ?? [];
+    list.push({ t: at(t!), gear: c.w?.[k!] ?? '' });
+    gear.set(id, list);
+  }
+  const frost = new Map<string, { t: number; frost: number }[]>();
+  for (const [t, i, v] of c.x ?? []) {
+    const id = c.ids[i!] ?? '?';
+    const list = frost.get(id) ?? [];
+    list.push({ t: at(t!), frost: v! });
+    frost.set(id, list);
+  }
+  const teams = new Map<string, number | null>();
+  c.ids.forEach((id, i) => {
+    const tm = c.tm?.[i];
+    teams.set(id, tm === undefined || tm < 0 ? null : tm);
+  });
+  const projectiles: ProjectileTrack[] = (c.pj ?? []).map(([id, k, o, sub]) => ({ id: id!, kind: c.pk?.[k!] ?? '', sub: c.pk?.[sub!] ?? '', owner: o! >= 0 ? (c.ids[o!] ?? null) : null, points: [] }));
+  const byId = new Map(projectiles.map((p) => [p.id, p]));
+  const frameAt = new Map(c.f.map((row, i) => [row[0]!, frames[i]!]));
+  for (const [t, id, x, y, z] of c.pe ?? []) {
+    const pr = byId.get(id!);
+    if (!pr) continue;
+    const pt = { t: at(t!), x: x! / 100, y: y! / 100, z: z! / 100 };
+    pr.points.push(pt);
+    const fr = frameAt.get(t!);
+    if (fr) (fr.e ??= []).push([pr.id, pr.kind, pr.owner ?? '', pt.x, pt.y, pt.z, pr.sub]);
+  }
+  // Fill the frames' own gear and frost fields from the change lists.
+  for (const fr of frames)
+    for (const p of fr.p) {
+      const held = valueAt(gear.get(p[0]), fr.t);
+      if (held) p[8] = held.gear;
+      const fz = valueAt(frost.get(p[0]), fr.t);
+      if (fz && fz.frost) p[9] = fz.frost;
+    }
+  return { frames, shots, gear, frost, teams, projectiles };
 }

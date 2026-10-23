@@ -74,7 +74,7 @@ function digits(g: CanvasRenderingContext2D, s: string, cx: number, y: number, s
 }
 
 /** The chalk frame and price under a wall-buy. One texture per price. */
-const prices = new Set([...Object.values(WALL_PRICES), 500, 750, 1000, 1200, 1500, 2000]);
+const prices = new Set([...Object.values(WALL_PRICES), 200, 500, 600, 750, 1000, 1200, 1500, 1800, 2000]);
 for (const price of prices) {
   registerTexture(`zm_chalk_${price}`, {
     w: 64,
