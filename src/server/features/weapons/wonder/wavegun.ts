@@ -121,7 +121,21 @@ export function updateSwell(room: Room): void {
       clearSwell(room, q);
       wonderFx(room, { k: 'pop', p: by?.id ?? null, v: q.id, x: r2(c.x), y: r2(c.y), z: r2(c.z) });
       room.damage({ victim: q, attacker: by, amount: WAVE_GUN.wave.damage, weapon: 'wavegun', part: 'torso', means: 'wonder', from: c, distance: by ? Math.hypot(by.move.x - q.move.x, by.move.z - q.move.z) : 0 });
+      if (by) popBurst(room, by, q, c);
     }
+  }
+}
+
+/** A pop bursts over the shooter's enemies near the body: `popMax` at the body to `popMin` at `popR`. */
+function popBurst(room: Room, by: PlayerState, popped: PlayerState, c: { x: number; y: number; z: number }): void {
+  const W = WAVE_GUN.wave;
+  for (const q of targetsOf(room, by)) {
+    if (q === popped) continue;
+    const at = chest(q);
+    const d = Math.hypot(at.x - c.x, at.y - c.y, at.z - c.z);
+    if (d > W.popR || !room.world.lineOfSight(c, at, 'bullets')) continue;
+    const amount = W.popMax + (W.popMin - W.popMax) * (d / W.popR);
+    room.damage({ victim: q, attacker: by, amount, weapon: 'wavegun', part: 'torso', means: 'wonder', from: c, distance: Math.hypot(by.move.x - q.move.x, by.move.z - q.move.z) });
   }
 }
 

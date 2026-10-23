@@ -291,14 +291,15 @@ export const BABY_GUN = {
 /**
  * Wave Gun (Zap Guns). BO1 (Moon): the dual-wield Zap Guns fire quick electric bolts; aiming down
  * sights snaps them together into the Wave Gun, a slow microwave shot that makes zombies swell
- * and burst. Here: hip fire alternates zap bolts from each pistol at 300 rpm, instant out to 35 m,
- * 34 each (three kill) and a small arc for 20 to one enemy within 2.5 m of the victim. Aimed, the
- * same trigger fires the Wave Gun at x0.2 the rate (60 rpm): out to 50 m, a body within 0.5 m of
- * the line swells for 0.7 s (slowed to x0.3, hands taken) and pops (a kill).
+ * and burst. Here: hip fire alternates zap bolts from each pistol at 450 rpm, instant out to 40 m,
+ * 50 each (two kill) and an arc for 35 to one enemy within 4 m of the victim. Aimed, the same
+ * trigger fires the Wave Gun at x0.45 the rate (about 200 rpm): out to 60 m, a body within 0.8 m
+ * of the line swells for 0.45 s (slowed to x0.3, hands taken) and pops (a kill), and the pop
+ * bursts over everyone within `popR` (`popMax` at the body to `popMin` at the edge).
  */
 export const WAVE_GUN = {
-  zap: { range: 35, damage: 34, aimRadius: 0.25, arcR: 2.5, arcDamage: 20 },
-  wave: { range: 50, aimRadius: 0.5, swellSec: 0.7, damage: 300, fireRate: 0.2, slow: 0.3 },
+  zap: { range: 40, damage: 50, aimRadius: 0.35, arcR: 4, arcDamage: 35 },
+  wave: { range: 60, aimRadius: 0.8, swellSec: 0.45, damage: 300, fireRate: 0.45, slow: 0.3, popR: 3.5, popMax: 120, popMin: 30 },
   /** ADS above this counts as aimed (the guns are together). */
   adsAt: 0.5,
 } as const;

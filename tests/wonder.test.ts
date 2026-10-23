@@ -114,7 +114,7 @@ describe('wonder weapon defs', () => {
     expect(WEAPON_BY_ID.get('wintershowl')).toMatchObject({ magazine: 6, reserve: 24 });
     expect(WEAPON_BY_ID.get('scavenger')).toMatchObject({ magazine: 2, reserve: 12, mode: 'bolt', scope: true });
     expect(WEAPON_BY_ID.get('babygun')).toMatchObject({ magazine: 4, reserve: 16 });
-    expect(WEAPON_BY_ID.get('wavegun')).toMatchObject({ magazine: 16, reserve: 96, mode: 'auto' });
+    expect(WEAPON_BY_ID.get('wavegun')).toMatchObject({ magazine: 24, reserve: 144, mode: 'auto' });
     expect(isWonderWeapon('ak47')).toBe(false);
   });
 
