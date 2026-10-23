@@ -17,6 +17,7 @@ const humans = arg('humans', 1);
 
 const t0 = performance.now();
 const h = blackoutRoom({ humans, seed });
+h.room.options.onEnd = 'lobby';
 console.log(`setup ${(performance.now() - t0).toFixed(0)} ms, players ${h.room.players.size}, loot ${h.game.lootSpawned}, entities ${h.room.entities.size}`);
 const chunk = 30;
 let all: number[] = [];

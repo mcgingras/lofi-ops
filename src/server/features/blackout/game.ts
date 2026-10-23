@@ -434,7 +434,7 @@ export class BlackoutGame {
     for (const p of this.aliveEntrants()) {
       if (bx(p).stage === 'plane') continue;
       if (outsideBy(c.cur, p.move.x, p.move.z) <= 0) continue;
-      this.room.damage({ victim: p, attacker: null, amount, weapon: 'storm', part: null, means: 'storm', from: null, distance: 0 });
+      this.room.damage({ victim: p, attacker: null, amount, weapon: 'circle', part: null, means: 'storm', from: null, distance: 0 });
     }
   }
 
@@ -647,7 +647,9 @@ export class BlackoutGame {
       const key = p.id < foe.id ? `${p.id}|${foe.id}` : `${foe.id}|${p.id}`;
       let los = this.farLos.get(key);
       if (!los || room.time - los.t > 2) {
-        los = { t: room.time, ok: room.world.lineOfSight({ x: p.move.x, y: p.move.y + 1.5, z: p.move.z }, { x: foe.move.x, y: foe.move.y + 1.2, z: foe.move.z }) };
+        // Not every pair that could fight does (bots also loot, rotate and keep their heads down):
+        // the decision is re-rolled with the sight check every 2 s.
+        los = { t: room.time, ok: Math.random() < 0.35 && room.world.lineOfSight({ x: p.move.x, y: p.move.y + 1.5, z: p.move.z }, { x: foe.move.x, y: foe.move.y + 1.2, z: foe.move.z }) };
         this.farLos.set(key, los);
       }
       if (!los.ok) continue;
@@ -658,7 +660,7 @@ export class BlackoutGame {
       const w = currentWeapon(p);
       if (!w) continue;
       if (w.def.base.id === 'knife') {
-        if (fd < 2 && Math.random() < 0.06) room.damage({ victim: foe, attacker: p, amount: 150, weapon: 'knife', part: 'torso', means: 'melee', from: p.move, distance: fd });
+        if (fd < 2 && Math.random() < 0.04) room.damage({ victim: foe, attacker: p, amount: 150, weapon: 'knife', part: 'torso', means: 'melee', from: p.move, distance: fd });
         continue;
       }
       if (w.mag <= 0) {
@@ -675,7 +677,7 @@ export class BlackoutGame {
       const skill = p.ext.bots?.skill;
       const aimQ = skill ? clampNum(1.4 - skill.aimErrorDeg / 6, 0.4, 1.4) : 1;
       const hit = clampNum((0.32 - fd / 160) * aimQ, 0.03, 0.4);
-      const dmg = damageAtRange(w.def, fd) * Math.max(1, w.def.pellets ?? 1) * 0.7 * shots * hit;
+      const dmg = damageAtRange(w.def, fd) * Math.max(1, w.def.pellets ?? 1) * 0.35 * shots * hit;
       if (dmg > 0) room.damage({ victim: foe, attacker: p, amount: dmg, weapon: w.def.base.id, part: 'torso', means: 'bullet', from: p.move, distance: fd });
     }
     if (this.farLos.size > 4000) this.farLos.clear();

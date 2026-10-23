@@ -26,7 +26,7 @@ import { currentWeapon, type BotBrain, type PlayerState } from '../../player';
 import type { Room } from '../../room';
 import { addRecoil, angleDiff, engage, feltOffDeg, flinch, lookToward, newAimState, noticeTime, stepAim, toleranceDeg, type AimState } from '../bots/aim';
 import { botCanHit, chestOf, headOf, visiblePart } from '../bots/sight';
-import { dropsOf, swapBlocker, swapFor, type DropEntity } from '../pickups/index';
+import { swapBlocker, swapFor, type DropEntity } from '../pickups/index';
 import { wants } from './loot';
 import { blackoutGameOf } from './rules';
 import { bx } from './state';
@@ -77,6 +77,8 @@ export class BlackoutBrain implements BotBrain {
   private prev = 0;
   private slot = 0;
   private hurtBy: { id: string; t: number } | null = null;
+  /** Loot it gave up on (unreachable, or it couldn't take it): entity id -> room time to retry. */
+  private ignore = new Map<number, number>();
   /** Camping late-game: holds its spot until then. */
   private campUntil = 0;
   readonly camper: boolean;
@@ -114,6 +116,7 @@ export class BlackoutBrain implements BotBrain {
     else this.stats.far++;
 
     // Plan: re-think on a timer (far bots rarely), or when the goal is done.
+    if (this.goal?.kind === 'loot' && this.goal.ent !== undefined && now > this.goal.until) this.giveUp(this.goal.ent, now);
     if (now >= this.nextThink || !this.goal || now > this.goal.until) {
       this.nextThink = now + (near ? 0.35 : BLACKOUT.lod.farThinkSec) * (0.8 + this.rnd() * 0.4);
       this.plan(room, game, self);
@@ -172,7 +175,10 @@ export class BlackoutBrain implements BotBrain {
         buttons |= this.jumpPulse();
         this.detour = (this.rnd() < 0.5 ? -1 : 1) * (0.8 + this.rnd() * 1.2);
         this.detourUntil = now + 0.9;
-        if (this.stuckCount >= 4) this.goal = null;
+        if (this.stuckCount >= 4) {
+          if (this.goal?.ent !== undefined) this.giveUp(this.goal.ent, now);
+          this.goal = null;
+        }
       }
     }
     if (near) lookToward(this.aim, skill, yaw, 0, dt, 0.7);
@@ -193,6 +199,11 @@ export class BlackoutBrain implements BotBrain {
     this.aim.yaw = yaw;
     this.aim.pitch = 0;
     return { buttons: Math.hypot(dx, dz) > 4 ? Buttons.FORWARD : 0, yaw, pitch: 0, weaponSlot: 0 };
+  }
+
+  private giveUp(ent: number, now: number): void {
+    this.ignore.set(ent, now + 45);
+    if (this.ignore.size > 64) for (const [id, t] of this.ignore) if (t < now) this.ignore.delete(id);
   }
 
   private jumpPulse(): number {
@@ -295,9 +306,12 @@ export class BlackoutBrain implements BotBrain {
     const needGun = self.weapons.some((w) => w.def.base.id === 'knife');
     for (const e of game.lootNear(p.x, p.z, LOOT_RANGE)) {
       if (Math.abs(e.y - p.y) > 6) continue;
+      const until = this.ignore.get(e.id);
+      if (until !== undefined && room.time < until) continue;
       const claim = game.lootClaims.get(e.id);
       if (claim && claim !== self.id && room.players.get(claim)?.alive) continue;
-      const d = Math.hypot(e.x - p.x, e.z - p.z);
+      // Another floor costs a detour (stairs somewhere): weigh the height.
+      const d = Math.hypot(e.x - p.x, e.z - p.z) + Math.max(0, Math.abs(e.y - p.y) - 0.6) * 6;
       let score = Infinity;
       if (e.kind === 'pickups_weapon') {
         const drop = e as DropEntity;
@@ -324,19 +338,21 @@ export class BlackoutBrain implements BotBrain {
     const e = room.entities.get(this.goal.ent);
     if (!e) {
       this.goal = null;
+      this.nextThink = 0;
       return;
     }
     if (e.kind !== 'pickups_weapon') return;
     if (Math.hypot(e.x - self.move.x, e.z - self.move.z) > PICKUP.radius * 0.9) return;
-    const drop = dropsOf(room).find((d) => d.id === e.id);
-    if (!drop) return;
+    const drop = e as DropEntity;
+    if (!drop.data) return;
     const slot = game.pickupSlot(self) === self.slot && self.weapons[self.slot]?.def.base.id !== 'knife' ? worstSlot(self) : game.pickupSlot(self);
     if (swapBlocker(room, self, drop, { slot }) === null) {
       swapFor(room, self, drop, slot);
       this.slot = slot;
       game.lootChanged();
-    }
+    } else this.giveUp(e.id, room.time);
     this.goal = null;
+    this.nextThink = 0;
   }
 
   // -------------------------------------------------------------------------------------------

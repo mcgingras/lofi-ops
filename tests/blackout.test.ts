@@ -390,6 +390,58 @@ describe('blackout: the map', () => {
   });
 });
 
+describe('blackout: bots', () => {
+  it('bots outside the circle head into it', () => {
+    h = blackoutRoom({ players: 8, seed: 51 });
+    const { room, game } = h;
+    // Everyone on the ground far east; the safe zone is a small circle in the west.
+    const bots = [...room.players.values()];
+    bots.forEach((p, i) => {
+      bx(p).stage = 'ground';
+      p.move.x = 200;
+      p.move.y = 0;
+      p.move.z = -40 + i * 10;
+      p.move.vx = p.move.vz = 0;
+      p.move.onGround = true;
+    });
+    for (let i = 0; i < game.circles.length; i++) game.circles[i] = { x: 60, z: -20, r: 60 };
+    const d0 = bots.map((p) => Math.hypot(p.move.x - 60, p.move.z + 20));
+    for (let i = 0; i < 20 * TICK_RATE; i++) room.step();
+    const moved = bots.filter((p, i) => p.alive && Math.hypot(p.move.x - 60, p.move.z + 20) < d0[i]! - 40);
+    expect(moved.length).toBeGreaterThanOrEqual(Math.ceil(bots.filter((p) => p.alive).length * 0.6));
+  });
+
+  it('never more than three bots fight one human at once', () => {
+    h = blackoutRoom({ humans: 1, players: 100, seed: 52 });
+    const { room, game } = h;
+    const me = h.humans[0]!.player;
+    let worst = 0;
+    for (let i = 0; i < 75 * TICK_RATE; i++) {
+      room.step();
+      if (me.alive && i % 10 === 0) worst = Math.max(worst, game.engagedOn(me));
+    }
+    expect(worst).toBeLessThanOrEqual(3);
+  }, 120_000);
+
+  it('far bots think rarely and never trace shots; near bots use the full brain', () => {
+    h = blackoutRoom({ humans: 1, players: 40, seed: 53 });
+    const { room, game } = h;
+    for (let i = 0; i < 50 * TICK_RATE; i++) room.step();
+    const bots = [...room.players.values()].filter((p) => p.isBot && p.alive);
+    const near = bots.filter((p) => game.isNear(p));
+    const far = bots.filter((p) => !game.isNear(p));
+    expect(far.length).toBeGreaterThan(0);
+    for (const p of far) {
+      const d = Math.min(...room.humans().map((hm) => Math.hypot(hm.move.x - p.move.x, hm.move.z - p.move.z)));
+      expect(d).toBeGreaterThan(BLACKOUT.lod.nearDist - 15);
+    }
+    for (const p of near) {
+      const d = Math.min(...room.humans().map((hm) => Math.hypot(hm.move.x - p.move.x, hm.move.z - p.move.z)));
+      expect(d).toBeLessThan(BLACKOUT.lod.nearDist + 15);
+    }
+  }, 60_000);
+});
+
 describe('blackout: 100 players', () => {
   it('a full room (1 human + 99 bots) runs the drop and the first fights within budget', () => {
     h = blackoutRoom({ humans: 1, players: 100, seed: 41 });

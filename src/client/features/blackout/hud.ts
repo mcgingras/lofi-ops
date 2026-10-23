@@ -333,7 +333,7 @@ function wrapCore(): void {
     const w = hudWidgets.get(id);
     if (w) registerHudWidget(id, fn(w.draw), w.order);
   };
-  for (const id of ['core.score', 'core.death', 'killstreaks.radar'])
+  for (const id of ['core.score', 'core.death', 'killstreaks.radar', 'frontend.classHint'])
     wrap(id, (orig) => (g, W, H, dt) => {
       if (isBlackout(currentMatch())) return;
       orig(g, W, H, dt);

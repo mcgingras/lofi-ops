@@ -100,7 +100,7 @@ export const BLACKOUT = {
     /** Far bots re-plan this often (s). */
     farThinkSec: 0.5,
     /** Far bots "fight" each other inside this range (m), resolved statistically. */
-    farFightRange: 45,
+    farFightRange: 32,
   },
   /** Loot spots get an item with this chance at match start. */
   lootChance: 0.82,

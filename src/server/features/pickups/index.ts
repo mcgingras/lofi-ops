@@ -75,7 +75,7 @@ function updateWalkOver(room: Room): void {
   for (const p of room.players.values()) {
     if (!p.alive) continue;
     for (const d of drops) {
-      if (!room.entities.get(d.id) || !carriesWeapon(p, d.data.weapon) || !onTopOf(p, d)) continue;
+      if (!onTopOf(p, d) || !room.entities.get(d.id) || !carriesWeapon(p, d.data.weapon)) continue;
       takeAmmo(room, p, d);
     }
   }

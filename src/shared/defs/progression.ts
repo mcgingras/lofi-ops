@@ -165,6 +165,7 @@ export const OBJECTIVE_ALIASES: Record<string, string> = {
   'infected.last_alive': 'infected_last',
   'infected.outlast': 'outlast',
   'infected.final_stand': 'final_stand',
+  'blackout.placement': 'placement',
 };
 
 /**
@@ -196,6 +197,7 @@ export const OBJECTIVE_LABELS: Record<string, string> = {
   infected_last: 'LAST ONE STANDING',
   outlast: 'OUTLASTED',
   final_stand: 'FINAL STAND',
+  placement: 'PLACEMENT',
 };
 
 export const canonicalObjective = (kind: string) => OBJECTIVE_ALIASES[kind] ?? kind;
