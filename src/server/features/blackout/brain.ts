@@ -16,7 +16,7 @@
  * Fairness: a bot only fights whom it sees (FOV + line of sight + noticing time), humans are not
  * preferred, and at most `MAX_ON_HUMAN` bots engage the same human at once unless shot by them.
  */
-import { BLACKOUT, circleState, insideCircle, type Circle } from '../../../shared/defs/blackout';
+import { BLACKOUT, insideCircle, type Circle } from '../../../shared/defs/blackout';
 import type { BotSkill } from '../../../shared/defs/bots';
 import { PICKUP } from '../../../shared/defs/pickups';
 import { Buttons, type InputCmd } from '../../../shared/input';
@@ -38,6 +38,10 @@ const DEG = Math.PI / 180;
 export const MAX_ON_HUMAN = 3;
 /** How far a bot looks for loot (m) and how long it gives a loot goal (s). */
 const LOOT_RANGE = 45;
+/** Odds that a bot takes on another bot it sees (re-rolled every few seconds; far fights use the same). */
+export const FIGHT_ODDS = 0.35;
+/** Near bots see and shoot for real (hitscan, the aim controller), which kills faster: lower odds. */
+export const NEAR_FIGHT_ODDS = 0.2;
 
 type Goal = { x: number; y: number; z: number; kind: 'loot' | 'circle' | 'roam' | 'camp'; until: number; ent?: number };
 
@@ -79,6 +83,8 @@ export class BlackoutBrain implements BotBrain {
   private hurtBy: { id: string; t: number } | null = null;
   /** Loot it gave up on (unreachable, or it couldn't take it): entity id -> room time to retry. */
   private ignore = new Map<number, number>();
+  /** Bots it decided to leave alone for now (id -> until). */
+  private truce = new Map<string, { fight: boolean; until: number }>();
   /** Camping late-game: holds its spot until then. */
   private campUntil = 0;
   readonly camper: boolean;
@@ -389,6 +395,14 @@ export class BlackoutBrain implements BotBrain {
       const hurtByQ = !!this.hurtBy && this.hurtBy.id === q.id && now - this.hurtBy.t < 3;
       // Fair play: humans already busy with MAX_ON_HUMAN bots are left alone (unless they shot us).
       if (!q.isBot && q !== this.target && !hurtByQ && game.engagedOn(q) >= MAX_ON_HUMAN) continue;
+      // Bots don't take on every other bot they see (they loot and rotate too; the same odds as
+      // far fights): the choice holds for a few seconds. Humans and whoever shot it: always.
+      if (q.isBot && !hurtByQ && d > 55) continue;
+      if (q.isBot && q !== this.target && !hurtByQ) {
+        let truce = this.truce.get(q.id);
+        if (!truce || now > truce.until) this.truce.set(q.id, (truce = { fight: this.rnd() < NEAR_FIGHT_ODDS, until: now + 4 + this.rnd() * 3 }));
+        if (!truce.fight) continue;
+      }
       const off = Math.abs(angleDiff(yawTo(eye, c), this.aim.yaw));
       const prev = this.notice.get(q.id) ?? 0;
       const tracking = q === this.target;
@@ -499,10 +513,4 @@ export function worstSlot(p: PlayerState): number {
 /** The bots feature calls this for every bot in a Blackout room. */
 export function createBlackoutBrain(_room: Room, _bot: PlayerState, skill: BotSkill): BlackoutBrain {
   return new BlackoutBrain(skill);
-}
-
-/** Debug/tests: where the circle sends a bot standing at `p` now. */
-export function circleGoal(game: BlackoutGame, p: Vec3): Circle | null {
-  const c = game.t0 === null ? null : circleState(game.circles, game.room.time - game.t0);
-  return c?.next ?? c?.cur ?? null;
 }

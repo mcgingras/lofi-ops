@@ -4,7 +4,7 @@
  * the room's bus, modifiers and core hooks (`moveParamsHook` for the glide physics, `interest` for
  * snapshots). Pure maths lives in shared/defs/blackout.ts.
  */
-import { BLACKOUT, BLACKOUT_MODE, GLIDE, LOOT_ENTITY, PLANE_ENTITY, buildCircles, circleState, outsideBy, placementXp, planeAt, planePath, type BlackoutStatePayload, type Circle, type CircleState, type PlanePath } from '../../../shared/defs/blackout';
+import { BLACKOUT, BLACKOUT_MODE, GLIDE, PLANE_ENTITY, buildCircles, circleState, outsideBy, placementXp, planeAt, planePath, type BlackoutStatePayload, type Circle, type CircleState, type PlanePath } from '../../../shared/defs/blackout';
 import { Buttons } from '../../../shared/input';
 import type { MatchResults, PlayerResult } from '../../../shared/events';
 import type { SpawnPoint } from '../../../shared/maps/types';
@@ -15,11 +15,10 @@ import type { Entity } from '../../entities';
 import { makeWeapon, type PlayerState } from '../../player';
 import type { Room } from '../../room';
 import { heldSlot, setPickupRules } from '../pickups/index';
-import { sendEquip } from '../weapons/equipment';
 import { wext } from '../weapons/state';
-import { BlackoutBrain } from './brain';
+import { BlackoutBrain, FIGHT_ODDS } from './brain';
 import { focusOf, interestFor } from './interest';
-import { deathLoot, LootGrid, lootSpots, spawnLoot, trimLoot, walkOver } from './loot';
+import { deathLoot, LootGrid, lootSpots, spawnLoot, walkOver } from './loot';
 import { bx, freshExt } from './state';
 
 const KNIFE = 'knife';
@@ -590,7 +589,8 @@ export class BlackoutGame {
     for (const h of this.room.players.values()) {
       if (h.isBot || !h.session) continue;
       const f = focusOf(this.room, h);
-      for (const p of this.playersNear(f.x, f.z, R)) if (p.isBot) this.near.add(p.id);
+      // Spectating needs the full brain only around the player watched.
+      for (const p of this.playersNear(f.x, f.z, h.alive ? R : R * 0.5)) if (p.isBot) this.near.add(p.id);
     }
   }
 
@@ -649,7 +649,7 @@ export class BlackoutGame {
       if (!los || room.time - los.t > 2) {
         // Not every pair that could fight does (bots also loot, rotate and keep their heads down):
         // the decision is re-rolled with the sight check every 2 s.
-        los = { t: room.time, ok: Math.random() < 0.35 && room.world.lineOfSight({ x: p.move.x, y: p.move.y + 1.5, z: p.move.z }, { x: foe.move.x, y: foe.move.y + 1.2, z: foe.move.z }) };
+        los = { t: room.time, ok: Math.random() < FIGHT_ODDS && room.world.lineOfSight({ x: p.move.x, y: p.move.y + 1.5, z: p.move.z }, { x: foe.move.x, y: foe.move.y + 1.2, z: foe.move.z }) };
         this.farLos.set(key, los);
       }
       if (!los.ok) continue;
@@ -771,16 +771,5 @@ export class BlackoutGame {
     st.watching = next || !st.killer || !this.room.players.get(st.killer)?.alive ? this.nextToWatch(p) : st.killer;
     this.dirty.add(p.id);
     return st.watching;
-  }
-
-  /** Keep the loot under its cap (tests call it after dropping things). */
-  trim(): void {
-    trimLoot(this.room);
-    this.lootVersion++;
-  }
-
-  /** Give the frag counts to the client after changes (tests). */
-  syncEquip(p: PlayerState): void {
-    sendEquip(this.room, p);
   }
 }
