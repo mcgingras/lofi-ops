@@ -690,8 +690,8 @@ export const GUNS: Record<string, GunBuilder> = {
     k.box(0.04, 0.02, 0.03, M.metal, 0, -0.05, -0.5);
     for (const s of [-1, 1]) k.box(0.01, 0.01, 0.22, M.metal, s * 0.022, -0.055, -0.38);
     const mag = k.magazine(-0.07, -0.043, atts, (g, l) => {
-      k.box(0.07, 0.14 * l, 0.12, M.metal, 0, -0.07 * l, 0.01, 0.06, 0, 0, g);
-      k.box(0.074, 0.016, 0.124, M.poly, 0, -0.14 * l, 0.018, 0.06, 0, 0, g);
+      k.box(0.07, 0.16 * l, 0.12, M.metal, 0, -0.08 * l, 0.01, 0.06, 0, 0, g);
+      k.box(0.074, 0.016, 0.124, M.poly, 0, -0.16 * l, 0.018, 0.06, 0, 0, g);
       for (let i = 0; i < 3; i++) k.box(0.072, 0.004, 0.11, M.poly, 0, -0.03 - i * 0.035 * l, 0.012, 0.06, 0, 0, g);
     });
     k.pistolGrip(0.12, -0.043, M.poly);
@@ -721,8 +721,11 @@ export const GUNS: Record<string, GunBuilder> = {
       k.cyl(r0 * 0.6, 0.066, M.poly, 0, -r0, 0, 8, g, 'x');
       k.box(0.02, 0.02, 0.05, M.metal, 0, -0.005, 0, 0, 0, 0, g); // drum neck
     });
+    k.box(0.03, 0.014, 0.03, M.metal, 0.042, 0.0, -0.1); // charging handle (right)
+    k.box(0.014, 0.02, 0.02, M.metal, 0, -0.05, -0.36); // sling swivel
     k.pistolGrip(0.1, -0.045);
     k.stock(0.17, 0.3, -0.015, 0.11, M.furn, 0.035);
+    k.box(0.012, 0.02, 0.02, M.metal, 0, -0.1, 0.38); // stock swivel
     const r = longGunAttachments(k, atts, { mountZ: -0.04, mountY: 0.065, tip: tip0, boreY: 0.01, guardZ: -0.3, guardY: -0.045, sightY: 0.088, adsZ: -0.47 });
     return { muzzle: V(0, 0.01, r.tip), sightY: r.sightY, adsZ: r.adsZ, grip: V(0.005, -0.1, 0.1), fore: V(-0.012, -0.05, -0.28), parts: { mag }, pistol: false };
   },
