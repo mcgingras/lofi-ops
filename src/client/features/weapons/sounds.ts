@@ -51,6 +51,12 @@ export const VOICES: Record<string, Voice> = {
   python: V({ dur: 0.45, decay: 2.8, hold: 5, lp: 0.55, body: 70, bodyAmt: 0.6, crack: 0.6, tail: 0.3, gain: 0.95 }),
   asp: V({ dur: 0.16, decay: 4.4, hold: 3, lp: 0.68, body: 140, bodyAmt: 0.25, crack: 0.4, tail: 0.06, gain: 0.65 }),
   gl: V({ dur: 0.3, decay: 3, hold: 10, lp: 0.25, body: 60, bodyAmt: 1, crack: 0.05, tail: 0.1, gain: 0.9 }),
+  // Secondary launchers: a hollow thump (China Lake), a roaring whoosh (rockets, missiles).
+  china_lake: V({ dur: 0.34, decay: 2.8, hold: 11, lp: 0.22, body: 52, bodyAmt: 1, crack: 0.08, tail: 0.12, gain: 0.95 }),
+  rpg: V({ dur: 0.9, decay: 1.8, hold: 7, lp: 0.42, body: 45, bodyAmt: 0.9, crack: 0.2, tail: 0.4, gain: 1 }),
+  m72law: V({ dur: 0.65, decay: 2.1, hold: 6, lp: 0.5, body: 58, bodyAmt: 0.7, crack: 0.25, tail: 0.3, gain: 0.95 }),
+  strela: V({ dur: 0.85, decay: 1.9, hold: 6, lp: 0.46, body: 50, bodyAmt: 0.75, crack: 0.15, tail: 0.35, gain: 0.95 }),
+  stinger: V({ dur: 0.8, decay: 2, hold: 5, lp: 0.52, body: 55, bodyAmt: 0.7, crack: 0.18, tail: 0.32, gain: 0.95 }),
 };
 
 function render(ctx: AudioContext, v: Voice, suppressed: boolean): AudioBuffer {
@@ -144,4 +150,15 @@ sfx.register('weapons.beep', (ctx) => tone(ctx, 0.07, (t) => (Math.sin(t * 2 * M
 sfx.register('weapons.thump', (ctx) => tone(ctx, 0.25, (t) => Math.sin(t * 2 * Math.PI * (90 - 120 * t)) * Math.pow(1 - t / 0.25, 3) * 0.9));
 // Cooking a frag: a dry mechanical tick (the spoon spring / fuse) once a second, faster at the end.
 sfx.register('weapons.cook', (ctx) => tone(ctx, 0.05, (t) => clack(t, 0, 0.012, 0.35) + Math.sin(t * 2 * Math.PI * 1800) * Math.pow(1 - t / 0.05, 6) * 0.12));
+// Launchers: the lock-on tones (a seeking beep, a steady locked tone), a rocket motor passing, a dud.
+sfx.register('weapons.lock.seek', (ctx) => tone(ctx, 0.06, (t) => (Math.sin(t * 2 * Math.PI * 1400) > 0 ? 0.16 : -0.16) * Math.min(1, t / 0.004) * Math.pow(1 - t / 0.06, 0.6)));
+sfx.register('weapons.lock.on', (ctx) => tone(ctx, 0.2, (t) => (Math.sin(t * 2 * Math.PI * 2200) > 0 ? 0.13 : -0.13) * Math.min(1, t / 0.004, (0.2 - t) / 0.004)));
+sfx.register('weapons.rocket.whoosh', (ctx) => {
+  let y = 0;
+  return tone(ctx, 0.7, (t) => {
+    y += ((Math.random() * 2 - 1) - y) * (0.08 + 0.25 * Math.sin((t / 0.7) * Math.PI));
+    return y * Math.sin((t / 0.7) * Math.PI) * 0.9;
+  });
+});
+sfx.register('weapons.dud', (ctx) => tone(ctx, 0.18, (t) => clack(t, 0, 0.05, 0.7) + Math.sin(t * 2 * Math.PI * 320) * Math.pow(1 - t / 0.18, 4) * 0.3));
 import './wonder/sounds';

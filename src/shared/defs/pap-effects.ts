@@ -21,6 +21,10 @@
  * - Extra weapon in the underbarrel slot (3 / D-pad down): `launcher` (`gl`: the grenade launcher;
  *   `masterkey`: a 4-shell underbarrel shotgun).
  * - `wonder`: light touches the wonder weapon behaviours read when the gun is packed.
+ * - Launchers (the weapons feature's launchers/ applies them): `cluster` (the grenade bursts into
+ *   bomblets), `napalm` (the warhead leaves burning ground), `proximity` (the rocket bursts beside
+ *   anyone it passes), `swarm` (a faster lock, several missiles per shot), `flak` (a missile hit
+ *   bursts and hurts every enemy aircraft near it).
  *
  * All numbers are tuned for 100-health players. Effect damage (burn, zap, headblast) is final: the
  * packed damage multiplier never scales it. Bullet damage the effects add (pierce, collateral,
@@ -48,7 +52,13 @@ export type PapEffect =
   | { kind: 'knockback'; range: number; push: number; up: number; sec: number }
   | { kind: 'flechette' }
   | { kind: 'doubletap' }
-  | { kind: 'wonder'; red?: boolean; hops?: number; radiusMult?: number; freezeAll?: boolean; shrinkR?: number; arcs?: number };
+  | { kind: 'wonder'; red?: boolean; hops?: number; radiusMult?: number; freezeAll?: boolean; shrinkR?: number; arcs?: number }
+  // Launchers (applied by the weapons feature's launchers/, defs/launchers.ts).
+  | { kind: 'cluster'; bomblets: number; radius: number; max: number; min: number; fuse: number }
+  | { kind: 'napalm'; radius: number; dps: number; sec: number }
+  | { kind: 'proximity'; radius: number }
+  | { kind: 'swarm'; missiles: number; lockMult: number }
+  | { kind: 'flak'; radius: number; damage: number };
 
 export type PapEffectKind = PapEffect['kind'];
 export type PapEffectOf<K extends PapEffectKind> = Extract<PapEffect, { kind: K }>;

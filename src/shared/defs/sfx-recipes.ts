@@ -255,6 +255,13 @@ export const WEAPON_SHOTS: Record<string, { files: string[]; rate: number; gain?
   python: { files: ['gun_python_a', 'gun_python_b'], rate: 0.97, gain: 1.3, sup: ['sup_pistol_a', 'sup_rifle_a'], supRate: 0.95 },
   asp: { files: ['gun_asp_a', 'gun_asp_b'], rate: 1.04, gain: 0.8, highpass: 150, sup: ['sup_pistol_a', 'sup_pistol_c', 'sup_pistol_d'], supRate: 1.05 },
   gl: { files: ['gun_gl_a', 'gun_gl_b'], rate: 1.0, sup: ['gun_gl_a', 'gun_gl_b'], supRate: 1.0 },
+  // Secondary launchers (defs/launchers.ts): the China Lake on the M203 thump, the rockets and
+  // missiles on the Valkyrie's launch recording, told apart by rate and EQ. No new files.
+  china_lake: { files: ['gun_gl_b', 'gun_gl_a'], rate: 0.96, gain: 1.1, lowpass: 7000, sup: ['gun_gl_b', 'gun_gl_a'], supRate: 0.96 },
+  rpg: { files: ['ks_launch'], rate: 0.95, gain: 1.15, lowpass: 6500, sup: ['ks_launch'], supRate: 0.95 },
+  m72law: { files: ['ks_launch'], rate: 1.05, gain: 0.95, highpass: 120, sup: ['ks_launch'], supRate: 1.05 },
+  strela: { files: ['ks_launch', 'gun_gl_a'], rate: 0.98, gain: 1.05, lowpass: 8000, sup: ['ks_launch'], supRate: 0.98 },
+  stinger: { files: ['ks_launch', 'gun_gl_b'], rate: 1.03, gain: 1.0, highpass: 90, sup: ['ks_launch'], supRate: 1.03 },
 };
 
 /** Distant-layer pitch by class (the layer is one AR recording): kept within +-6% as well. */
@@ -298,6 +305,9 @@ export const SFX_BINDINGS: Record<string, SfxBinding> = {
   'weapons.boom': { files: ['boom_frag_a', 'boom_frag_b'], pitchJitter: 0.03, volJitter: 1, maxVoices: 4 },
   'weapons.flashbang': { files: ['boom_flash'], pitchJitter: 0.02, maxVoices: 3 },
   'weapons.ring': { files: ['ui_ring'], gain: 1.4, maxVoices: 1 },
+  // Launchers: rocket and missile warheads on the killstreak blast recordings.
+  'weapons.rocketboom': { files: ['boom_medium', 'boom_frag_b'], gain: 1.1, pitchJitter: 0.03, volJitter: 1, maxVoices: 4, fallback: 'weapons.boom' },
+  'weapons.rocketboom.big': { files: ['boom_big', 'boom_medium'], gain: 1.1, pitchJitter: 0.03, volJitter: 1, maxVoices: 3, fallback: 'weapons.boom' },
   // Killstreaks.
   ks_ready: { files: ['cue_ready'], maxVoices: 1 },
   ks_call: { files: ['ks_call'], maxVoices: 2 },
@@ -343,6 +353,11 @@ export const SFX_SYNTH_ONLY: Record<string, string> = {
   'weapons.thump': 'Sticks and Stones BANKRUPTED sting: a low thump, no fitting recording',
   'weapons.beep': 'stuck crossbow bolt beep: a synthesized chirp, like the semtex blink',
   'weapons.cook': 'frag cook tick: a short synthesized fuse tick, no fitting recording',
+  // Launchers (defs/launchers.ts): lock-on tones are electronic beeps, the rest have no recording.
+  'weapons.lock.seek': 'Strela / Stinger seeking a lock: a synthesized short beep, faster as it closes',
+  'weapons.lock.on': 'Strela / Stinger locked: a synthesized steady high tone',
+  'weapons.rocket.whoosh': 'rocket / missile motor passing by: synthesized filtered noise sweep',
+  'weapons.dud': 'a launcher round that touched something before arming: a synthesized dull clank',
   ks_smoke: 'Care Package marker smoke hiss: synthesized noise, no smoke recording in the manifest',
   ks_glitch: 'Glitch call-in: a synthesized digital power-down (original streak, no recording)',
   // Mystery Box wonder weapons and the box itself: sci-fi / music-box sounds, no recordings approved.
