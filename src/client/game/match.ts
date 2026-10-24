@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { effectiveWeapon, type EffectiveWeapon } from '../../shared/defs/attachments';
 import { getMapData, MAP_BY_ID } from '../../shared/defs/maps';
 import { MODE_BY_ID } from '../../shared/defs/modes';
-import { WEAPON_BY_ID } from '../../shared/defs/weapons';
+import { recoilAdsK, WEAPON_BY_ID } from '../../shared/defs/weapons';
 import { isPackable, packDef, PAP_CAMO } from '../../shared/defs/pack-a-punch';
 import { shotSeed, spreadDegrees, spreadDirection, stanceSpread } from '../../shared/ballistics';
 import { playerHitboxes, rayHitboxes } from '../../shared/collision';
@@ -807,7 +807,7 @@ export class Match {
     if (ammo.mag - 1 <= 0 && ammo.reserve > 0) this.wantReload = true; // the server auto-reloads an empty mag
 
     // Local feedback: kick, flash, sound, tracer and impact using the server's spread maths.
-    const adsK = (1 - st.ads * 0.35) * RECOIL_SCALE * (fullyProne(st) ? PRONE.recoil : 1);
+    const adsK = recoilAdsK(def.recoil, st.ads) * RECOIL_SCALE * (fullyProne(st) ? PRONE.recoil : 1);
     this.recoil.pitch += def.recoil.vertical * DEG * adsK;
     this.recoil.yaw += (Math.random() - 0.5) * 2 * def.recoil.horizontal * DEG * adsK;
     this.viewmodel.shoot(this.time, Math.min(1.2, 0.5 + def.recoil.vertical * 0.4));

@@ -258,7 +258,7 @@ export const WEAPON_SHOTS: Record<string, { files: string[]; rate: number; gain?
 };
 
 /** Distant-layer pitch by class (the layer is one AR recording): kept within +-6% as well. */
-export const DISTANT_RATE: Record<WeaponClass, number> = { ar: 1, smg: 1.04, lmg: 0.97, sniper: 0.95, shotgun: 0.94, pistol: 1.05, launcher: 0.94, special: 1 };
+export const DISTANT_RATE: Record<WeaponClass, number> = { ar: 1, smg: 1.04, lmg: 0.97, sniper: 0.95, shotgun: 0.94, pistol: 1.05, machinepistol: 1.06, launcher: 0.94, special: 1 };
 
 /** Per-shot variation (+-2.5% rate, +-1.5 dB) and voice cap: 4 overlapping tails per gun at most. */
 const GUN = { pitchJitter: 0.025, volJitter: 1.5, maxVoices: 4 };

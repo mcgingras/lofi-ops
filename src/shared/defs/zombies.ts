@@ -474,7 +474,7 @@ export function rollBoxWeapon(carried: readonly string[], rnd: number, pool = bo
  * hellhounds by class, with per-weapon overrides. The knife already does BO1's 150.
  */
 export const ZOMBIE_DAMAGE = {
-  byClass: { ar: 2.6, smg: 2.5, lmg: 2.6, sniper: 4, shotgun: 3, pistol: 2.2, launcher: 3, special: 6 } as Record<string, number>,
+  byClass: { ar: 2.6, smg: 2.5, lmg: 2.6, sniper: 4, shotgun: 3, pistol: 2.2, machinepistol: 2.4, launcher: 3, special: 6 } as Record<string, number>,
   byWeapon: { m1911: 0.5, raygun: 6, thundergun: 40, wunderwaffe: 40, wintershowl: 30, scavenger: 20, babygun: 1, wavegun: 10, gl: 3 } as Record<string, number>,
   explosive: 2.5,
 } as const;
@@ -495,7 +495,7 @@ export function zombieDamageMult(weapon: string, means: string, difficulty: Zomb
  * Zombies hits the head x3-x10. `head` and `torso` replace the weapon's own (`torso` only where
  * BO1 lists a chest multiplier above 1); limbs keep theirs.
  *   ARs and SMGs (M16, Famas, Commando, Galil, AUG, AK-74u, MP5K, MPL, Spectre...) head x4;
- *   RPK / HK21 x3; M1911 x3.5, chest x1.25; CZ75 x3.5; Python head and chest x1.5;
+ *   RPK / HK21 x3; M1911 x3.5, chest x1.25; CZ75 x3.5 (so machine pistols too); Python head and chest x1.5;
  *   Dragunov x10, chest x1.5; L96A1 x10; shotguns none (N/A); the wonder weapons none.
  */
 export const ZOMBIE_PARTS = {
@@ -505,6 +505,7 @@ export const ZOMBIE_PARTS = {
     lmg: { head: 3 },
     sniper: { head: 10 },
     pistol: { head: 3.5 },
+    machinepistol: { head: 3.5 },
     shotgun: { head: 1 },
     launcher: { head: 1 },
     special: { head: 1 },

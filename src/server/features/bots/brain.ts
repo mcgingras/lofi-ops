@@ -77,13 +77,15 @@ export const NAV_SEARCHES_PER_TICK = 3;
 export const NAV_EXPAND_PER_TICK = 24000;
 
 /** How each weapon class is fought: preferred range (m), ADS beyond (m; Infinity = never). */
-const CLASS_STYLE: Record<WeaponClass, { range: number; ads: number; rush?: boolean }> = {
+export const CLASS_STYLE: Record<WeaponClass, { range: number; ads: number; rush?: boolean }> = {
   ar: { range: 18, ads: 7 },
   smg: { range: 9, ads: 10, rush: true },
   lmg: { range: 22, ads: 8 },
   sniper: { range: 32, ads: 3 },
   shotgun: { range: 4, ads: Infinity, rush: true },
   pistol: { range: 9, ads: 8 },
+  // Machine pistols: hipfire up close, push in (they lose to everything past ~10 m).
+  machinepistol: { range: 6, ads: Infinity, rush: true },
   launcher: { range: 18, ads: 6 },
   special: { range: 6, ads: Infinity, rush: true },
 };

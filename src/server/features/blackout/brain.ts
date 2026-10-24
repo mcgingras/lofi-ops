@@ -33,6 +33,7 @@
 import { BLACKOUT, insideCircle, outsideBy, type Circle, type LootItem } from '../../../shared/defs/blackout';
 import type { BotSkill } from '../../../shared/defs/bots';
 import { PICKUP } from '../../../shared/defs/pickups';
+import { WEAPON_BY_ID, type WeaponClass } from '../../../shared/defs/weapons';
 import { Buttons, type InputCmd } from '../../../shared/input';
 import { clamp, dist, viewDir, yawTo, type Vec3 } from '../../../shared/math';
 import { eyeHeight } from '../../../shared/movement';
@@ -89,13 +90,14 @@ export interface Goal {
 }
 
 /** How each weapon class is fought: preferred range and ADS beyond (m). */
-const STYLE: Record<string, { range: number; ads: number }> = {
+export const STYLE: Record<WeaponClass, { range: number; ads: number }> = {
   ar: { range: 22, ads: 8 },
   smg: { range: 10, ads: 12 },
   lmg: { range: 25, ads: 9 },
   sniper: { range: 45, ads: 4 },
   shotgun: { range: 5, ads: Infinity },
   pistol: { range: 10, ads: 9 },
+  machinepistol: { range: 7, ads: Infinity },
   launcher: { range: 18, ads: 6 },
   special: { range: 1.5, ads: Infinity },
 };
@@ -298,7 +300,7 @@ export class BlackoutBrain implements BotBrain {
     const score = (i: number) => {
       const w = self.weapons[i];
       if (!w || w.def.base.id === 'knife') return 0;
-      return w.mag + w.reserve > 0 ? 2 + (w.def.class === 'pistol' ? 0 : 1) : 1;
+      return w.mag + w.reserve > 0 ? 2 + (w.def.class === 'pistol' || w.def.class === 'machinepistol' ? 0 : 1) : 1;
     };
     const cur = score(this.slot);
     const other = this.slot === 0 ? 1 : 0;
@@ -891,7 +893,7 @@ export class BlackoutBrain implements BotBrain {
 /** How much a gun is worth to a bot (rarity, class; an empty one is worth little). */
 export function gunValue(id: string, attachments: number, ammo = 1): number {
   if (id === 'knife') return 0;
-  const base = id === 'raygun' ? 6 : ['m1911', 'python', 'asp'].includes(id) ? 1.5 : ['olympia', 'stakeout'].includes(id) ? 2.2 : 3;
+  const base = id === 'raygun' ? 6 : ['m1911', 'python', 'asp'].includes(id) ? 1.5 : WEAPON_BY_ID.get(id)?.class === 'machinepistol' ? 2 : ['olympia', 'stakeout'].includes(id) ? 2.2 : 3;
   return ammo > 0 ? base + attachments * 0.6 : 0.4;
 }
 

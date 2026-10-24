@@ -38,6 +38,7 @@ const CLASS_TONE: Record<WeaponClass, { rate: number; lowpass: number; vol: numb
   sniper: { rate: 0.7, lowpass: 1700, vol: 0.4 },
   shotgun: { rate: 0.62, lowpass: 1500, vol: 0.42 },
   pistol: { rate: 1.3, lowpass: 2800, vol: 0.24 },
+  machinepistol: { rate: 1.34, lowpass: 2800, vol: 0.24 },
   launcher: { rate: 0.5, lowpass: 900, vol: 0.4 },
   special: { rate: 1, lowpass: 2200, vol: 0.3 },
 };

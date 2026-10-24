@@ -209,7 +209,7 @@ export const SHARPSHOOTER = {
   rotateSec: 45,
   killScore: 50,
   /** Weapon classes eligible for the rotation. */
-  classes: ['ar', 'smg', 'lmg', 'sniper', 'shotgun', 'pistol'] as readonly string[],
+  classes: ['ar', 'smg', 'lmg', 'sniper', 'shotgun', 'pistol', 'machinepistol'] as readonly string[],
   /**
    * Streak bonuses (BO1-style "perks and multiplier"): at `streak` kills in a life you get the perk
    * effect and the score multiplier. Highest reached applies.

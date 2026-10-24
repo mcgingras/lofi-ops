@@ -21,7 +21,7 @@ import { EQUIPMENT_BY_ID as EQUIPMENT_DEFS } from './equipment';
 import { KILLSTREAK_BY_ID, KILLSTREAKS } from './killstreaks';
 import { PERK_BY_ID, PERKS } from './perks';
 import { attachmentKillsFor, MAX_PRESTIGE, prestigeEmblem } from './progression';
-import { LOADOUT_WEAPONS, WEAPON_BY_ID, WEAPONS } from './weapons';
+import { LOADOUT_WEAPONS, WEAPON_BY_ID, WEAPONS, type WeaponClass } from './weapons';
 import { WAGER_ONLY_WEAPONS } from './wager-weapons';
 import { cloneLoadout, DEFAULT_LOADOUTS, type Loadout, type WeaponLoadout } from '../loadout';
 import type { Profile } from '../profile';
@@ -186,7 +186,8 @@ export function isUnlocked(p: UnlockProfile, kind: UnlockKind, id: string, weapo
 // ---------------------------------------------------------------------------------------------
 
 const KIND_ORDER: Record<UnlockKind, number> = { feature: 0, class: 1, weapon: 2, attachment: 3, perk: 4, pro: 5, killstreak: 6, lethal: 7, tactical: 8, emblem: 9 };
-const CLASS_LABEL: Record<string, string> = { ar: 'Assault', smg: 'SMG', lmg: 'LMG', sniper: 'Sniper', shotgun: 'Shotgun', pistol: 'Pistol', launcher: 'Launcher', special: 'Special' };
+/** The weapon class under an unlock's name in the Barracks table. */
+export const CLASS_LABEL: Record<WeaponClass, string> = { ar: 'Assault', smg: 'SMG', lmg: 'LMG', sniper: 'Sniper', shotgun: 'Shotgun', pistol: 'Pistol', machinepistol: 'Machine Pistol', launcher: 'Launcher', special: 'Special' };
 
 /** Everything that unlocks by level, sorted by level. Rebuilt per call (defs may be overridden). */
 export function unlockTable(): UnlockEntry[] {

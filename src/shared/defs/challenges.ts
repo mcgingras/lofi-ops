@@ -220,13 +220,15 @@ function make(id: string, name: string, description: string, metric: string, l: 
 
 const L = (tiers: number[], xp: number[], cp?: number[]): Ladder => ({ tiers, xp, cp });
 
-const CLASS_NAMES: Record<string, string> = {
+/** Class names in the per-class challenges ("Machine Pistol Expert"). */
+export const CLASS_NAMES: Record<WeaponClass, string> = {
   ar: 'Assault Rifle',
   smg: 'Submachine Gun',
   lmg: 'Light Machine Gun',
   sniper: 'Sniper Rifle',
   shotgun: 'Shotgun',
   pistol: 'Pistol',
+  machinepistol: 'Machine Pistol',
   launcher: 'Launcher',
   special: 'Special',
 };
@@ -365,7 +367,7 @@ function modeChallenges(): ChallengeDef[] {
 
 function weaponChallenges(): ChallengeDef[] {
   const out: ChallengeDef[] = [];
-  const classes = new Set<string>();
+  const classes = new Set<WeaponClass>();
   for (const w of WEAPONS) {
     classes.add(w.class);
     const base = { category: 'weapon' as const, weapon: w.id };

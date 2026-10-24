@@ -15,7 +15,12 @@ import type { HitPart } from '../collision';
 import type { PenetrationType } from '../penetration';
 import { indexById } from './registry';
 
-export type WeaponClass = 'ar' | 'smg' | 'lmg' | 'sniper' | 'shotgun' | 'pistol' | 'launcher' | 'special';
+/**
+ * Every weapon class, in menu order. Tables keyed by class (`Record<WeaponClass, ...>`) are checked
+ * by the compiler; `tests/weapon-classes.test.ts` walks this list over the string-keyed ones.
+ */
+export const WEAPON_CLASSES = ['ar', 'smg', 'lmg', 'sniper', 'shotgun', 'pistol', 'machinepistol', 'launcher', 'special'] as const;
+export type WeaponClass = (typeof WEAPON_CLASSES)[number];
 export type FireMode = 'auto' | 'semi' | 'burst' | 'bolt' | 'pump';
 export type WeaponSlot = 'primary' | 'secondary' | 'melee' | 'attachment';
 
@@ -58,8 +63,12 @@ export interface WeaponDef {
   moveMult: number;
   /** Cone half-angles in degrees: hip, fully aimed, extra while moving. */
   spread: { hip: number; ads: number; move: number };
-  /** Client view kick per shot (degrees) and recovery speed (deg/s). Server ignores recoil. */
-  recoil: { vertical: number; horizontal: number; recovery: number };
+  /**
+   * Client view kick per shot (degrees) and recovery speed (deg/s). Server ignores recoil. `ads`:
+   * the kick multiplier when fully aimed (default `ADS_RECOIL` 0.65; machine pistols kick harder
+   * aimed than from the hip). Read it through `recoilAdsK`.
+   */
+  recoil: { vertical: number; horizontal: number; recovery: number; ads?: number };
   unlockLevel: number;
   /** Attachment ids this weapon accepts (see attachments.ts). */
   attachments: string[];
@@ -73,7 +82,7 @@ export interface WeaponDef {
    * the rest none.
    */
   penetration?: PenetrationType;
-  /** Weapon raise/lower time when switching (default 500 ms). */
+  /** Weapon raise/lower time when switching (default 500 ms; pistols and machine pistols 350). */
   swapMs?: number;
   /** Fires a server-simulated projectile (crossbow bolt, ballistic knife blade): no local hitscan tracer or impact puff. */
   projectile?: boolean;
@@ -111,6 +120,10 @@ const MW2_AR_ATTS = ['extmag', 'acog', 'reddot', 'reflex', 'suppressor', 'gl'];
 const ar = (o: Omit<WeaponDef, 'class' | 'slot' | 'multipliers' | 'sprintOutMs'> & Partial<Pick<WeaponDef, 'multipliers' | 'sprintOutMs'>>): WeaponDef => ({ class: 'ar', slot: 'primary', multipliers: { head: 1.4, torso: 1, limb: 1 }, sprintOutMs: 250, ...o });
 const smg = (o: Omit<WeaponDef, 'class' | 'slot' | 'multipliers' | 'sprintOutMs'> & Partial<Pick<WeaponDef, 'multipliers' | 'sprintOutMs'>>): WeaponDef => ({ class: 'smg', slot: 'primary', multipliers: { head: 1.4, torso: 1, limb: 1 }, sprintOutMs: 200, ...o });
 const pistol = (o: Omit<WeaponDef, 'class' | 'slot' | 'multipliers' | 'sprintOutMs' | 'swapMs'> & Partial<Pick<WeaponDef, 'multipliers' | 'sprintOutMs' | 'swapMs'>>): WeaponDef => ({ class: 'pistol', slot: 'secondary', multipliers: { head: 1.4, torso: 1, limb: 1 }, sprintOutMs: 150, swapMs: 350, ...o });
+// Machine pistols: full-auto secondaries. Pistol handling (350 ms swap, 150 ms sprint-out), damage
+// that falls off fast (worse than any SMG past ~10 m), tight hipfire, loose sights and more kick aimed.
+const MP_ATTS = ['extmag', 'suppressor', 'reddot', 'akimbo'];
+const machinePistol = (o: Omit<WeaponDef, 'class' | 'slot' | 'multipliers' | 'sprintOutMs' | 'swapMs' | 'mode' | 'attachments'> & Partial<Pick<WeaponDef, 'multipliers' | 'sprintOutMs' | 'swapMs' | 'attachments'>>): WeaponDef => ({ class: 'machinepistol', slot: 'secondary', multipliers: { head: 1.4, torso: 1, limb: 1 }, sprintOutMs: 150, swapMs: 350, mode: 'auto', attachments: MP_ATTS, ...o });
 
 export const WEAPONS: WeaponDef[] = [
   // ------------------------------------------------------------------ assault rifles
@@ -617,6 +630,100 @@ export const WEAPONS: WeaponDef[] = [
     price: 0,
   }),
 
+  // ------------------------------------------------------------------ machine pistols (secondary)
+  // Full auto sidearms from BO1 (Skorpion, CZ75 with Full Auto) and MW2 (G18, TMP, MP9). Up close
+  // they kill as fast as an SMG (faster than any semi-auto pistol); damage is gone by ~11 m.
+  machinePistol({
+    id: 'mp9',
+    name: 'MP9',
+    blurb: 'Balanced machine pistol: quick, controllable, fifteen rounds.',
+    damage: { near: 30, far: 14, nearRange: 5, farRange: 13 },
+    rpm: 1080,
+    magazine: 15,
+    reserve: 75,
+    reloadMs: 1650,
+    reloadEmptyMs: 2050,
+    adsMs: 160,
+    moveMult: 1,
+    spread: { hip: 2.3, ads: 1.1, move: 0.9 },
+    recoil: { vertical: 0.95, horizontal: 0.5, recovery: 15, ads: 1.05 },
+    unlockLevel: 8,
+    model: 'mp9',
+    price: 1500,
+  }),
+  machinePistol({
+    id: 'skorpion',
+    name: 'Skorpion',
+    blurb: 'Light-hitting sprayer: twenty rounds of fast, wild fire.',
+    damage: { near: 25, far: 12, nearRange: 5, farRange: 13 },
+    rpm: 1150,
+    magazine: 20,
+    reserve: 80,
+    reloadMs: 1700,
+    reloadEmptyMs: 2200,
+    adsMs: 160,
+    moveMult: 1,
+    spread: { hip: 2.4, ads: 1.3, move: 0.9 },
+    recoil: { vertical: 0.9, horizontal: 0.8, recovery: 15, ads: 1.05 },
+    unlockLevel: 13,
+    model: 'skorpion',
+    price: 1500,
+  }),
+  machinePistol({
+    id: 'tmp',
+    name: 'TMP',
+    blurb: 'Steady machine pistol: the lightest kick of the class, made for short bursts.',
+    damage: { near: 34, far: 15, nearRange: 5, farRange: 13 },
+    rpm: 850,
+    magazine: 15,
+    reserve: 75,
+    reloadMs: 1700,
+    reloadEmptyMs: 2100,
+    adsMs: 170,
+    moveMult: 1,
+    spread: { hip: 2.3, ads: 0.9, move: 0.8 },
+    recoil: { vertical: 0.7, horizontal: 0.35, recovery: 17, ads: 0.95 },
+    unlockLevel: 22,
+    model: 'tmp',
+    price: 2000,
+  }),
+  machinePistol({
+    id: 'cz75auto',
+    name: 'CZ75 Auto',
+    blurb: 'Full-auto CZ75: hard-hitting, but only twelve rounds.',
+    damage: { near: 40, far: 18, nearRange: 5, farRange: 13 },
+    rpm: 800,
+    magazine: 12,
+    reserve: 60,
+    reloadMs: 1500,
+    reloadEmptyMs: 1900,
+    adsMs: 160,
+    moveMult: 1,
+    spread: { hip: 2.6, ads: 1.0, move: 1 },
+    recoil: { vertical: 1.4, horizontal: 0.6, recovery: 13, ads: 1.15 },
+    unlockLevel: 32,
+    model: 'cz75auto',
+    price: 2000,
+  }),
+  machinePistol({
+    id: 'g18',
+    name: 'G18',
+    blurb: 'Blistering full-auto Glock: empties twenty rounds in a second.',
+    damage: { near: 26, far: 12, nearRange: 5, farRange: 13 },
+    rpm: 1250,
+    magazine: 20,
+    reserve: 80,
+    reloadMs: 1600,
+    reloadEmptyMs: 2000,
+    adsMs: 160,
+    moveMult: 1,
+    spread: { hip: 2.2, ads: 1.4, move: 0.8 },
+    recoil: { vertical: 1.1, horizontal: 0.7, recovery: 14, ads: 1.1 },
+    unlockLevel: 44,
+    model: 'g18',
+    price: 2500,
+  }),
+
   // ------------------------------------------------------------------ not selectable: knife, underbarrel GL
   {
     id: 'knife',
@@ -887,6 +994,12 @@ export const LOADOUT_WEAPONS: WeaponDef[] = WEAPONS.filter((w) => (w.slot === 'p
 
 /** A Mystery Box wonder weapon (never classable, sold or unlocked). */
 export const isWonderWeapon = (id: string | null | undefined): boolean => !!id && !!WEAPON_BY_ID.get(id)?.wonder;
+
+/** Kick multiplier when fully aimed, unless a weapon's `recoil.ads` says otherwise. */
+export const ADS_RECOIL = 0.65;
+
+/** The view-kick multiplier at ADS fraction `ads` (0 hip .. 1 aimed): 1 at the hip, `recoil.ads` (default 0.65) aimed. */
+export const recoilAdsK = (recoil: Pick<WeaponDef['recoil'], 'ads'>, ads: number): number => 1 + Math.max(0, Math.min(1, ads)) * ((recoil.ads ?? ADS_RECOIL) - 1);
 
 /** Seconds between trigger pulls for a weapon at its cycle rate (burst weapons: between bursts). */
 export function cycleSec(w: Pick<WeaponDef, 'rpm' | 'mode' | 'burst' | 'burstDelayMs'>): number {
