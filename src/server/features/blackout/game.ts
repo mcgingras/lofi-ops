@@ -299,6 +299,9 @@ export class BlackoutGame {
 
   private tick(dt: number): void {
     const room = this.room;
+    // Bot navigation: the town grids are built a slice at a time (~3 ms a tick) from the lobby and
+    // countdown on, while the plane flies (once per server process; every room shares them).
+    islandNavFor(room.map).warm();
     if (room.phase !== 'playing' || this.t0 === null) {
       // The countdown: players are already aboard (the plane camera needs their stage).
       if (this.dirty.size) this.push();
@@ -317,8 +320,6 @@ export class BlackoutGame {
       }
     }
     this.rebuildGrid();
-    // Bot navigation: the town grids are built a slice at a time (~3 ms a tick) while the plane flies.
-    islandNavFor(room.map).warm();
     if (room.tick % 6 === 0) this.updateLod();
     if (room.time >= this.nextFar) {
       this.nextFar = room.time + 0.5;

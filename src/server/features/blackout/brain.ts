@@ -218,7 +218,9 @@ export class BlackoutBrain implements BotBrain {
     if (this.target) {
       const d = Math.hypot(this.target.move.x - self.move.x, this.target.move.z - self.move.z);
       const flee = !kit.armed && this.goal?.kind === 'loot' && d > 7;
-      if (!flee && this.goal?.kind !== 'circle') return this.out(self, buttons | this.fight(room, self, skill, dt, now));
+      // Outside the zone it keeps running in, unless the enemy is close.
+      const run = this.goal?.kind === 'circle' && d > 15;
+      if (!flee && !run) return this.out(self, buttons | this.fight(room, self, skill, dt, now));
     }
     const g = this.goal;
     if (!g) return this.out(self, buttons);
@@ -415,14 +417,14 @@ export class BlackoutBrain implements BotBrain {
       this.setGoal({ kind: 'circle', ...spot, since: now, until: now + 25 + Math.hypot(spot.x - p.x, spot.z - p.z) / 3.5, zone }, now);
       return;
     }
-    if (this.goal) {
+    // 3. Loot when under-equipped (and anything useful close by when it has nothing better to do).
+    // Committed to a goal, only loot it needs can take over from cover, a hold or a hunt.
+    const loot = !this.goal || (curP < PRIORITY.loot && kit.under) ? this.findLoot(room, game, self, c, kit, now) : null;
+    if (this.goal && !loot) {
       // Committed. Only a far fight may interrupt holding or walking to cover.
       if (curP <= PRIORITY.cover && this.farFoeFresh(now)) this.startFarFight(self, now);
       return;
     }
-
-    // 3. Loot when under-equipped (and anything useful close by in any case).
-    const loot = this.findLoot(room, game, self, c, kit, now);
     if (loot) {
       this.setGoal({ kind: 'loot', x: loot.x, y: loot.y, z: loot.z, since: now, until: now + 10 + Math.hypot(loot.x - p.x, loot.z - p.z) / 3, ent: loot.id }, now);
       game.lootClaims.set(loot.id, self.id);

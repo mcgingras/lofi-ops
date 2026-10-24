@@ -118,8 +118,8 @@ describe('blackout bots: the goal stack', () => {
     land(h, (i) => ({ x: -100 + i * 5, y: 0, z: -20 }));
     const p = [...room.players.values()][0]!;
     const b = brainOf(p);
-    // A spot in the sea, beyond the shore walls: no route.
-    b.goal = { kind: 'cover', x: 300, y: 0, z: 300, since: room.time, until: room.time + 60 };
+    // A spot in the sea, beyond the shore walls: no route (a circle goal, so nothing outranks it).
+    b.goal = { kind: 'circle', x: 300, y: 0, z: 300, since: room.time, until: room.time + 60 };
     (b as unknown as { needRoute: boolean }).needRoute = true;
     (b as unknown as { path: null }).path = null;
     for (let i = 0; i < 2 * TICK_RATE; i++) room.step();
