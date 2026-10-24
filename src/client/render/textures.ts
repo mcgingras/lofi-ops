@@ -65,7 +65,8 @@ interface Slot {
 // 4: skies develop at full colour (the texture palette/crosshatch read as bands and a screen door).
 const DEV_VERSION = 4;
 const slots = new Map<string, Slot>();
-const bound = new Map<THREE.ShaderMaterial, string>();
+/** Bound materials: uniform name (tMap, tBlend) -> texture id. */
+const bound = new Map<THREE.ShaderMaterial, Record<string, string>>();
 let look: Look = 'photo';
 let filter: TexFilter = 'pixel-mip';
 
@@ -143,9 +144,11 @@ export function getTexture(id: string): THREE.Texture {
 }
 
 /** Keep `material.uniforms.tMap` pointed at the right texture for `id` (look changes, photos landing). */
-export function bindTexture(m: THREE.ShaderMaterial, id: string): void {
-  bound.set(m, id);
-  const u = m.uniforms.tMap;
+export function bindTexture(m: THREE.ShaderMaterial, id: string, uniform = 'tMap'): void {
+  const b = bound.get(m) ?? {};
+  b[uniform] = id;
+  bound.set(m, b);
+  const u = m.uniforms[uniform];
   if (u) u.value = getTexture(id);
 }
 
@@ -154,10 +157,12 @@ export function unbindTexture(m: THREE.ShaderMaterial): void {
 }
 
 function refreshBindings(id?: string) {
-  for (const [m, tid] of bound) if (!id || tid === id) {
-    const u = m.uniforms.tMap;
-    if (u) u.value = getTexture(tid);
-  }
+  for (const [m, b] of bound)
+    for (const [name, tid] of Object.entries(b)) {
+      if (id && tid !== id) continue;
+      const u = m.uniforms[name];
+      if (u) u.value = getTexture(tid);
+    }
 }
 
 export function setLook(l: Look): void {
@@ -193,7 +198,7 @@ export function setDevelopOptions(v: DevelopVariant): void {
       s.state = 'none';
       redo.push(s.id);
     }
-  const onScreen = [...new Set(bound.values())];
+  const onScreen = [...new Set([...bound.values()].flatMap((b) => Object.values(b)))];
   void develop(redo);
   prioritize(onScreen);
 }

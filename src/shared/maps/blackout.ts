@@ -18,7 +18,7 @@ import { BLACKOUT } from '../defs/blackout';
 import type { Vec3 } from '../math';
 import { getMapData as mapById } from '../defs/maps';
 import { CollisionWorld } from '../collision';
-import { box, cylinder, flatDecal, mapSolids, unitVec, type Brush, type Decal, type MapData, type MapLight, type MaterialDef, type Prop, type SpawnPoint } from './types';
+import { box, cylinder, flatDecal, mapSolids, unitVec, type BlendShape, type Brush, type Decal, type MapData, type MapLight, type MaterialDef, type Prop, type SpawnPoint } from './types';
 
 export const BLACKOUT_HALF = 256;
 
@@ -32,6 +32,11 @@ export interface TownDef {
   cut: { x0: number; z0: number; x1: number; z1: number };
   /** World position of the cut's centre. */
   at: { x: number; z: number };
+  /**
+   * Openings cut into the source map (its coordinates): brushes wholly inside a box go (wall pieces
+   * under a window, a barricade), so a closed building gets a doorway from the open ground.
+   */
+  open?: { x0: number; z0: number; x1: number; z1: number; y1: number }[];
 }
 
 /**
@@ -45,10 +50,23 @@ export const BLACKOUT_TOWNS: readonly TownDef[] = [
   { name: 'Summit', map: 'summit', cut: { x0: -24, z0: -50, x1: 20, z1: 45 }, at: { x: 15, z: -170 } },
   { name: 'Hanoi', map: 'hanoi', cut: { x0: -42, z0: -41, x1: 42, z1: 43 }, at: { x: 165, z: 45 } },
   { name: 'Terminal', map: 'terminal', cut: { x0: -55, z0: -36, x1: 56, z1: 38 }, at: { x: 30, z: 180 } },
-  { name: 'Scrapyard', map: 'scrapyard', cut: { x0: -24, z0: -46, x1: 24, z1: 38 }, at: { x: -150, z: 180 } },
+  { name: 'Scrapyard', map: 'scrapyard', cut: { x0: -24, z0: -48.5, x1: 24, z1: 38 }, at: { x: -150, z: 178.75 } },
   { name: 'Launch', map: 'launch', cut: { x0: -64, z0: -31, x1: 60, z1: 31 }, at: { x: 0, z: 10 } },
   { name: 'Yard', map: 'yard', cut: { x0: -26, z0: -24, x1: 26, z1: 28 }, at: { x: -60, z: -85 } },
-  { name: 'Nacht', map: 'nacht', cut: { x0: -43, z0: -37, x1: 43, z1: 37 }, at: { x: 170, z: 190 } },
+  {
+    name: 'Nacht',
+    map: 'nacht',
+    cut: { x0: -43, z0: -37, x1: 43, z1: 37 },
+    at: { x: 170, z: 190 },
+    // Nacht's bunker has no door to the field (zombies climb in through the windows): four
+    // ground-floor windows (S1, S3, S4, H1) become doorways (the wall under the sill goes).
+    open: [
+      { x0: -3.95, z0: 8.5, x1: -2.45, z1: 9.1, y1: 0.95 },
+      { x0: 9.25, z0: 8.5, x1: 10.75, z1: 9.1, y1: 0.95 },
+      { x0: 12.0, z0: 0.85, x1: 12.6, z1: 2.35, y1: 0.95 },
+      { x0: -9.55, z0: -9.2, x1: -8.05, z1: -8.6, y1: 0.95 },
+    ],
+  },
 ];
 
 /** A town's rectangle on the island (world coordinates). */
@@ -70,6 +88,8 @@ export function townAt(x: number, z: number, margin = 0): TownDef | null {
 const EPS = 1e-6;
 /** Brushes taller than this crossing the cut near its edge are arena walls (dropped). */
 const WALL_H = 5;
+/** Things standing on the floor that poke out of the cut by no more than this are kept whole (stairs, crates). */
+const OVERHANG = 1.2;
 const CLIP_TAGS = new Set(['perimeter', 'roof']);
 
 interface Imported {
@@ -98,10 +118,29 @@ export function importTown(t: TownDef, prefix: string): Imported {
   const brushes: Brush[] = [];
   for (const b of src.brushes) {
     if (b.tag && CLIP_TAGS.has(b.tag)) continue;
+    // Doors and debris that open in Zombies (`gate`) stand open: drawn shut they would be walked
+    // through (gates without a switch are open), and taking them out opens the doorway.
+    if (b.gate) continue;
+    if (t.open?.some((o) => b.min.x >= o.x0 && b.max.x <= o.x1 && b.min.z >= o.z0 && b.max.z <= o.z1 && b.min.y >= -0.05 && b.max.y <= o.y1)) continue;
     // Entirely outside the cut: gone.
     if (b.max.x <= c.x0 + EPS || b.min.x >= c.x1 - EPS || b.max.z <= c.z0 + EPS || b.min.z >= c.z1 - EPS) continue;
     const crosses = b.min.x < c.x0 - EPS || b.max.x > c.x1 + EPS || b.min.z < c.z0 - EPS || b.max.z > c.z1 + EPS;
     const clip = !!b.noRender && (b.players ?? b.collide ?? true) && !(b.bullets ?? b.collide ?? true);
+    // Tall invisible clips are the source map's out-of-bounds walls (Terminal's tarmac edge,
+    // Scrapyard's corner pocket): on the island they would be invisible walls in the open.
+    if (clip && b.max.y - Math.max(0, b.min.y) > WALL_H) continue;
+    // Window clips (Nacht's bunker: zombies climb in, players never do): on the island the windows
+    // are the way into the bunker from the field, so they open.
+    if (clip && b.tag === 'clip' && b.min.y > 0.5) continue;
+    const over = Math.max(c.x0 - b.min.x, b.max.x - c.x1, c.z0 - b.min.z, b.max.z - c.z1);
+    if (crosses && over <= OVERHANG && b.min.y >= -0.01 && b.max.y > 0.05 && b.max.y - b.min.y <= WALL_H && !clip) {
+      // Stairs, crates and props standing on the floor that only just cross the cut: kept whole
+      // (cutting stairs drops them, and the floor they lead to can't be reached).
+      const out: Brush = { ...b, min: { x: b.min.x + ox, y: b.min.y, z: b.min.z + oz }, max: { x: b.max.x + ox, y: b.max.y, z: b.max.z + oz }, mat: mat(b.mat) };
+      if (b.faceMats) out.faceMats = Object.fromEntries(Object.entries(b.faceMats).map(([f, m]) => [f, mat(m)]));
+      brushes.push(out);
+      continue;
+    }
     if (crosses) {
       // Invisible clips, ramps and visually turned boxes can't be cut cleanly; tall walls across
       // the cut are the arena's walls.
@@ -128,6 +167,11 @@ export function importTown(t: TownDef, prefix: string): Imported {
   const spawns = sp.map((s) => ({ ...s, x: s.x + ox, z: s.z + oz }));
   const hotspots = (src.hotspots ?? []).filter((h) => inside(h.x, h.z)).map((h) => ({ x: h.x + ox, y: h.y, z: h.z + oz }));
   return { materials, brushes, decals, props, lights, spawns, hotspots };
+}
+
+/** Ramps from the open ground up onto raised floors cut open at a town's edge (none yet). */
+function townEdgeRamps(_brushes: Brush[], _r: Rect): Brush[] {
+  return [];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -228,28 +272,45 @@ function holes(brushes: Brush[], props: Prop[], r: Rect): Rect[] {
 // ---------------------------------------------------------------------------------------------
 
 const MATERIALS: Record<string, MaterialDef> = {
-  grass: { texture: 'fr_grass', uvMul: [1 / 8, 1 / 8], tint: 0xc8d0a8, segment: 8 },
-  meadow: { texture: 'afg_grass', uvMul: [1 / 8, 1 / 8], segment: 6 },
-  dirt: { texture: 'fr_dirt', uvMul: [1 / 6, 1 / 6], segment: 4 },
-  road: { texture: 'lc_asphalt', uvMul: [1 / 6, 1 / 6] },
-  rock: { texture: 'est_rock', uvMul: [1 / 5, 1 / 5] },
-  rockDark: { texture: 'bo_rock', uvMul: [1 / 4, 1 / 4], tint: 0xa8a49c },
+  // Open ground: one material over every tile and hill, textured in world space (seamless across
+  // tiles), grass with a slow colour drift, turning to dirt round the towns, along the tracks and
+  // at the shore (`blendMask`), with dithered edges. 4 m per texture tile, like the classic maps.
+  ground: { texture: 'fr_grass', uvMul: [1 / 4, 1 / 4], tint: 0xb0cc8c, segment: 2, worldUV: true, blend: { texture: 'fr_dirt', uvMul: [1 / 4, 1 / 4], tint: 0xb09a80 }, vary: 0.2 },
+  cliff: { texture: 'bo_rock', uvMul: [1 / 4, 1 / 4], tint: 0xa09a8c },
+  rock: { texture: 'est_rock', uvMul: [1 / 3, 1 / 3] },
+  rockDark: { texture: 'bo_rock', uvMul: [1 / 3, 1 / 3], tint: 0xa8a49c },
   bark: { texture: 'fr_bark', uvMul: [1 / 1.5, 1 / 3] },
-  leaves: { texture: 'est_pine', side: 'double' },
-  bush: { texture: 'fr_bush', side: 'double' },
+  foliage: { texture: 'fr_jungle', uvMul: [1 / 2, 1 / 2], tint: 0x9cb07a },
   sea: { texture: 'hj_sea', uvMul: [1 / 16, 1 / 16], fog: true },
-  sand: { texture: 'rust_sand', uvMul: [1 / 8, 1 / 8], segment: 6 },
+  sand: { texture: 'rust_sand', uvMul: [1 / 5, 1 / 5], segment: 3, worldUV: true },
   clip: { texture: 'none' },
 };
 
-/** Hills: a plateau and four ramps (gentle, ~1:4), corners left open. */
-function hill(out: Brush[], x: number, z: number, w: number, d: number, h: number, mat: string, slope = 4) {
+/**
+ * A hill: a plateau, four ramps (1 : `slope`) and four corner fans (strips of ramps stepping down
+ * at most 0.35 m, under the step height), so it reads as a mound from every side and can be walked
+ * up anywhere: no vertical cliff faces.
+ */
+function hill(out: Brush[], x: number, z: number, w: number, d: number, h: number, slope = 4) {
   const run = h * slope;
-  out.push(box(w, h, d, mat, x, 0, z, { hide: ['ny'] }));
-  out.push({ min: { x: x - w / 2 - run, y: 0, z: z - d / 2 }, max: { x: x - w / 2, y: h, z: z + d / 2 }, ramp: '+x', mat });
-  out.push({ min: { x: x + w / 2, y: 0, z: z - d / 2 }, max: { x: x + w / 2 + run, y: h, z: z + d / 2 }, ramp: '-x', mat });
-  out.push({ min: { x: x - w / 2, y: 0, z: z - d / 2 - run }, max: { x: x + w / 2, y: h, z: z - d / 2 }, ramp: '+z', mat });
-  out.push({ min: { x: x - w / 2, y: 0, z: z + d / 2 }, max: { x: x + w / 2, y: h, z: z + d / 2 + run }, ramp: '-z', mat });
+  const px0 = x - w / 2, px1 = x + w / 2, pz0 = z - d / 2, pz1 = z + d / 2;
+  const mat = 'ground';
+  out.push({ min: { x: px0, y: 0, z: pz0 }, max: { x: px1, y: h, z: pz1 }, mat, hide: ['ny', 'px', 'nx', 'pz', 'nz'] });
+  out.push({ min: { x: px0 - run, y: 0, z: pz0 }, max: { x: px0, y: h, z: pz1 }, ramp: '+x', mat, hide: ['ny'] });
+  out.push({ min: { x: px1, y: 0, z: pz0 }, max: { x: px1 + run, y: h, z: pz1 }, ramp: '-x', mat, hide: ['ny'] });
+  out.push({ min: { x: px0, y: 0, z: pz0 - run }, max: { x: px1, y: h, z: pz0 }, ramp: '+z', mat, hide: ['ny'] });
+  out.push({ min: { x: px0, y: 0, z: pz1 }, max: { x: px1, y: h, z: pz1 + run }, ramp: '-z', mat, hide: ['ny'] });
+  const n = Math.max(3, Math.ceil(h / 0.35));
+  const sw = run / n;
+  for (let k = 0; k < n; k++) {
+    const hk = h * (1 - (k + 0.5) / n);
+    const len = run * (hk / h);
+    for (const sz of [-1, 1]) {
+      const za = sz > 0 ? pz1 + k * sw : pz0 - (k + 1) * sw;
+      out.push({ min: { x: px1, y: 0, z: za }, max: { x: px1 + len, y: hk, z: za + sw }, ramp: '-x', mat, hide: ['ny'] });
+      out.push({ min: { x: px0 - len, y: 0, z: za }, max: { x: px0, y: hk, z: za + sw }, ramp: '+x', mat, hide: ['ny'] });
+    }
+  }
 }
 
 /** Footprint (with ramps) of a hill, to keep it off towns and roads. */
@@ -286,7 +347,8 @@ export function buildBlackout(): MapData {
     Object.assign(materials, im.materials);
     brushes.push(...im.brushes);
     // Where the cut has no floor at all (Summit's mountaintop stands in the void), open ground.
-    for (const r of holes(im.brushes, im.props, townRect(t))) brushes.push({ min: { x: r.x0, y: -2, z: r.z0 }, max: { x: r.x1, y: 0, z: r.z1 }, mat: 'dirt', hide: ['ny', 'px', 'nx', 'pz', 'nz'] });
+    for (const r of holes(im.brushes, im.props, townRect(t))) brushes.push({ min: { x: r.x0, y: -2, z: r.z0 }, max: { x: r.x1, y: 0, z: r.z1 }, mat: 'ground', hide: ['ny', 'px', 'nx', 'pz', 'nz'] });
+    brushes.push(...townEdgeRamps(im.brushes, townRect(t)));
     decals.push(...im.decals);
     props.push(...im.props);
     lights.push(...im.lights);
@@ -294,40 +356,64 @@ export function buildBlackout(): MapData {
     hotspots.push(...im.hotspots, ...im.spawns.slice(0, 3).map((s) => ({ x: s.x, y: s.y, z: s.z })));
   });
 
-  // Open ground: grass tiles around the towns (top at y = 0; only the top face is drawn).
-  for (const r of terrainTiles(rects)) {
-    const cx = (r.x0 + r.x1) / 2;
-    const cz = (r.z0 + r.z1) / 2;
-    const near = rects.some((t) => overlaps(t, r, 6));
-    brushes.push({ min: { x: r.x0, y: -2, z: r.z0 }, max: { x: r.x1, y: 0, z: r.z1 }, mat: near ? 'dirt' : (Math.floor(cx / 64) + Math.floor(cz / 64)) & 1 ? 'grass' : 'meadow', hide: ['ny', 'px', 'nx', 'pz', 'nz'] });
+  // Open ground: tiles around the towns (top at y = 0; only the top face is drawn), out to the
+  // beach. Every tile is the same `ground` material: the look comes from the blend mask below.
+  const SHORE = 10;
+  for (const r of terrainTiles(rects, H - SHORE)) brushes.push({ min: { x: r.x0, y: -2, z: r.z0 }, max: { x: r.x1, y: 0, z: r.z1 }, mat: 'ground', hide: ['ny', 'px', 'nx', 'pz', 'nz'] });
+  // The beach: a sand ring at y = 0 inside the shore walls, then a sand slope (drawn only) into the sea.
+  for (const r of terrainTiles([{ x0: -H + SHORE, z0: -H + SHORE, x1: H - SHORE, z1: H - SHORE }], H)) brushes.push({ min: { x: r.x0, y: -2, z: r.z0 }, max: { x: r.x1, y: 0, z: r.z1 }, mat: 'sand', hide: ['ny', 'px', 'nx', 'pz', 'nz'] });
+  const B = 14;
+  for (let k = -H - B; k < H + B; k += 64) {
+    const k1 = Math.min(H + B, k + 64);
+    brushes.push({ min: { x: H, y: -1.6, z: k }, max: { x: H + B, y: 0, z: k1 }, ramp: '-x', mat: 'sand', collide: false });
+    brushes.push({ min: { x: -H - B, y: -1.6, z: k }, max: { x: -H, y: 0, z: k1 }, ramp: '+x', mat: 'sand', collide: false });
+  }
+  for (let k = -H; k < H; k += 64) {
+    const k1 = Math.min(H, k + 64);
+    brushes.push({ min: { x: k, y: -1.6, z: H }, max: { x: k1, y: 0, z: H + B }, ramp: '-z', mat: 'sand', collide: false });
+    brushes.push({ min: { x: k, y: -1.6, z: -H - B }, max: { x: k1, y: 0, z: -H }, ramp: '+z', mat: 'sand', collide: false });
   }
 
-  // Roads: flat strips joining the towns to the centre (render only).
+  // Dirt: pads round the towns, tracks from every town to the centre, a fringe before the beach.
+  const blendMask: BlendShape[] = [];
+  for (const r of rects) blendMask.push({ kind: 'rect', ...r, feather: 10 });
+  blendMask.push(
+    { kind: 'line', ax: -H, az: -H + SHORE, bx: H, bz: -H + SHORE, w: 2, feather: 7, k: 0.85 },
+    { kind: 'line', ax: -H, az: H - SHORE, bx: H, bz: H - SHORE, w: 2, feather: 7, k: 0.85 },
+    { kind: 'line', ax: -H + SHORE, az: -H, bx: -H + SHORE, bz: H, w: 2, feather: 7, k: 0.85 },
+    { kind: 'line', ax: H - SHORE, az: -H, bx: H - SHORE, bz: H, w: 2, feather: 7, k: 0.85 },
+  );
   const centre = rects[BLACKOUT_TOWNS.findIndex((t) => t.map === 'launch')]!;
   const cxm = (centre.x0 + centre.x1) / 2;
   const czm = (centre.z0 + centre.z1) / 2;
+  /** Track footprints, so hills, rocks and trees keep off them. */
+  const tracks: Rect[] = [];
   for (const r of rects) {
     const tx = (r.x0 + r.x1) / 2;
     const tz = (r.z0 + r.z1) / 2;
-    if (Math.hypot(tx - cxm, tz - czm) < 1) continue;
     const len = Math.hypot(tx - cxm, tz - czm);
-    const ry = Math.atan2(tx - cxm, tz - czm);
-    decals.push(flatDecal(6, len, 'road', (tx + cxm) / 2, 0.02, (tz + czm) / 2, { ry, seg: 1 }));
+    if (len < 1) continue;
+    blendMask.push({ kind: 'line', ax: tx, az: tz, bx: cxm, bz: czm, w: 5, feather: 3.5 });
+    for (let u = 0; u <= len; u += 6) {
+      const px = tx + ((cxm - tx) * u) / len;
+      const pz = tz + ((czm - tz) * u) / len;
+      tracks.push({ x0: px - 5, z0: pz - 5, x1: px + 5, z1: pz + 5 });
+    }
   }
 
-  // Hills, rocks and trees on the open ground (seeded, kept off towns, each other and the shore).
+  // Hills, rocks and trees on the open ground (seeded, kept off towns, tracks, each other and the shore).
   const rnd = prng(0xb1ac0);
-  const placed: Rect[] = rects.map((r) => ({ x0: r.x0 - 8, z0: r.z0 - 8, x1: r.x1 + 8, z1: r.z1 + 8 }));
-  const freeSpot = (r: Rect, m: number) => r.x0 > -H + 14 && r.x1 < H - 14 && r.z0 > -H + 14 && r.z1 < H - 14 && !placed.some((p) => overlaps(p, r, m));
-  for (let n = 0, tries = 0; n < 22 && tries < 600; tries++) {
-    const w = 10 + rnd() * 18;
-    const d = 10 + rnd() * 18;
-    const h = 1.5 + rnd() * 3.5;
+  const placed: Rect[] = [...rects.map((r) => ({ x0: r.x0 - 8, z0: r.z0 - 8, x1: r.x1 + 8, z1: r.z1 + 8 })), ...tracks];
+  const freeSpot = (r: Rect, m: number) => r.x0 > -H + SHORE + 4 && r.x1 < H - SHORE - 4 && r.z0 > -H + SHORE + 4 && r.z1 < H - SHORE - 4 && !placed.some((p) => overlaps(p, r, m));
+  for (let n = 0, tries = 0; n < 22 && tries < 4000; tries++) {
+    const w = 10 + rnd() * 16;
+    const d = 10 + rnd() * 16;
+    const h = 1.5 + rnd() * 2.5;
     const x = (rnd() * 2 - 1) * (H - 40);
     const z = (rnd() * 2 - 1) * (H - 40);
     const r = hillRect(x, z, w, d, h);
     if (!freeSpot(r, 6)) continue;
-    hill(brushes, x, z, w, d, h, rnd() < 0.5 ? 'grass' : 'meadow');
+    hill(brushes, x, z, w, d, h);
     placed.push(r);
     hotspots.push({ x, y: h, z });
     n++;
@@ -339,8 +425,8 @@ export function buildBlackout(): MapData {
     const r = { x0: x - s, z0: z - s, x1: x + s, z1: z + s };
     if (!freeSpot(r, 2)) continue;
     const h = 0.8 + rnd() * 2.6;
-    // A rock: a low block and a smaller one on top (cover), never a pit.
-    brushes.push(box(s * 2, h, s * 1.6, rnd() < 0.5 ? 'rock' : 'rockDark', x, 0, z, { hide: ['ny'] }));
+    // A rock: a block sunk a little into the ground and a smaller one on top (cover), never a pit.
+    brushes.push(box(s * 2, h + 0.3, s * 1.6, rnd() < 0.5 ? 'rock' : 'rockDark', x, -0.3, z, { hide: ['ny'] }));
     if (h > 1.4 && rnd() < 0.5) brushes.push(box(s * 1.1, 0.8 + rnd() * 1.2, s * 0.9, 'rock', x + (rnd() - 0.5) * s * 0.4, h, z + (rnd() - 0.5) * s * 0.3, { hide: ['ny'] }));
     placed.push(r);
     n++;
@@ -352,8 +438,12 @@ export function buildBlackout(): MapData {
     if (!freeSpot(r, 1.5)) continue;
     const trunk = 3 + rnd() * 3;
     props.push(cylinder(0.32, trunk, 6, 'bark', x, trunk / 2, z));
-    // Canopy: drawn only (no collision), hides you from bots like a bush.
-    brushes.push(box(3.6 + rnd() * 1.6, 2.6 + rnd() * 1.6, 3.6 + rnd() * 1.6, 'leaves', x, trunk - 0.6, z, { collide: false, ry: rnd() * Math.PI }));
+    // Canopy: two chunky leaf blocks, drawn only (no collision); foliage hides you from bots.
+    const cw = 3.4 + rnd() * 1.6;
+    const ch = 2.2 + rnd() * 1.2;
+    const ry = rnd() * Math.PI;
+    brushes.push(box(cw, ch, cw, 'foliage', x, trunk - 0.8, z, { collide: false, ry }));
+    brushes.push(box(cw * 0.62, ch * 0.7, cw * 0.62, 'foliage', x, trunk - 0.8 + ch, z, { collide: false, ry: ry + 0.6 }));
     placed.push(r);
     n++;
   }
@@ -428,5 +518,6 @@ export function buildBlackout(): MapData {
     hotspots,
     chunk: 96,
     drawDistance: 200,
+    blendMask,
   };
 }

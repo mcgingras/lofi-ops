@@ -45,9 +45,17 @@ uniform float uJitter, uSnapMul, uAffine, uAffMul, uBake, uDynOn, uFogNear, uFog
 uniform vec2 uHorizon;
 uniform vec3 uUnlitColor;
 uniform vec3 uSunDir, uSun, uAmb, uDyn;
+uniform float uWorldUV;
 varying vec3 vLight;
 varying vec3 vUvA;
 varying float vFog;
+#ifdef USE_BLEND
+attribute float blend;
+uniform vec2 uBlendRepeat;
+varying vec3 vUvB;
+varying vec2 vWxz;
+varying float vBlend;
+#endif
 #ifdef SNAP_DEPTH
 varying vec4 vSnapD;
 #endif
@@ -76,7 +84,14 @@ void main() {
   light *= 1.0 - 0.07 * hash(floor(wp.xyz * 1.7)) * (1.0 - uUnlit) * (1.0 - uDynOn);
   vLight = light + vec3(1.0, 0.8, 0.5) * uFlash * (1.0 - smoothstep(0.0, 9.0, length(mv.xyz)));
   float w = mix(1.0, p.w, uAffine * uAffMul);
-  vUvA = vec3(uv * uRepeat * w, w);
+  // World-space UVs on upward faces: the texture runs on across tiles of any size.
+  vec2 uv0 = uWorldUV > 0.5 && n.y > 0.7 ? vec2(wp.x, wp.z) : uv;
+  vUvA = vec3(uv0 * uRepeat * w, w);
+#ifdef USE_BLEND
+  vUvB = vec3(uv0 * uBlendRepeat * w, w);
+  vWxz = wp.xz;
+  vBlend = blend;
+#endif
   float d = length(mv.xyz);
   if (uSky > 0.5) vFog = 1.0 - smoothstep(uHorizon.x, uHorizon.y, normalize(position).y);
   else if (uNoFog > 0.5) vFog = uHazeOn * uHaze * clamp(d / (2.0 * uFogFar * uFogScale), 0.0, 1.0);
@@ -94,6 +109,20 @@ varying float vFog;
 uniform vec2 uPolyOffset, uSnap;
 varying vec4 vSnapD;
 #endif
+#ifdef USE_BLEND
+uniform sampler2D tBlend;
+uniform vec3 uBlendTint;
+uniform float uVary;
+varying vec3 vUvB;
+varying vec2 vWxz;
+varying float vBlend;
+float h2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), f.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+#endif
 void main() {
 #ifdef SNAP_DEPTH
   // Vertex snap moves triangles sideways but must not move depth: layered coplanar surfaces
@@ -109,7 +138,20 @@ void main() {
 #endif
   vec4 t = texture2D(tMap, vUvA.xy / vUvA.z);
   if (t.a < 0.5) discard;
-  vec3 c = t.rgb * uTint * mix(vLight, vec3(1.0), uEmissive);
+  vec3 tint = uTint;
+#ifdef USE_BLEND
+  // Blend: the mask (per vertex) plus two octaves of world noise, cut at a stippled threshold in
+  // world space (stable as the camera moves): ragged, dithered edges between grass and dirt.
+  float n1 = vnoise(vWxz / 26.0);
+  float n2 = vnoise(vWxz / 6.5 + 17.0);
+  float bw = vBlend * 1.25 + (n1 * 0.65 + n2 * 0.35 - 0.7) * 1.2;
+  float thr = 0.5 + (h2(floor(vWxz * 4.0)) - 0.5) * 0.45;
+  if (bw > thr) {
+    t = texture2D(tBlend, vUvB.xy / vUvB.z);
+    tint = uBlendTint;
+  } else tint *= mix(vec3(1.0 - uVary, 1.0 - uVary * 0.6, 1.0 - uVary * 1.2), vec3(1.0 + uVary * 0.5, 1.0 + uVary * 0.7, 1.0), n1 * 0.7 + n2 * 0.3);
+#endif
+  vec3 c = t.rgb * tint * mix(vLight, vec3(1.0), uEmissive);
   gl_FragColor = vec4(mix(c, uFogColor, vFog), uOpacity);
 }`;
 
@@ -139,6 +181,12 @@ export interface LookMaterialOpts {
    * backdrops such as mountains), 0 for the sky, `dyn` objects and unbaked ones.
    */
   haze?: number;
+  /** Upward faces use world (x, z) UVs (MaterialDef.worldUV). */
+  worldUV?: boolean;
+  /** A second texture blended in by the `blend` vertex attribute and world noise (MaterialDef.blend). */
+  blend?: { texture: string; uvMul?: [number, number]; tint?: number };
+  /** Base texture variation across the world, 0..1 (MaterialDef.vary; needs `blend`). */
+  vary?: number;
 }
 
 export type LookMaterial = THREE.ShaderMaterial & { uniforms: { tMap: { value: THREE.Texture }; uTint: { value: THREE.Color }; uDyn: { value: THREE.Color }; uOpacity: { value: number }; uSnapMul: { value: number }; uPolyOffset?: { value: THREE.Vector2 } } };
@@ -180,6 +228,8 @@ export function makeLookMaterial(o: LookMaterialOpts): LookMaterial {
       uDynOn: { value: o.dyn ? 1 : 0 },
       uDyn: { value: new THREE.Color(1, 1, 1) },
       uOpacity: { value: 1 },
+      uWorldUV: { value: o.worldUV ? 1 : 0 },
+      ...(o.blend ? { tBlend: { value: null }, uBlendRepeat: { value: new THREE.Vector2(...(o.blend.uvMul ?? [1, 1])) }, uBlendTint: { value: new THREE.Color(o.blend.tint ?? 0xffffff) }, uVary: { value: o.vary ?? 0 } } : {}),
     },
     vertexShader: VS,
     fragmentShader: FS,
@@ -187,6 +237,7 @@ export function makeLookMaterial(o: LookMaterialOpts): LookMaterial {
     vertexColors: !o.dyn && o.bake !== false,
   }) as LookMaterial;
   m.defines ??= {};
+  if (o.blend) m.defines.USE_BLEND = '';
   if (m.uniforms.uSnapMul.value) {
     // polygonOffset is set by the caller after creation (map depth levels): mirror it for SNAP_DEPTH.
     const po = m.uniforms.uPolyOffset!.value as THREE.Vector2;
@@ -199,6 +250,7 @@ export function makeLookMaterial(o: LookMaterialOpts): LookMaterial {
     applySnapDepth(m);
   }
   bindTexture(m, o.texture);
+  if (o.blend) bindTexture(m, o.blend.texture, 'tBlend');
   return m;
 }
 

@@ -16,8 +16,9 @@ import { makeWeapon, type PlayerState } from '../../player';
 import type { Room } from '../../room';
 import { heldSlot, setPickupRules } from '../pickups/index';
 import { wext } from '../weapons/state';
-import { BlackoutBrain, FIGHT_ODDS } from './brain';
+import { BlackoutBrain, fightOdds } from './brain';
 import { focusOf, interestFor } from './interest';
+import { islandNavFor } from './nav';
 import { deathLoot, LootGrid, lootSpots, spawnLoot, walkOver } from './loot';
 import { bx, freshExt } from './state';
 
@@ -68,6 +69,10 @@ export class BlackoutGame {
   private dropClaims = new Set<number>();
   /** Loot entities a bot is heading for (entity id -> bot id), so two bots don't race for one. */
   readonly lootClaims = new Map<number, string>();
+  /** Route search work this tick (grid cells expanded): rationed so no tick spikes. */
+  private routes = { tick: -1, used: 0 };
+  /** Cells bots may expand in route searches per tick (~3 ms at worst). */
+  static readonly ROUTE_CELLS_PER_TICK = 12000;
 
   constructor(readonly room: Room) {}
 
@@ -191,6 +196,11 @@ export class BlackoutGame {
     x.tacticalN = 0;
     this.board(p, this.t0 === null ? 0 : this.room.time - this.t0);
     this.dirty.add(p.id);
+    // Show the plane during the countdown too (everyone waits aboard it).
+    if (!this.planeEntity && this.t0 === null) {
+      const at = planeAt(this.plane, 0);
+      this.planeEntity = this.room.entities.add({ kind: PLANE_ENTITY, x: at.x, y: at.y, z: at.z, yaw: at.yaw, s: { t0: -1 } });
+    }
   }
 
   /** Put a player aboard the plane at flight time `t`. */
@@ -225,6 +235,7 @@ export class BlackoutGame {
     this.lootSpawned = spawnLoot(room, this.seed);
     this.lootVersion++;
     const at = planeAt(this.plane, 0);
+    if (this.planeEntity && room.entities.get(this.planeEntity.id)) room.entities.remove(this.planeEntity.id);
     this.planeEntity = room.entities.add({ kind: PLANE_ENTITY, x: at.x, y: at.y, z: at.z, yaw: at.yaw, s: { t0: Math.round(room.time * 1000) / 1000 } });
     this.pushAll();
   }
@@ -238,7 +249,8 @@ export class BlackoutGame {
     // nearest to it, a little early (the glide carries you forward).
     let tx = 0;
     let tz = 0;
-    const spots = lootSpots(this.room.map, this.room.world);
+    // Ground floors only: a bot that glides onto a roof or a gantry has to find its way down first.
+    const spots = lootSpots(this.room.map, this.room.world).filter((s) => s.y < 1.5);
     if (spots.length && r() < 0.85) {
       // A spot nobody else picked yet (bots spread over the map like players do).
       let i = Math.floor(r() * spots.length);
@@ -287,7 +299,14 @@ export class BlackoutGame {
 
   private tick(dt: number): void {
     const room = this.room;
-    if (room.phase !== 'playing' || this.t0 === null) return;
+    // Bot navigation: the town grids are built a slice at a time (~3 ms a tick) from the lobby and
+    // countdown on, while the plane flies (once per server process; every room shares them).
+    islandNavFor(room.map).warm();
+    if (room.phase !== 'playing' || this.t0 === null) {
+      // The countdown: players are already aboard (the plane camera needs their stage).
+      if (this.dirty.size) this.push();
+      return;
+    }
     const t = room.time - this.t0;
     const pl = planeAt(this.plane, t);
     if (this.planeEntity) {
@@ -351,6 +370,21 @@ export class BlackoutGame {
       return;
     }
     if (room.time >= this.nextState || this.dirty.size) this.push();
+  }
+
+  /**
+   * Cells a route search may still expand this tick (0: wait for the next tick). `long`: a search
+   * that ran out before gets a tick to itself with five times the budget.
+   */
+  routeBudget(long = false): number {
+    if (this.routes.tick !== this.room.tick) this.routes = { tick: this.room.tick, used: 0 };
+    if (long) return this.routes.used === 0 ? BlackoutGame.ROUTE_CELLS_PER_TICK * 5 : 0;
+    const left = BlackoutGame.ROUTE_CELLS_PER_TICK - this.routes.used;
+    return left < 1500 ? 0 : left;
+  }
+
+  spendRoute(cells: number): void {
+    this.routes.used += Math.max(50, cells);
   }
 
   heightAboveGround(p: PlayerState): number {
@@ -629,7 +663,10 @@ export class BlackoutGame {
    */
   private farFights(dt: number): void {
     const room = this.room;
-    const R = BLACKOUT.lod.farFightRange;
+    const phase = this.circle()?.phase ?? 0;
+    // Late in the match people are closer and see further across the small circle.
+    const R = BLACKOUT.lod.farFightRange + Math.max(0, phase - 2) * 6;
+    const odds = fightOdds(phase, false);
     for (const p of this.aliveEntrants()) {
       const ps = bx(p);
       if (!p.isBot || this.near.has(p.id) || ps.stage !== 'ground' || ps.healUntil !== null || room.time - (ps.landedAt ?? room.time) < 4) continue;
@@ -649,14 +686,18 @@ export class BlackoutGame {
       if (!los || room.time - los.t > 2) {
         // Not every pair that could fight does (bots also loot, rotate and keep their heads down):
         // the decision is re-rolled with the sight check every 2 s.
-        los = { t: room.time, ok: Math.random() < FIGHT_ODDS && room.world.lineOfSight({ x: p.move.x, y: p.move.y + 1.5, z: p.move.z }, { x: foe.move.x, y: foe.move.y + 1.2, z: foe.move.z }) };
+        los = { t: room.time, ok: Math.random() < odds && room.world.lineOfSight({ x: p.move.x, y: p.move.y + 1.5, z: p.move.z }, { x: foe.move.x, y: foe.move.y + 1.2, z: foe.move.z }) };
         this.farLos.set(key, los);
       }
       if (!los.ok) continue;
       this.prof.farFights++;
-      // Face each other (so a human arriving sees a fight, not two bots walking past).
+      // Face each other (so a human arriving sees a fight, not two bots walking past), and the
+      // brain holds its ground while it lasts (its `fight` goal).
       p.yaw = Math.atan2(-(foe.move.x - p.move.x), -(foe.move.z - p.move.z));
-      if (p.brain instanceof BlackoutBrain) p.brain.aim.yaw = p.yaw;
+      if (p.brain instanceof BlackoutBrain) {
+        p.brain.aim.yaw = p.yaw;
+        p.brain.farFoe = { id: foe.id, t: room.time };
+      }
       const w = currentWeapon(p);
       if (!w) continue;
       if (w.def.base.id === 'knife') {

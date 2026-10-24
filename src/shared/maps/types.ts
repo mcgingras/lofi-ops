@@ -33,6 +33,49 @@ export interface MaterialDef {
   affine?: number;
   /** Metres per vertex-lighting subdivision of faces with this material (default ~1.1; big open ground uses more). */
   segment?: number;
+  /**
+   * Upward faces take their UVs from the world position (x, z) instead of the face, so the texture
+   * runs on seamlessly across brushes of any size (big open ground made of many tiles).
+   */
+  worldUV?: boolean;
+  /**
+   * A second texture blended in by the map's `blendMask` (per vertex) plus a world-space noise, with
+   * a dithered edge: grass that turns to dirt around towns and along tracks (Blackout's terrain).
+   */
+  blend?: { texture: string; uvMul?: [number, number]; tint?: number };
+  /** 0..1: low-frequency brightness/hue variation of the base texture across the world (no tiling look). */
+  vary?: number;
+}
+
+/**
+ * Where a material's `blend` texture shows (0..1), as shapes: inside a rect or near a line it is
+ * `k` (default 1), fading to 0 over `feather` metres. The renderer evaluates it per vertex.
+ */
+export type BlendShape =
+  | { kind: 'rect'; x0: number; z0: number; x1: number; z1: number; feather: number; k?: number }
+  | { kind: 'line'; ax: number; az: number; bx: number; bz: number; w: number; feather: number; k?: number };
+
+/** The blend mask at a point (max over the shapes). */
+export function blendAt(shapes: readonly BlendShape[], x: number, z: number): number {
+  let best = 0;
+  for (const s of shapes) {
+    let d: number;
+    if (s.kind === 'rect') {
+      const dx = Math.max(s.x0 - x, 0, x - s.x1);
+      const dz = Math.max(s.z0 - z, 0, z - s.z1);
+      d = Math.hypot(dx, dz);
+    } else {
+      const vx = s.bx - s.ax;
+      const vz = s.bz - s.az;
+      const l2 = vx * vx + vz * vz || 1;
+      const t = Math.max(0, Math.min(1, ((x - s.ax) * vx + (z - s.az) * vz) / l2));
+      d = Math.max(0, Math.hypot(x - s.ax - vx * t, z - s.az - vz * t) - s.w / 2);
+    }
+    const f = s.feather > 0 ? 1 - Math.min(1, d / s.feather) : d > 0 ? 0 : 1;
+    const v = (s.k ?? 1) * f * f * (3 - 2 * f);
+    if (v > best) best = v;
+  }
+  return best;
 }
 
 /**
@@ -215,6 +258,8 @@ export interface MapData {
   chunk?: number;
   /** Camera far plane for this map (m); the fog should end before it. Default: the renderer's. */
   drawDistance?: number;
+  /** Where materials with a `blend` texture show it (Blackout: dirt pads round towns, tracks, the shore). */
+  blendMask?: BlendShape[];
 }
 
 // ---------------------------------------------------------------------------------------------

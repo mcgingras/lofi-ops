@@ -15,7 +15,7 @@
  */
 import * as THREE from 'three';
 import { boxFace, decalQuad, FACES, faceKey, planDepth, RAMP_ANGLE, xform, type FaceSource } from '../../shared/maps/faces';
-import { buildCollisionWorld, type Brush, type Decal, type GlowProp, type MapData, type MaterialDef, type Prop, type TimePreset } from '../../shared/maps/types';
+import { blendAt, buildCollisionWorld, type Brush, type Decal, type GlowProp, type MapData, type MaterialDef, type Prop, type TimePreset } from '../../shared/maps/types';
 import { hashString, type Vec3 } from '../../shared/math';
 import { Baker, DynLight } from './bake';
 import { cacheGet, cachePut } from './idb';
@@ -150,7 +150,7 @@ export class MapScene {
 
   /** Texture recipe ids this map uses (to develop them first). */
   textureIds(): string[] {
-    const ids = new Set<string>(Object.values(this.map.materials).map((m) => m.texture));
+    const ids = new Set<string>(Object.values(this.map.materials).flatMap((m) => (m.blend ? [m.texture, m.blend.texture] : [m.texture])));
     for (const t of this.map.times) ids.add(t.sky);
     return [...ids];
   }
@@ -211,6 +211,13 @@ export class MapScene {
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
       geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(b.uv), 2));
+      if (map.materials[matId]?.blend) {
+        // The blend mask per vertex (MaterialDef.blend, MapData.blendMask).
+        const bl = new Float32Array(b.count);
+        const shapes = map.blendMask ?? [];
+        for (let i = 0; i < b.count; i++) bl[i] = blendAt(shapes, pos[i * 3]!, pos[i * 3 + 2]!);
+        geo.setAttribute('blend', new THREE.BufferAttribute(bl, 1));
+      }
       geo.setIndex(b.count > 65535 ? new THREE.Uint32BufferAttribute(b.idx, 1) : new THREE.Uint16BufferAttribute(b.idx, 1));
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, mat);
@@ -235,7 +242,7 @@ export class MapScene {
       return null;
     }
     if (def.texture === 'none') return null;
-    const m = makeLookMaterial({ texture: def.texture, uvMul: def.uvMul, tint: def.tint, emissive: def.emissive, side: def.side, bake: def.bake, fog: def.fog, affine: def.affine });
+    const m = makeLookMaterial({ texture: def.texture, uvMul: def.uvMul, tint: def.tint, emissive: def.emissive, side: def.side, bake: def.bake, fog: def.fog, affine: def.affine, worldUV: def.worldUV, blend: def.blend, vary: def.vary });
     if (level > 0) {
       const o = depthOffset(level);
       m.polygonOffset = true;

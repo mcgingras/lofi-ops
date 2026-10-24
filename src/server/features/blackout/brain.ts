@@ -1,22 +1,36 @@
 /**
- * Blackout bot brain, with a level of detail by distance to the humans (BLACKOUT.lod):
+ * Blackout bot brain: a goal at all times, chosen from a priority stack, followed on the island's
+ * navigation grids (nav.ts), with a level of detail by distance to the humans (BLACKOUT.lod).
  *
- *   near (within `nearDist` of a human, or of the player a dead human watches): every tick, the
- *     bots feature's perception and aim (aim.ts: reaction, spring, sway, recoil; sight.ts: what it
- *     can see and shoot through), hitscan through `room.fire` with the human rules, steering with
- *     probe rays around walls (jumping low ones), looting, healing, moving with the circle.
- *   far: re-plans every `farThinkSec` and steers with one probe ray per plan; no perception or
- *     hitscan. Fights between far bots are resolved by the game (`farFights`, statistical damage
- *     over time with one line-of-sight check per pair).
+ * Goals, highest priority first (`decide`):
+ *   heal    hurt and carrying heals, nobody shooting at it: heal (standing still inside the zone;
+ *           walking on when outside it);
+ *   circle  outside the safe zone, or outside the next one with too little time left to walk in:
+ *           a spot inside it (a building when there is one), commits until well inside;
+ *   loot    under-equipped (no gun, low ammo, no vest, no heals): the nearest worthwhile item it
+ *           can reach, inside the zone; anything useful close by on the way;
+ *   fight   an enemy it sees (near: perception and the aim controller; far: the game's statistical
+ *           far fights hold it in place facing its foe);
+ *   hunt    late in the match (phase 3 on), half the time: move up on the nearest player;
+ *   cover / hold   otherwise a building or cover spot inside the next circle: walk there, hold it
+ *           for a while (crouched, watching), then move to another.
  *
- * The map is too big for the bots feature's nav grid (and 512 MB of server), so there is none:
- * open ground between towns is steered across, and a bot that gets stuck jumps, sidesteps and
- * finally picks another goal.
+ * Commitment: a goal is only replaced by one of higher priority, when it is done, or when it fails
+ * (timeout, target gone, no route, stuck). Failed targets are ignored for a minute, so a bot never
+ * dithers between two goals or keeps walking at a wall.
  *
- * Fairness: a bot only fights whom it sees (FOV + line of sight + noticing time), humans are not
- * preferred, and at most `MAX_ON_HUMAN` bots engage the same human at once unless shot by them.
+ * Movement: `IslandNav.route` (town grids + the coarse open-ground grid) gives waypoints; the bot
+ * string-pulls them with line checks, jumps where the grid says, and when it stops making progress
+ * it jumps, sidesteps, re-routes, and finally gives the goal up.
+ *
+ *   near (within `nearDist` of a human, or of the player a dead human watches): perceives every
+ *     50 ms (FOV, line of sight, noticing time) and fights with the aim controller and hitscan.
+ *   far: decides every `farThinkSec`, string-pulls only then; fights are resolved by the game.
+ *
+ * Fairness: a bot only fights whom it sees, humans are not preferred, and at most `MAX_ON_HUMAN`
+ * bots engage the same human at once unless shot by them.
  */
-import { BLACKOUT, insideCircle, type Circle } from '../../../shared/defs/blackout';
+import { BLACKOUT, insideCircle, outsideBy, type Circle, type LootItem } from '../../../shared/defs/blackout';
 import type { BotSkill } from '../../../shared/defs/bots';
 import { PICKUP } from '../../../shared/defs/pickups';
 import { Buttons, type InputCmd } from '../../../shared/input';
@@ -27,23 +41,52 @@ import type { Room } from '../../room';
 import { addRecoil, angleDiff, engage, feltOffDeg, flinch, lookToward, newAimState, noticeTime, stepAim, toleranceDeg, type AimState } from '../bots/aim';
 import { botCanHit, chestOf, headOf, visiblePart } from '../bots/sight';
 import { swapBlocker, swapFor, type DropEntity } from '../pickups/index';
-import { wants } from './loot';
+import type { BlackoutGame } from './game';
+import { lootSpots, wants } from './loot';
+import { clearLine, islandNavFor, type Waypoint } from './nav';
 import { blackoutGameOf } from './rules';
 import { bx } from './state';
-import type { LootItem } from '../../../shared/defs/blackout';
-import type { BlackoutGame } from './game';
 
 const DEG = Math.PI / 180;
 /** Most bots fighting one human at once (others ignore them unless shot by them). */
 export const MAX_ON_HUMAN = 3;
-/** How far a bot looks for loot (m) and how long it gives a loot goal (s). */
-const LOOT_RANGE = 45;
 /** Odds that a bot takes on another bot it sees (re-rolled every few seconds; far fights use the same). */
 export const FIGHT_ODDS = 0.28;
 /** Near bots see and shoot for real (hitscan, the aim controller), which kills faster: lower odds. */
 export const NEAR_FIGHT_ODDS = 0.2;
+/**
+ * The odds rise as the circle closes (phase 0-1 as above, then up to 0.85 / 0.75): late in the
+ * match everyone is close together and holding back would leave a crowd for the final circle to
+ * kill.
+ */
+export function fightOdds(phase: number, near: boolean): number {
+  const base = near ? NEAR_FIGHT_ODDS : FIGHT_ODDS;
+  return Math.min(near ? 0.75 : 0.85, base + Math.max(0, phase - 1) * 0.15);
+}
 
-type Goal = { x: number; y: number; z: number; kind: 'loot' | 'circle' | 'roam' | 'camp'; until: number; ent?: number };
+/** How long a failed target (loot, spot) is ignored (s). */
+const IGNORE_SEC = 60;
+
+export type GoalKind = 'heal' | 'circle' | 'loot' | 'fight' | 'hunt' | 'cover' | 'hold';
+const PRIORITY: Record<GoalKind, number> = { heal: 5, circle: 4, loot: 3, fight: 2, hunt: 1, cover: 1, hold: 1 };
+
+export interface Goal {
+  kind: GoalKind;
+  x: number;
+  y: number;
+  z: number;
+  /** Room time it was set and when it times out. */
+  since: number;
+  until: number;
+  /** Loot entity, loot spot index, far foe. */
+  ent?: number;
+  spot?: number;
+  foe?: string;
+  /** The safe zone it goes into (circle goals). */
+  zone?: Circle;
+  /** Holding: arrived, and when to move on. */
+  holdUntil?: number;
+}
 
 /** How each weapon class is fought: preferred range and ADS beyond (m). */
 const STYLE: Record<string, { range: number; ads: number }> = {
@@ -59,6 +102,22 @@ const STYLE: Record<string, { range: number; ads: number }> = {
 
 const eyeOf = (p: PlayerState): Vec3 => ({ x: p.move.x, y: p.move.y + eyeHeight(p.move), z: p.move.z });
 
+/** What a bot carries, for its decisions. */
+export function kitOf(p: PlayerState): { armed: boolean; lowAmmo: boolean; armour: boolean; heals: number; under: boolean } {
+  let armed = false;
+  let lowAmmo = true;
+  for (const w of p.weapons.slice(0, 2)) {
+    if (w.def.base.id === 'knife') continue;
+    const ammo = w.mag + w.reserve;
+    if (ammo > 0) armed = true;
+    if (ammo >= w.def.magazine * 2) lowAmmo = false;
+  }
+  const st = bx(p);
+  const heals = st.bandages + st.medkits;
+  const armour = st.armorMax > 0;
+  return { armed, lowAmmo: armed && lowAmmo, armour, heals, under: !armed || lowAmmo || !armour || heals === 0 };
+}
+
 export class BlackoutBrain implements BotBrain {
   readonly aim: AimState = newAimState();
   target: PlayerState | null = null;
@@ -72,30 +131,42 @@ export class BlackoutBrain implements BotBrain {
   private pauseUntil = 0;
   private strafe = 0;
   private strafeUntil = 0;
-  private detour = 0;
-  private detourUntil = 0;
-  private stuckAt: Vec3 = { x: 0, y: 0, z: 0 };
-  private stuckT = 0;
-  private stuckCount = 0;
   private jumpHeld = false;
   private prev = 0;
   private slot = 0;
   private hurtBy: { id: string; t: number } | null = null;
-  /** Loot it gave up on (unreachable, or it couldn't take it): entity id -> room time to retry. */
-  private ignore = new Map<number, number>();
+  /** Targets it gave up on (loot entity ids, `s<spot>` spot indices): key -> room time to retry. */
+  private ignore = new Map<string, number>();
   /** Bots it decided to leave alone for now (id -> until). */
   private truce = new Map<string, { fight: boolean; until: number }>();
-  /** Camping late-game: holds its spot until then. */
-  private campUntil = 0;
-  readonly camper: boolean;
-  /** Ticks of near / far thinking (for the benchmark and tests). */
-  readonly stats = { near: 0, far: 0, shots: 0 };
+  /** The route to the goal and how far along it is. */
+  private path: Waypoint[] | null = null;
+  private pathIdx = 0;
+  private pathAim = 0;
+  private needRoute = false;
+  /** No route search before this (walking off a ledge first). */
+  private nextRouteAt = 0;
+  /** The last search ran out of a tick's budget: the next one gets a tick to itself. */
+  private longRoute = false;
+  private nextPull = 0;
+  /** Progress watch: best distance to the current waypoint, when it last improved, tries so far. */
+  private bestD = Infinity;
+  private bestT = 0;
+  private stuckTries = 0;
+  private progIdx = -2;
+  private detour = 0;
+  private detourUntil = 0;
+  /** Phase 3 on (set by decide): shorter holds, moving up on others. */
+  private late = false;
+  /** A far fight the game put it in (foe id, room time). */
+  farFoe: { id: string; t: number } | null = null;
+  /** Ticks of near / far thinking, goal changes, routes, give-ups (benchmark, tests). */
+  readonly stats = { near: 0, far: 0, shots: 0, goals: 0, routes: 0, noRoute: 0, stuck: 0, timeouts: 0 };
 
   constructor(
     public skill: BotSkill,
     readonly rnd: () => number = Math.random,
   ) {
-    this.camper = rnd() < 0.3;
     this.nextThink = rnd() * BLACKOUT.lod.farThinkSec;
   }
 
@@ -121,78 +192,71 @@ export class BlackoutBrain implements BotBrain {
     if (near) this.stats.near++;
     else this.stats.far++;
 
-    // Plan: re-think on a timer (far bots rarely), or when the goal is done.
-    if (this.goal?.kind === 'loot' && this.goal.ent !== undefined && now > this.goal.until) this.giveUp(this.goal.ent, now);
-    if (now >= this.nextThink || !this.goal || now > this.goal.until) {
-      this.nextThink = now + (near ? 0.35 : BLACKOUT.lod.farThinkSec) * (0.8 + this.rnd() * 0.4);
-      this.plan(room, game, self);
-      this.loot(room, game, self);
-    }
-    this.pickSlot(self);
-
-    // Heal when hurt and nobody in sight.
-    let buttons = 0;
-    if (!this.target && self.health < self.maxHealth * 0.6 && st.healUntil === null && (st.bandages > 0 || st.medkits > 0) && !(this.prev & Buttons.STREAK)) buttons |= Buttons.STREAK;
-
     if (near) {
       if (now >= this.nextPerceive) {
         this.nextPerceive = now + 0.05;
         this.perceive(room, game, self, skill, now);
       }
       if (this.target && (!this.target.alive || !room.players.has(this.target.id))) this.target = null;
-      if (this.target) return this.out(self, buttons | this.fight(room, self, skill, dt, now));
     } else this.target = null;
 
-    // ---- Move toward the goal.
+    // Decide: on a timer (far bots less often), at once when the goal is gone or a route is wanted.
+    if (now >= this.nextThink || !this.goal) {
+      this.nextThink = now + (near ? 0.35 : BLACKOUT.lod.farThinkSec) * (0.8 + this.rnd() * 0.4);
+      this.decide(room, game, self, now);
+      this.pickUp(room, game, self);
+    }
+    if (this.goal && (this.needRoute || !this.path) && now >= this.nextRouteAt) this.route(room, game, self);
+    this.pickSlot(self);
+
+    let buttons = 0;
+    const kit = kitOf(self);
+    // Heal (the top goal): never while someone is shooting at it.
+    if (this.goal?.kind === 'heal' && st.healUntil === null && !(this.prev & Buttons.STREAK)) buttons |= Buttons.STREAK;
+
+    // A visible enemy: fight it, unless unarmed with loot to run for and the enemy isn't close.
+    if (this.target) {
+      const d = Math.hypot(this.target.move.x - self.move.x, this.target.move.z - self.move.z);
+      const flee = !kit.armed && this.goal?.kind === 'loot' && d > 7;
+      // Outside the zone it keeps running in, unless the enemy is close.
+      const run = this.goal?.kind === 'circle' && d > 15;
+      if (!flee && !run) return this.out(self, buttons | this.fight(room, self, skill, dt, now));
+    }
     const g = this.goal;
     if (!g) return this.out(self, buttons);
-    const dx = g.x - self.move.x;
-    const dz = g.z - self.move.z;
-    const d = Math.hypot(dx, dz);
-    let yaw = Math.atan2(-dx, -dz);
-    if (g.kind === 'camp' && d < 2) {
-      lookToward(this.aim, skill, this.aim.yaw + Math.sin(now * 0.4) * 0.3 * dt, 0, dt, 0.3);
-      return this.out(self, buttons | Buttons.CROUCH);
-    }
-    if (d < 0.8) return this.out(self, buttons);
-    // Steering: around walls (probe rays), jumping low ones; detours stick for a moment.
-    if (now < this.detourUntil) yaw += this.detour;
-    else if (near || now >= this.nextThink - 0.01 || this.stuckT > 0.6) {
-      const s = this.steer(room, self, yaw);
-      if (s.turn) {
-        this.detour = s.turn;
-        this.detourUntil = now + 0.6;
-        yaw += s.turn;
-      }
-      if (s.jump) buttons |= this.jumpPulse();
-    }
-    // Stuck: jump, then sidestep, then give up on the goal.
-    const moved = Math.hypot(self.move.x - this.stuckAt.x, self.move.z - this.stuckAt.z);
-    if (moved > 0.8) {
-      this.stuckAt = { ...self.move };
-      this.stuckT = 0;
-      this.stuckCount = 0;
-    } else {
-      this.stuckT += dt;
-      if (this.stuckT > 1.2) {
-        this.stuckT = 0;
-        this.stuckAt = { ...self.move };
-        this.stuckCount++;
-        buttons |= this.jumpPulse();
-        this.detour = (this.rnd() < 0.5 ? -1 : 1) * (0.8 + this.rnd() * 1.2);
-        this.detourUntil = now + 0.9;
-        if (this.stuckCount >= 4) {
-          if (this.goal?.ent !== undefined) this.giveUp(this.goal.ent, now);
-          this.goal = null;
+
+    // Holding a spot (or healing, or a far fight): stay put, crouched, looking about.
+    const dGoal = Math.hypot(g.x - self.move.x, g.z - self.move.z);
+    if (g.kind === 'hold' || g.kind === 'fight' || (g.kind === 'heal' && !g.zone)) {
+      const look = g.kind === 'fight' ? this.aim.yaw : this.aim.yaw + Math.sin(now * 0.5 + self.move.x) * 0.5 * dt;
+      if (near) lookToward(this.aim, skill, look, 0, dt, 0.35);
+      else this.aim.yaw = look;
+      if (g.kind === 'fight') {
+        if (now >= this.strafeUntil) {
+          this.strafe = this.rnd() < 0.5 ? -1 : 1;
+          this.strafeUntil = now + 0.6 + this.rnd() * 0.8;
         }
+        return this.out(self, buttons | (this.strafe < 0 ? Buttons.LEFT : Buttons.RIGHT));
       }
+      return this.out(self, buttons | (g.kind === 'hold' ? Buttons.CROUCH : 0));
     }
+    if (dGoal < 0.7 && Math.abs(g.y - self.move.y) < 1.5) {
+      if (g.kind === 'cover') this.arrive(g, now);
+      return this.out(self, buttons);
+    }
+
+    // ---- Move along the route.
+    const step = this.follow(room, self, now, near);
+    let yaw = step.yaw;
+    if (now < this.detourUntil) yaw += this.detour;
+    if (step.jump) buttons |= this.jumpPulse();
+    buttons |= this.watchProgress(room, game, self, now, step.d);
     if (near) lookToward(this.aim, skill, yaw, 0, dt, 0.7);
     else {
       this.aim.yaw = yaw;
       this.aim.pitch = 0;
     }
-    const sprint = d > 10 && self.health > 30 && st.healUntil === null;
+    const sprint = dGoal > 8 && self.health > 25 && st.healUntil === null;
     return this.out(self, buttons | Buttons.FORWARD | (sprint ? Buttons.SPRINT : 0), yaw);
   }
 
@@ -205,11 +269,6 @@ export class BlackoutBrain implements BotBrain {
     this.aim.yaw = yaw;
     this.aim.pitch = 0;
     return { buttons: Math.hypot(dx, dz) > 4 ? Buttons.FORWARD : 0, yaw, pitch: 0, weaponSlot: 0 };
-  }
-
-  private giveUp(ent: number, now: number): void {
-    this.ignore.set(ent, now + 45);
-    if (this.ignore.size > 64) for (const [id, t] of this.ignore) if (t < now) this.ignore.delete(id);
   }
 
   private jumpPulse(): number {
@@ -247,88 +306,300 @@ export class BlackoutBrain implements BotBrain {
   }
 
   // -------------------------------------------------------------------------------------------
-  // Planning
+  // Deciding
   // -------------------------------------------------------------------------------------------
 
-  private plan(room: Room, game: BlackoutGame, self: PlayerState): void {
-    const now = room.time;
+  private ignored(key: string, now: number): boolean {
+    const t = this.ignore.get(key);
+    return t !== undefined && now < t;
+  }
+
+  private giveUp(now: number): void {
+    const g = this.goal;
+    if (g) {
+      if (g.ent !== undefined) this.ignore.set(`e${g.ent}`, now + IGNORE_SEC);
+      if (g.spot !== undefined) this.ignore.set(`s${g.spot}`, now + IGNORE_SEC);
+      if (g.kind === 'circle') this.ignore.set(`c${Math.round(g.x)},${Math.round(g.z)}`, now + IGNORE_SEC);
+    }
+    if (this.ignore.size > 96) for (const [k, t] of this.ignore) if (t < now) this.ignore.delete(k);
+    this.setGoal(null, now);
+  }
+
+  private setGoal(g: Goal | null, now: number): void {
+    this.goal = g;
+    this.path = null;
+    this.pathIdx = 0;
+    this.needRoute = !!g && g.kind !== 'hold' && g.kind !== 'fight' && !(g.kind === 'heal' && !g.zone);
+    this.bestD = Infinity;
+    this.bestT = now;
+    this.stuckTries = 0;
+    if (g) this.stats.goals++;
+  }
+
+  /** Done with the current goal? (Reached, target gone, timed out.) */
+  private finished(room: Room, game: BlackoutGame, self: PlayerState, now: number): boolean {
+    const g = this.goal;
+    if (!g) return true;
+    const st = bx(self);
+    switch (g.kind) {
+      case 'heal':
+        return self.health >= self.maxHealth * 0.95 || (st.bandages + st.medkits === 0 && st.healUntil === null) || (now - g.since > 1 && st.healUntil === null && now - g.since > 8);
+      case 'circle':
+        return !!g.zone && outsideBy(g.zone, self.move.x, self.move.z) < -Math.min(8, g.zone.r * 0.3) && Math.hypot(g.x - self.move.x, g.z - self.move.z) < Math.max(6, g.zone.r * 0.25);
+      case 'loot': {
+        const e = g.ent !== undefined ? room.entities.get(g.ent) : null;
+        if (!e) return true;
+        if (e.kind !== 'pickups_weapon') {
+          const it = (e.data as { item: LootItem } | undefined)?.item;
+          if (!it || !wants(self, it)) return true;
+        }
+        const claim = game.lootClaims.get(g.ent!);
+        return !!claim && claim !== self.id && !!room.players.get(claim)?.alive;
+      }
+      case 'fight':
+        return !this.farFoe || now - this.farFoe.t > 1.2 || !room.players.get(this.farFoe.id)?.alive;
+      case 'cover':
+        return false;
+      case 'hunt': {
+        const q = g.foe ? room.players.get(g.foe) : null;
+        return !q?.alive || Math.hypot(q.move.x - self.move.x, q.move.z - self.move.z) < 9;
+      }
+      case 'hold':
+        return now >= (g.holdUntil ?? 0);
+    }
+  }
+
+  /**
+   * The goal stack. Keeps the current goal unless something of higher priority applies, it is
+   * done, or it timed out (a timeout counts as a failure: the target is ignored for a while).
+   */
+  private decide(room: Room, game: BlackoutGame, self: PlayerState, now: number): void {
     const c = game.circle();
     if (!c) return;
+    const g = this.goal;
+    if (g && now > g.until) {
+      this.stats.timeouts++;
+      this.giveUp(now);
+    } else if (g && this.finished(room, game, self, now)) {
+      if (g.kind === 'loot' && g.ent !== undefined) game.lootClaims.delete(g.ent);
+      this.setGoal(null, now);
+    }
+    this.late = c.phase >= 3;
+    const cur = this.goal;
+    const curP = cur ? PRIORITY[cur.kind] : 0;
+    const st = bx(self);
     const p = self.move;
-    // The circle first: outside it (or the next one when it is about to move), go in.
-    const target: Circle | null = c.next && (c.stage === 'shrink' || (c.endsAt !== null && c.endsAt - (now - (game.t0 ?? now)) < 25 + Math.hypot(p.x - c.next.x, p.z - c.next.z) / 5)) ? c.next : c.cur;
-    const outside = !insideCircle({ ...target, r: Math.max(0, target.r - 4) }, p.x, p.z);
-    if (outside) {
-      if (this.goal?.kind !== 'circle' || !insideCircle(target, this.goal.x, this.goal.z)) {
-        const a = Math.atan2(p.z - target.z, p.x - target.x) + (this.rnd() - 0.5) * 0.8;
-        const r = target.r * (0.2 + this.rnd() * 0.5);
-        this.goal = { x: target.x + Math.cos(a) * r, y: 0, z: target.z + Math.sin(a) * r, kind: 'circle', until: now + 30 };
+    const kit = kitOf(self);
+    const underFire = !!this.hurtBy && now - this.hurtBy.t < 2.5;
+
+    // 1. Heal.
+    const outsideNow = outsideBy(c.cur, p.x, p.z) > 0;
+    const hurt = self.health < self.maxHealth * (this.target || underFire ? 0.4 : outsideNow ? 0.45 : 0.75);
+    if (curP < PRIORITY.heal && hurt && kit.heals > 0 && st.healUntil === null && !underFire && !this.target && this.farFoeFresh(now) === null) {
+      this.setGoal({ kind: 'heal', x: p.x, y: p.y, z: p.z, since: now, until: now + 9, ...(outsideNow ? { zone: c.cur } : {}) }, now);
+      // Healing outside the zone: keep walking in (the goal point is set by the circle logic below).
+      if (!outsideNow) return;
+    }
+
+    // 2. The safe zone: outside it, or outside the next one with too little time to walk in.
+    const zone = this.zoneTarget(game, self, c, now);
+    if (zone && curP < PRIORITY.circle) {
+      const spot = this.spotInside(room, game, self, zone, now);
+      if (this.goal?.kind === 'heal') {
+        // Heal on the move: walk to the spot while the bandage runs.
+        this.goal.x = spot.x;
+        this.goal.y = spot.y;
+        this.goal.z = spot.z;
+        this.goal.zone = zone;
+        this.needRoute = true;
+        return;
       }
+      this.setGoal({ kind: 'circle', ...spot, since: now, until: now + 25 + Math.hypot(spot.x - p.x, spot.z - p.z) / 3.5, zone }, now);
       return;
     }
-    // Late game: some bots hold a spot inside the circle for a while.
-    if (this.camper && c.phase >= 4 && now >= this.campUntil && this.goal?.kind !== 'camp' && this.rnd() < 0.4) {
-      this.goal = { x: p.x, y: p.y, z: p.z, kind: 'camp', until: now + 15 + this.rnd() * 20 };
-      this.campUntil = this.goal.until + 20;
+    // 3. Loot when under-equipped (and anything useful close by when it has nothing better to do).
+    // Committed to a goal, only loot it needs can take over from cover, a hold or a hunt.
+    const loot = !this.goal || (curP < PRIORITY.loot && kit.under) ? this.findLoot(room, game, self, c, kit, now) : null;
+    if (this.goal && !loot) {
+      // Committed. Only a far fight may interrupt holding or walking to cover.
+      if (curP <= PRIORITY.cover && this.farFoeFresh(now)) this.startFarFight(self, now);
       return;
     }
-    if (this.goal && this.goal.kind !== 'roam' && now < this.goal.until) return;
-    // Loot nearby.
-    const loot = this.findLoot(room, game, self);
     if (loot) {
-      this.goal = { x: loot.x, y: loot.y, z: loot.z, kind: 'loot', until: now + 12, ent: loot.id };
+      this.setGoal({ kind: 'loot', x: loot.x, y: loot.y, z: loot.z, since: now, until: now + 10 + Math.hypot(loot.x - p.x, loot.z - p.z) / 3, ent: loot.id }, now);
       game.lootClaims.set(loot.id, self.id);
       return;
     }
-    if (this.goal?.kind === 'roam' && now < this.goal.until && Math.hypot(this.goal.x - p.x, this.goal.z - p.z) > 2) return;
-    // Roam: somewhere inside the safe zone, towards towns (hotspots) more often than not.
-    const spots = (room.map.hotspots ?? []).filter((h) => insideCircle({ ...target, r: target.r * 0.9 }, h.x, h.z) && Math.hypot(h.x - p.x, h.z - p.z) < 160);
-    let gx: number;
-    let gz: number;
-    if (spots.length && this.rnd() < 0.7) {
-      const h = spots[Math.floor(this.rnd() * spots.length)]!;
-      gx = h.x + (this.rnd() - 0.5) * 8;
-      gz = h.z + (this.rnd() - 0.5) * 8;
-    } else {
-      const a = this.rnd() * Math.PI * 2;
-      const r = Math.sqrt(this.rnd()) * target.r * 0.85;
-      gx = target.x + Math.cos(a) * r;
-      gz = target.z + Math.sin(a) * r;
-      // Don't walk off across the whole map: a step towards it.
-      const d = Math.hypot(gx - p.x, gz - p.z);
-      if (d > 80) {
-        gx = p.x + ((gx - p.x) / d) * 80;
-        gz = p.z + ((gz - p.z) / d) * 80;
+
+    // 4. A far fight the game put it in.
+    if (this.farFoeFresh(now)) {
+      this.startFarFight(self, now);
+      return;
+    }
+
+    // 5. Late in the match, half the time: move up on the nearest player (fights happen before
+    // the last circle does it for them).
+    if (this.late && this.rnd() < 0.5) {
+      let foe: PlayerState | null = null;
+      let fd = 70;
+      for (const q of game.playersNear(p.x, p.z, 70)) {
+        if (q === self || !q.alive || bx(q).stage !== 'ground') continue;
+        const d = Math.hypot(q.move.x - p.x, q.move.z - p.z);
+        if (d < fd) {
+          fd = d;
+          foe = q;
+        }
+      }
+      if (foe && fd > 9) {
+        this.setGoal({ kind: 'hunt', x: foe.move.x, y: foe.move.y, z: foe.move.z, since: now, until: now + 12, foe: foe.id }, now);
+        return;
       }
     }
-    this.goal = { x: gx, y: 0, z: gz, kind: 'roam', until: now + 25 };
+
+    // 6. Cover inside the next circle: go there, hold, then move on.
+    const into = c.next ?? c.cur;
+    const spot = this.coverSpot(room, game, self, into, now);
+    this.setGoal({ kind: 'cover', ...spot.at, since: now, until: now + 20 + Math.hypot(spot.at.x - p.x, spot.at.z - p.z) / 3, ...(spot.i >= 0 ? { spot: spot.i } : {}) }, now);
   }
 
-  /** The best loot in range: guns while it has an empty slot (or better ones), items it can use. */
-  private findLoot(room: Room, game: BlackoutGame, self: PlayerState): { x: number; y: number; z: number; id: number } | null {
+  private farFoeFresh(now: number): string | null {
+    return this.farFoe && now - this.farFoe.t < 1.2 ? this.farFoe.id : null;
+  }
+
+  private startFarFight(self: PlayerState, now: number): void {
+    const foe = this.farFoeFresh(now);
+    // With only a knife it keeps looting (or walking to cover) rather than standing in a gunfight.
+    if (!foe || !kitOf(self).armed) return;
+    this.setGoal({ kind: 'fight', x: self.move.x, y: self.move.y, z: self.move.z, since: now, until: now + 20, foe }, now);
+  }
+
+  /** Arrived at a cover spot: hold it for a while. */
+  private arrive(g: Goal, now: number): void {
+    g.kind = 'hold';
+    g.holdUntil = now + (this.late ? 6 + this.rnd() * 6 : 10 + this.rnd() * 15);
+    g.until = g.holdUntil + 1;
+    this.path = null;
+    this.needRoute = false;
+  }
+
+  /** The circle to be inside now: the current one, or the next when it is time to move. */
+  private zoneTarget(game: BlackoutGame, self: PlayerState, c: NonNullable<ReturnType<BlackoutGame['circle']>>, now: number): Circle | null {
     const p = self.move;
+    const t = now - (game.t0 ?? now);
+    const g = this.goal;
+    // Hysteresis: going in, it keeps going until well inside (finished()); a bot just inside the
+    // edge counts as outside so it doesn't hover on the line.
+    if (outsideBy(c.cur, p.x, p.z) > -2) return c.cur;
+    if (c.next) {
+      const out = outsideBy(c.next, p.x, p.z);
+      if (out > -2) {
+        // Walking time at ~5.5 m/s along a route ~1.3x the straight line, plus a margin to spare.
+        const walk = ((out + 10) * 1.3) / 5.5;
+        const left = c.stage === 'shrink' ? 0 : (c.endsAt ?? t) - t;
+        if (left < walk + 25 || g?.kind === 'circle') return c.next;
+      }
+    }
+    return null;
+  }
+
+  /** Somewhere to go inside a circle: an indoor loot spot near the bot's side of it, else a point. */
+  private spotInside(room: Room, game: BlackoutGame, self: PlayerState, zone: Circle, now: number): Vec3 {
+    const p = self.move;
+    const nav = islandNavFor(room.map);
+    const r = zone.r * 0.65;
+    let best: Vec3 | null = null;
+    let bs = Infinity;
+    if (zone.r > 12) {
+      const spots = lootSpots(room.map, room.world);
+      for (let i = 0; i < spots.length; i++) {
+        const s = spots[i]!;
+        if (Math.hypot(s.x - zone.x, s.z - zone.z) > r || this.ignored(`s${i}`, now) || this.ignored(`c${Math.round(s.x)},${Math.round(s.z)}`, now)) continue;
+        const score = Math.hypot(s.x - p.x, s.z - p.z) - (s.indoor ? 15 : 0) + this.rnd() * 25;
+        if (score < bs) {
+          bs = score;
+          best = s;
+        }
+      }
+    }
+    if (best) return { x: best.x, y: best.y, z: best.z };
+    // A point on the line to the centre, well inside, nudged to walkable ground.
+    for (let k = 0; k < 6; k++) {
+      const a = Math.atan2(p.z - zone.z, p.x - zone.x) + (this.rnd() - 0.5) * (0.8 + k * 0.5);
+      const rr = zone.r * (0.15 + this.rnd() * 0.45);
+      const x = zone.x + Math.cos(a) * rr;
+      const z = zone.z + Math.sin(a) * rr;
+      const gk = nav.ground.cellNear(x, z);
+      if (gk >= 0) return nav.ground.centre(gk);
+      const ti = nav.townAt(x, z, 0);
+      if (ti >= 0) {
+        const tn = nav.town(ti);
+        const cell = tn.cellAt({ x, y: 0, z }, true);
+        if (cell >= 0 && tn.core[cell]) return { x: tn.x[cell]!, y: tn.y[cell]!, z: tn.z[cell]! };
+      }
+    }
+    return { x: zone.x, y: 0, z: zone.z };
+  }
+
+  /** A building or cover spot inside the circle to hold, not far, not one it gave up on. */
+  private coverSpot(room: Room, game: BlackoutGame, self: PlayerState, zone: Circle, now: number): { at: Vec3; i: number } {
+    const p = self.move;
+    const spots = lootSpots(room.map, room.world);
+    const rr = Math.max(4, zone.r * 0.8);
+    const hunt = (game.circle()?.phase ?? 0) >= 3;
+    let best = -1;
+    let bs = Infinity;
+    for (let i = 0; i < spots.length; i++) {
+      const s = spots[i]!;
+      if (Math.hypot(s.x - zone.x, s.z - zone.z) > rr || this.ignored(`s${i}`, now)) continue;
+      const d = Math.hypot(s.x - p.x, s.z - p.z);
+      if (d < 4 || d > 110) continue;
+      let score = d * 0.6 - (s.indoor ? 18 : 0) + this.rnd() * 30;
+      // Late in the match it moves up on whoever is around (the circle won't wait).
+      if (hunt) for (const q of game.playersNear(s.x, s.z, 22)) if (q !== self && q.alive) {
+        score -= 30;
+        break;
+      }
+      if (score < bs) {
+        bs = score;
+        best = i;
+      }
+    }
+    if (best >= 0) return { at: { x: spots[best]!.x, y: spots[best]!.y, z: spots[best]!.z }, i: best };
+    return { at: this.spotInside(room, game, self, zone, now), i: -1 };
+  }
+
+  /**
+   * Loot worth going for: guns while unarmed or for a clear upgrade, ammo when low, a vest, heals.
+   * Under-equipped it looks further (90 m, 140 m without a gun); otherwise only close by (14 m).
+   * Inside the zone it's heading for, on its floor or a stair away, not claimed, not given up on.
+   */
+  private findLoot(room: Room, game: BlackoutGame, self: PlayerState, c: NonNullable<ReturnType<BlackoutGame['circle']>>, kit: ReturnType<typeof kitOf>, now: number): { x: number; y: number; z: number; id: number } | null {
+    const p = self.move;
+    const range = !kit.armed ? 140 : kit.under ? 90 : 14;
+    const zone = c.next && (c.endsAt ?? 0) - (now - (game.t0 ?? now)) < 40 ? c.next : c.cur;
     let best: { x: number; y: number; z: number; id: number } | null = null;
     let bestScore = Infinity;
-    const needGun = self.weapons.some((w) => w.def.base.id === 'knife');
-    for (const e of game.lootNear(p.x, p.z, LOOT_RANGE)) {
-      if (Math.abs(e.y - p.y) > 6) continue;
-      const until = this.ignore.get(e.id);
-      if (until !== undefined && room.time < until) continue;
+    const needGun = !kit.armed;
+    for (const e of game.lootNear(p.x, p.z, range)) {
+      if (this.ignored(`e${e.id}`, now) || !insideCircle({ ...zone, r: Math.max(0, zone.r - 3) }, e.x, e.z)) continue;
       const claim = game.lootClaims.get(e.id);
       if (claim && claim !== self.id && room.players.get(claim)?.alive) continue;
       // Another floor costs a detour (stairs somewhere): weigh the height.
-      const d = Math.hypot(e.x - p.x, e.z - p.z) + Math.max(0, Math.abs(e.y - p.y) - 0.6) * 6;
+      const d = Math.hypot(e.x - p.x, e.z - p.z) + Math.max(0, Math.abs(e.y - p.y) - 0.6) * 4;
       let score = Infinity;
       if (e.kind === 'pickups_weapon') {
         const drop = e as DropEntity;
         if (!drop.data?.landed || self.weapons.some((w) => w.def.base.id === drop.data.weapon)) continue;
         const gain = gunValue(drop.data.weapon, drop.data.attachments.length) - Math.min(...self.weapons.slice(0, 2).map((w) => gunValue(w.def.base.id, w.def.attachmentIds.length, w.mag + w.reserve)));
         if (gain <= 0.5) continue;
-        score = d - gain * (needGun ? 12 : 4);
+        score = d - gain * (needGun ? 30 : 6);
       } else {
         const it = (e.data as { item: LootItem } | undefined)?.item;
         if (!it || !wants(self, it)) continue;
-        score = d + (needGun ? 15 : 0) - (it.k === 'armor' ? 6 : 0);
+        if (needGun && d > 25 && it.k !== 'armor') continue;
+        const w = it.k === 'armor' && !kit.armour ? 12 : it.k === 'ammo' && kit.lowAmmo ? 12 : (it.k === 'bandage' || it.k === 'medkit') && kit.heals === 0 ? 10 : 0;
+        if (!kit.under && d > 8) continue;
+        score = d - w;
       }
       if (score < bestScore) {
         bestScore = score;
@@ -339,16 +610,12 @@ export class BlackoutBrain implements BotBrain {
   }
 
   /** In reach of a gun worth taking: swap for it (bots "hold USE" instantly). */
-  private loot(room: Room, game: BlackoutGame, self: PlayerState): void {
-    if (!this.goal || this.goal.kind !== 'loot' || this.goal.ent === undefined) return;
-    const e = room.entities.get(this.goal.ent);
-    if (!e) {
-      this.goal = null;
-      this.nextThink = 0;
-      return;
-    }
-    if (e.kind !== 'pickups_weapon') return;
-    if (Math.hypot(e.x - self.move.x, e.z - self.move.z) > PICKUP.radius * 0.9) return;
+  private pickUp(room: Room, game: BlackoutGame, self: PlayerState): void {
+    const g = this.goal;
+    if (!g || g.kind !== 'loot' || g.ent === undefined) return;
+    const e = room.entities.get(g.ent);
+    if (!e || e.kind !== 'pickups_weapon') return;
+    if (Math.hypot(e.x - self.move.x, e.z - self.move.z) > PICKUP.radius * 0.9 || Math.abs(e.y - self.move.y) > 1.5) return;
     const drop = e as DropEntity;
     if (!drop.data) return;
     const slot = game.pickupSlot(self) === self.slot && self.weapons[self.slot]?.def.base.id !== 'knife' ? worstSlot(self) : game.pickupSlot(self);
@@ -356,26 +623,153 @@ export class BlackoutBrain implements BotBrain {
       swapFor(room, self, drop, slot);
       this.slot = slot;
       game.lootChanged();
-    } else this.giveUp(e.id, room.time);
-    this.goal = null;
+      game.lootClaims.delete(e.id);
+      this.setGoal(null, room.time);
+    } else this.giveUp(room.time);
     this.nextThink = 0;
   }
 
   // -------------------------------------------------------------------------------------------
-  // Steering
+  // Moving
   // -------------------------------------------------------------------------------------------
 
-  /** Probe ahead along `yaw` at knee and chest height; turn toward the nearest free direction. */
-  private steer(room: Room, self: PlayerState, yaw: number): { turn: number; jump: boolean } {
-    const free = (a: number, y: number, len: number) => {
-      const d = viewDir(yaw + a, 0);
-      return room.world.raycast({ x: self.move.x, y: self.move.y + y, z: self.move.z }, d, len, 'players') === null;
-    };
-    if (free(0, 0.6, 2.2)) return { turn: 0, jump: false };
-    // Knee blocked, chest free: something low to jump or climb.
-    if (free(0, 1.45, 2.2)) return { turn: 0, jump: true };
-    for (const a of [0.6, -0.6, 1.2, -1.2, 1.9, -1.9, 2.6, -2.6]) if (free(a, 0.6, 2.5) && free(a, 1.45, 2.5)) return { turn: a, jump: false };
-    return { turn: Math.PI, jump: false };
+  /** Route to the goal (rationed per tick by the game); no route: the goal is unreachable. */
+  private route(room: Room, game: BlackoutGame, self: PlayerState): void {
+    const g = this.goal;
+    const budget = game.routeBudget(this.longRoute);
+    if (!g || budget <= 0) return;
+    this.stats.routes++;
+    const nav = islandNavFor(room.map);
+    const path = nav.route(self.move, g, budget);
+    game.spendRoute(nav.lastExpanded);
+    // Out of search budget this tick: try again next tick (not a failure), with a long search if
+    // it had most of a tick's budget already.
+    if (!path && nav.lastHitLimit) {
+      if (this.longRoute) this.giveUp(room.time);
+      else if (budget >= 8000) this.longRoute = true;
+      return;
+    }
+    this.longRoute = false;
+    this.needRoute = false;
+    if (!path) {
+      // Stranded on top of something (it landed there): walk off the edge first.
+      const down = nav.wayDown(self.move);
+      if (down) {
+        this.path = [down];
+        this.pathIdx = 0;
+        this.pathAim = 0;
+        this.needRoute = true;
+        this.nextRouteAt = room.time + 2.5;
+        return;
+      }
+    }
+    if (!path || !path.length) {
+      this.stats.noRoute++;
+      this.giveUp(room.time);
+      this.nextThink = 0;
+      return;
+    }
+    this.path = path;
+    this.pathIdx = 0;
+    this.pathAim = 0;
+    this.nextPull = 0;
+    this.bestD = Infinity;
+    this.bestT = room.time;
+  }
+
+  /** Steer along the route: the farthest waypoint in a straight walkable line, jumps where needed. */
+  private follow(room: Room, self: PlayerState, now: number, near: boolean): { yaw: number; jump: boolean; d: number } {
+    const pos = self.move;
+    const g = this.goal!;
+    const p = this.path;
+    if (!p || this.pathIdx >= p.length) {
+      const dx = g.x - pos.x;
+      const dz = g.z - pos.z;
+      return { yaw: Math.atan2(-dx, -dz), jump: false, d: Math.hypot(dx, dz) };
+    }
+    // Skip waypoints reached (or passed: the nearest of the next few on this level).
+    let k = this.pathIdx;
+    let bd = Infinity;
+    for (let j = this.pathIdx; j < Math.min(p.length, this.pathIdx + 8); j++) {
+      const w = p[j]!;
+      const d = Math.hypot(w.x - pos.x, w.z - pos.z) + Math.abs(w.y - pos.y) * 2;
+      if (d < bd) {
+        bd = d;
+        k = j;
+      }
+    }
+    if (bd < 0.8) k++;
+    if (k > this.pathIdx) {
+      this.pathIdx = Math.min(k, p.length);
+      this.pathAim = Math.max(this.pathAim, this.pathIdx);
+    }
+    if (this.pathIdx >= p.length) {
+      const dx = g.x - pos.x;
+      const dz = g.z - pos.z;
+      return { yaw: Math.atan2(-dx, -dz), jump: false, d: Math.hypot(dx, dz) };
+    }
+    // String pull now and then (near bots only: far ones walk waypoint to waypoint, which nobody
+    // sees and costs no line checks): the farthest of a few waypoints ahead in a clear line.
+    if (near && now >= this.nextPull) {
+      this.nextPull = now + 0.25;
+      let aim = this.pathIdx;
+      for (const ahead of [6, 4, 2]) {
+        const j = Math.min(p.length - 1, this.pathIdx + ahead);
+        if (j <= this.pathIdx) continue;
+        let jumpBetween = false;
+        for (let q = this.pathIdx; q <= j; q++) if (p[q]!.jump) jumpBetween = true;
+        if (jumpBetween || Math.hypot(p[j]!.x - pos.x, p[j]!.z - pos.z) > 14) continue;
+        if (clearLine(room.world, pos, p[j]!)) {
+          aim = j;
+          break;
+        }
+      }
+      this.pathAim = aim;
+    } else if (!near) this.pathAim = this.pathIdx;
+    const w = p[Math.max(this.pathAim, this.pathIdx)]!;
+    const next = p[this.pathIdx]!;
+    const dx = w.x - pos.x;
+    const dz = w.z - pos.z;
+    const dn = Math.hypot(next.x - pos.x, next.z - pos.z);
+    const jump = (!!next.jump || next.y - pos.y > 0.4) && dn < 1.3 && next.y > pos.y + 0.25;
+    return { yaw: Math.atan2(-dx, -dz), jump, d: dn };
+  }
+
+  /**
+   * Stuck detection: the distance to the next waypoint must keep shrinking. After 1.5 s without
+   * progress: jump and sidestep; then re-route; after four tries the goal is given up.
+   */
+  private watchProgress(room: Room, game: BlackoutGame, self: PlayerState, now: number, d: number): number {
+    // A new waypoint (or a new route): measure progress toward it from here.
+    const key = this.path ? this.pathIdx : -1;
+    if (key !== this.progIdx) {
+      // Reaching a waypoint is progress: the tries start over.
+      if (key > this.progIdx) this.stuckTries = 0;
+      this.progIdx = key;
+      this.bestD = d;
+      this.bestT = now;
+      return 0;
+    }
+    if (d < this.bestD - 0.25) {
+      this.bestD = d;
+      this.bestT = now;
+      return 0;
+    }
+    if (now - this.bestT < 1.5) return 0;
+    this.bestT = now;
+    this.bestD = d;
+    this.stuckTries++;
+    this.detour = (this.rnd() < 0.5 ? -1 : 1) * (0.7 + this.rnd() * 0.9);
+    this.detourUntil = now + 0.7;
+    if (this.stuckTries >= 2) this.needRoute = true;
+    if (this.stuckTries >= 4) {
+      this.stats.stuck++;
+      this.giveUp(now);
+      this.nextThink = 0;
+    }
+    void room;
+    void game;
+    return this.jumpPulse();
   }
 
   // -------------------------------------------------------------------------------------------
@@ -400,7 +794,7 @@ export class BlackoutBrain implements BotBrain {
       if (q.isBot && !hurtByQ && d > 55) continue;
       if (q.isBot && q !== this.target && !hurtByQ) {
         let truce = this.truce.get(q.id);
-        if (!truce || now > truce.until) this.truce.set(q.id, (truce = { fight: this.rnd() < NEAR_FIGHT_ODDS, until: now + 4 + this.rnd() * 3 }));
+        if (!truce || now > truce.until) this.truce.set(q.id, (truce = { fight: this.rnd() < fightOdds(game.circle()?.phase ?? 0, true), until: now + 4 + this.rnd() * 3 }));
         if (!truce.fight) continue;
       }
       const off = Math.abs(angleDiff(yawTo(eye, c), this.aim.yaw));
