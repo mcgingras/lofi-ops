@@ -47,9 +47,10 @@ export function simMetrics(h: BlackoutHarness, every = 0.5, window = 2) {
         const b = p.brain;
         const tr = trail.get(p.id) ?? [];
         tr.push({ x: p.move.x, z: p.move.z, t: now });
-        while (tr.length && tr[0]!.t < now - window - 1e-6) tr.shift();
+        // Keep the samples of the last `window` seconds (with slack: room time is a float sum).
+        while (tr.length > 1 && tr[1]!.t <= now - window + 0.01) tr.shift();
         trail.set(p.id, tr);
-        if (now - tr[0]!.t < window - 1e-6) continue; // not long enough on the ground yet
+        if (now - tr[0]!.t < window - 0.25) continue; // not long enough on the ground yet
         samples++;
         const g = b.goal;
         const kind = g?.kind ?? 'none';

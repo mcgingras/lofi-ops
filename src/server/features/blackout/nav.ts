@@ -13,12 +13,12 @@
  *
  * Shared per MapData (every Blackout room on the server uses the same grids).
  */
-import { CollisionWorld } from '../../../shared/collision';
+import { CollisionWorld, topAt, type Solid } from '../../../shared/collision';
 import { PLAYER } from '../../../shared/constants';
 import { BLACKOUT_TOWNS, townRect } from '../../../shared/maps/blackout';
 import { buildCollisionWorld, type MapData } from '../../../shared/maps/types';
 import type { Vec3 } from '../../../shared/math';
-import { freeAt, groundAt, NAV_CELL, NavGrid } from '../bots/nav';
+import { freeAt, groundAt, JUMP_UP, MAX_DROP, NAV_CELL } from '../bots/nav';
 
 export interface Waypoint {
   x: number;
@@ -145,7 +145,193 @@ export function clearLine(world: CollisionWorld, a: Vec3, b: Vec3): boolean {
 // Towns
 // ---------------------------------------------------------------------------------------------
 
-/** One town's walking grid in typed arrays (from the bots feature's NavGrid). */
+/** A town grid's arrays, as the builder produces them. */
+interface TownGridData {
+  x: Float32Array;
+  y: Float32Array;
+  z: Float32Array;
+  core: Uint8Array;
+  eStart: Int32Array;
+  eTo: Int32Array;
+  eCost: Float32Array;
+  eKind: Uint8Array;
+  cx0: number;
+  cz0: number;
+  ncx: number;
+  ncz: number;
+  colStart: Int32Array;
+  colCount: Int32Array;
+  ms: number;
+}
+
+/**
+ * Build one town's walking grid, a slice at a time (a generator: `yield` every few milliseconds of
+ * work), straight into typed arrays. The cells and links are the bots feature's NavGrid rules
+ * (bots/nav.ts: walk within a step, jump up to JUMP_UP with headroom, drop up to MAX_DROP); core
+ * cells are those reachable from the open ground round the town and back.
+ */
+export function* buildTownGrid(map: MapData, world: CollisionWorld, rect: Rect, sliceMs = 4): Generator<void, TownGridData> {
+  let t0 = performance.now();
+  let spent = 0;
+  const tick = () => {
+    const now = performance.now();
+    if (now - t0 < sliceMs) return false;
+    spent += now - t0;
+    return true;
+  };
+  const m = TOWN_MARGIN;
+  const cx0 = Math.ceil((rect.x0 - m) / NAV_CELL);
+  const cx1 = Math.floor((rect.x1 + m) / NAV_CELL) - 1;
+  const cz0 = Math.ceil((rect.z0 - m) / NAV_CELL);
+  const cz1 = Math.floor((rect.z1 + m) / NAV_CELL) - 1;
+  const ncx = cx1 - cx0 + 1;
+  const ncz = cz1 - cz0 + 1;
+  const colStart = new Int32Array(ncx * ncz);
+  const colCount = new Int32Array(ncx * ncz);
+  const xs: number[] = [];
+  const ys: number[] = [];
+  const zs: number[] = [];
+  const near: Solid[] = [];
+  const minY = map.bounds.min.y;
+  // ---- Cells: every surface a body can stand on, per 0.5 m column.
+  for (let cx = cx0; cx <= cx1; cx++) {
+    for (let cz = cz0; cz <= cz1; cz++) {
+      const x = (cx + 0.5) * NAV_CELL;
+      const z = (cz + 0.5) * NAV_CELL;
+      const tops: number[] = [];
+      for (const sd of world.near(x - R, x + R, z - R, z + R, near)) {
+        if (x + R <= sd.min.x || x - R >= sd.max.x || z + R <= sd.min.z || z - R >= sd.max.z) continue;
+        const t = topAt(sd, x - R, x + R, z - R, z + R);
+        if (t < minY || t > 60) continue;
+        tops.push(t);
+      }
+      tops.sort((a2, b2) => a2 - b2);
+      const k = (cx - cx0) * ncz + (cz - cz0);
+      colStart[k] = xs.length;
+      let last = -Infinity;
+      for (const t of tops) {
+        if (t - last < 0.05) continue;
+        const g = groundAt(world, x, z, t + EPS, 0.02, R);
+        if (g === null || Math.abs(g - t) > 0.03) continue;
+        if (!freeAt(world, x, t + EPS, z, R, PLAYER.height)) continue;
+        last = t;
+        xs.push(x);
+        ys.push(t);
+        zs.push(z);
+        colCount[k]!++;
+      }
+    }
+    if (tick()) {
+      yield;
+      t0 = performance.now();
+    }
+  }
+  const n = xs.length;
+  const X = Float32Array.from(xs);
+  const Y = Float32Array.from(ys);
+  const Z = Float32Array.from(zs);
+  const col = (cx: number, cz: number): [number, number] => {
+    const i = cx - cx0;
+    const j = cz - cz0;
+    if (i < 0 || j < 0 || i >= ncx || j >= ncz) return [0, 0];
+    const k = i * ncz + j;
+    return [colStart[k]!, colCount[k]!];
+  };
+  const levelIn = (cx: number, cz: number, y: number) => {
+    const [st, c] = col(cx, cz);
+    for (let i = st; i < st + c; i++) if (Math.abs(Y[i]! - y) <= STEP) return true;
+    return false;
+  };
+  // ---- Links.
+  const eStart = new Int32Array(n + 1);
+  const eTo: number[] = [];
+  const eCost: number[] = [];
+  const eKind: number[] = [];
+  for (let i = 0; i < n; i++) {
+    eStart[i] = eTo.length;
+    const x = X[i]!, y = Y[i]!, z = Z[i]!;
+    const cx = Math.floor(x / NAV_CELL);
+    const cz = Math.floor(z / NAV_CELL);
+    const headroomForJump = freeAt(world, x, y + JUMP_UP + EPS, z, R * 0.9, PLAYER.height);
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dz = -1; dz <= 1; dz++) {
+        if (!dx && !dz) continue;
+        const diag = dx !== 0 && dz !== 0;
+        const [st, c] = col(cx + dx, cz + dz);
+        if (!c) continue;
+        const horiz = NAV_CELL * (diag ? Math.SQRT2 : 1);
+        const mx = x + (dx * NAV_CELL) / 2;
+        const mz = z + (dz * NAV_CELL) / 2;
+        let dropTo = -1;
+        for (let j = st; j < st + c; j++) {
+          const dh = Y[j]! - y;
+          if (Math.abs(dh) <= STEP) {
+            if (diag && (!levelIn(cx + dx, cz, y) || !levelIn(cx, cz + dz, y))) continue;
+            if (!freeAt(world, mx, Math.max(y, Y[j]!) + EPS, mz, R * 0.95, PLAYER.height)) continue;
+            eTo.push(j);
+            eCost.push(Math.hypot(horiz, dh));
+            eKind.push(0);
+          } else if (dh > STEP && dh <= JUMP_UP) {
+            if (diag || !headroomForJump) continue;
+            if (!freeAt(world, mx, Y[j]! + EPS, mz, R * 0.9, PLAYER.height)) continue;
+            eTo.push(j);
+            eCost.push(horiz + 1.2 + dh);
+            eKind.push(1);
+          } else if (dh < -STEP && dh >= -MAX_DROP) {
+            if (dropTo < 0 || Y[j]! > Y[dropTo]!) dropTo = j;
+          }
+        }
+        if (dropTo >= 0 && !diag) {
+          if (freeAt(world, X[dropTo]!, Y[dropTo]! + EPS, Z[dropTo]!, R * 0.9, y - Y[dropTo]! + PLAYER.height) && freeAt(world, mx, y + EPS, mz, R * 0.9, PLAYER.height)) {
+            eTo.push(dropTo);
+            eCost.push(horiz + 0.4 + (y - Y[dropTo]!) * 0.3);
+            eKind.push(2);
+          }
+        }
+      }
+    if ((i & 255) === 0 && tick()) {
+      yield;
+      t0 = performance.now();
+    }
+  }
+  eStart[n] = eTo.length;
+  const ET = Int32Array.from(eTo);
+  // ---- Core: reachable from the open ground round the town, and back to it.
+  const seeds: number[] = [];
+  const cellNear = (px: number, pz: number) => {
+    const [st, c] = col(Math.floor(px / NAV_CELL), Math.floor(pz / NAV_CELL));
+    for (let i = st; i < st + c; i++) if (Math.abs(Y[i]!) < 0.6) return i;
+    return -1;
+  };
+  for (let px = rect.x0 - 5; px <= rect.x1 + 5; px += 4) for (const pz of [rect.z0 - 5, rect.z1 + 5]) seeds.push(cellNear(px, pz));
+  for (let pz = rect.z0 - 5; pz <= rect.z1 + 5; pz += 4) for (const px of [rect.x0 - 5, rect.x1 + 5]) seeds.push(cellNear(px, pz));
+  const fwd = new Uint8Array(n);
+  const stack: number[] = [];
+  for (const sd of seeds) if (sd >= 0 && !fwd[sd]) (fwd[sd] = 1), stack.push(sd);
+  while (stack.length) {
+    const i = stack.pop()!;
+    for (let e = eStart[i]!; e < eStart[i + 1]!; e++) if (!fwd[ET[e]!]) (fwd[ET[e]!] = 1), stack.push(ET[e]!);
+  }
+  // Reverse links (CSR) for the way back.
+  const rStart = new Int32Array(n + 1);
+  for (let e = 0; e < ET.length; e++) rStart[ET[e]! + 1]!++;
+  for (let i = 0; i < n; i++) rStart[i + 1]! += rStart[i]!;
+  const rFrom = new Int32Array(ET.length);
+  const fill = rStart.slice(0, n);
+  for (let i = 0; i < n; i++) for (let e = eStart[i]!; e < eStart[i + 1]!; e++) rFrom[fill[ET[e]!]!++] = i;
+  const back = new Uint8Array(n);
+  for (const sd of seeds) if (sd >= 0 && !back[sd]) (back[sd] = 1), stack.push(sd);
+  while (stack.length) {
+    const i = stack.pop()!;
+    for (let e = rStart[i]!; e < rStart[i + 1]!; e++) if (!back[rFrom[e]!]) (back[rFrom[e]!] = 1), stack.push(rFrom[e]!);
+  }
+  const core = new Uint8Array(n);
+  for (let i = 0; i < n; i++) core[i] = fwd[i]! & back[i]!;
+  spent += performance.now() - t0;
+  return { x: X, y: Y, z: Z, core, eStart, eTo: ET, eCost: Float32Array.from(eCost), eKind: Uint8Array.from(eKind), cx0, cz0, ncx, ncz, colStart, colCount, ms: spent };
+}
+
+/** One town's walking grid in typed arrays (~80 bytes a cell; see `buildTownGrid`). */
 export class TownNav {
   readonly n: number;
   readonly x: Float32Array;
@@ -163,75 +349,39 @@ export class TownNav {
   private ncx: number;
   private ncz: number;
   private colStart: Int32Array;
+  private colCount: Int32Array;
   /** Core cells on the open ground 3-7 m outside the town, about 4 m apart: where routes leave and enter. */
   readonly portals: number[] = [];
   private scratch: Scratch | null = null;
+  /** CPU time the build took (ms, summed over its slices). */
   readonly buildMs: number;
   /** Cells expanded by searches (budgeting, tests). */
   expanded = 0;
 
   constructor(
-    map: MapData,
+    d: TownGridData,
     readonly world: CollisionWorld,
     readonly rect: Rect,
   ) {
-    const t0 = performance.now();
-    const m = TOWN_MARGIN;
-    const seeds = [];
-    // Seeds on the open ground all round: core = reachable from outside the town and back.
-    for (let x = rect.x0 - 5; x <= rect.x1 + 5; x += 8) seeds.push({ x, y: 0, z: rect.z0 - 5, yaw: 0 }, { x, y: 0, z: rect.z1 + 5, yaw: 0 });
-    for (let z = rect.z0 - 5; z <= rect.z1 + 5; z += 8) seeds.push({ x: rect.x0 - 5, y: 0, z, yaw: 0 }, { x: rect.x1 + 5, y: 0, z, yaw: 0 });
-    const sub: MapData = { ...map, bounds: { min: { x: rect.x0 - m, y: map.bounds.min.y, z: rect.z0 - m }, max: { x: rect.x1 + m, y: 60, z: rect.z1 + m } }, spawns: { teams: [[], []], ffa: seeds } };
-    const g = new NavGrid(sub, world);
-    const n = (this.n = g.cells.length);
-    this.x = new Float32Array(n);
-    this.y = new Float32Array(n);
-    this.z = new Float32Array(n);
-    this.core = new Uint8Array(n);
-    let ne = 0;
-    for (const c of g.cells) ne += c.edges.length;
-    this.eStart = new Int32Array(n + 1);
-    this.eTo = new Int32Array(ne);
-    this.eCost = new Float32Array(ne);
-    this.eKind = new Uint8Array(ne);
-    let cxMin = Infinity, cxMax = -Infinity, czMin = Infinity, czMax = -Infinity;
-    for (const c of g.cells) {
-      cxMin = Math.min(cxMin, c.cx);
-      cxMax = Math.max(cxMax, c.cx);
-      czMin = Math.min(czMin, c.cz);
-      czMax = Math.max(czMax, c.cz);
-    }
-    if (!n) cxMin = cxMax = czMin = czMax = 0;
-    this.cx0 = cxMin;
-    this.cz0 = czMin;
-    this.ncx = cxMax - cxMin + 1;
-    this.ncz = czMax - czMin + 1;
-    const cols = this.ncx * this.ncz;
-    this.colStart = new Int32Array(cols + 1).fill(-1);
-    // NavGrid adds cells column by column (x outer, z inner, low to high), so a column is a run.
-    let e = 0;
-    const counts = new Int32Array(cols);
-    g.cells.forEach((c, i) => {
-      this.x[i] = c.x;
-      this.y[i] = c.y;
-      this.z[i] = c.z;
-      this.core[i] = c.core ? 1 : 0;
-      this.eStart[i] = e;
-      for (const ed of c.edges) {
-        this.eTo[e] = ed.to;
-        this.eCost[e] = ed.cost;
-        this.eKind[e] = ed.kind === 'walk' ? 0 : ed.kind === 'jump' ? 1 : 2;
-        e++;
-      }
-      const k = (c.cx - cxMin) * this.ncz + (c.cz - czMin);
-      if (counts[k] === 0) this.colStart[k] = i;
-      counts[k]!++;
-    });
-    this.eStart[n] = e;
-    this.colCount = counts;
+    this.n = d.x.length;
+    this.x = d.x;
+    this.y = d.y;
+    this.z = d.z;
+    this.core = d.core;
+    this.eStart = d.eStart;
+    this.eTo = d.eTo;
+    this.eCost = d.eCost;
+    this.eKind = d.eKind;
+    this.cx0 = d.cx0;
+    this.cz0 = d.cz0;
+    this.ncx = d.ncx;
+    this.ncz = d.ncz;
+    this.colStart = d.colStart;
+    this.colCount = d.colCount;
+    this.buildMs = d.ms;
     // Portals: core cells at ground level in the band outside the town.
     const taken = new Set<string>();
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < this.n; i++) {
       if (!this.core[i] || Math.abs(this.y[i]!) > 0.3) continue;
       const px = this.x[i]!;
       const pz = this.z[i]!;
@@ -242,10 +392,16 @@ export class TownNav {
       taken.add(k);
       this.portals.push(i);
     }
-    this.buildMs = performance.now() - t0;
   }
 
-  private colCount: Int32Array;
+  /** Build one at once (tests, a route that needs it before its turn). */
+  static build(map: MapData, world: CollisionWorld, rect: Rect): TownNav {
+    const g = buildTownGrid(map, world, rect, Infinity);
+    for (;;) {
+      const r = g.next();
+      if (r.done) return new TownNav(r.value, world, rect);
+    }
+  }
 
   /** Typed-array bytes held (memory budget tests). */
   get bytes(): number {
@@ -290,14 +446,44 @@ export class TownNav {
     return best;
   }
 
+  /**
+   * Stranded somewhere the grid can't leave (a roof or a gantry it landed on, a slot between two
+   * blocks; there is no fall damage): the nearest reachable cell at or below its feet within `r`
+   * metres, to walk (or drop) toward.
+   */
+  wayDown(p: Vec3, r = 12): Waypoint | null {
+    const cx = Math.floor(p.x / NAV_CELL);
+    const cz = Math.floor(p.z / NAV_CELL);
+    const n = Math.ceil(r / NAV_CELL);
+    let best = -1;
+    let bd = Infinity;
+    for (let dx = -n; dx <= n; dx += 2)
+      for (let dz = -n; dz <= n; dz += 2) {
+        const [st, c] = this.column(cx + dx, cz + dz);
+        for (let i = st; i < st + c; i++) {
+          if (!this.core[i] || this.y[i]! > p.y + 0.4) continue;
+          const d = Math.hypot(this.x[i]! - p.x, this.z[i]! - p.z);
+          if (d < bd) {
+            bd = d;
+            best = i;
+          }
+        }
+      }
+    return best < 0 ? null : { x: this.x[best]!, y: this.y[best]!, z: this.z[best]! };
+  }
+
   /** Is this point on a reachable cell (or next to one)? */
   reachable(p: Vec3): boolean {
     const c = this.cellAt(p, true);
     return c >= 0 && Math.hypot(this.x[c]! - p.x, this.z[c]! - p.z) < 1.5 && Math.abs(this.y[c]! - p.y) < 1.2;
   }
 
+  /** The last search ran out of `limit` (rather than finding there is no way). */
+  hitLimit = false;
+
   /** A* between two points: waypoints (cell centres, the last at the goal's cell), or null. */
   path(from: Vec3, to: Vec3, limit = 30000): Waypoint[] | null {
+    this.hitLimit = false;
     const a = this.cellAt(from);
     let b = this.cellAt(to, true);
     if (b < 0) b = this.cellAt(to);
@@ -327,6 +513,7 @@ export class TownNav {
         }
         return out.reverse();
       }
+      if (count === limit) this.hitLimit = true;
       if (s.closed[ci] === st) continue;
       s.closed[ci] = st;
       const gc = s.g[ci]!;
@@ -469,8 +656,11 @@ export class GroundNav {
     return Math.abs(dh);
   }
 
+  hitLimit = false;
+
   /** A* across the open ground: waypoints from near `from` to `to` (the last is `to` itself), or null. */
   path(from: Vec3, to: Vec3, limit = 40000): Waypoint[] | null {
+    this.hitLimit = false;
     const a = this.cellNear(from.x, from.z);
     const b = this.cellNear(to.x, to.z);
     if (a < 0 || b < 0) return null;
@@ -497,6 +687,7 @@ export class GroundNav {
         out.push({ x: to.x, y: to.y, z: to.z });
         return out;
       }
+      if (count === limit) this.hitLimit = true;
       if (s.closed[ci] === st) continue;
       s.closed[ci] = st;
       const i = Math.floor(ci / N);
@@ -535,6 +726,8 @@ export class IslandNav {
   readonly rects: Rect[];
   readonly ground: GroundNav;
   private towns: (TownNav | null)[];
+  /** The town grid being built a slice at a time (`warm`). */
+  private building: { i: number; gen: Generator<void, TownGridData> } | null = null;
   /** Searches so far (benchmarks, tests). */
   searches = 0;
 
@@ -555,16 +748,37 @@ export class IslandNav {
     return -1;
   }
 
-  /** A town's grid, built now if needed. */
+  /** A town's grid, built now if needed (finishing a slow build in progress). */
   town(i: number): TownNav {
-    return (this.towns[i] ??= new TownNav(this.map, this.world, this.rects[i]!));
+    let t = this.towns[i];
+    if (t) return t;
+    const gen = this.building?.i === i ? this.building.gen : buildTownGrid(this.map, this.world, this.rects[i]!, Infinity);
+    if (this.building?.i === i) this.building = null;
+    for (;;) {
+      const r = gen.next();
+      if (r.done) {
+        t = this.towns[i] = new TownNav(r.value, this.world, this.rects[i]!);
+        return t;
+      }
+    }
   }
 
-  /** Build the next missing town grid (spreads the cost over the plane ride). False when all are built. */
-  warm(): boolean {
-    const i = this.towns.findIndex((t) => !t);
-    if (i < 0) return false;
-    this.town(i);
+  /**
+   * Build the missing town grids a slice at a time: about `sliceMs` of work per call, so the ten
+   * towns (~3.5 s of CPU) spread over the plane ride without a long tick. False when all are built.
+   */
+  warm(sliceMs = 3): boolean {
+    if (!this.building) {
+      const i = this.towns.findIndex((t) => !t);
+      if (i < 0) return false;
+      this.building = { i, gen: buildTownGrid(this.map, this.world, this.rects[i]!, sliceMs) };
+    }
+    const b = this.building;
+    const r = b.gen.next();
+    if (r.done) {
+      this.towns[b.i] = new TownNav(r.value, this.world, this.rects[b.i]!);
+      this.building = null;
+    }
     return true;
   }
 
@@ -589,18 +803,49 @@ export class IslandNav {
       .sort((p, q) => Math.hypot(p.x - a.x, p.z - a.z) + Math.hypot(p.x - b.x, p.z - b.z) - (Math.hypot(q.x - a.x, q.z - a.z) + Math.hypot(q.x - b.x, q.z - b.z)));
   }
 
-  /** Waypoints from `from` to `to`, or null when there is no way (the goal is unreachable). */
-  route(from: Vec3, to: Vec3): Waypoint[] | null {
+  /** The last `route` ran out of its search budget (try again later), and the cells it expanded. */
+  lastHitLimit = false;
+  lastExpanded = 0;
+
+  /**
+   * Waypoints from `from` to `to`, or null when there is no way (the goal is unreachable) or the
+   * search ran out of `limit` expanded cells (`lastHitLimit`).
+   */
+  route(from: Vec3, to: Vec3, limit = 60000): Waypoint[] | null {
     this.searches++;
+    this.lastHitLimit = false;
+    const e0 = this.expandedAll();
+    const out = this.routeIn(from, to, limit);
+    this.lastExpanded = this.expandedAll() - e0;
+    return out;
+  }
+
+  private expandedAll(): number {
+    return this.ground.expanded + this.towns.reduce((n, t) => n + (t?.expanded ?? 0), 0);
+  }
+
+  private left(limit: number, e0: number): number {
+    return Math.max(1, limit - (this.expandedAll() - e0));
+  }
+
+  private routeIn(from: Vec3, to: Vec3, limit: number): Waypoint[] | null {
+    const e0 = this.expandedAll();
     const ta = this.townAt(from.x, from.z);
     const tb = this.townAt(to.x, to.z);
-    if (ta >= 0 && ta === tb) return this.town(ta).path(from, to);
+    const townLeg = (i: number, a: Vec3, b: Vec3) => {
+      const t = this.town(i);
+      const p = t.path(a, b, this.left(limit, e0));
+      if (!p && t.hitLimit) this.lastHitLimit = true;
+      return p;
+    };
+    if (ta >= 0 && ta === tb) return townLeg(ta, from, to);
     const out: Waypoint[] = [];
     let start: Vec3 = from;
     if (ta >= 0) {
       let ok = false;
       for (const p of this.portalsBy(ta, from, to).slice(0, 3)) {
-        const leg = this.town(ta).path(from, p);
+        const leg = townLeg(ta, from, p);
+        if (this.lastHitLimit) return null;
         if (!leg) continue;
         out.push(...leg);
         start = p;
@@ -614,7 +859,8 @@ export class IslandNav {
     if (tb >= 0) {
       let ok = false;
       for (const q of this.portalsBy(tb, start, to).slice(0, 3)) {
-        const leg = this.town(tb).path(q, to);
+        const leg = townLeg(tb, q, to);
+        if (this.lastHitLimit) return null;
         if (!leg) continue;
         tail = [{ x: q.x, y: q.y, z: q.z }, ...leg];
         end = q;
@@ -623,9 +869,22 @@ export class IslandNav {
       }
       if (!ok) return null;
     }
-    const mid = this.ground.path(start, end);
-    if (!mid) return null;
+    const mid = this.ground.path(start, end, this.left(limit, e0));
+    if (!mid) {
+      if (this.ground.hitLimit) this.lastHitLimit = true;
+      return null;
+    }
     return [...out, ...mid, ...tail];
+  }
+
+  /** Off somewhere no route leaves from: a reachable spot below to walk off toward (towns only). */
+  wayDown(p: Vec3): Waypoint | null {
+    const t = this.townAt(p.x, p.z);
+    if (t < 0) return null;
+    const tn = this.town(t);
+    const c = tn.cellAt(p);
+    if (c >= 0 && tn.core[c]) return null;
+    return tn.wayDown(p);
   }
 
   /** Typed-array bytes held by the grids built so far. */
