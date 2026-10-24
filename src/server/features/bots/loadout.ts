@@ -25,6 +25,8 @@ const PRIMARY_WEIGHT: Partial<Record<WeaponClass, (rating: number) => number>> =
 const SECONDARY_WEIGHT: Partial<Record<WeaponClass, (rating: number) => number>> = {
   pistol: () => 5,
   launcher: (r) => 0.4 + r * 0.6,
+  // Per gun, like every weight: five machine pistols at ~0.8 make one bot in four or five carry one.
+  machinepistol: (r) => 0.6 + r * 0.4,
 };
 
 function weighted<T>(items: T[], weight: (t: T) => number, rnd: () => number): T | undefined {
@@ -91,10 +93,13 @@ export function chooseBotLoadout(rating: number, rnd: () => number = Math.random
   const tactical = tacticals.length ? tacticals[Math.floor(rnd() * tacticals.length)]! : base.tactical;
   // Drawn last so the rest of the class stays what the same seed gave before camos.
   const camo = pickBotCamo(primary, rating, rnd);
+  // A machine pistol sometimes comes with its one attachment (Akimbo, a long mag...); after the camo
+  // so other secondaries draw nothing new.
+  const secondaryAtts = secondary?.class === 'machinepistol' ? pickAttachments(secondary, rnd, 1) : [];
   return {
     name: 'Bot',
     primary: primary ? { weapon: primary.id, attachments, camo } : { ...base.primary },
-    secondary: secondary ? { weapon: secondary.id, attachments: [], camo: 'none' } : { ...base.secondary },
+    secondary: secondary ? { weapon: secondary.id, attachments: secondaryAtts, camo: 'none' } : { ...base.secondary },
     perks,
     killstreaks: chosen,
     lethal,

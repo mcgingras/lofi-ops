@@ -150,6 +150,12 @@ export const PAP_WEAPONS: Record<string, PapOverride> = {
     // Two rounds per pull, fast; the magazine keeps whole pairs.
     tweak: (d) => ({ mode: 'burst', burst: 2, burstDelayMs: 140, rpm: Math.max(d.rpm, 1100), magazine: d.magazine + (d.magazine % 2) }),
   },
+  // Machine pistols: one distinct effect each. The CZ75 keeps BO1's packed name; the rest are new.
+  g18: { name: 'G115 Generator', effect: { kind: 'zap', chance: 0.3, damage: 12, range: 5 }, effectText: 'chain zap' },
+  skorpion: { name: 'Scorpion Venom', effect: { kind: 'venom', perHit: 4, sec: 3, maxStacks: 5 }, effectText: 'venom: every hit adds poison' },
+  cz75auto: { name: 'Calamity Jane', effect: { kind: 'ricochet', keep: 0.6, range: 30 }, effectText: 'ricochet rounds' },
+  tmp: { name: 'Tempest', effect: { kind: 'shatter', mult: 1.2, sec: 3 }, effectText: 'shatter rounds: +20% damage taken' },
+  mp9: { name: 'Nightstalker', effect: { kind: 'mark', sec: 4 }, effectText: 'marks targets through walls' },
   // Wonder weapons (BO1's upgraded magazines: X2 40, Zeus Cannon 4, DG-3 JZ 6).
   raygun: { name: "Porter's X2 Ray Gun", mag: 2, reserve: 3, effect: { kind: 'wonder', red: true }, effectText: 'red bolts' },
   thundergun: { name: 'Zeus Cannon', mag: 2, reserve: 2, effect: { kind: 'wonder', radiusMult: 1.5 }, effectText: 'a wider blast' },

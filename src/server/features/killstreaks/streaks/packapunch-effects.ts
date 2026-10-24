@@ -8,7 +8,7 @@
  *   shooter's view time), ricochet (a bullet stopped by a wall bounces once), knockback (close
  *   shotgun hits shove).
  * - `damage` event (bullet hits; priority 50 so the bots' flinch reads a fresh stagger): burn,
- *   mark, stagger, zap, frost, shatter.
+ *   venom, mark, stagger, zap, frost, shatter.
  * - `death` event: headblast (a head kill bursts), shockwave (a kill shoves and slows around the
  *   body).
  * - Modifiers: `damageTaken` (shatter), `speedMultiplier` (shockwave slow), `radarVisible` (marked
@@ -17,7 +17,7 @@
  * - The underbarrel extras (`launcher`): `syncPapExtras` puts the grenade launcher / Masterkey in
  *   slot 2 while the gun is packed (the buff code calls it) and takes it back after.
  *
- * Effect damage (burn ticks, zaps, head blasts) goes through `fxDamage`, which tells the packed
+ * Effect damage (burn and venom ticks, zaps, head blasts) goes through `fxDamage`, which tells the packed
  * damage multiplier to stay out (`inPapFx`): those numbers are final.
  */
 import { damageAtRange, isLowerTorso, partMultiplier } from '../../../../shared/ballistics';
@@ -25,7 +25,7 @@ import { poseHitboxes, poseStance, rayHitboxes, type HitPart } from '../../../..
 import { PLAYER } from '../../../../shared/constants';
 import type { DamageInfo } from '../../../../shared/events';
 import { PAP_CAMO, papEffect, papEffectOf } from '../../../../shared/defs/pack-a-punch';
-import { burnPerTick, knockImpulse, PAP_FX, papRoller, papV3, pierceOf, pulseImpulse, reflect, type PapEffectOf, type PapFx } from '../../../../shared/defs/pap-effects';
+import { burnPerTick, knockImpulse, PAP_FX, papRoller, papV3, pierceOf, pulseImpulse, reflect, venomPerTick, type PapEffectOf, type PapFx } from '../../../../shared/defs/pap-effects';
 import { WINTERS_HOWL } from '../../../../shared/defs/wonder';
 import { hashString, normalize, type Vec3 } from '../../../../shared/math';
 import { bodyHeight, movePose } from '../../../../shared/movement';
@@ -39,6 +39,8 @@ import { launch, syncFrostEntity, wonderOf } from '../../weapons/wonder/index';
 /** Per-player effect state (as a victim, and the marks a shooter placed). */
 export interface PapFxExt {
   burn: { by: string; weapon: string; until: number; next: number; per: number } | null;
+  /** Poison from venom rounds: `stacks` doses, ticking like a burn (kept apart, so both can run). */
+  venom: { by: string; weapon: string; until: number; next: number; per: number; stacks: number } | null;
   shatterUntil: number;
   shatter: number;
   slowUntil: number;
@@ -62,7 +64,7 @@ declare module '../../../player' {
 }
 
 export const papFxOf = (p: PlayerState): PapFxExt =>
-  (p.ext.pap ??= { burn: null, shatterUntil: 0, shatter: 1, slowUntil: 0, slow: 1, staggerUntil: 0, stagger: null, marks: new Map() });
+  (p.ext.pap ??= { burn: null, venom: null, shatterUntil: 0, shatter: 1, slowUntil: 0, slow: 1, staggerUntil: 0, stagger: null, marks: new Map() });
 
 /** The underbarrel slot (weapons feature). */
 const GL_SLOT = 2;
@@ -255,21 +257,40 @@ export function igniteBurn(room: Room, q: PlayerState, by: PlayerState, weapon: 
   push(room, null, { k: 'burn', v: q.id, by: by.id, until: r3(x.burn.until) });
 }
 
-/** Burn ticks for everyone on fire (per room tick). */
+/**
+ * Add a dose of venom: one more stack (up to `maxStacks`; a different shooter's venom starts over
+ * at one), the clock restarts at `sec`, and the poison ticks `perHit` x stacks over it.
+ */
+export function poisonTarget(room: Room, q: PlayerState, by: PlayerState, weapon: string, spec: PapEffectOf<'venom'>): number {
+  const x = papFxOf(q);
+  const live = !!x.venom && x.venom.until > room.time && x.venom.by === by.id;
+  const stacks = Math.min(spec.maxStacks, live ? x.venom!.stacks + 1 : 1);
+  x.venom = { by: by.id, weapon, until: room.time + spec.sec, next: live ? x.venom!.next : room.time + PAP_FX.burnTick, per: venomPerTick(spec, stacks), stacks };
+  push(room, null, { k: 'venom', v: q.id, by: by.id, until: r3(x.venom.until), n: stacks });
+  return stacks;
+}
+
+/** Is `p` poisoned right now (venom rounds), and how many doses? 0 when not. */
+export const papVenom = (room: Room, p: PlayerState): number => (p.alive && p.ext.pap?.venom && p.ext.pap.venom.until > room.time ? p.ext.pap.venom.stacks : 0);
+
+/** Burn and venom ticks for everyone on fire or poisoned (per room tick). */
 export function tickBurns(room: Room): void {
   for (const q of room.players.values()) {
-    const b = q.ext.pap?.burn;
-    if (!b) continue;
-    if (!q.alive || room.phase !== 'playing') {
-      q.ext.pap!.burn = null;
-      continue;
+    for (const kind of ['burn', 'venom'] as const) {
+      const b = q.ext.pap?.[kind];
+      if (!b) continue;
+      if (!q.alive || room.phase !== 'playing') {
+        q.ext.pap![kind] = null;
+        continue;
+      }
+      const means = kind === 'burn' ? 'fire' : 'poison';
+      while (q.alive && b.next <= room.time + 1e-9 && b.next <= b.until + 1e-9) {
+        b.next += PAP_FX.burnTick;
+        const by = room.players.get(b.by) ?? null;
+        fxDamage(() => room.damage({ victim: q, attacker: by, amount: b.per, weapon: b.weapon, part: 'torso', means, from: null, distance: by ? Math.hypot(by.move.x - q.move.x, by.move.z - q.move.z) : 0 }));
+      }
+      if (q.ext.pap?.[kind] === b && b.next > b.until + 1e-9) q.ext.pap[kind] = null;
     }
-    while (q.alive && b.next <= room.time + 1e-9 && b.next <= b.until + 1e-9) {
-      b.next += PAP_FX.burnTick;
-      const by = room.players.get(b.by) ?? null;
-      fxDamage(() => room.damage({ victim: q, attacker: by, amount: b.per, weapon: b.weapon, part: 'torso', means: 'fire', from: null, distance: by ? Math.hypot(by.move.x - q.move.x, by.move.z - q.move.z) : 0 }));
-    }
-    if (q.ext.pap?.burn === b && b.next > b.until + 1e-9) q.ext.pap.burn = null;
   }
 }
 
@@ -388,6 +409,9 @@ export function wirePapEffects(room: Room): void {
         case 'burn':
           if (alive) igniteBurn(room, q, by, ev.weapon, fx);
           break;
+        case 'venom':
+          if (alive) poisonTarget(room, q, by, ev.weapon, fx);
+          break;
         case 'mark':
           if (alive) markTarget(room, q, by, fx);
           break;
@@ -441,6 +465,7 @@ function clearStatus(p: PlayerState): void {
   const x = p.ext.pap;
   if (!x) return;
   x.burn = null;
+  x.venom = null;
   x.shatterUntil = 0;
   x.slowUntil = 0;
   x.staggerUntil = 0;

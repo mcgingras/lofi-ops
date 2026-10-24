@@ -50,6 +50,12 @@ export const VOICES: Record<string, Voice> = {
   m1911: V({ dur: 0.22, decay: 3.6, hold: 4, lp: 0.6, body: 100, bodyAmt: 0.4, crack: 0.4, tail: 0.1, gain: 0.75 }),
   python: V({ dur: 0.45, decay: 2.8, hold: 5, lp: 0.55, body: 70, bodyAmt: 0.6, crack: 0.6, tail: 0.3, gain: 0.95 }),
   asp: V({ dur: 0.16, decay: 4.4, hold: 3, lp: 0.68, body: 140, bodyAmt: 0.25, crack: 0.4, tail: 0.06, gain: 0.65 }),
+  // Machine pistols (synth fallbacks): short, bright pops between the ASP and the MPL.
+  mp9: V({ dur: 0.15, decay: 4.6, hold: 3, lp: 0.67, body: 135, bodyAmt: 0.26, crack: 0.38, tail: 0.06, gain: 0.66 }),
+  skorpion: V({ dur: 0.14, decay: 4.8, hold: 3, lp: 0.64, body: 145, bodyAmt: 0.24, crack: 0.34, tail: 0.05, gain: 0.64 }),
+  tmp: V({ dur: 0.15, decay: 4.6, hold: 3, lp: 0.66, body: 138, bodyAmt: 0.26, crack: 0.36, tail: 0.06, gain: 0.64 }),
+  cz75auto: V({ dur: 0.18, decay: 4.1, hold: 3, lp: 0.63, body: 115, bodyAmt: 0.34, crack: 0.4, tail: 0.08, gain: 0.7 }),
+  g18: V({ dur: 0.13, decay: 5, hold: 3, lp: 0.7, body: 150, bodyAmt: 0.22, crack: 0.4, tail: 0.05, gain: 0.62 }),
   gl: V({ dur: 0.3, decay: 3, hold: 10, lp: 0.25, body: 60, bodyAmt: 1, crack: 0.05, tail: 0.1, gain: 0.9 }),
 };
 

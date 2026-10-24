@@ -255,6 +255,13 @@ export const WEAPON_SHOTS: Record<string, { files: string[]; rate: number; gain?
   python: { files: ['gun_python_a', 'gun_python_b'], rate: 0.97, gain: 1.3, sup: ['sup_pistol_a', 'sup_rifle_a'], supRate: 0.95 },
   asp: { files: ['gun_asp_a', 'gun_asp_b'], rate: 1.04, gain: 0.8, highpass: 150, sup: ['sup_pistol_a', 'sup_pistol_c', 'sup_pistol_d'], supRate: 1.05 },
   gl: { files: ['gun_gl_a', 'gun_gl_b'], rate: 1.0, sup: ['gun_gl_a', 'gun_gl_b'], supRate: 1.0 },
+  // Machine pistols: no new recordings. The SMG and 9 mm pistol pools, brighter and lighter than
+  // the SMGs (the CZ75 Auto a touch heavier, the G18 the snappiest).
+  mp9: { files: ['gun_smg_b', 'gun_asp_a', 'gun_smg_c'], rate: 1.05, gain: 0.82, highpass: 170, sup: ['sup_pistol_c', 'sup_pistol_a'], supRate: 1.05 },
+  skorpion: { files: ['gun_smg_c', 'gun_smg_a', 'gun_asp_b'], rate: 1.04, gain: 0.8, lowpass: 8500, highpass: 150, sup: ['sup_pistol_d', 'sup_pistol_b'], supRate: 1.04 },
+  tmp: { files: ['gun_smg_a', 'gun_asp_b', 'gun_smg_b'], rate: 1.03, gain: 0.8, highpass: 160, sup: ['sup_pistol_b', 'sup_pistol_c'], supRate: 1.03 },
+  cz75auto: { files: ['gun_m1911_a', 'gun_m1911_b', 'gun_smg_a'], rate: 1.02, gain: 0.85, highpass: 120, sup: ['sup_pistol_a', 'sup_pistol_b'], supRate: 1.02 },
+  g18: { files: ['gun_asp_a', 'gun_smg_b', 'gun_asp_b'], rate: 1.06, gain: 0.78, highpass: 180, sup: ['sup_pistol_c', 'sup_pistol_d'], supRate: 1.06 },
 };
 
 /** Distant-layer pitch by class (the layer is one AR recording): kept within +-6% as well. */
