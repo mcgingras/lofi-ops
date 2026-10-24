@@ -3,6 +3,10 @@
  * users). An enemy of the dead player with Scavenger who walks over it gets a magazine of reserve
  * back for each weapon; Pro also refills a lethal and a tactical (`perks.resupply` event for the
  * weapons area) and spawns with extra mags.
+ *
+ * Launchers are left out, as in BO1 (Scavenger never refilled them): the secondary launchers (China
+ * Lake, RPG-7, M72 LAW, Strela-3, Stinger) and the underbarrel grenade launcher get no rounds from a
+ * pack and no extra at spawn with Pro. A Care Package's ammo still fills them.
  */
 import { KS_ENTITY } from '../../../shared/defs/killstreaks';
 import { PERK_TUNING as T } from '../../../shared/defs/perks';
@@ -21,6 +25,7 @@ const MAX_PACKS = 24;
 /** Give a Scavenger pickup to `p` (exported for tests). */
 export function resupply(room: Room, p: PlayerState): void {
   for (const w of p.weapons) {
+    if (w.def.class === 'launcher') continue;
     const cap = w.def.reserve + (isPro(p, 'scavenger') ? w.def.magazine * T.scavengerProMags : 0);
     w.reserve = Math.min(cap, w.reserve + w.def.magazine * T.scavengerMags);
   }
@@ -32,7 +37,7 @@ export function resupply(room: Room, p: PlayerState): void {
 export function setupScavenger(room: Room): void {
   room.bus.on('spawn', ({ player }) => {
     if (!isPro(player, 'scavenger')) return;
-    for (const w of player.weapons) w.reserve += w.def.magazine * T.scavengerProMags;
+    for (const w of player.weapons) if (w.def.class !== 'launcher') w.reserve += w.def.magazine * T.scavengerProMags;
   });
 
   room.bus.on('death', ({ victim }) => {
