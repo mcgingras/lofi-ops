@@ -245,6 +245,14 @@ export const WEAPON_SHOTS: Record<string, { files: string[]; rate: number; gain?
   ak74u: { files: ['gun_smg_a', 'gun_smg_c', 'gun_ak_e'], rate: 1.0, gain: 0.95, lowpass: 8000, sup: ['sup_pistol_d', 'sup_pistol_b'], supRate: 1.0 },
   mpl: { files: ['gun_smg_b', 'gun_smg_c'], rate: 1.06, gain: 0.85, highpass: 160, sup: ['sup_pistol_c', 'sup_pistol_d'], supRate: 1.06 },
   rpk: { files: ['gun_ak_a', 'gun_ak_d', 'gun_ak_c'], rate: 0.95, gain: 1.05, sup: ['sup_rifle_a', 'sup_pistol_b'], supRate: 0.94 },
+  // Early-CoD LMGs: the 7.62 guns (M60, HK21, RPD) on the AK pool, the 5.56 guns (Stoner63, SAW,
+  // MG4) on the AR pool, each with its own pitch and EQ (the M60 lowest and darkest).
+  m60: { files: ['gun_ak_d', 'gun_ak_b', 'gun_ak_a'], rate: 0.94, gain: 1.12, lowpass: 7000, sup: ['sup_rifle_a'], supRate: 0.94 },
+  stoner63: { files: ['gun_ar_a', 'gun_ar_c'], rate: 1.05, gain: 0.9, highpass: 130, sup: ['sup_rifle_a', 'sup_pistol_d'], supRate: 1.03 },
+  hk21: { files: ['gun_ak_b', 'gun_ak_c', 'gun_ak_e'], rate: 0.97, gain: 1.05, lowpass: 8000, highpass: 70, sup: ['sup_rifle_a', 'sup_pistol_b'], supRate: 0.96 },
+  rpd: { files: ['gun_ak_c', 'gun_ak_a', 'gun_ak_b'], rate: 0.96, gain: 1.08, highpass: 90, sup: ['sup_rifle_a', 'sup_pistol_c'], supRate: 0.95 },
+  m249: { files: ['gun_ar_c', 'gun_ar_b'], rate: 0.96, gain: 1.05, lowpass: 8500, sup: ['sup_rifle_a', 'sup_pistol_b'], supRate: 0.95 },
+  mg4: { files: ['gun_ar_a', 'gun_ar_c', 'gun_ar_b'], rate: 0.99, lowpass: 9000, highpass: 110, sup: ['sup_rifle_a', 'sup_pistol_c'], supRate: 0.98 },
   l96a1: { files: ['gun_sniper_a', 'gun_sniper_b', 'gun_sniper_c'], rate: 1.0, gain: 1.1, sup: ['sup_rifle_a'], supRate: 0.95 },
   dragunov: { files: ['gun_dragunov_a', 'gun_sniper_c', 'gun_sniper_a'], rate: 1.03, highpass: 70, sup: ['sup_rifle_a'], supRate: 0.98 },
   intervention: { files: ['gun_sniper_b', 'gun_sniper_a', 'gun_sniper_c'], rate: 0.95, gain: 1.12, lowpass: 7500, highpass: 55, sup: ['sup_rifle_a'], supRate: 0.95 },
@@ -254,6 +262,11 @@ export const WEAPON_SHOTS: Record<string, { files: string[]; rate: number; gain?
   m1911: { files: ['gun_m1911_a', 'gun_m1911_b'], rate: 1.0, gain: 0.85, sup: ['sup_pistol_a', 'sup_pistol_b', 'sup_pistol_c', 'sup_pistol_d'], supRate: 1.0 },
   python: { files: ['gun_python_a', 'gun_python_b'], rate: 0.97, gain: 1.3, sup: ['sup_pistol_a', 'sup_rifle_a'], supRate: 0.95 },
   asp: { files: ['gun_asp_a', 'gun_asp_b'], rate: 1.04, gain: 0.8, highpass: 150, sup: ['sup_pistol_a', 'sup_pistol_c', 'sup_pistol_d'], supRate: 1.05 },
+  // Early-CoD pistols: the Desert Eagle on the revolver boom, pitched down and darkened; the
+  // Makarov on the ASP's 9 mm pool; the USP on the M1911's .45 pool.
+  deagle: { files: ['gun_python_b', 'gun_m1911_b', 'gun_python_a'], rate: 0.94, gain: 1.35, lowpass: 7000, sup: ['sup_pistol_a', 'sup_rifle_a'], supRate: 0.94 },
+  makarov: { files: ['gun_asp_b', 'gun_asp_a'], rate: 1.02, gain: 0.8, highpass: 120, sup: ['sup_pistol_c', 'sup_pistol_b'], supRate: 1.04 },
+  usp: { files: ['gun_m1911_b', 'gun_m1911_a'], rate: 0.97, gain: 0.9, lowpass: 9000, sup: ['sup_pistol_a', 'sup_pistol_d'], supRate: 0.98 },
   gl: { files: ['gun_gl_a', 'gun_gl_b'], rate: 1.0, sup: ['gun_gl_a', 'gun_gl_b'], supRate: 1.0 },
 };
 

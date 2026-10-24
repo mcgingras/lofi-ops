@@ -293,6 +293,9 @@ export const FURNITURE: Record<string, 'wood' | 'poly' | 'olive' | 'tan'> = {
   l96a1: 'olive',
   aug: 'olive',
   acr: 'tan',
+  // Early-CoD LMGs and pistols (the rest are black polymer: 'poly').
+  rpd: 'wood',
+  makarov: 'wood',
 };
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -596,6 +599,196 @@ export const GUNS: Record<string, GunBuilder> = {
     return { muzzle: V(0, 0.012, r.tip), sightY: r.sightY, adsZ: r.adsZ, grip: V(0.005, -0.1, 0.12), fore: V(-0.012, -0.05, -0.35), parts: { mag }, pistol: false };
   },
 
+  // ---- Early-CoD LMGs. Each reads at a glance from its signature part: the M60's barrel carry
+  // handle and long ribbed fore-end, the Stoner63's perforated round shroud, the HK21's cocking tube
+  // over the barrel and hooded front sight, the RPD's wood and round drum, the SAW's olive ammo
+  // pouch and railed feed cover, the MG4's polymer box and side-vented handguard.
+
+  // BO1 M60: long receiver with a feed-tray cover, fat ribbed fore-end, long barrel with a gas
+  // cylinder, a carry handle on the barrel and a folded bipod; olive ammo can with a brass belt.
+  m60(k, atts) {
+    const { M } = k;
+    k.box(0.075, 0.09, 0.4, M.body, 0, 0, 0);
+    k.box(0.07, 0.025, 0.22, M.metal, 0, 0.057, -0.02); // feed tray cover
+    k.box(0.02, 0.015, 0.05, M.metal, 0.03, 0.072, 0.07); // cover latch
+    k.box(0.08, 0.075, 0.26, M.furn, 0, -0.012, -0.34); // fore-end
+    for (let i = 0; i < 5; i++) k.box(0.084, 0.006, 0.012, M.poly, 0, -0.012, -0.24 - i * 0.045);
+    const tip0 = k.barrel(-0.47, 0.5, 0.016, 0.015);
+    k.cyl(0.021, 0.06, M.metal, 0, 0.015, tip0 + 0.03); // flash hider
+    const tip = tip0;
+    k.cyl(0.012, 0.3, M.metal, 0, -0.014, -0.62, 6); // gas cylinder
+    // Carry handle on the barrel, off to the right of the sight line.
+    k.box(0.012, 0.05, 0.012, M.metal, 0.032, 0.04, -0.55);
+    k.box(0.012, 0.05, 0.012, M.metal, 0.032, 0.04, -0.68);
+    k.box(0.014, 0.012, 0.15, M.poly, 0.032, 0.066, -0.615);
+    // Bipod folded along the barrel.
+    k.box(0.03, 0.02, 0.03, M.metal, 0, -0.02, -0.88);
+    for (const s of [-1, 1]) k.box(0.01, 0.01, 0.24, M.metal, s * 0.02, -0.025, -0.76);
+    k.frontPost(-0.93, 0.095, 0.07);
+    k.rearSight(0.03, 0.095);
+    // Ammo can on the left with the belt running up into the feed tray.
+    const mag = k.magazine(-0.06, -0.045, atts, (g, l) => {
+      k.box(0.1, 0.12 * l, 0.12, M.olive, -0.02, -0.06 * l, 0, 0, 0, 0, g);
+      k.box(0.104, 0.015, 0.124, M.olive, -0.02, 0.003, 0, 0, 0, 0, g);
+      k.box(0.05, 0.01, 0.012, M.metal, -0.02, -0.12 * l - 0.006, 0, 0, 0, 0, g); // handle
+      for (let i = 0; i < 3; i++) k.box(0.012, 0.025, 0.03, M.brass, -0.042, 0.03 + i * 0.018, 0.0, 0, 0, 0.35, g);
+    });
+    k.pistolGrip(0.12, -0.045);
+    k.stock(0.2, 0.3, -0.012, 0.11, M.furn, 0.03);
+    const r = longGunAttachments(k, atts, { mountZ: 0.0, mountY: 0.07, tip, boreY: 0.015, guardZ: -0.34, guardY: -0.05, sightY: 0.095, adsZ: -0.5 });
+    return { muzzle: V(0, 0.015, r.tip), sightY: r.sightY, adsZ: r.adsZ, grip: V(0.005, -0.1, 0.12), fore: V(-0.012, -0.055, -0.34), parts: { mag }, pistol: false };
+  },
+
+  // BO1 Stoner63: slim black receiver, round perforated barrel shroud as the handguard, left-side
+  // charging handle, a small belt box and a slim fixed stock.
+  stoner63(k, atts) {
+    const { M } = k;
+    k.box(0.062, 0.08, 0.34, M.body, 0, 0, 0);
+    k.box(0.058, 0.02, 0.2, M.metal, 0, 0.05, -0.02); // feed cover
+    k.box(0.03, 0.015, 0.03, M.metal, -0.04, 0.02, -0.12); // charging handle
+    k.cyl(0.034, 0.32, M.metal, 0, 0.01, -0.33, 8); // perforated shroud
+    for (let i = 0; i < 6; i++) k.cyl(0.036, 0.012, M.poly, 0, 0.01, -0.2 - i * 0.05, 8);
+    for (const s of [-1, 1]) for (let i = 0; i < 5; i++) k.box(0.004, 0.012, 0.02, M.poly, s * 0.035, 0.01, -0.225 - i * 0.05);
+    const tip0 = k.barrel(-0.49, 0.2, 0.012, 0.01);
+    k.cyl(0.016, 0.05, M.metal, 0, 0.01, tip0 + 0.025);
+    k.frontPost(-0.47, 0.085, 0.05);
+    k.rearSight(0.08, 0.085);
+    const mag = k.magazine(-0.05, -0.04, atts, (g, l) => {
+      k.box(0.085, 0.1 * l, 0.1, M.poly, -0.012, -0.05 * l, 0, 0, 0, 0, g);
+      k.box(0.088, 0.012, 0.104, M.metal, -0.012, -0.1 * l, 0, 0, 0, 0, g);
+      for (let i = 0; i < 2; i++) k.box(0.01, 0.022, 0.026, M.brass, -0.036, 0.02 + i * 0.016, 0, 0, 0, 0.35, g);
+    });
+    k.pistolGrip(0.11, -0.04, M.poly);
+    k.stock(0.17, 0.29, -0.005, 0.095, M.furn, 0.02);
+    const r = longGunAttachments(k, atts, { mountZ: -0.02, mountY: 0.06, tip: tip0, boreY: 0.01, guardZ: -0.3, guardY: -0.03, sightY: 0.085, adsZ: -0.46 });
+    return { muzzle: V(0, 0.01, r.tip), sightY: r.sightY, adsZ: r.adsZ, grip: V(0.005, -0.095, 0.11), fore: V(-0.012, -0.04, -0.3), parts: { mag }, pistol: false };
+  },
+
+  // BO1 HK21: G3-pattern stamped receiver, the HK cocking tube over the barrel with its handle on
+  // the left, wide ribbed handguard, hooded front post, drum rear sight, slotted flash hider,
+  // folded bipod and a chunky 125-round box.
+  hk21(k, atts) {
+    const { M } = k;
+    k.box(0.066, 0.085, 0.4, M.body, 0, 0, 0);
+    k.box(0.07, 0.012, 0.34, M.metal, 0, -0.03, 0.0); // stamped seam
+    k.cyl(0.016, 0.42, M.metal, 0, 0.055, -0.3, 6); // cocking tube
+    k.box(0.012, 0.03, 0.04, M.metal, -0.03, 0.055, -0.4); // cocking handle
+    k.box(0.085, 0.07, 0.28, M.furn, 0, -0.008, -0.36); // handguard
+    for (let i = 0; i < 6; i++) k.box(0.088, 0.008, 0.014, M.poly, 0, -0.008, -0.25 - i * 0.045);
+    const tip0 = k.barrel(-0.5, 0.36, 0.015, 0.01);
+    k.cyl(0.02, 0.07, M.metal, 0, 0.01, tip0 + 0.035, 6); // flash hider
+    for (const s of [-1, 1]) k.box(0.004, 0.02, 0.05, M.poly, s * 0.02, 0.01, tip0 + 0.035);
+    // Hooded front sight on the end of the cocking tube.
+    k.box(0.03, 0.03, 0.03, M.metal, 0, 0.06, -0.58);
+    for (const s of [-1, 1]) k.box(0.006, 0.04, 0.022, M.metal, s * 0.014, 0.085, -0.58);
+    k.box(0.034, 0.006, 0.022, M.metal, 0, 0.106, -0.58);
+    k.frontPost(-0.58, 0.095, 0.03);
+    // Drum rear sight.
+    k.cyl(0.02, 0.03, M.metal, 0, 0.068, 0.12, 8, k.root, 'x');
+    k.rearSight(0.12, 0.095);
+    // Bipod folded under the handguard.
+    k.box(0.04, 0.02, 0.03, M.metal, 0, -0.05, -0.5);
+    for (const s of [-1, 1]) k.box(0.01, 0.01, 0.22, M.metal, s * 0.022, -0.055, -0.38);
+    const mag = k.magazine(-0.07, -0.043, atts, (g, l) => {
+      k.box(0.07, 0.14 * l, 0.12, M.metal, 0, -0.07 * l, 0.01, 0.06, 0, 0, g);
+      k.box(0.074, 0.016, 0.124, M.poly, 0, -0.14 * l, 0.018, 0.06, 0, 0, g);
+      for (let i = 0; i < 3; i++) k.box(0.072, 0.004, 0.11, M.poly, 0, -0.03 - i * 0.035 * l, 0.012, 0.06, 0, 0, g);
+    });
+    k.pistolGrip(0.12, -0.043, M.poly);
+    k.stock(0.2, 0.3, -0.01, 0.12, M.furn, 0.02);
+    const r = longGunAttachments(k, atts, { mountZ: 0.0, mountY: 0.07, tip: tip0, boreY: 0.01, guardZ: -0.36, guardY: -0.045, sightY: 0.095, adsZ: -0.48 });
+    return { muzzle: V(0, 0.01, r.tip), sightY: r.sightY, adsZ: r.adsZ, grip: V(0.005, -0.1, 0.12), fore: V(-0.012, -0.05, -0.36), parts: { mag }, pistol: false };
+  },
+
+  // CoD4 RPD: wood handguard and stock, a long thin barrel with the gas tube under it, a folded
+  // bipod near the muzzle and the round drum hanging under the receiver.
+  rpd(k, atts) {
+    const { M } = k;
+    k.box(0.07, 0.085, 0.34, M.body, 0, 0, 0);
+    k.box(0.064, 0.022, 0.2, M.metal, 0, 0.053, -0.02); // feed cover
+    k.box(0.075, 0.07, 0.2, M.furn, 0, -0.01, -0.28); // wood handguard
+    k.cyl(0.012, 0.32, M.metal, 0, -0.026, -0.52, 6); // gas tube
+    const tip0 = k.barrel(-0.38, 0.54, 0.014, 0.01);
+    k.cyl(0.018, 0.04, M.metal, 0, 0.01, tip0 + 0.02);
+    k.frontPost(-0.86, 0.088, 0.065);
+    k.rearSight(-0.08, 0.088);
+    // Bipod: hinge near the muzzle, legs folded back.
+    k.box(0.04, 0.02, 0.03, M.metal, 0, -0.01, -0.82);
+    for (const s of [-1, 1]) k.box(0.01, 0.01, 0.22, M.metal, s * 0.02, -0.03, -0.71, -0.05);
+    const mag = k.magazine(-0.04, -0.045, atts, (g, l) => {
+      const r0 = 0.075 * (l > 1 ? 1.15 : 1);
+      k.cyl(r0, 0.06, M.metal, 0, -r0, 0, 8, g, 'x');
+      k.cyl(r0 * 0.6, 0.066, M.poly, 0, -r0, 0, 8, g, 'x');
+      k.box(0.02, 0.02, 0.05, M.metal, 0, -0.005, 0, 0, 0, 0, g); // drum neck
+    });
+    k.pistolGrip(0.1, -0.045);
+    k.stock(0.17, 0.3, -0.015, 0.11, M.furn, 0.035);
+    const r = longGunAttachments(k, atts, { mountZ: -0.04, mountY: 0.065, tip: tip0, boreY: 0.01, guardZ: -0.3, guardY: -0.045, sightY: 0.088, adsZ: -0.47 });
+    return { muzzle: V(0, 0.01, r.tip), sightY: r.sightY, adsZ: r.adsZ, grip: V(0.005, -0.1, 0.1), fore: V(-0.012, -0.05, -0.28), parts: { mag }, pistol: false };
+  },
+
+  // CoD4 M249 SAW: railed feed cover, ribbed heat-shield handguard over the barrel, the gas tube
+  // under it, a tall front sight, a carry handle on the barrel, olive soft ammo pouch, ribbed stock.
+  m249(k, atts) {
+    const { M } = k;
+    k.box(0.07, 0.09, 0.34, M.body, 0, 0, 0);
+    k.box(0.068, 0.03, 0.22, M.metal, 0, 0.06, -0.01); // feed cover
+    k.rail(-0.1, 0.14, 0.075);
+    k.box(0.07, 0.05, 0.22, M.furn, 0, 0.018, -0.29); // heat-shield handguard
+    for (let i = 0; i < 5; i++) k.box(0.074, 0.006, 0.012, M.poly, 0, 0.044, -0.2 - i * 0.045);
+    const tip0 = k.barrel(-0.4, 0.42, 0.015, 0.0);
+    k.cyl(0.02, 0.06, M.metal, 0, 0, tip0 + 0.03, 6);
+    k.cyl(0.012, 0.3, M.metal, 0, -0.03, -0.5, 6); // gas tube
+    // Carry handle on the barrel (right side, clear of the sight line).
+    k.box(0.012, 0.045, 0.012, M.metal, 0.03, 0.025, -0.46);
+    k.box(0.012, 0.045, 0.012, M.metal, 0.03, 0.025, -0.58);
+    k.box(0.014, 0.012, 0.14, M.poly, 0.03, 0.05, -0.52);
+    k.frontPost(-0.76, 0.1, 0.1);
+    k.rearSight(0.12, 0.1);
+    k.box(0.04, 0.02, 0.03, M.metal, 0, -0.04, -0.66); // bipod hinge
+    for (const s of [-1, 1]) k.box(0.01, 0.01, 0.2, M.metal, s * 0.02, -0.045, -0.56);
+    const mag = k.magazine(-0.06, -0.045, atts, (g, l) => {
+      k.box(0.11, 0.12 * l, 0.13, M.olive, -0.012, -0.06 * l, 0, 0, 0, 0, g);
+      k.box(0.116, 0.025, 0.136, M.olive, -0.012, -0.004, 0, 0, 0, 0, g); // flap
+      k.box(0.03, 0.01, 0.01, M.poly, -0.012, -0.004, 0.07, 0, 0, 0, g); // strap
+    });
+    k.pistolGrip(0.12, -0.045, M.poly);
+    k.stock(0.17, 0.32, -0.01, 0.12, M.furn, 0.03);
+    for (let i = 0; i < 3; i++) k.box(0.062, 0.006, 0.012, M.poly, 0, -0.03, 0.27 + i * 0.05);
+    const r = longGunAttachments(k, atts, { mountZ: 0.02, mountY: 0.088, tip: tip0, boreY: 0, guardZ: -0.3, guardY: -0.01, sightY: 0.1, adsZ: -0.48 });
+    return { muzzle: V(0, 0, r.tip), sightY: r.sightY, adsZ: r.adsZ, grip: V(0.005, -0.1, 0.12), fore: V(-0.012, -0.02, -0.3), parts: { mag }, pistol: false };
+  },
+
+  // MW2 MG4: polymer feed cover with a top rail, side-vented polymer handguard, integrated bipod,
+  // prong flash hider, polymer box with a round-count window and a folding stock.
+  mg4(k, atts) {
+    const { M } = k;
+    k.box(0.068, 0.085, 0.36, M.body, 0, 0, 0);
+    k.box(0.07, 0.03, 0.24, M.furn, 0, 0.055, -0.02); // feed cover
+    k.rail(-0.14, 0.15, 0.07);
+    k.box(0.074, 0.065, 0.24, M.furn, 0, -0.005, -0.3);
+    for (const s of [-1, 1]) for (let i = 0; i < 4; i++) k.box(0.004, 0.02, 0.035, M.poly, s * 0.038, 0.0, -0.21 - i * 0.055);
+    const tip0 = k.barrel(-0.42, 0.4, 0.014, 0.008);
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      k.box(0.006, 0.006, 0.05, M.metal, Math.sin(a) * 0.014, 0.008 + Math.cos(a) * 0.014, tip0 + 0.02); // prongs
+    }
+    k.frontPost(-0.62, 0.095, 0.085);
+    k.rearSight(0.12, 0.095);
+    k.box(0.045, 0.02, 0.035, M.metal, 0, -0.045, -0.43); // bipod hinge
+    for (const s of [-1, 1]) k.box(0.01, 0.01, 0.2, M.metal, s * 0.024, -0.05, -0.32);
+    const mag = k.magazine(-0.06, -0.043, atts, (g, l) => {
+      k.box(0.1, 0.11 * l, 0.12, M.furn, -0.015, -0.055 * l, 0, 0, 0, 0, g);
+      k.box(0.104, 0.012, 0.124, M.poly, -0.015, -0.11 * l, 0, 0, 0, 0, g);
+      k.box(0.002, 0.07 * l, 0.012, M.brass, 0.036, -0.055 * l, 0.03, 0, 0, 0, g); // window
+    });
+    k.pistolGrip(0.12, -0.043, M.poly);
+    k.stock(0.18, 0.3, -0.01, 0.11, M.furn, 0.02);
+    k.box(0.064, 0.05, 0.1, M.poly, 0, -0.02, 0.34); // stock cut-out
+    const r = longGunAttachments(k, atts, { mountZ: 0.0, mountY: 0.083, tip: tip0, boreY: 0.008, guardZ: -0.3, guardY: -0.04, sightY: 0.095, adsZ: -0.47 });
+    return { muzzle: V(0, 0.008, r.tip), sightY: r.sightY, adsZ: r.adsZ, grip: V(0.005, -0.1, 0.12), fore: V(-0.012, -0.045, -0.3), parts: { mag }, pistol: false };
+  },
+
   l96a1(k, atts) {
     const { M } = k;
     // Green thumbhole chassis, heavy barrel, bolt on the right, built-in scope.
@@ -764,6 +957,38 @@ export const GUNS: Record<string, GunBuilder> = {
     return pistolGun(k, atts, { slideLen: 0.28, slideH: 0.04, gripH: 0.11, barrelExtra: 0.08, rev: true });
   },
 
+  // ---- Early-CoD pistols.
+  // Desert Eagle: long, tall slide with the barrel's top rib and a squared muzzle face.
+  deagle(k, atts) {
+    return pistolGun(k, atts, {
+      slideLen: 0.26, slideH: 0.054, gripH: 0.12, barrelExtra: 0, rev: false,
+      extra: (slide, len) => {
+        k.box(0.014, 0.008, len * 0.95, k.M.metal, 0, 0.031, 0, 0, 0, 0, slide); // top rib
+        k.box(0.03, 0.034, 0.012, k.M.metal, 0, -0.002, -len / 2 - 0.004, 0, 0, 0, slide); // muzzle face
+      },
+    });
+  },
+  // Makarov: small rounded slide with an exposed hammer.
+  makarov(k, atts) {
+    return pistolGun(k, atts, {
+      slideLen: 0.15, slideH: 0.038, gripH: 0.09, barrelExtra: 0, rev: false,
+      extra: (slide, len) => {
+        k.cyl(0.019, len * 0.9, k.M.body, 0, 0.008, 0, 6, slide); // rounded top
+        k.box(0.012, 0.02, 0.014, k.M.metal, 0, 0.01, len / 2 + 0.008, -0.4, 0, 0, slide); // hammer
+      },
+    });
+  },
+  // USP .45: squared polymer-frame slide with the accessory rail under the dust cover.
+  usp(k, atts) {
+    return pistolGun(k, atts, {
+      slideLen: 0.21, slideH: 0.048, gripH: 0.115, barrelExtra: 0, rev: false,
+      extra: (slide, len) => {
+        k.box(0.03, 0.012, len * 0.4, k.M.poly, 0, -0.032, -0.05 - len * 0.22, 0, 0, 0, slide.parent ?? slide); // rail
+        k.box(0.044, 0.01, len * 0.5, k.M.metal, 0, 0.027, -len * 0.15, 0, 0, 0, slide); // slide flat
+      },
+    });
+  },
+
   gl(k) {
     const { M } = k;
     // The M203 raised: launcher tube under a stub of the host rifle.
@@ -786,7 +1011,7 @@ export const GUNS: Record<string, GunBuilder> = {
 };
 
 /** Pistol / revolver body. */
-function pistolGun(k: Kit, atts: readonly string[], o: { slideLen: number; slideH: number; gripH: number; barrelExtra: number; rev: boolean }): GunBuild {
+function pistolGun(k: Kit, atts: readonly string[], o: { slideLen: number; slideH: number; gripH: number; barrelExtra: number; rev: boolean; extra?: (slide: THREE.Object3D, slideLen: number) => void }): GunBuild {
   const { M } = k;
   const dual = atts.includes('dual');
   const one = (parent: THREE.Object3D) => {
@@ -799,6 +1024,7 @@ function pistolGun(k: Kit, atts: readonly string[], o: { slideLen: number; slide
       k.box(0.038, o.slideH, o.slideLen, M.body, 0, 0, 0, 0, 0, 0, slide);
       for (let i = 0; i < 4; i++) k.box(0.04, o.slideH * 0.7, 0.004, M.poly, 0, 0, o.slideLen / 2 - 0.02 - i * 0.012, 0, 0, 0, slide);
     }
+    o.extra?.(slide, o.slideLen);
     k.box(0.034, 0.028, o.slideLen * 0.72, M.metal, 0, -0.012, -0.03, 0, 0, 0, parent); // frame
     k.box(0.034, o.gripH, 0.055, M.furn, 0, -0.025 - o.gripH / 2, 0.04, 0.22, 0, 0, parent);
     k.box(0.01, 0.02, 0.05, M.metal, 0, -0.04, -0.03, 0, 0, 0, parent);
