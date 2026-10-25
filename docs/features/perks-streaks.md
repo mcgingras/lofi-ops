@@ -275,6 +275,12 @@ Data: `PAP_WEAPONS[id].effect` (a `PapEffect`, kinds in `defs/pap-effects.ts`) a
 | AK-74u | AK74fu2 | `laser` | no hipfire spread (hip = ADS, no move bloom), no recoil (`tweak`, so prediction follows); a red dot at the crosshair |
 | MPL | MPL-LF | `akimbo` | dual wield: x1.6 cycle, x2 magazine, damage x1.25 (not x1.5), hip spread x1.2, no sights (`canAds`); a mirrored second gun in the left hand |
 | RPK | R115 Resonator | `shockwave` | a kill shoves enemies within 3 m of the body (6 m/s out, 2.2 up; `knockbackMultiplier` respected) and slows them x0.6 for 1.5 s |
+| M60 | Mutilator | `stagger` | suppressing fire: the victim's aim kicks 3.4 deg; a bot flinches x4.5 with +4 deg aim error for 0.8 s |
+| Stoner63 | Stoner63 Deathbringer | `mark` | anyone hit is outlined through walls and on your radar for 5 s |
+| HK21 | H115 Oscillator | `zap` | each hit: 20% to arc 15 to the nearest other enemy within 5 m |
+| RPD | R.I.P.D. | `pierce` | the first pellet goes on through 2 more bodies at x0.75 |
+| M249 SAW | Scorched Earth Weapon | `burn` | 12 over 2.5 s, refreshed by each hit |
+| MG4 | Thunderclap | `shockwave` | a kill shoves enemies within 4 m (5 m/s) and slows them x0.5 for 2 s |
 | L96A1 | Iceburg | `frost` | a hit that doesn't kill freezes the target solid (Winter's Howl frost = 1: no fire, no sights, legs stopped) for 1 s (x `frostMultiplier`), then the usual thaw |
 | Dragunov | D115 Disassembler | `shatter` | a hit breaks armour: x1.25 damage taken from everyone for 4 s (`damageTaken`) |
 | Intervention | Divine Intervention | `collateral` | the round goes through every body on its line (up to 8) at full damage |
@@ -284,6 +290,9 @@ Data: `PAP_WEAPONS[id].effect` (a `PapEffect`, kinds in `defs/pap-effects.ts`) a
 | M1911 | Mustang & Sally | `explosive` | a blast where the round stops: 3 m, 30 to 10 (before the x1.25) |
 | Python | Cobra | `explosive` | 2.5 m, 18 to 6 (before the x1.4) |
 | ASP | Basilisk | `doubletap` | two-round bursts at 1100 rpm, 140 ms between pulls; the magazine keeps whole pairs |
+| Desert Eagle | Desert Hawk | `knockback` | a hit inside 14 m shoves the target up to 7 m/s + 2 up; damage x1.35 (no packed headshot one-shot) |
+| Makarov | Dvoynik | `doubletap` | two-round bursts at 1100 rpm, 150 ms between pulls; whole pairs in the magazine |
+| USP .45 | Peacekeeper .45 | `shatter` | a hit makes the target take x1.2 damage from everyone for 3 s |
 | Ray Gun | Porter's X2 Ray Gun | `wonder` | red bolts and splash (entity `s.u`, `WonderFx.u`) |
 | Thundergun | Zeus Cannon | `wonder` | a tube x1.5 wider (`blast` drawn wider) |
 | Wunderwaffe | Wunderwaffe DG-3 JZ | `wonder` | 4 hops instead of 2 |

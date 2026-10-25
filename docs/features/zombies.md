@@ -64,7 +64,7 @@ Damage against the undead: our guns are tuned for 100-health players, BO1's zomb
 | weapon (BO1 Zombies) | head | chest | ours |
 |---|---|---|---|
 | M16, Famas, Commando, Galil, AUG, G11, AK-74u, MP5K, MPL, PM63, Spectre | x4 | x1 | ARs and SMGs x4 (class default) |
-| RPK, HK21 | x3 | x1 | LMGs x3 |
+| RPK, HK21 (and every LMG) | x3 | x1 | LMGs x3 |
 | M1911 | x3.5 | x1.25 | x3.5, chest x1.25 |
 | CZ75 | x3.5 | x1 | pistols x3.5 (the ASP too) |
 | Python | x1.5 | x1.5 | x1.5 / x1.5 (a head is no better than the chest, as in BO1) |

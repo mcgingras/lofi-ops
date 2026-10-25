@@ -63,7 +63,7 @@ The bot's view comes out of a controller a person's hand could produce; nothing 
 - **Tracking:** the target angle goes through a lagged estimate (50–150 ms) with a velocity estimate; the bot leads 50–90 % of its own lag, so strafers are trailed and reversals throw it off.
 - **Sway:** two-octave value noise, scaled by the situation.
 - **Situation multiplier** on error and sway: `(1 + d/150) × (1 + min(0.8, 0.05 × lateral m/s)) × (1 + 0.8 × moving × (1 − 0.6 × ADS)) × (1 + 0.6 × hip)`.
-- **Recoil:** each shot kicks the view exactly like the client (`WeaponDef.recoil × 0.6 × (1 − 0.35 × ADS)`, random horizontal), recovering at the weapon's recovery speed (35 % while spraying). The bot pulls down `0.85 × burstControl` of it and doesn't notice the rest. Server spread applies as for players.
+- **Recoil:** each shot kicks the view exactly like the client (`WeaponDef.recoil × 0.6 × (1 − 0.35 × ADS)`, random horizontal plus the weapon's steady `drift`, if any), recovering at the weapon's recovery speed (35 % while spraying). The bot pulls down `0.85 × burstControl` of it and doesn't notice the rest. Server spread applies as for players.
 - **Flinch:** being hit knocks the view ~2.5° (× `flinchMultiplier`, so Hardened Pro halves it) and adds re-acquisition error.
 - **Firing:** it fires when its view (minus the recoil it ignores) is within a body-width tolerance of the point it *means* to hit. It can't see its own error, so accuracy follows skill. It also needs a line of fire (see Walls below): it sees the target this tick, and a bullet from its eye would reach that point.
 - **Looking around** (walking, noises, grenades) uses the same spring with relaxed limits.
