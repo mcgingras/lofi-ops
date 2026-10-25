@@ -13,10 +13,12 @@
  * - On a hit (the `damage` event, bullets only): `burn` (damage over time, credited to the
  *   shooter; a repeat hit refreshes it), `venom` (poison that stacks: every hit adds `perHit`
  *   over `sec`, up to `maxStacks`, and restarts the clock), `mark` (outlined through walls for the shooter), `stagger` (heavy flinch), `zap`
- *   (a chance to arc to the nearest other enemy), `frost` (frozen solid if it didn't kill),
- *   `shatter` (the target takes more damage from everyone for a while).
+ *   (a chance to arc to the nearest other enemy), `frost` (frozen solid if it didn't kill; with
+ *   `chance`, only that share of the hits), `shatter` (the target takes more damage from everyone
+ *   for a while), `vampire` (every hit heals the shooter `heal`, up to their max health).
  * - On a kill (the `death` event): `headblast` (a head kill bursts), `shockwave` (a pulse shoves
- *   and slows enemies around the body).
+ *   and slows enemies around the body), `adrenaline` (the killer's magazine refills for free and
+ *   they move x`speed` for `sec`).
  * - In the def (`tweak`, so the client's prediction follows): `laser`, `akimbo`, `flechette`,
  *   `doubletap`.
  * - Extra weapon in the underbarrel slot (3 / D-pad down): `launcher` (`gl`: the grenade launcher;
@@ -45,11 +47,13 @@ export type PapEffect =
   | { kind: 'laser' }
   | { kind: 'akimbo' }
   | { kind: 'shockwave'; radius: number; push: number; slow: number; sec: number }
-  | { kind: 'frost'; frozenSec: number }
+  | { kind: 'frost'; frozenSec: number; chance?: number }
   | { kind: 'shatter'; mult: number; sec: number }
   | { kind: 'knockback'; range: number; push: number; up: number; sec: number }
   | { kind: 'flechette' }
   | { kind: 'doubletap' }
+  | { kind: 'vampire'; heal: number }
+  | { kind: 'adrenaline'; speed: number; sec: number }
   | { kind: 'wonder'; red?: boolean; hops?: number; radiusMult?: number; freezeAll?: boolean; shrinkR?: number; arcs?: number };
 
 export type PapEffectKind = PapEffect['kind'];
@@ -159,6 +163,8 @@ export const papV3 = (v: Vec3): [number, number, number] => [r2(v.x), r2(v.y), r
  * - `knock` (everyone): `v` was shoved by a shotgun blast.
  * - `freeze` (everyone): `v` was frozen solid by a frost round.
  * - `headblast` (everyone): a head kill burst at x, y, z (radius `r`).
+ * - `vampire` (the shooter only): a hit healed you by `n`.
+ * - `adrenaline` (everyone): `v` got a kill's rush (mag refilled, faster until `until`).
  */
 export type PapFx =
   | { k: 'burn'; v: string; by: string; until: number }
@@ -171,7 +177,9 @@ export type PapFx =
   | { k: 'pulse'; p: string; x: number; y: number; z: number; r: number }
   | { k: 'knock'; v: string; x: number; y: number; z: number }
   | { k: 'freeze'; v: string; x: number; y: number; z: number }
-  | { k: 'headblast'; p: string; x: number; y: number; z: number; r: number };
+  | { k: 'headblast'; p: string; x: number; y: number; z: number; r: number }
+  | { k: 'vampire'; v: string; n: number }
+  | { k: 'adrenaline'; v: string; until: number };
 
 declare module '../protocol' {
   interface FeatureMessages {

@@ -8,10 +8,11 @@
  *   shooter's view time), ricochet (a bullet stopped by a wall bounces once), knockback (close
  *   shotgun hits shove).
  * - `damage` event (bullet hits; priority 50 so the bots' flinch reads a fresh stagger): burn,
- *   venom, mark, stagger, zap, frost, shatter.
+ *   venom, mark, stagger, zap, frost (every hit, or a seeded `chance` of them), shatter, vampire
+ *   (the shooter heals).
  * - `death` event: headblast (a head kill bursts), shockwave (a kill shoves and slows around the
- *   body).
- * - Modifiers: `damageTaken` (shatter), `speedMultiplier` (shockwave slow), `radarVisible` (marked
+ *   body), adrenaline (the killer's packed gun refills its magazine and they speed up).
+ * - Modifiers: `damageTaken` (shatter), `speedMultiplier` (shockwave slow, adrenaline rush), `radarVisible` (marked
  *   targets show on the marker's radar, and bots perceive them), `flinchMultiplier` and
  *   `botSkillOffset` (stagger on bots), `canAds` (dual wield).
  * - The underbarrel extras (`launcher`): `syncPapExtras` puts the grenade launcher / Masterkey in
@@ -47,6 +48,9 @@ export interface PapFxExt {
   slow: number;
   staggerUntil: number;
   stagger: PapEffectOf<'stagger'> | null;
+  /** Adrenaline rush from a kill (as the killer): move x`rush` until `rushUntil`. */
+  rushUntil: number;
+  rush: number;
   /** Marks this player placed: target id -> until (room time) and the target's life (spawn time). */
   marks: Map<string, { until: number; life: number }>;
 }
@@ -64,7 +68,7 @@ declare module '../../../player' {
 }
 
 export const papFxOf = (p: PlayerState): PapFxExt =>
-  (p.ext.pap ??= { burn: null, venom: null, shatterUntil: 0, shatter: 1, slowUntil: 0, slow: 1, staggerUntil: 0, stagger: null, marks: new Map() });
+  (p.ext.pap ??= { burn: null, venom: null, shatterUntil: 0, shatter: 1, slowUntil: 0, slow: 1, staggerUntil: 0, stagger: null, rushUntil: 0, rush: 1, marks: new Map() });
 
 /** The underbarrel slot (weapons feature). */
 const GL_SLOT = 2;
@@ -355,7 +359,31 @@ export function shatterTarget(room: Room, q: PlayerState, by: PlayerState, spec:
   push(room, null, { k: 'shatter', v: q.id, by: by.id, until: r3(x.shatterUntil) });
 }
 
+/** Vampire round: the shooter heals `heal` (up to their max health). Returns what it healed. */
+export function vampireHeal(room: Room, by: PlayerState, spec: PapEffectOf<'vampire'>): number {
+  if (!by.alive) return 0;
+  const n = Math.min(spec.heal, Math.max(0, by.maxHealth - by.health));
+  if (n <= 0) return 0;
+  by.health += n;
+  push(room, by, { k: 'vampire', v: by.id, n: r2(n) });
+  return n;
+}
+
 // --------------------------------------------------------------------------- kill effects (death)
+
+/** Adrenaline: a kill refills the killer's packed gun's magazine (free) and rushes them (x`speed` for `sec`). */
+export function adrenalineRush(room: Room, by: PlayerState, weapon: string, spec: PapEffectOf<'adrenaline'>): void {
+  if (!by.alive) return;
+  const w = packedGun(by, weapon);
+  if (w) w.mag = w.def.magazine;
+  const x = papFxOf(by);
+  x.rushUntil = room.time + spec.sec;
+  x.rush = spec.speed;
+  push(room, null, { k: 'adrenaline', v: by.id, until: r3(x.rushUntil) });
+}
+
+/** Is `p` on an adrenaline rush right now? */
+export const papRushing = (room: Room, p: PlayerState): boolean => p.alive && !!p.ext.pap && p.ext.pap.rushUntil > room.time;
 
 /** Exploding headshot: a small blast at the victim's head that hurts those around them. */
 export function headBlast(room: Room, victim: PlayerState, by: PlayerState, weapon: string, spec: PapEffectOf<'headblast'>): PlayerState[] {
@@ -422,7 +450,11 @@ export function wirePapEffects(room: Room): void {
           zapFrom(room, q, by, ev.weapon, fx);
           break;
         case 'frost':
-          if (alive) freezeTarget(room, q, fx);
+          // A chance (the SMG's cryo rounds) rolls the room's seeded stream; the L96's always freezes.
+          if (alive && (fx.chance === undefined || roll(room) < fx.chance)) freezeTarget(room, q, fx);
+          break;
+        case 'vampire':
+          vampireHeal(room, by, fx);
           break;
         case 'shatter':
           if (alive) shatterTarget(room, q, by, fx);
@@ -440,6 +472,8 @@ export function wirePapEffects(room: Room): void {
       if (head && e.headshot) headBlast(room, v, by, e.weapon, head);
       const pulse = papEffectOf(e.weapon, 'shockwave');
       if (pulse) shockwave(room, v, by, pulse);
+      const rush = papEffectOf(e.weapon, 'adrenaline');
+      if (rush) adrenalineRush(room, by, e.weapon, rush);
     }
     clearStatus(v);
   });
@@ -451,6 +485,7 @@ export function wirePapEffects(room: Room): void {
     return k !== 1 ? k : undefined;
   }, 'killstreaks.pap.shatter');
   room.modifiers.add('speedMultiplier', (p) => (p.ext.pap && p.ext.pap.slowUntil > room.time ? p.ext.pap.slow : undefined), 'killstreaks.pap.shockwave');
+  room.modifiers.add('speedMultiplier', (p) => (papRushing(room, p) ? p.ext.pap!.rush : undefined), 'killstreaks.pap.adrenaline');
   room.modifiers.add('radarVisible', (target, viewer) => (papMarked(room, viewer, target) ? true : undefined), 'killstreaks.pap.mark');
   room.modifiers.add('flinchMultiplier', (p) => (p.ext.pap?.stagger && p.ext.pap.staggerUntil > room.time ? p.ext.pap.stagger.botFlinch : undefined), 'killstreaks.pap.stagger');
   room.modifiers.add('botSkillOffset', (bot, knob) => (knob === 'aimErrorDeg' && bot.ext.pap?.stagger && bot.ext.pap.staggerUntil > room.time ? bot.ext.pap.stagger.botAimDeg : undefined), 'killstreaks.pap.stagger');
@@ -470,4 +505,5 @@ function clearStatus(p: PlayerState): void {
   x.slowUntil = 0;
   x.staggerUntil = 0;
   x.stagger = null;
+  x.rushUntil = 0;
 }

@@ -121,6 +121,21 @@ export const PAP_WEAPONS: Record<string, PapOverride> = {
     rpm: 1.6,
     tweak: (d) => ({ spread: { hip: d.spread.hip * 1.2, ads: d.spread.hip * 1.2, move: d.spread.move } }),
   },
+  // Iconic SMGs: BO1's names for the Spectre (Phantom) and the Uzi (Uncle Gal), invented ones for
+  // the CoD4 / MW2 guns. Effect kinds no other SMG uses, none past two guns: the two new kinds
+  // (vampire, adrenaline) and the ones only one gun had (frost, venom, flechette, collateral).
+  mp5: { name: 'Sub-Zero', effect: { kind: 'frost', frozenSec: 0.8, chance: 0.25 }, effectText: 'cryo rounds: a hit can freeze' },
+  ump45: { name: 'Black Widow', effect: { kind: 'venom', perHit: 7, sec: 2.5, maxStacks: 3 }, effectText: 'venom: heavy poison that stacks' },
+  vector: { name: 'Nosferatu', effect: { kind: 'vampire', heal: 5 }, effectText: 'vampire rounds: every hit heals you' },
+  p90: {
+    name: 'Porcupine',
+    effect: { kind: 'flechette' },
+    effectText: 'flechettes: tighter spread, twice the reach',
+    // Darts that keep their punch: the falloff starts and ends twice as far out.
+    tweak: (d) => ({ spread: { hip: d.spread.hip * 0.7, ads: d.spread.ads * 0.6, move: d.spread.move * 0.7 }, damage: { ...d.damage, nearRange: d.damage.nearRange * 2, farRange: d.damage.farRange * 2 } }),
+  },
+  spectre: { name: 'Phantom', effect: { kind: 'collateral' }, effectText: 'phantom rounds: through every body' },
+  uzi: { name: 'Uncle Gal', effect: { kind: 'adrenaline', speed: 1.15, sec: 3 }, effectText: 'adrenaline: kills refill the mag and speed you up' },
   // LMG
   rpk: { name: 'R115 Resonator', effect: { kind: 'shockwave', radius: 3, push: 6, slow: 0.6, sec: 1.5 }, effectText: 'kills release a shockwave' },
   // Early-CoD LMGs: BO1's names where the gun was packable in BO1 Zombies (HK21, plus the
