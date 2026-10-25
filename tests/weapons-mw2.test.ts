@@ -154,8 +154,7 @@ describe('MW2 unlocks, store, challenges, wagers, sounds, bots', () => {
     expect(ladder.indexOf('m16a4')).toBe(ladder.indexOf('m16') + 1);
     expect(ladder.indexOf('intervention')).toBe(ladder.indexOf('l96a1') - 1);
     expect(ladder).toContain('acr');
-    // BO1's 20 shipped rungs, plus intent rungs other weapon classes ship later (the Skorpion).
-    expect(ladder.length).toBeGreaterThanOrEqual(20);
+    expect(ladder.length).toBe(20);
     for (const id of MW2) expect(SHARPSHOOTER.classes).toContain(W(id).class);
   });
 

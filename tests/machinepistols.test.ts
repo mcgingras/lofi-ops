@@ -341,10 +341,11 @@ describe('machine pistols: unlocks, store, challenges, modes', () => {
     expect(c.weaponClass).toBe('machinepistol');
   });
 
-  it('Sharpshooter rotates them; the Skorpion takes its Gun Game rung after the MP5K', () => {
+  it('Sharpshooter rotates them; the Gun Game ladder stays at 20 rungs without them', () => {
     expect(SHARPSHOOTER.classes).toContain('machinepistol');
     const ladder = gunGameLadder();
-    expect(ladder.indexOf('skorpion')).toBe(ladder.indexOf('mp5k') + 1);
+    expect(ladder).toHaveLength(20);
+    for (const id of MPS) expect(ladder, id).not.toContain(id);
   });
 });
 
