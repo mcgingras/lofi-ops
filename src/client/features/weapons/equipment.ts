@@ -16,7 +16,7 @@ import { onFeature, registerEntityRenderer, registerHudWidget, registerMatchHook
 import { makeLookMaterial, setDynLight, type LookMaterial } from '../../render/shader';
 import { getTexture, unbindTexture } from '../../render/textures';
 import { currentMatch } from '../../state';
-import { blastFeel, shakeAmplitude, stunStrength } from './camfx';
+import { blastFeel, launcherBlast, shakeAmplitude, stunStrength } from './camfx';
 import { frameTimeOfSeq, pushFrame, type FrameSeq } from './cook';
 import { dangerRingPos, grenadeDangers, type DangerNade } from './danger';
 
@@ -175,7 +175,20 @@ const blasts: Blast[] = [];
 function boom(m: Match, x: number, y: number, z: number, e: string) {
   const at = { x, y, z };
   const tactical = e === 'flashbang' || e === 'concussion';
-  if (tactical) {
+  // Secondary launchers: sized by their blast (an RPG-7 warhead is a lot bigger than a frag).
+  const lb = launcherBlast(e);
+  const size = lb ? Math.max(2.2, lb.radius * 0.85) : tactical ? 3 : 4.5;
+  if (lb && lb.radius <= 0) {
+    // A Killer Bee flak burst high up: a dark puff and sparks.
+    m.effects.puff('spark', at, undefined, 16);
+    m.effects.puff('dust', at, undefined, 14);
+    sfx.play('weapons.rocketboom', { at, volume: 1.2, range: 'far' });
+  } else if (lb) {
+    m.effects.puff('spark', at, { x: 0, y: 1, z: 0 }, Math.round(8 + lb.radius * 2));
+    m.effects.puff('dust', at, { x: 0, y: 1, z: 0 }, Math.round(10 + lb.radius * 3));
+    m.effects.puff('dust', { x, y: y + 0.8, z }, { x: 0, y: 1, z: 0 }, Math.round(lb.radius * 2));
+    sfx.play(lb.radius >= 6 ? 'weapons.rocketboom.big' : lb.radius >= 4 ? 'weapons.rocketboom' : 'weapons.boom', { at, volume: 1.6, ...(lb.radius >= 6 ? { range: 'far' as const } : {}) });
+  } else if (tactical) {
     m.effects.puff('dust', at, { x: 0, y: 1, z: 0 }, 10);
     m.effects.puff('spark', at, undefined, 4);
     sfx.play('weapons.flashbang', { at, volume: 1.2 });
@@ -187,7 +200,7 @@ function boom(m: Match, x: number, y: number, z: number, e: string) {
   }
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: getTexture('glow'), color: tactical ? 0xffffff : 0xffc060, transparent: true, depthWrite: false }));
   sprite.position.set(x, y + 0.3, z);
-  sprite.scale.setScalar(tactical ? 3 : 4.5);
+  sprite.scale.setScalar(size);
   m.renderer.scene.add(sprite);
   blasts.push({ sprite, life: 0.25, max: 0.25 });
   const cam = m.renderer.cam.position;

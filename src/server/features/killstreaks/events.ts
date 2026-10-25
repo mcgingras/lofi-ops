@@ -113,8 +113,11 @@ declare module '../../../shared/events' {
     'killstreaks.nuke': { player: P; phase: 'detonated' };
     /** A Care Package marker settled: the crate comes down at x,y,z (`valid` false: moved off the canister, `reason` why). */
     'killstreaks.marker': { player: P; x: number; y: number; z: number; valid: boolean; reason: string };
-    /** A piece of killstreak hardware (entity `kind`) was destroyed by `by`. */
-    'killstreaks.destroyed': { owner: P | null; id: string; kind: string; by: P | null };
+    /**
+     * A piece of killstreak hardware (entity `kind`) was destroyed by `by`. `score`: the points it
+     * was worth (set when it was shot or blown up; absent for a Hacker Pro takeover).
+     */
+    'killstreaks.destroyed': { owner: P | null; id: string; kind: string; by: P | null; score?: number };
   }
 }
 

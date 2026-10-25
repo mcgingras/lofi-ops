@@ -56,6 +56,13 @@ export const IN_GAME_VOLUME: Record<string, number> = {
   'weapons.beep': 0.7,
   'weapons.thump': 1,
   'weapons.cook': 0.45,
+  // Secondary launchers (weapons/launchers/).
+  'weapons.lock.seek': 0.4,
+  'weapons.lock.on': 0.45,
+  'weapons.rocket.whoosh': 0.8,
+  'weapons.dud': 0.7,
+  'weapons.rocketboom': 1.6,
+  'weapons.rocketboom.big': 1.6,
   'weapons.wonder.splash': 1.3,
   'weapons.wonder.zap': 1.1,
   'weapons.wonder.shatter': 1.4,

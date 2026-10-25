@@ -188,6 +188,12 @@ export const PAP_WEAPONS: Record<string, PapOverride> = {
     tweak: (d) => ({ spread: { hip: d.spread.ads, ads: d.spread.ads, move: 0 }, recoil: { ...d.recoil, vertical: 0, horizontal: 0, drift: 0 } }),
   },
   mp9: { name: 'Nightstalker', effect: { kind: 'headblast', radius: 2.5, max: 35, min: 10 }, effectText: 'exploding headshots' },
+  // Launchers (defs/launchers.ts). China Beach and M72 Anarchy are BO1 Zombies' own names.
+  china_lake: { name: 'China Beach', mag: 2, reserve: 2.5, effect: { kind: 'cluster', bomblets: 5, radius: 3, max: 80, min: 20, fuse: 0.6 }, effectText: 'four in the tube, cluster bomblets' },
+  rpg: { name: 'Rocket Propelled Grievance', mag: 1, reserve: 2, effect: { kind: 'napalm', radius: 4, dps: 35, sec: 5 }, effectText: 'incendiary warhead: burning ground' },
+  m72law: { name: 'M72 Anarchy', mag: 2, effect: { kind: 'proximity', radius: 2.5 }, effectText: 'proximity fuse: bursts beside anyone it passes' },
+  strela: { name: 'Strela-3 Upgraded', mag: 1, reserve: 2, effect: { kind: 'swarm', missiles: 2, lockMult: 0.5 }, effectText: 'locks twice as fast, two missiles per shot' },
+  stinger: { name: 'Killer Bee', mag: 1, reserve: 3, effect: { kind: 'flak', radius: 14, damage: 700 }, effectText: 'flak burst: a hit hurts every enemy aircraft near it' },
   // Wonder weapons (BO1's upgraded magazines: X2 40, Zeus Cannon 4, DG-3 JZ 6).
   raygun: { name: "Porter's X2 Ray Gun", mag: 2, reserve: 3, effect: { kind: 'wonder', red: true }, effectText: 'red bolts' },
   thundergun: { name: 'Zeus Cannon', mag: 2, reserve: 2, effect: { kind: 'wonder', radiusMult: 1.5 }, effectText: 'a wider blast' },

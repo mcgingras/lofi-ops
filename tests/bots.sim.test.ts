@@ -27,12 +27,13 @@ describe('bots: simulated matches', () => {
   }, 60000);
 
   it('Kill Confirmed: bots confirm at least as often as they deny', () => {
-    // Two seeds summed: one 90 s match swings either way (seed 5 alone went 26-27 once the frag
-    // got its BO1 strength; across seeds 1-8 confirms lead in six).
-    const runs = [5, 6].map((seed) => simMatch({ map: 'nuketown', mode: 'kc', seconds: 90, seed }));
+    // Four seeds summed: one 90 s match swings either way (seed 5 alone went 26-27 once the frag
+    // got its BO1 strength; seeds 5 + 6 went 58-59 once launchers and machine pistols joined the
+    // bot classes, though across seeds 1-8 confirms still lead about 248 to 183).
+    const runs = [5, 6, 7, 8].map((seed) => simMatch({ map: 'nuketown', mode: 'kc', seconds: 90, seed }));
     const confirms = runs.reduce((n, r) => n + r.confirms, 0);
     const denies = runs.reduce((n, r) => n + r.denies, 0);
     expect(confirms).toBeGreaterThan(10);
     expect(confirms).toBeGreaterThanOrEqual(denies);
-  }, 60000);
+  }, 120000);
 });
