@@ -7,6 +7,8 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { FURNITURE, GUNS, Kit } from '../src/client/features/weapons/gunkit';
 import { VOICES } from '../src/client/features/weapons/sounds';
+// The secondary launchers add their builders to GUNS from their own module.
+import '../src/client/features/weapons/launchers/models';
 import { LOADOUT_WEAPONS, WEAPON_BY_ID } from '../src/shared/defs/weapons';
 
 const LMGS = ['m60', 'stoner63', 'hk21', 'rpd', 'm249', 'mg4'];
