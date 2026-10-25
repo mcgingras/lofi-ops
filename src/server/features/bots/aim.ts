@@ -26,6 +26,7 @@
  * exactly as for players.
  */
 import type { BotSkill } from '../../../shared/defs/bots';
+import { recoilAdsK } from '../../../shared/defs/weapons';
 
 const DEG = Math.PI / 180;
 /** Must match the client's view kick per WeaponDef.recoil degree (src/client/game/match.ts). */
@@ -280,8 +281,8 @@ function recoverRecoil(s: AimState, recovery: number, dt: number) {
 }
 
 /** A shot was fired: the player's view kick (WeaponDef.recoil degrees), less when ADS. */
-export function addRecoil(s: AimState, recoil: { vertical: number; horizontal: number; drift?: number }, ads: number, rnd: () => number = Math.random): void {
-  const k = (1 - ads * 0.35) * RECOIL_SCALE;
+export function addRecoil(s: AimState, recoil: { vertical: number; horizontal: number; drift?: number; ads?: number }, ads: number, rnd: () => number = Math.random): void {
+  const k = recoilAdsK(recoil, ads) * RECOIL_SCALE;
   const p = recoil.vertical * k;
   const y = ((rnd() - 0.5) * 2 * recoil.horizontal + (recoil.drift ?? 0)) * k;
   s.recoil += p;

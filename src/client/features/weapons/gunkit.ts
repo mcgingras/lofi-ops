@@ -35,8 +35,10 @@ export interface GunBuild {
   parts: GunParts;
   /** One-handed weapons (pistols). */
   pistol: boolean;
-  /** No ADS pose (dual wield). */
+  /** No ADS pose (dual wield, akimbo). */
   noAds?: boolean;
+  /** No left hand on the gun (Akimbo: the left hand holds the mirrored second gun). */
+  oneHand?: boolean;
   /**
    * The model's own per-frame animation in the first-person viewmodel, after the rig's (the Wave
    * Gun snapping its two pistols together as it aims). Third person and dropped guns never call it.
@@ -289,6 +291,7 @@ export const FURNITURE: Record<string, 'wood' | 'poly' | 'olive' | 'tan'> = {
   olympia: 'wood',
   stakeout: 'wood',
   python: 'wood',
+  skorpion: 'wood',
   m1911: 'wood',
   l96a1: 'olive',
   aug: 'olive',
@@ -992,6 +995,75 @@ export const GUNS: Record<string, GunBuilder> = {
     });
   },
 
+  // Machine pistols: one-handed bodies (`machinePistolGun` adds mag, optic, suppressor, akimbo).
+  g18(k, atts) {
+    const { M } = k;
+    // Glock: squared polymer frame, slab slide, the fire selector on the back of the slide.
+    const slide = k.group(0, 0.02, -0.05);
+    k.box(0.036, 0.04, 0.19, M.body, 0, 0, 0, 0, 0, 0, slide);
+    for (let i = 0; i < 3; i++) k.box(0.038, 0.028, 0.004, M.poly, 0, 0, 0.07 - i * 0.012, 0, 0, 0, slide);
+    k.box(0.012, 0.012, 0.012, M.metal, 0.02, 0.006, 0.085, 0, 0, 0, slide); // selector
+    k.box(0.034, 0.03, 0.15, M.poly, 0, -0.012, -0.04); // frame with rail
+    k.box(0.03, 0.01, 0.05, M.poly, 0, -0.032, -0.1);
+    return machinePistolGun(k, atts, { slide, front: -0.145, gripZ: 0.03, gripH: 0.1, magLen: 0.12, sightY: 0.056, mount: { z: -0.04, y: 0.04 } });
+  },
+  cz75auto(k, atts) {
+    const { M } = k;
+    // CZ75 with the Full Auto kit: slide in the frame rails, a compensator and a spare magazine
+    // clipped under the dust cover as a foregrip.
+    const slide = k.group(0, 0.02, -0.05);
+    k.box(0.034, 0.036, 0.2, M.body, 0, 0, 0, 0, 0, 0, slide);
+    for (let i = 0; i < 4; i++) k.box(0.036, 0.024, 0.004, M.poly, 0, 0, 0.08 - i * 0.011, 0, 0, 0, slide);
+    k.box(0.036, 0.032, 0.17, M.metal, 0, -0.014, -0.04);
+    k.box(0.04, 0.04, 0.05, M.metal, 0, 0.016, -0.17); // compensator
+    k.box(0.028, 0.1, 0.04, M.metal, 0, -0.08, -0.1, -0.05); // spare mag (foregrip)
+    return machinePistolGun(k, atts, { slide, front: -0.195, gripZ: 0.035, gripH: 0.1, magLen: 0.11, sightY: 0.054, fore: V(-0.02, -0.1, -0.1), mount: { z: -0.04, y: 0.04 } });
+  },
+  tmp(k, atts) {
+    const { M } = k;
+    // TMP: a boxy polymer receiver, the bolt inside, a front grip moulded on.
+    k.box(0.05, 0.07, 0.26, M.poly, 0, 0.005, -0.03);
+    const bolt = k.group(0, 0.045, 0.04);
+    k.box(0.02, 0.012, 0.04, M.metal, 0, 0, 0, 0, 0, 0, bolt); // charging handle
+    k.cyl(0.012, 0.05, M.metal, 0, 0.012, -0.185, 6);
+    k.box(0.034, 0.09, 0.035, M.poly, 0, -0.08, -0.12, 0.12); // front grip
+    k.box(0.012, 0.035, 0.012, M.metal, 0, 0.055, -0.14);
+    k.box(0.03, 0.02, 0.016, M.metal, 0, 0.05, 0.08);
+    return machinePistolGun(k, atts, { slide: bolt, front: -0.21, gripZ: 0.04, gripH: 0.1, magLen: 0.13, sightY: 0.066, fore: V(-0.015, -0.11, -0.12), mount: { z: -0.03, y: 0.04 } });
+  },
+  mp9(k, atts) {
+    const { M } = k;
+    // MP9: the TMP's descendant with a top rail and a side-folding stock along the right.
+    k.box(0.05, 0.07, 0.26, M.poly, 0, 0.005, -0.03);
+    k.rail(-0.15, 0.08, 0.04);
+    const bolt = k.group(0, 0.03, 0.09);
+    k.box(0.024, 0.012, 0.03, M.metal, 0, 0, 0, 0, 0, 0, bolt);
+    k.cyl(0.012, 0.05, M.metal, 0, 0.012, -0.185, 6);
+    k.box(0.034, 0.09, 0.035, M.poly, 0, -0.08, -0.12, 0.12);
+    k.box(0.012, 0.03, 0.2, M.metal, 0.034, -0.01, 0.02); // folded stock
+    k.box(0.014, 0.07, 0.016, M.metal, 0.034, -0.035, -0.08);
+    if (!atts.includes('reddot')) {
+      k.box(0.012, 0.025, 0.012, M.metal, 0, 0.065, -0.13);
+      k.box(0.026, 0.02, 0.014, M.metal, 0, 0.062, 0.06);
+    }
+    return machinePistolGun(k, atts, { slide: bolt, front: -0.21, gripZ: 0.04, gripH: 0.1, magLen: 0.13, sightY: 0.075, fore: V(-0.015, -0.11, -0.12), mount: { z: -0.04, y: 0.052 } });
+  },
+  skorpion(k, atts) {
+    const { M } = k;
+    // Skorpion vz. 61: a long slim receiver, the magazine ahead of the trigger, a wire stock folded
+    // over the top and a wooden grip.
+    k.box(0.04, 0.05, 0.27, M.body, 0, 0.0, -0.04);
+    k.cyl(0.011, 0.06, M.metal, 0, 0.0, -0.205, 6);
+    const bolt = k.group(0, 0.006, 0.02);
+    k.box(0.05, 0.01, 0.014, M.metal, 0, 0, 0, 0, 0, 0, bolt); // cocking knobs both sides
+    k.box(0.008, 0.008, 0.25, M.metal, 0.016, 0.034, -0.02); // wire stock, folded
+    k.box(0.008, 0.008, 0.25, M.metal, -0.016, 0.034, -0.02);
+    k.box(0.04, 0.008, 0.02, M.metal, 0, 0.034, -0.145);
+    k.box(0.012, 0.03, 0.012, M.metal, 0, 0.04, -0.17);
+    const mag = k.magazine(-0.1, -0.025, atts, (g, l) => k.curvedMag(g, 0.15 * l, 0.024, 0.04, M.metal));
+    return machinePistolGun(k, atts, { slide: bolt, front: -0.235, gripZ: 0.07, gripH: 0.1, mag, sightY: 0.055, fore: V(-0.02, -0.09, -0.1), mount: { z: -0.06, y: 0.03 } });
+  },
+
   gl(k) {
     const { M } = k;
     // The M203 raised: launcher tube under a stub of the host rifle.
@@ -1058,6 +1130,25 @@ function pistolGun(k: Kit, atts: readonly string[], o: { slideLen: number; slide
   }
   if (atts.includes('suppressor')) tip = k.suppressor(tip, 0.02, 0.018, 0.14);
   return { muzzle: V(0, 0.02, tip), sightY, adsZ, grip: V(0, -0.085, 0.06), fore: V(-0.03, -0.075, 0.02), parts: { slide: a.slide, cylinder: a.cylinder, offhand }, pistol: true, noAds: dual };
+}
+
+/**
+ * Machine pistol tail: the grip (with the magazine in it unless the body hung its own, as the
+ * Skorpion does), red dot, suppressor, and Akimbo (one-handed, no ADS pose: the left hand holds the
+ * mirrored copy the Pack-a-Punch dual wield draws).
+ */
+function machinePistolGun(k: Kit, atts: readonly string[], o: { slide: THREE.Object3D; front: number; gripZ: number; gripH: number; magLen?: number; mag?: THREE.Group; sightY: number; fore?: THREE.Vector3; mount: { z: number; y: number } }): GunBuild {
+  const { M } = k;
+  k.box(0.034, o.gripH, 0.05, M.furn, 0, -0.025 - o.gripH / 2, o.gripZ, 0.2);
+  k.box(0.01, 0.022, 0.05, M.metal, 0, -0.04, o.gripZ - 0.06); // trigger guard
+  const mag = o.mag ?? k.magazine(o.gripZ + 0.012, -0.02 - o.gripH * 0.6, atts, (g, l) => k.straightMag(g, (o.magLen ?? 0.12) * l * 0.55, 0.026, 0.04, M.metal, 0.2));
+  let sightY = o.sightY;
+  let adsZ = -0.38;
+  const opt = k.optic(atts, o.mount.z, o.mount.y);
+  if (opt) ({ sightY, adsZ } = opt);
+  const tip = atts.includes('suppressor') ? k.suppressor(o.front, 0.012, 0.018, 0.14) : o.front;
+  const akimbo = atts.includes('akimbo');
+  return { muzzle: V(0, 0.012, tip), sightY, adsZ, grip: V(0, -0.085, o.gripZ + 0.02), fore: o.fore ?? V(-0.03, -0.075, 0.02), parts: { slide: o.slide, mag }, pistol: true, noAds: akimbo, oneHand: akimbo };
 }
 
 /** A combat knife (blade along -z) into `parent`. */

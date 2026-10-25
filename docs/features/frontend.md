@@ -48,7 +48,7 @@ If a screen owned by another area (`barracks`, `store`, `wager`) isn't registere
 - Every edit is validated locally with the server's rules and then saved.
 
 **Store** (`store` screen, params `tab` = `weapon` | `camo` | `reticle` | `emblem` and `gun` = a weapon id; the old `tab=attachment` opens Weapons). The screen lives in economy's folder (`src/client/features/economy/store-screen.ts`, styles in `economy.css`). The browsing layout is BO1's: pick a gun, then see its attachments.
-- **Weapons tab: gun list.** Guns are grouped by class: Assault Rifles, SMGs, LMGs, Snipers, Shotguns, Pistols, Launchers / Specials. A group with nothing for sale is hidden. Within a group, guns are sorted by unlock level. Each row shows:
+- **Weapons tab: gun list.** Guns are grouped by class: Assault Rifles, SMGs, LMGs, Snipers, Shotguns, Pistols, Machine Pistols, Launchers / Specials. A group with nothing for sale is hidden. Within a group, guns are sorted by unlock level. Each row shows:
   - a small side-on picture of the gun. `gun-thumbs.ts` renders the real viewmodel once per model through one shared offscreen WebGL renderer, without hands, and copies it into a 2D canvas.
   - the name.
   - Starter / Owned, the price, or the unlock level.

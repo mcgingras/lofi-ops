@@ -203,7 +203,7 @@ export const OITC = { lives: 3, weapon: 'm1911', killScore: 50, surviveScore: 10
  * the RPK as its one LMG.
  */
 export const GUN_GAME_LADDER_INTENT = [
-  'm1911', 'python', 'cz75', 'olympia', 'spas12', 'mp5k', 'skorpion', 'ak74u', 'mac11', 'm16', 'm16a4', 'famas', 'galil', 'commando', 'aug', 'acr', 'ak47', 'rpk', 'dragunov', 'intervention', 'l96a1', 'crossbow', 'ballistic_knife',
+  'm1911', 'python', 'cz75', 'olympia', 'spas12', 'mp5k', 'ak74u', 'mac11', 'm16', 'm16a4', 'famas', 'galil', 'commando', 'aug', 'acr', 'ak47', 'rpk', 'dragunov', 'intervention', 'l96a1', 'crossbow', 'ballistic_knife',
 ];
 export const GUN_GAME = { killScore: 100, demoteOnMelee: true, demoteOnSuicide: true };
 
@@ -211,7 +211,7 @@ export const SHARPSHOOTER = {
   rotateSec: 45,
   killScore: 50,
   /** Weapon classes eligible for the rotation. */
-  classes: ['ar', 'smg', 'lmg', 'sniper', 'shotgun', 'pistol'] as readonly string[],
+  classes: ['ar', 'smg', 'lmg', 'sniper', 'shotgun', 'pistol', 'machinepistol'] as readonly string[],
   /**
    * Streak bonuses (BO1-style "perks and multiplier"): at `streak` kills in a life you get the perk
    * effect and the score multiplier. Highest reached applies.

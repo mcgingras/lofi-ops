@@ -51,6 +51,7 @@ export function penetrationType(w: Pick<WeaponDef, 'class' | 'penetration' | 'pe
   if (w.penetration) return w.penetration;
   switch (w.class) {
     case 'pistol':
+    case 'machinepistol':
     case 'smg':
       return 'small';
     case 'ar':

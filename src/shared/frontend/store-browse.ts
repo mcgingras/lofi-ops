@@ -15,7 +15,7 @@ import { attachmentKillsFor } from '../defs/progression';
 import { gateReason, lockReason, owns, storeCatalog, type LockReason, type ProfileLike, type StoreItem } from '../defs/store';
 import { WEAPON_BY_ID, type WeaponClass, type WeaponDef } from '../defs/weapons';
 
-export type GunGroupId = 'ar' | 'smg' | 'lmg' | 'sniper' | 'shotgun' | 'pistol' | 'special';
+export type GunGroupId = 'ar' | 'smg' | 'lmg' | 'sniper' | 'shotgun' | 'pistol' | 'machinepistol' | 'special';
 
 /** Store gun groups in BO1 order. Launchers and specials share the last group. */
 export const GUN_GROUPS: { id: GunGroupId; label: string; classes: WeaponClass[] }[] = [
@@ -25,6 +25,7 @@ export const GUN_GROUPS: { id: GunGroupId; label: string; classes: WeaponClass[]
   { id: 'sniper', label: 'Snipers', classes: ['sniper'] },
   { id: 'shotgun', label: 'Shotguns', classes: ['shotgun'] },
   { id: 'pistol', label: 'Pistols', classes: ['pistol'] },
+  { id: 'machinepistol', label: 'Machine Pistols', classes: ['machinepistol'] },
   { id: 'special', label: 'Launchers / Specials', classes: ['launcher', 'special'] },
 ];
 

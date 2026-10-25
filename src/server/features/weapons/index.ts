@@ -9,7 +9,8 @@
  *          at `spawn`; Scavenger Pro refills (`perks.resupply`); knife on the MELEE edge (timing x
  *          `meleeSpeedMultiplier`); lethal / tactical raised on the press
  *          and thrown on release (frags cook while held); grenades, tomahawks (retrievable),
- *          and shell-by-shell reloads every tick; concussion slows movement and ADS.
+ *          and shell-by-shell reloads every tick; concussion slows movement and ADS; no ADS
+ *          with a gun in each hand (`canAds`: Akimbo, Dual Wield).
  *
  * Bots: call `melee(room, bot)` / `startThrow(room, bot, 'lethal')` directly (or press the MELEE /
  * LETHAL / TACTICAL buttons; the throw leaves on release, so a one-tick press throws right after
@@ -124,6 +125,8 @@ const feature: Feature = {
       const a = stunnedAmount(room, p);
       return a > 0 ? 1 + a : undefined;
     }, 'weapons.concussion');
+    // A gun in each hand (Akimbo, Dual Wield): no sights to aim down (the effective def has `noAds`).
+    room.modifiers.add('canAds', (p) => (p.weapons[p.slot]?.def.noAds ? false : undefined), 'weapons.noAds');
   },
 };
 

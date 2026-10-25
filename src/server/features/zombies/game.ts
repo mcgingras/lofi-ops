@@ -77,8 +77,11 @@ export function setZombiesDifficulty(room: Room, difficulty: unknown): void {
 
 export const zombiesDifficultyOf = (room: Room): ZombiesDifficulty => difficultySettings.get(room) ?? zombiesDifficulty(undefined);
 
-/** Pistols a downed survivor fights with, best first (BO1: the Ray Gun if you have it, else a pistol, else an M1911). */
-const LAST_STAND_PICKS = ['raygun', 'python', 'asp', 'm1911'];
+/**
+ * Sidearms a downed survivor fights with, best first (BO1: the Ray Gun if you have it, else a
+ * pistol, else an M1911). Machine pistols come before the pistols.
+ */
+const LAST_STAND_PICKS = ['raygun', 'cz75auto', 'g18', 'tmp', 'mp9', 'skorpion', 'python', 'asp', 'm1911'];
 
 export interface ZombiesResultsExt {
   round: number;

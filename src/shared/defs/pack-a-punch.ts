@@ -168,6 +168,26 @@ export const PAP_WEAPONS: Record<string, PapOverride> = {
     tweak: (d) => ({ mode: 'burst', burst: 2, burstDelayMs: 150, rpm: Math.max(d.rpm, 1100), magazine: d.magazine + (d.magazine % 2) }),
   },
   usp: { name: 'Peacekeeper .45', effect: { kind: 'shatter', mult: 1.2, sec: 3 }, effectText: 'sundering rounds: +20% damage taken' },
+  // Machine pistols: one distinct effect each (kinds no more than two other guns share). The CZ75
+  // keeps BO1's packed name; the rest are new. The G18 goes akimbo like the MPL-LF (MW2's famous
+  // pair) without the faster cycle: it already fires fastest.
+  g18: {
+    name: 'G115 Generator',
+    effect: { kind: 'akimbo' },
+    effectText: 'dual wield',
+    damage: 1.25,
+    mag: 2,
+    tweak: (d) => ({ spread: { hip: d.spread.hip * 1.2, ads: d.spread.hip * 1.2, move: d.spread.move } }),
+  },
+  skorpion: { name: 'Scorpion Venom', effect: { kind: 'venom', perHit: 4, sec: 3, maxStacks: 5 }, effectText: 'venom: every hit adds poison' },
+  cz75auto: { name: 'Calamity Jane', effect: { kind: 'ricochet', keep: 0.6, range: 30 }, effectText: 'ricochet rounds' },
+  tmp: {
+    name: 'Tempest',
+    effect: { kind: 'laser' },
+    effectText: 'laser: hipfire as tight as aimed, no recoil',
+    tweak: (d) => ({ spread: { hip: d.spread.ads, ads: d.spread.ads, move: 0 }, recoil: { ...d.recoil, vertical: 0, horizontal: 0, drift: 0 } }),
+  },
+  mp9: { name: 'Nightstalker', effect: { kind: 'headblast', radius: 2.5, max: 35, min: 10 }, effectText: 'exploding headshots' },
   // Wonder weapons (BO1's upgraded magazines: X2 40, Zeus Cannon 4, DG-3 JZ 6).
   raygun: { name: "Porter's X2 Ray Gun", mag: 2, reserve: 3, effect: { kind: 'wonder', red: true }, effectText: 'red bolts' },
   thundergun: { name: 'Zeus Cannon', mag: 2, reserve: 2, effect: { kind: 'wonder', radiusMult: 1.5 }, effectText: 'a wider blast' },

@@ -268,10 +268,17 @@ export const WEAPON_SHOTS: Record<string, { files: string[]; rate: number; gain?
   makarov: { files: ['gun_asp_b', 'gun_asp_a'], rate: 1.02, gain: 0.8, highpass: 120, sup: ['sup_pistol_c', 'sup_pistol_b'], supRate: 1.04 },
   usp: { files: ['gun_m1911_b', 'gun_m1911_a'], rate: 0.97, gain: 0.9, lowpass: 9000, sup: ['sup_pistol_a', 'sup_pistol_d'], supRate: 0.98 },
   gl: { files: ['gun_gl_a', 'gun_gl_b'], rate: 1.0, sup: ['gun_gl_a', 'gun_gl_b'], supRate: 1.0 },
+  // Machine pistols: no new recordings. The SMG and 9 mm pistol pools, brighter and lighter than
+  // the SMGs (the CZ75 Auto a touch heavier, the G18 the snappiest).
+  mp9: { files: ['gun_smg_b', 'gun_asp_a', 'gun_smg_c'], rate: 1.05, gain: 0.82, highpass: 170, sup: ['sup_pistol_c', 'sup_pistol_a'], supRate: 1.05 },
+  skorpion: { files: ['gun_smg_c', 'gun_smg_a', 'gun_asp_b'], rate: 1.04, gain: 0.8, lowpass: 8500, highpass: 150, sup: ['sup_pistol_d', 'sup_pistol_b'], supRate: 1.04 },
+  tmp: { files: ['gun_smg_a', 'gun_asp_b', 'gun_smg_b'], rate: 1.03, gain: 0.8, highpass: 160, sup: ['sup_pistol_b', 'sup_pistol_c'], supRate: 1.03 },
+  cz75auto: { files: ['gun_m1911_a', 'gun_m1911_b', 'gun_smg_a'], rate: 1.02, gain: 0.85, highpass: 120, sup: ['sup_pistol_a', 'sup_pistol_b'], supRate: 1.02 },
+  g18: { files: ['gun_asp_a', 'gun_smg_b', 'gun_asp_b'], rate: 1.05, gain: 0.78, highpass: 180, sup: ['sup_pistol_c', 'sup_pistol_d'], supRate: 1.05 },
 };
 
 /** Distant-layer pitch by class (the layer is one AR recording): kept within +-6% as well. */
-export const DISTANT_RATE: Record<WeaponClass, number> = { ar: 1, smg: 1.04, lmg: 0.97, sniper: 0.95, shotgun: 0.94, pistol: 1.05, launcher: 0.94, special: 1 };
+export const DISTANT_RATE: Record<WeaponClass, number> = { ar: 1, smg: 1.04, lmg: 0.97, sniper: 0.95, shotgun: 0.94, pistol: 1.05, machinepistol: 1.06, launcher: 0.94, special: 1 };
 
 /** Per-shot variation (+-2.5% rate, +-1.5 dB) and voice cap: 4 overlapping tails per gun at most. */
 const GUN = { pitchJitter: 0.025, volJitter: 1.5, maxVoices: 4 };

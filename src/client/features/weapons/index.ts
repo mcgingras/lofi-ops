@@ -11,6 +11,7 @@ import './worldmodels';
 import './sounds';
 import './scope';
 import './equipment';
+import './killfeed';
 import './wonder/index';
 
 export { equipState } from './equipment';

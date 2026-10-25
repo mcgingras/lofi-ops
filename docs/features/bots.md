@@ -17,7 +17,7 @@ Owner: bots. Covers DESIGN.md section 8a (hard requirement): every lobby runs wi
 | `src/server/features/bots/roles.ts` | roles, lanes, goal claims, chase limits and the team path-usage grid (pure) |
 | `src/server/features/modes/spawns.ts` | spawn scoring (owner: modes) and `recentSpawns`, which bots read to stay off the enemy's spawn |
 | `src/server/features/bots/skill.ts` | settings validation, per-bot variance, skill rating |
-| `src/server/features/bots/loadout.ts` | bot classes picked from the current defs (primaries wear an MW2 camo about two times in three, from what a pretend headshot record growing with skill would have opened: `pickBotCamo`), and bot callsigns |
+| `src/server/features/bots/loadout.ts` | bot classes picked from the current defs (primaries wear an MW2 camo about two times in three, from what a pretend headshot record growing with skill would have opened: `pickBotCamo`; about one bot in four or five carries a machine pistol, sometimes with its one attachment, Akimbo included, rolled from a generator seeded off the last draw so seeded callers' streams don't shift), and bot callsigns |
 | `src/server/features/bots/hooks.ts` | `registerBotGoal`, `registerBotStreakHandler`, `registerBotModeStyle`, `registerBotStyle` (per-bot style for modes whose players play different roles: Infected) |
 | `src/client/features/bots/index.ts` | `botsClient` (typed RPC helpers), the `bots.setup` screen with the "Play with Bots" menu item, and the `bots.wait` HUD widget |
 
@@ -213,7 +213,7 @@ Nothing in the server adds avoidable delay. Inputs are applied on the next tick,
   - ADS by range, depending on weapon class.
   - Holds its class's preferred range (closer for aggressive bots).
   - Strafes and crouch-spams, and won't strafe off ledges.
-  - Switches to the sidearm when dry up close, or reloads.
+  - Switches to the sidearm when dry up close (under 12 m, or anywhere with no spare rounds), or reloads. Holding a machine pistol it goes back to the primary (and reloads it there) once the target is past `MP_BACK_TO_PRIMARY` (16 m), and it fights with one from the hip, pushing in (`CLASS_STYLE.machinepistol`: 6 m, never ADS).
   - Backs off to a cover cell out of the enemy's sight to reload or heal (less aggressive bots).
   - Presses MELEE when touching an enemy.
 - **After a fight:** chases or flanks to the last-seen spot (aggression), or holds the angle. It throws its lethal if the loadout has one: it aims an arc and presses LETHAL. Then it tops up its magazine.

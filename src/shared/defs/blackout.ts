@@ -301,7 +301,7 @@ export const RARITY_ATTACHMENTS: Record<Rarity, number> = { common: 0, rare: 1, 
 
 /** Ammo types (one per weapon class family). */
 export type AmmoType = 'pistol' | 'smg' | 'rifle' | 'sniper' | 'shotgun';
-export const AMMO_OF_CLASS: Record<WeaponClass, AmmoType | null> = { ar: 'rifle', lmg: 'rifle', smg: 'smg', sniper: 'sniper', shotgun: 'shotgun', pistol: 'pistol', launcher: null, special: null };
+export const AMMO_OF_CLASS: Record<WeaponClass, AmmoType | null> = { ar: 'rifle', lmg: 'rifle', smg: 'smg', sniper: 'sniper', shotgun: 'shotgun', pistol: 'pistol', machinepistol: 'pistol', launcher: null, special: null };
 /** Rounds in an ammo box of each type. */
 export const AMMO_BOX: Record<AmmoType, number> = { pistol: 24, smg: 60, rifle: 60, sniper: 10, shotgun: 12 };
 export const AMMO_NAMES: Record<AmmoType, string> = { pistol: 'PISTOL AMMO', smg: 'SMG AMMO', rifle: 'RIFLE AMMO', sniper: 'SNIPER AMMO', shotgun: 'SHELLS' };
@@ -355,7 +355,7 @@ export function rollRarity(r: () => number): Rarity {
 export function rollAttachments(def: WeaponDef, rarity: Rarity, r: () => number): string[] {
   const n = RARITY_ATTACHMENTS[rarity];
   if (!n || !def.attachments.length) return [];
-  const pool = def.attachments.filter((a) => a !== 'gl' && a !== 'dual');
+  const pool = def.attachments.filter((a) => a !== 'gl' && a !== 'dual' && a !== 'akimbo');
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(r() * (i + 1));
     [pool[i], pool[j]] = [pool[j]!, pool[i]!];
