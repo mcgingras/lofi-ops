@@ -261,7 +261,7 @@ export const WEAPON_SHOTS: Record<string, { files: string[]; rate: number; gain?
   skorpion: { files: ['gun_smg_c', 'gun_smg_a', 'gun_asp_b'], rate: 1.04, gain: 0.8, lowpass: 8500, highpass: 150, sup: ['sup_pistol_d', 'sup_pistol_b'], supRate: 1.04 },
   tmp: { files: ['gun_smg_a', 'gun_asp_b', 'gun_smg_b'], rate: 1.03, gain: 0.8, highpass: 160, sup: ['sup_pistol_b', 'sup_pistol_c'], supRate: 1.03 },
   cz75auto: { files: ['gun_m1911_a', 'gun_m1911_b', 'gun_smg_a'], rate: 1.02, gain: 0.85, highpass: 120, sup: ['sup_pistol_a', 'sup_pistol_b'], supRate: 1.02 },
-  g18: { files: ['gun_asp_a', 'gun_smg_b', 'gun_asp_b'], rate: 1.06, gain: 0.78, highpass: 180, sup: ['sup_pistol_c', 'sup_pistol_d'], supRate: 1.06 },
+  g18: { files: ['gun_asp_a', 'gun_smg_b', 'gun_asp_b'], rate: 1.05, gain: 0.78, highpass: 180, sup: ['sup_pistol_c', 'sup_pistol_d'], supRate: 1.05 },
 };
 
 /** Distant-layer pitch by class (the layer is one AR recording): kept within +-6% as well. */
