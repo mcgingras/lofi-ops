@@ -63,9 +63,25 @@ onFeature('killstreaks.called', (d) => {
 });
 
 onFeature('killstreaks.ended', (d) => {
-  if (!d.destroyed) return;
+  // Destroyed by someone: `killstreaks.shotDown` (below) says it, with who did it.
+  if (!d.destroyed || d.by) return;
   const f = friendly(d.owner, d.team);
   announce(`${f ? 'Friendly' : 'Enemy'} ${streakName(d.id)} destroyed`, f ? 'enemy' : 'friend');
+});
+
+// Hardware shot down (BO1 "Spy Plane destroyed +100"): the destroyer gets the line and the points
+// (progression also pops the XP), the owner hears who did it, everyone else friendly / enemy.
+onFeature('killstreaks.shotDown', (d) => {
+  const m = currentMatch();
+  if (!m) return;
+  if (d.by === m.myId) {
+    announce(`${d.name} destroyed${d.xp > 0 ? ` +${d.xp}` : ''}`, 'hi');
+    sfx.play('ks_confirm', { volume: 0.5 });
+  } else if (d.owner === m.myId) announce(`Your ${d.name} was shot down by ${m.nameOf(d.by)}`, 'enemy');
+  else {
+    const f = d.owner ? friendly(d.owner, d.team) : false;
+    announce(`${f ? 'Friendly' : 'Enemy'} ${d.name} destroyed`, f ? 'enemy' : 'friend');
+  }
 });
 
 onFeature('killstreaks.crate', (d) => {
