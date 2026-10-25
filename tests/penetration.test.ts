@@ -32,9 +32,9 @@ const shoot = (w: CollisionWorld, type: PenetrationType, depthMultiplier = 1, ra
 const through = (mat: string, th: number, type: PenetrationType, depthMultiplier = 1) => shoot(world(wall(mat, 0, th)), type, depthMultiplier).walls.length === 1;
 
 describe('penetration: types and materials', () => {
-  it('every weapon has BO1\'s type: pistols/SMGs small (the Python medium), ARs medium, LMGs/snipers large, shotguns pellet, launchers and the knife none', () => {
+  it('every weapon has BO1\'s type: pistols/SMGs small (the Python and Desert Eagle medium), ARs medium, LMGs/snipers large, shotguns pellet, launchers and the knife none', () => {
     const want: Record<string, PenetrationType> = { pistol: 'small', smg: 'small', ar: 'medium', lmg: 'large', sniper: 'large', shotgun: 'pellet', launcher: 'none', special: 'none' };
-    const own: Record<string, PenetrationType> = { python: 'medium' };
+    const own: Record<string, PenetrationType> = { python: 'medium', deagle: 'medium' };
     for (const w of WEAPONS) expect({ id: w.id, type: penetrationType(w) }).toEqual({ id: w.id, type: own[w.id] ?? want[w.class] });
     expect(PENETRATION.depth.none).toBe(0);
     expect(PENETRATION.depth.pellet).toBeLessThan(PENETRATION.depth.small);

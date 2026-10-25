@@ -123,6 +123,14 @@ export const PAP_WEAPONS: Record<string, PapOverride> = {
   },
   // LMG
   rpk: { name: 'R115 Resonator', effect: { kind: 'shockwave', radius: 3, push: 6, slow: 0.6, sec: 1.5 }, effectText: 'kills release a shockwave' },
+  // Early-CoD LMGs: BO1's names where the gun was packable in BO1 Zombies (HK21, plus the
+  // Mutilator and Deathbringer as asked), invented ones for the CoD4 / MW2 guns.
+  m60: { name: 'Mutilator', effect: { kind: 'stagger', kickDeg: 3.4, botFlinch: 4.5, botAimDeg: 4, sec: 0.8 }, effectText: 'suppressing fire: heavy stagger' },
+  stoner63: { name: 'Stoner63 Deathbringer', effect: { kind: 'mark', sec: 5 }, effectText: 'marks targets through walls' },
+  hk21: { name: 'H115 Oscillator', effect: { kind: 'zap', chance: 0.2, damage: 15, range: 5 }, effectText: 'chain zap' },
+  rpd: { name: 'R.I.P.D.', effect: { kind: 'pierce', bodies: 2, keep: 0.75 }, effectText: 'piercing rounds: through two bodies' },
+  m249: { name: 'Scorched Earth Weapon', effect: { kind: 'burn', damage: 12, sec: 2.5 }, effectText: 'incendiary rounds' },
+  mg4: { name: 'Thunderclap', effect: { kind: 'shockwave', radius: 4, push: 5, slow: 0.5, sec: 2 }, effectText: 'kills release a wide shockwave' },
   // Snipers
   l96a1: { name: 'Iceburg', effect: { kind: 'frost', frozenSec: 1 }, effectText: 'frost rounds' },
   dragunov: { name: 'D115 Disassembler', effect: { kind: 'shatter', mult: 1.25, sec: 4 }, effectText: 'shatter rounds: +25% damage taken' },
@@ -150,6 +158,16 @@ export const PAP_WEAPONS: Record<string, PapOverride> = {
     // Two rounds per pull, fast; the magazine keeps whole pairs.
     tweak: (d) => ({ mode: 'burst', burst: 2, burstDelayMs: 140, rpm: Math.max(d.rpm, 1100), magazine: d.magazine + (d.magazine % 2) }),
   },
+  // Early-CoD pistols (invented names). The Desert Hawk's damage stays at x1.35 so a packed
+  // headshot (94.5) is still not a one-shot.
+  deagle: { name: 'Desert Hawk', damage: 1.35, effect: { kind: 'knockback', range: 14, push: 7, up: 2, sec: 0.3 }, effectText: 'knockback rounds' },
+  makarov: {
+    name: 'Dvoynik',
+    effect: { kind: 'doubletap' },
+    effectText: 'double-tap',
+    tweak: (d) => ({ mode: 'burst', burst: 2, burstDelayMs: 150, rpm: Math.max(d.rpm, 1100), magazine: d.magazine + (d.magazine % 2) }),
+  },
+  usp: { name: 'Peacekeeper .45', effect: { kind: 'shatter', mult: 1.2, sec: 3 }, effectText: 'sundering rounds: +20% damage taken' },
   // Wonder weapons (BO1's upgraded magazines: X2 40, Zeus Cannon 4, DG-3 JZ 6).
   raygun: { name: "Porter's X2 Ray Gun", mag: 2, reserve: 3, effect: { kind: 'wonder', red: true }, effectText: 'red bolts' },
   thundergun: { name: 'Zeus Cannon', mag: 2, reserve: 2, effect: { kind: 'wonder', radiusMult: 1.5 }, effectText: 'a wider blast' },

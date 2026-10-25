@@ -809,7 +809,7 @@ export class Match {
     // Local feedback: kick, flash, sound, tracer and impact using the server's spread maths.
     const adsK = (1 - st.ads * 0.35) * RECOIL_SCALE * (fullyProne(st) ? PRONE.recoil : 1);
     this.recoil.pitch += def.recoil.vertical * DEG * adsK;
-    this.recoil.yaw += (Math.random() - 0.5) * 2 * def.recoil.horizontal * DEG * adsK;
+    this.recoil.yaw += ((Math.random() - 0.5) * 2 * def.recoil.horizontal + (def.recoil.drift ?? 0)) * DEG * adsK;
     this.viewmodel.shoot(this.time, Math.min(1.2, 0.5 + def.recoil.vertical * 0.4));
     rumble('fire', Math.min(1, 0.5 + def.recoil.vertical * 0.3));
     sfx.gunshot(def.base.id, undefined, def.suppressed);
