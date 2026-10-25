@@ -210,7 +210,7 @@ const feature: Feature = {
         if (!p || !room) throw new RpcError('not_in_match');
         const d = (data ?? {}) as { id?: unknown; bots?: unknown; weapon?: unknown; selfFx?: unknown };
         if (typeof d.id === 'string' && KILLSTREAK_BY_ID.has(d.id)) grant(room, p, d.id);
-        if (typeof d.weapon === 'string' && WEAPON_BY_ID.get(d.weapon)?.slot === 'primary') {
+        if (typeof d.weapon === 'string' && ['primary', 'secondary'].includes(WEAPON_BY_ID.get(d.weapon)?.slot ?? '')) {
           p.weapons[0] = makeWeapon({ weapon: d.weapon, attachments: [], camo: 'none' }, d.weapon);
           if (p.weapons.length > 2) p.weapons.length = 2;
           p.slot = 0;

@@ -218,7 +218,8 @@ export function buildWeaponViewmodel(c: ViewmodelCtx, model: string): ViewmodelS
     actions(s);
   };
 
-  return { muzzle: build.muzzle, hip, ads, reload: p.barrels || p.cylinder || p.pump ? 'none' : pistol ? 'drop' : 'tilt', animate };
+  // Shoulder launchers drop out of view to reload (a tilt would swing the tube's back end into the camera).
+  return { muzzle: build.muzzle, hip, ads, reload: p.barrels || p.cylinder || p.pump ? 'none' : pistol || def?.class === 'launcher' ? 'drop' : 'tilt', animate };
 }
 
 for (const model of Object.keys(GUNS)) registerViewmodel(model, (c) => buildWeaponViewmodel(c, model));
