@@ -258,8 +258,8 @@ export const WEAPON_SHOTS: Record<string, { files: string[]; rate: number; gain?
   // Secondary launchers (defs/launchers.ts): the China Lake on the M203 thump, the rockets and
   // missiles on the Valkyrie's launch recording, told apart by rate and EQ. No new files.
   china_lake: { files: ['gun_gl_b', 'gun_gl_a'], rate: 0.96, gain: 1.1, lowpass: 7000, sup: ['gun_gl_b', 'gun_gl_a'], supRate: 0.96 },
-  rpg: { files: ['ks_launch'], rate: 0.95, gain: 1.15, lowpass: 6500, sup: ['ks_launch'], supRate: 0.95 },
-  m72law: { files: ['ks_launch'], rate: 1.05, gain: 0.95, highpass: 120, sup: ['ks_launch'], supRate: 1.05 },
+  rpg: { files: ['ks_launch', 'gun_gl_b'], rate: 0.95, gain: 1.15, lowpass: 6500, sup: ['ks_launch'], supRate: 0.95 },
+  m72law: { files: ['ks_launch', 'gun_gl_a'], rate: 1.05, gain: 0.95, highpass: 120, sup: ['ks_launch'], supRate: 1.05 },
   strela: { files: ['ks_launch', 'gun_gl_a'], rate: 0.98, gain: 1.05, lowpass: 8000, sup: ['ks_launch'], supRate: 0.98 },
   stinger: { files: ['ks_launch', 'gun_gl_b'], rate: 1.03, gain: 1.0, highpass: 90, sup: ['ks_launch'], supRate: 1.03 },
 };

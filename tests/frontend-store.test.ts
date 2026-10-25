@@ -27,7 +27,7 @@ describe('store gun groups', () => {
       const classes = GUN_GROUPS.find((x) => x.id === g.id)!.classes;
       for (const gun of g.guns) expect(classes).toContain(WEAPON_BY_ID.get(gun.id)!.class);
     }
-    expect(groups.map((g) => g.label)).toEqual(['Assault Rifles', 'SMGs', 'LMGs', 'Snipers', 'Shotguns', 'Pistols']);
+    expect(groups.map((g) => g.label)).toEqual(['Assault Rifles', 'SMGs', 'LMGs', 'Snipers', 'Shotguns', 'Pistols', 'Launchers / Specials']);
   });
 
   it('orders guns by unlock level within a group', () => {
