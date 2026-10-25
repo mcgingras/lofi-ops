@@ -82,14 +82,19 @@ export const LOST_GRACE = 0.25;
 export const NAV_SEARCHES_PER_TICK = 3;
 export const NAV_EXPAND_PER_TICK = 24000;
 
+/** Holding a machine pistol, a target further than this (m) sends the bot back to its primary. */
+export const MP_BACK_TO_PRIMARY = 16;
+
 /** How each weapon class is fought: preferred range (m), ADS beyond (m; Infinity = never). */
-const CLASS_STYLE: Record<WeaponClass, { range: number; ads: number; rush?: boolean }> = {
+export const CLASS_STYLE: Record<WeaponClass, { range: number; ads: number; rush?: boolean }> = {
   ar: { range: 18, ads: 7 },
   smg: { range: 9, ads: 10, rush: true },
   lmg: { range: 22, ads: 8 },
   sniper: { range: 32, ads: 3 },
   shotgun: { range: 4, ads: Infinity, rush: true },
   pistol: { range: 9, ads: 8 },
+  // Machine pistols: hipfire up close, push in (they lose to everything past ~10 m).
+  machinepistol: { range: 6, ads: Infinity, rush: true },
   launcher: { range: 18, ads: 6 },
   special: { range: 6, ads: Infinity, rush: true },
 };
@@ -348,6 +353,9 @@ export class Brain implements BotBrain {
       const secondaryLauncher = !!secondary && isLauncher(secondary.def.base.id);
       if (w && w.mag === 0 && this.slotWanted === 0 && secondary && secondary.mag > 0 && (secondaryLauncher ? (primary?.reserve ?? 0) === 0 && d >= 14 : d < 12 || (primary?.reserve ?? 0) === 0)) this.slotWanted = 1;
       if (this.slotWanted === 1 && secondary && secondary.mag === 0 && secondary.reserve === 0 && primary && primary.mag + primary.reserve > 0) this.slotWanted = 0;
+      // A machine pistol is for the close fight: once the target is well out of its range, go back
+      // to the primary (and reload it there) rather than spraying at 20 m.
+      if (this.slotWanted === 1 && self.slot === 1 && secondary?.def.class === 'machinepistol' && d > MP_BACK_TO_PRIMARY && primary && primary.mag + primary.reserve > 0) this.slotWanted = 0;
 
       // A short-range wonder weapon holds fire outside its blast and swaps to the other gun far
       // off; holding the other gun with such a wonder weapon in the bag, it swaps back up close.

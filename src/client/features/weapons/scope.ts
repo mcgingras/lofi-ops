@@ -80,7 +80,7 @@ function mechanics(m: Match) {
         if (cross(0.12)) sfx.play('weapons.break', { volume: 0.7 });
         if (cross(0.85)) sfx.play('weapons.breakclose', { volume: 0.7 });
       } else {
-        const pistol = def.base.class === 'pistol';
+        const pistol = def.base.class === 'pistol' || def.base.class === 'machinepistol';
         if (cross(0.2)) sfx.play(pistol ? 'weapons.magout.pistol' : 'weapons.magout', { volume: 0.6 });
         if (cross(0.68)) sfx.play(pistol ? 'weapons.magin.pistol' : 'weapons.magin', { volume: 0.7 });
         if (def.mode === 'bolt' && cross(0.9)) sfx.play('weapons.bolt', { volume: 0.6 });

@@ -64,6 +64,8 @@ const flat = (a: Vec3, b: Vec3) => Math.hypot(a.x - b.x, a.z - b.z);
 const DEG = Math.PI / 180;
 /** Wall guns it rates (higher is better); anything not listed rates by price. */
 const GUN_RANK: Record<string, number> = { m1911: 0, asp: 1, olympia: 2, mpl: 3, mp5k: 4, m16: 5, ak74u: 6, commando: 7, stakeout: 6.5 };
+/** Rank of a gun not in GUN_RANK, by class: pistols last, machine pistols between the Olympia and the MPL, wonder weapons first. */
+const classRank = (cls: string | undefined, other: number): number => (cls === 'pistol' ? 0.5 : cls === 'machinepistol' ? 2.5 : cls === 'special' ? 9 : other);
 
 export class AllyBrain implements BotBrain {
   readonly aim = newAimState();
@@ -448,7 +450,7 @@ export class AllyBrain implements BotBrain {
       if (w.mag + w.reserve <= 0) return;
       const id = w.def.base.id;
       // Shotguns do nothing at range: the other gun out there.
-      const score = (GUN_RANK[id] ?? (w.def.class === 'pistol' ? 0.5 : w.def.class === 'special' ? 9 : 5)) + (i === self.slot ? 0.2 : 0) - (far && w.def.class === 'shotgun' ? 10 : 0);
+      const score = (GUN_RANK[id] ?? classRank(w.def.class, 5)) + (i === self.slot ? 0.2 : 0) - (far && w.def.class === 'shotgun' ? 10 : 0);
       if (score > bs) {
         bs = score;
         best = i;
@@ -641,7 +643,7 @@ export class AllyBrain implements BotBrain {
       }
     }
     // No real gun yet (pistols only): the best wall gun it can afford comes before anything else.
-    const rankOf = (id: string) => GUN_RANK[id] ?? (WEAPON_BY_ID.get(id)?.class === 'pistol' ? 0.5 : 5);
+    const rankOf = (id: string) => GUN_RANK[id] ?? classRank(WEAPON_BY_ID.get(id)?.class === 'special' ? undefined : WEAPON_BY_ID.get(id)?.class, 5);
     const primaries = self.weapons.filter((w) => rankOf(w.def.base.id) >= 2 && w.mag + w.reserve > 0);
     const bestAffordable = (minRank: number, spare: number) => {
       let best: (typeof g.buy.walls)[number] | null = null;
@@ -754,7 +756,7 @@ export class AllyBrain implements BotBrain {
     let worst = 0;
     let ws = Infinity;
     self.weapons.forEach((w, i) => {
-      const score = (w.mag + w.reserve > 0 ? 0 : -10) + (GUN_RANK[w.def.base.id] ?? (w.def.class === 'pistol' ? 0.5 : w.def.class === 'special' ? 9 : 5));
+      const score = (w.mag + w.reserve > 0 ? 0 : -10) + (GUN_RANK[w.def.base.id] ?? classRank(w.def.class, 5));
       if (score < ws) {
         ws = score;
         worst = i;
@@ -769,7 +771,7 @@ export class AllyBrain implements BotBrain {
     if (!def) return false;
     if (def.class === 'special') return true;
     if (self.weapons.length < 2) return true;
-    const rank = GUN_RANK[id] ?? (def.class === 'pistol' ? 0.5 : 5.5);
+    const rank = GUN_RANK[id] ?? classRank(def.class, 5.5);
     const inHand = currentWeapon(self);
     return rank > (inHand ? (GUN_RANK[inHand.def.base.id] ?? 5) : 0);
   }

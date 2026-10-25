@@ -15,7 +15,12 @@ import type { HitPart } from '../collision';
 import type { PenetrationType } from '../penetration';
 import { indexById } from './registry';
 
-export type WeaponClass = 'ar' | 'smg' | 'lmg' | 'sniper' | 'shotgun' | 'pistol' | 'launcher' | 'special';
+/**
+ * Every weapon class, in menu order. Tables keyed by class (`Record<WeaponClass, ...>`) are checked
+ * by the compiler; `tests/weapon-classes.test.ts` walks this list over the string-keyed ones.
+ */
+export const WEAPON_CLASSES = ['ar', 'smg', 'lmg', 'sniper', 'shotgun', 'pistol', 'machinepistol', 'launcher', 'special'] as const;
+export type WeaponClass = (typeof WEAPON_CLASSES)[number];
 export type FireMode = 'auto' | 'semi' | 'burst' | 'bolt' | 'pump';
 export type WeaponSlot = 'primary' | 'secondary' | 'melee' | 'attachment';
 
@@ -58,8 +63,14 @@ export interface WeaponDef {
   moveMult: number;
   /** Cone half-angles in degrees: hip, fully aimed, extra while moving. */
   spread: { hip: number; ads: number; move: number };
-  /** Client view kick per shot (degrees) and recovery speed (deg/s). Server ignores recoil. */
-  recoil: { vertical: number; horizontal: number; recovery: number };
+  /**
+   * Client view kick per shot (degrees) and recovery speed (deg/s). Server ignores recoil.
+   * `horizontal` is a random sideways kick (+-); `drift` (optional) is a steady sideways pull per
+   * shot (+ right, - left) on top of it, so a long burst walks off one way (the LMGs' patterns).
+   * `ads`: the kick multiplier when fully aimed (default `ADS_RECOIL` 0.65; machine pistols kick
+   * harder aimed than from the hip). Read it through `recoilAdsK`.
+   */
+  recoil: { vertical: number; horizontal: number; recovery: number; drift?: number; ads?: number };
   unlockLevel: number;
   /** Attachment ids this weapon accepts (see attachments.ts). */
   attachments: string[];
@@ -73,7 +84,7 @@ export interface WeaponDef {
    * the rest none.
    */
   penetration?: PenetrationType;
-  /** Weapon raise/lower time when switching (default 500 ms). */
+  /** Weapon raise/lower time when switching (default 500 ms; pistols and machine pistols 350). */
   swapMs?: number;
   /** Fires a server-simulated projectile (crossbow bolt, ballistic knife blade): no local hitscan tracer or impact puff. */
   projectile?: boolean;
@@ -113,6 +124,16 @@ const smg = (o: Omit<WeaponDef, 'class' | 'slot' | 'multipliers' | 'sprintOutMs'
 const pistol = (o: Omit<WeaponDef, 'class' | 'slot' | 'multipliers' | 'sprintOutMs' | 'swapMs'> & Partial<Pick<WeaponDef, 'multipliers' | 'sprintOutMs' | 'swapMs'>>): WeaponDef => ({ class: 'pistol', slot: 'secondary', multipliers: { head: 1.4, torso: 1, limb: 1 }, sprintOutMs: 150, swapMs: 350, ...o });
 /** Secondary launchers (defs/launchers.ts): projectiles, no attachments, no hit-part multipliers. */
 const launcher = (o: Omit<WeaponDef, 'class' | 'slot' | 'multipliers' | 'attachments' | 'projectile'>): WeaponDef => ({ class: 'launcher', slot: 'secondary', multipliers: { head: 1, torso: 1, limb: 1 }, attachments: [], projectile: true, ...o });
+// Early-CoD LMGs (M60, Stoner63, HK21, RPD, M249 SAW, MG4). BO1 LMGs: optics, Extended Mag, Grip
+// (no Dual Mag on belt / box guns; the Stoner63 also takes a Suppressor). MW2 LMGs (RPD, SAW, MG4
+// there): Red Dot, Holographic -> reflex, ACOG, Grip, Silencer, Extended Mags.
+const BO1_LMG_ATTS = ['extmag', 'acog', 'reddot', 'reflex', 'grip'];
+const MW2_LMG_ATTS = ['extmag', 'acog', 'reddot', 'reflex', 'grip', 'suppressor'];
+const lmg = (o: Omit<WeaponDef, 'class' | 'slot' | 'multipliers' | 'swapMs'> & Partial<Pick<WeaponDef, 'multipliers' | 'swapMs'>>): WeaponDef => ({ class: 'lmg', slot: 'primary', multipliers: { head: 1.4, torso: 1, limb: 1 }, swapMs: 650, ...o });
+// Machine pistols: full-auto secondaries. Pistol handling (350 ms swap, 150 ms sprint-out), damage
+// that falls off fast (worse than any SMG past ~10 m), tight hipfire, loose sights and more kick aimed.
+const MP_ATTS = ['extmag', 'suppressor', 'reddot', 'akimbo'];
+const machinePistol = (o: Omit<WeaponDef, 'class' | 'slot' | 'multipliers' | 'sprintOutMs' | 'swapMs' | 'mode' | 'attachments'> & Partial<Pick<WeaponDef, 'multipliers' | 'sprintOutMs' | 'swapMs' | 'attachments'>>): WeaponDef => ({ class: 'machinepistol', slot: 'secondary', multipliers: { head: 1.4, torso: 1, limb: 1 }, sprintOutMs: 150, swapMs: 350, mode: 'auto', attachments: MP_ATTS, ...o });
 
 export const WEAPONS: WeaponDef[] = [
   // ------------------------------------------------------------------ assault rifles
@@ -376,6 +397,157 @@ export const WEAPONS: WeaponDef[] = [
     price: 3000,
   },
 
+  // Early-CoD LMGs. BO1 (M60, Stoner63, HK21), CoD4 (RPD, M249 SAW) and MW2 (MG4) retuned the way
+  // the RPK is: damage at 100 health, ranges in game inches / 39.4, then each gun pushed toward the
+  // one thing it was known for. Against the ARs every LMG trades a big magazine and sustained fire
+  // for slow ADS (330-500 ms against the ARs' 230-300), slower movement (x0.8-0.9) and long
+  // reloads (4-7 s). Feel comes from cadence, ADS and the recoil shape (`drift` = steady pull).
+  // TTK (torso, ms): M60 218 at every range; Stoner63 210 to 45 m then 280; HK21 150 to 38 m then
+  // 225; RPD 171 to 56 m then 257; M249 192 to 37 m then 256; MG4 225 at every range. For scale:
+  // AK-47 200 / 300, RPK 160 / 240, ACR 228 / 304.
+  lmg({
+    // BO1 M60: the slow, heavy 7.62 belt gun. 45-34 keeps it a three-shot kill at any range (the
+    // only automatic that does), paid for with 550 rpm, the slowest ADS and movement of any gun,
+    // a 7 s belt change and a big climb that pulls left.
+    id: 'm60',
+    name: 'M60',
+    blurb: 'Belt-fed 7.62. Three shots kill at any range, but it is slow to aim, slow to move and slow to reload.',
+    damage: { near: 45, far: 34, nearRange: 40, farRange: 70 },
+    rpm: 550,
+    mode: 'auto',
+    magazine: 100,
+    reserve: 200,
+    reloadMs: 6000,
+    reloadEmptyMs: 7200,
+    adsMs: 500,
+    sprintOutMs: 450,
+    moveMult: 0.8,
+    spread: { hip: 6, ads: 0.3, move: 2.5 },
+    recoil: { vertical: 1.35, horizontal: 0.3, recovery: 9, drift: -0.25 },
+    unlockLevel: 45,
+    attachments: BO1_LMG_ATTS,
+    model: 'm60',
+    swapMs: 750,
+    price: 3500,
+  }),
+  lmg({
+    // BO1 Stoner63: the light one. 5.56 damage (30-20, four shots to 45 m) at 857 rpm, the lowest
+    // kick and quickest ADS of the LMGs, near-AR handling; 75-round box.
+    id: 'stoner63',
+    name: 'Stoner63',
+    blurb: 'Light, fast and steady: low damage, almost no kick, aims and moves almost like a rifle.',
+    damage: { near: 30, far: 20, nearRange: 35, farRange: 55 },
+    rpm: 857,
+    mode: 'auto',
+    magazine: 75,
+    reserve: 150,
+    reloadMs: 4200,
+    reloadEmptyMs: 5000,
+    adsMs: 330,
+    sprintOutMs: 300,
+    moveMult: 0.9,
+    spread: { hip: 4.2, ads: 0.18, move: 1.8 },
+    recoil: { vertical: 0.45, horizontal: 0.15, recovery: 18 },
+    unlockLevel: 20,
+    attachments: [...BO1_LMG_ATTS, 'suppressor'],
+    model: 'stoner63',
+    swapMs: 550,
+    price: 2500,
+  }),
+  lmg({
+    // BO1 HK21: the RPK's faster sibling. 40 damage and 800 rpm (three shots, 150 ms) but it falls
+    // off sooner (28-50 m) and bucks hard side to side; 125-round box, the longest reload but one.
+    id: 'hk21',
+    name: 'HK21',
+    blurb: 'Fast-firing 125-round box: shreds up close, bucks side to side and falls off at range.',
+    damage: { near: 40, far: 25, nearRange: 28, farRange: 50 },
+    rpm: 800,
+    mode: 'auto',
+    magazine: 125,
+    reserve: 250,
+    reloadMs: 5600,
+    reloadEmptyMs: 6600,
+    adsMs: 450,
+    sprintOutMs: 400,
+    moveMult: 0.85,
+    spread: { hip: 5.5, ads: 0.3, move: 2.2 },
+    recoil: { vertical: 0.9, horizontal: 0.7, recovery: 11 },
+    unlockLevel: 38,
+    attachments: BO1_LMG_ATTS,
+    model: 'hk21',
+    price: 3000,
+  }),
+  lmg({
+    // CoD4 RPD: the mid-range laser. 40-30 held to 40 m (three shots to ~56 m) at a measured 700
+    // rpm, the tightest aimed cone of the class and a straight climb that leans only a touch right;
+    // 100-round drum, slow drum change.
+    id: 'rpd',
+    name: 'RPD',
+    blurb: 'Drum-fed laser: three shots well into mid range, a straight, predictable climb.',
+    damage: { near: 40, far: 30, nearRange: 40, farRange: 65 },
+    rpm: 700,
+    mode: 'auto',
+    magazine: 100,
+    reserve: 200,
+    reloadMs: 5800,
+    reloadEmptyMs: 6800,
+    adsMs: 420,
+    sprintOutMs: 380,
+    moveMult: 0.85,
+    spread: { hip: 5.5, ads: 0.15, move: 2 },
+    recoil: { vertical: 0.75, horizontal: 0.12, recovery: 13, drift: 0.12 },
+    unlockLevel: 42,
+    attachments: MW2_LMG_ATTS,
+    model: 'rpd',
+    price: 3000,
+  }),
+  lmg({
+    // CoD4 M249 SAW: 30-20 at 937 rpm, the tightest hipfire of any LMG (the CoD4 run-and-gun SAW),
+    // but the heaviest random kick; 100-round box.
+    id: 'm249',
+    name: 'M249 SAW',
+    blurb: 'Squad automatic: a firehose with the best hipfire of the LMGs and a lot of kick.',
+    damage: { near: 30, far: 20, nearRange: 25, farRange: 50 },
+    rpm: 937,
+    mode: 'auto',
+    magazine: 100,
+    reserve: 200,
+    reloadMs: 5400,
+    reloadEmptyMs: 6400,
+    adsMs: 400,
+    sprintOutMs: 350,
+    moveMult: 0.875,
+    spread: { hip: 3.8, ads: 0.3, move: 1.6 },
+    recoil: { vertical: 1, horizontal: 0.6, recovery: 12 },
+    unlockLevel: 23,
+    attachments: MW2_LMG_ATTS,
+    model: 'm249',
+    price: 2500,
+  }),
+  lmg({
+    // MW2 MG4: the balanced one. 30-25 is four shots at every range (225 ms at 800 rpm), with low
+    // kick that drifts a hair right; 100-round box.
+    id: 'mg4',
+    name: 'MG4',
+    blurb: 'Balanced and controllable: four shots at any range, low recoil.',
+    damage: { near: 30, far: 25, nearRange: 40, farRange: 60 },
+    rpm: 800,
+    mode: 'auto',
+    magazine: 100,
+    reserve: 200,
+    reloadMs: 5000,
+    reloadEmptyMs: 5800,
+    adsMs: 380,
+    sprintOutMs: 350,
+    moveMult: 0.875,
+    spread: { hip: 4.8, ads: 0.2, move: 1.8 },
+    recoil: { vertical: 0.58, horizontal: 0.24, recovery: 15, drift: 0.08 },
+    unlockLevel: 34,
+    attachments: MW2_LMG_ATTS,
+    model: 'mg4',
+    price: 3000,
+  }),
+
   // ------------------------------------------------------------------ sniper rifles
   {
     id: 'l96a1',
@@ -617,6 +789,173 @@ export const WEAPONS: WeaponDef[] = [
     attachments: ['dual'],
     model: 'asp',
     price: 0,
+  }),
+
+  // Early-CoD pistols. Desert Eagle and USP .45 from CoD4 / MW2, the Makarov from BO1.
+  pistol({
+    // .50 AE hand cannon: two shots up close (Python: also two, but 375 ms between them), drops
+    // to three by 15 m and four past 22 m (the Python holds three); the heaviest kick and slowest
+    // ADS of the pistols, seven rounds. Medium penetration like the Python.
+    id: 'deagle',
+    name: 'Desert Eagle',
+    blurb: '.50 AE hand cannon: two shots up close, seven rounds and a brutal kick.',
+    penetration: 'medium',
+    damage: { near: 50, far: 30, nearRange: 8, farRange: 22 },
+    rpm: 200,
+    mode: 'semi',
+    magazine: 7,
+    reserve: 28,
+    reloadMs: 2100,
+    reloadEmptyMs: 2500,
+    adsMs: 200,
+    sprintOutMs: 180,
+    moveMult: 0.97,
+    spread: { hip: 3.6, ads: 0.4, move: 1.3 },
+    recoil: { vertical: 3.8, horizontal: 1.1, recovery: 9 },
+    unlockLevel: 36,
+    attachments: ['dual'],
+    model: 'deagle',
+    swapMs: 420,
+    price: 2000,
+  }),
+  pistol({
+    // BO1 Makarov: the quick starter. 35 damage (three shots inside 7 m, four by 10 m), the fastest
+    // trigger, ADS and swap of the pistols, eight rounds.
+    id: 'makarov',
+    name: 'Makarov',
+    blurb: 'Quick 9 mm starter pistol: fast to draw, aim and fire, weak past a few metres.',
+    damage: { near: 35, far: 20, nearRange: 7, farRange: 18 },
+    rpm: 720,
+    mode: 'semi',
+    magazine: 8,
+    reserve: 32,
+    reloadMs: 1400,
+    reloadEmptyMs: 1800,
+    adsMs: 130,
+    sprintOutMs: 130,
+    moveMult: 1,
+    spread: { hip: 2.8, ads: 0.5, move: 0.9 },
+    recoil: { vertical: 1.2, horizontal: 0.5, recovery: 16 },
+    unlockLevel: 1,
+    attachments: ['extmag', 'suppressor', 'dual'],
+    model: 'makarov',
+    swapMs: 300,
+    price: 0,
+  }),
+  pistol({
+    // USP .45: the all-rounder. M1911 damage at a slightly slower trigger with a 12-round magazine.
+    id: 'usp',
+    name: 'USP .45',
+    blurb: 'Solid .45 all-rounder with a 12-round magazine.',
+    damage: { near: 40, far: 25, nearRange: 9, farRange: 24 },
+    rpm: 600,
+    mode: 'semi',
+    magazine: 12,
+    reserve: 36,
+    reloadMs: 1700,
+    reloadEmptyMs: 2100,
+    adsMs: 160,
+    moveMult: 1,
+    spread: { hip: 3, ads: 0.4, move: 1 },
+    recoil: { vertical: 1.7, horizontal: 0.5, recovery: 14 },
+    unlockLevel: 9,
+    attachments: ['extmag', 'suppressor', 'dual'],
+    model: 'usp',
+    price: 1000,
+  }),
+
+  // ------------------------------------------------------------------ machine pistols (secondary)
+  // Full auto sidearms from BO1 (Skorpion, CZ75 with Full Auto) and MW2 (G18, TMP, MP9). Up close
+  // they kill as fast as an SMG (faster than any semi-auto pistol); damage is gone by ~11 m.
+  machinePistol({
+    id: 'mp9',
+    name: 'MP9',
+    blurb: 'Balanced machine pistol: quick, controllable, fifteen rounds.',
+    damage: { near: 30, far: 14, nearRange: 5, farRange: 13 },
+    rpm: 1080,
+    magazine: 15,
+    reserve: 75,
+    reloadMs: 1650,
+    reloadEmptyMs: 2050,
+    adsMs: 160,
+    moveMult: 1,
+    spread: { hip: 2.3, ads: 1.1, move: 0.9 },
+    recoil: { vertical: 0.95, horizontal: 0.5, recovery: 15, ads: 1.05 },
+    unlockLevel: 8,
+    model: 'mp9',
+    price: 1500,
+  }),
+  machinePistol({
+    id: 'skorpion',
+    name: 'Skorpion',
+    blurb: 'Light-hitting sprayer: twenty rounds of fast, wild fire.',
+    damage: { near: 25, far: 13, nearRange: 5, farRange: 13 },
+    rpm: 1150,
+    magazine: 20,
+    reserve: 80,
+    reloadMs: 1700,
+    reloadEmptyMs: 2200,
+    adsMs: 160,
+    moveMult: 1,
+    spread: { hip: 2.4, ads: 1.3, move: 0.9 },
+    recoil: { vertical: 0.9, horizontal: 0.8, recovery: 15, ads: 1.05 },
+    unlockLevel: 13,
+    model: 'skorpion',
+    price: 1500,
+  }),
+  machinePistol({
+    id: 'tmp',
+    name: 'TMP',
+    blurb: 'Steady machine pistol: the lightest kick of the class, made for short bursts.',
+    damage: { near: 34, far: 15, nearRange: 5, farRange: 13 },
+    rpm: 850,
+    magazine: 15,
+    reserve: 75,
+    reloadMs: 1700,
+    reloadEmptyMs: 2100,
+    adsMs: 170,
+    moveMult: 1,
+    spread: { hip: 2.3, ads: 0.9, move: 0.8 },
+    recoil: { vertical: 0.7, horizontal: 0.35, recovery: 17, ads: 0.95 },
+    unlockLevel: 22,
+    model: 'tmp',
+    price: 2000,
+  }),
+  machinePistol({
+    id: 'cz75auto',
+    name: 'CZ75 Auto',
+    blurb: 'Full-auto CZ75: hard-hitting, but only twelve rounds.',
+    damage: { near: 40, far: 18, nearRange: 5, farRange: 13 },
+    rpm: 800,
+    magazine: 12,
+    reserve: 60,
+    reloadMs: 1500,
+    reloadEmptyMs: 1900,
+    adsMs: 160,
+    moveMult: 1,
+    spread: { hip: 2.6, ads: 1.0, move: 1 },
+    recoil: { vertical: 1.4, horizontal: 0.6, recovery: 13, ads: 1.15 },
+    unlockLevel: 32,
+    model: 'cz75auto',
+    price: 2000,
+  }),
+  machinePistol({
+    id: 'g18',
+    name: 'G18',
+    blurb: 'Blistering full-auto Glock: empties twenty rounds in a second.',
+    damage: { near: 26, far: 13, nearRange: 5, farRange: 13 },
+    rpm: 1250,
+    magazine: 20,
+    reserve: 80,
+    reloadMs: 1600,
+    reloadEmptyMs: 2000,
+    adsMs: 160,
+    moveMult: 1,
+    spread: { hip: 2.2, ads: 1.4, move: 0.8 },
+    recoil: { vertical: 1.1, horizontal: 0.7, recovery: 14, ads: 1.1 },
+    unlockLevel: 44,
+    model: 'g18',
+    price: 2500,
   }),
 
   // ------------------------------------------------------------------ launchers (secondary)
@@ -1015,6 +1354,12 @@ export const LOADOUT_WEAPONS: WeaponDef[] = WEAPONS.filter((w) => (w.slot === 'p
 
 /** A Mystery Box wonder weapon (never classable, sold or unlocked). */
 export const isWonderWeapon = (id: string | null | undefined): boolean => !!id && !!WEAPON_BY_ID.get(id)?.wonder;
+
+/** Kick multiplier when fully aimed, unless a weapon's `recoil.ads` says otherwise. */
+export const ADS_RECOIL = 0.65;
+
+/** The view-kick multiplier at ADS fraction `ads` (0 hip .. 1 aimed): 1 at the hip, `recoil.ads` (default 0.65) aimed. */
+export const recoilAdsK = (recoil: Pick<WeaponDef['recoil'], 'ads'>, ads: number): number => 1 + Math.max(0, Math.min(1, ads)) * ((recoil.ads ?? ADS_RECOIL) - 1);
 
 /** Seconds between trigger pulls for a weapon at its cycle rate (burst weapons: between bursts). */
 export function cycleSec(w: Pick<WeaponDef, 'rpm' | 'mode' | 'burst' | 'burstDelayMs'>): number {

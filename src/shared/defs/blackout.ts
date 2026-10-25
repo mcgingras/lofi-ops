@@ -301,7 +301,7 @@ export const RARITY_ATTACHMENTS: Record<Rarity, number> = { common: 0, rare: 1, 
 
 /** Ammo types (one per weapon class family). */
 export type AmmoType = 'pistol' | 'smg' | 'rifle' | 'sniper' | 'shotgun';
-export const AMMO_OF_CLASS: Record<WeaponClass, AmmoType | null> = { ar: 'rifle', lmg: 'rifle', smg: 'smg', sniper: 'sniper', shotgun: 'shotgun', pistol: 'pistol', launcher: null, special: null };
+export const AMMO_OF_CLASS: Record<WeaponClass, AmmoType | null> = { ar: 'rifle', lmg: 'rifle', smg: 'smg', sniper: 'sniper', shotgun: 'shotgun', pistol: 'pistol', machinepistol: 'pistol', launcher: null, special: null };
 /** Rounds in an ammo box of each type. */
 export const AMMO_BOX: Record<AmmoType, number> = { pistol: 24, smg: 60, rifle: 60, sniper: 10, shotgun: 12 };
 export const AMMO_NAMES: Record<AmmoType, string> = { pistol: 'PISTOL AMMO', smg: 'SMG AMMO', rifle: 'RIFLE AMMO', sniper: 'SNIPER AMMO', shotgun: 'SHELLS' };
@@ -315,7 +315,7 @@ export const LOOT_ENTITY = 'blackout_loot';
 export const PLANE_ENTITY = 'blackout_plane';
 
 /** Weapons that can lie on the floor, by rarity weight (launchers, the knife and wonder weapons excluded). */
-export const LOOT_WEAPONS: readonly string[] = ['m16', 'famas', 'ak47', 'commando', 'galil', 'aug', 'acr', 'm16a4', 'mp5k', 'ak74u', 'mpl', 'rpk', 'l96a1', 'dragunov', 'intervention', 'olympia', 'stakeout', 'spas12', 'm1911', 'python', 'asp'];
+export const LOOT_WEAPONS: readonly string[] = ['m16', 'famas', 'ak47', 'commando', 'galil', 'aug', 'acr', 'm16a4', 'mp5k', 'ak74u', 'mpl', 'rpk', 'l96a1', 'dragunov', 'intervention', 'olympia', 'stakeout', 'spas12', 'm1911', 'python', 'asp', 'm60', 'stoner63', 'hk21', 'rpd', 'm249', 'mg4', 'deagle', 'makarov', 'usp'];
 /** The very rare wonder weapon spawn (a legendary roll can turn into it). */
 export const LOOT_WONDER = 'raygun';
 export const WONDER_CHANCE = 0.03;
@@ -355,7 +355,7 @@ export function rollRarity(r: () => number): Rarity {
 export function rollAttachments(def: WeaponDef, rarity: Rarity, r: () => number): string[] {
   const n = RARITY_ATTACHMENTS[rarity];
   if (!n || !def.attachments.length) return [];
-  const pool = def.attachments.filter((a) => a !== 'gl' && a !== 'dual');
+  const pool = def.attachments.filter((a) => a !== 'gl' && a !== 'dual' && a !== 'akimbo');
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(r() * (i + 1));
     [pool[i], pool[j]] = [pool[j]!, pool[i]!];

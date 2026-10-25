@@ -11,7 +11,8 @@
  *   `collateral` (through every body at full damage), `ricochet` (a bullet that stopped on a wall
  *   bounces once), `explosive` (a small blast where it stopped), `knockback` (close hits shove).
  * - On a hit (the `damage` event, bullets only): `burn` (damage over time, credited to the
- *   shooter), `mark` (outlined through walls for the shooter), `stagger` (heavy flinch), `zap`
+ *   shooter; a repeat hit refreshes it), `venom` (poison that stacks: every hit adds `perHit`
+ *   over `sec`, up to `maxStacks`, and restarts the clock), `mark` (outlined through walls for the shooter), `stagger` (heavy flinch), `zap`
  *   (a chance to arc to the nearest other enemy), `frost` (frozen solid if it didn't kill),
  *   `shatter` (the target takes more damage from everyone for a while).
  * - On a kill (the `death` event): `headblast` (a head kill bursts), `shockwave` (a pulse shoves
@@ -39,6 +40,7 @@ export type PapEffect =
   | { kind: 'collateral' }
   | { kind: 'launcher'; weapon: 'gl' | 'masterkey'; rounds: number }
   | { kind: 'burn'; damage: number; sec: number }
+  | { kind: 'venom'; perHit: number; sec: number; maxStacks: number }
   | { kind: 'mark'; sec: number }
   | { kind: 'ricochet'; keep: number; range: number }
   | { kind: 'stagger'; kickDeg: number; botFlinch: number; botAimDeg: number; sec: number }
@@ -75,6 +77,9 @@ export const PAP_FX = {
 
 /** Burn damage per tick (`PAP_FX.burnTick`) for a burn effect. */
 export const burnPerTick = (e: PapEffectOf<'burn'>): number => (e.damage * PAP_FX.burnTick) / e.sec;
+
+/** Venom damage per tick (`PAP_FX.burnTick`) with `stacks` doses in the target. */
+export const venomPerTick = (e: PapEffectOf<'venom'>, stacks: number): number => (Math.max(0, Math.min(e.maxStacks, stacks)) * e.perHit * PAP_FX.burnTick) / e.sec;
 
 /** How many extra bodies a path effect lets a bullet go through, and the damage kept for each (0 = none). */
 export function pierceOf(e: PapEffect | null): { bodies: number; keep: number } {
@@ -154,6 +159,7 @@ export const papV3 = (v: Vec3): [number, number, number] => [r2(v.x), r2(v.y), r
  * Effect pushes (`killstreaks.papFx`). Statuses carry the room time they end (`until`); the client
  * keeps the latest per player and kind.
  * - `burn` (everyone): `v` is on fire (flames on the body; the victim's screen edge glows orange).
+ * - `venom` (everyone): `v` is poisoned with `n` doses (green bubbles; the victim's screen edge pulses green).
  * - `shatter` (everyone): `v`'s armour is broken (cracks on the body; the victim's screen cracks).
  * - `mark` (the shooter only): `v` is outlined through walls for you.
  * - `stagger` (the victim only): your aim kicks by `p` / `y` degrees.
@@ -166,6 +172,7 @@ export const papV3 = (v: Vec3): [number, number, number] => [r2(v.x), r2(v.y), r
  */
 export type PapFx =
   | { k: 'burn'; v: string; by: string; until: number }
+  | { k: 'venom'; v: string; by: string; until: number; n: number }
   | { k: 'shatter'; v: string; by: string; until: number }
   | { k: 'mark'; v: string; until: number }
   | { k: 'stagger'; v: string; p: number; y: number }

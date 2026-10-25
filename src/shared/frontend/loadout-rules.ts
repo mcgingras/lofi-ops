@@ -11,7 +11,7 @@
  *   owned (bought in the store). MW2 camos (`weaponChallenge`) follow their per-weapon challenge
  *   only (`camo-unlocks.ts`: headshots with that gun, primaries only), never a grant or a price.
  */
-import { ATTACHMENT_BY_ID, BASE_ATTACHMENT_SLOTS, effectiveWeapon, type AttachmentDef } from '../defs/attachments';
+import { ATTACHMENT_BY_ID, attachmentsClash, BASE_ATTACHMENT_SLOTS, effectiveWeapon, type AttachmentDef } from '../defs/attachments';
 import { CAMO_BY_ID, camoName, type CamoDef } from '../defs/camos';
 import { weaponCamoProgress } from '../defs/camo-unlocks';
 import { CHALLENGES } from '../defs/challenges';
@@ -166,12 +166,18 @@ export function attachmentSlotsFor(perks: readonly string[], cat: Catalog = CATA
 /**
  * Create-a-class attachment pick (pure): clicking an equipped attachment takes it off; a new one
  * replaces any of the same attachment slot (optic, magazine...), and when the weapon is already
- * full (`max`: 1, or 2 with Warlord) the oldest pick makes room. Never clears the others.
+ * full (`max`: 1, or 2 with Warlord) the oldest pick makes room. One it rules out (`excludes`:
+ * Akimbo and an optic) is taken off too. Never clears the others.
  */
 export function toggleAttachment(current: readonly string[], id: string, max: number, attachments: ReadonlyMap<string, AttachmentDef> = ATTACHMENT_BY_ID): string[] {
   if (current.includes(id)) return current.filter((a) => a !== id);
-  const kind = attachments.get(id)?.slot;
-  const rest = current.filter((a) => attachments.get(a)?.slot !== kind);
+  const picked = attachments.get(id);
+  const kind = picked?.slot;
+  // Same slot, or one the pick rules out (Akimbo and an optic): replaced.
+  const rest = current.filter((a) => {
+    const other = attachments.get(a);
+    return other?.slot !== kind && !(picked && other && attachmentsClash(picked, other));
+  });
   const room = Math.max(1, Math.floor(max)) - 1;
   return [...rest.slice(Math.max(0, rest.length - room)), id];
 }
@@ -261,6 +267,11 @@ export function validateLoadout(p: UnlockProfile, input: unknown, fallback: Load
         }
         if (used.has(ad.slot)) {
           problems.push(`one ${ad.slot} attachment only`);
+          continue;
+        }
+        const clash = atts.find((x) => attachmentsClash(ad, cat.attachments.get(x)!));
+        if (clash) {
+          problems.push(`${ad.name} can't go with ${cat.attachments.get(clash)!.name}`);
           continue;
         }
         if (atts.length >= slots) {

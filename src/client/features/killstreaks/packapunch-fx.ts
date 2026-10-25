@@ -4,6 +4,8 @@
  *
  * - Burning (incendiary rounds, dragon's breath): a hot flush and flames rising off the body; on
  *   my own screen a flickering orange edge; the napalm crackle where it starts.
+ * - Poisoned (Scorpion Venom): green bubbles rising off the body (more with more doses); on my own
+ *   screen a pulsing green edge; a hiss on each new dose.
  * - Shattered armour: pale shards flaking off the body; on my screen a cracked-glass overlay.
  * - Marked (Predator, for the shooter only): a red box outline around the target, drawn through
  *   walls, blinking in its last second.
@@ -13,7 +15,8 @@
  * - Shockwave: a purple ring on the floor, dust and a whoomp. Knockback: dust and a thud.
  * - Frost round: an ice burst and crackle (the frost itself is the wonder weapons' ice entity).
  * - Exploding headshot: a small red-orange burst (blast jolt nearby).
- * - In hand: a red laser dot at the crosshair (AK74fu2), a second gun in the left hand (MPL-LF).
+ * - In hand: a red laser dot at the crosshair (AK74fu2), a second gun in the left hand (MPL-LF, and
+ *   any gun with the Akimbo attachment: the same mirrored copy).
  */
 import * as THREE from 'three';
 import { PAP_CAMO, papEffectOf } from '../../../shared/defs/pack-a-punch';
@@ -31,12 +34,15 @@ import { fxKit } from '../weapons/wonder/fx';
 const DEG = Math.PI / 180;
 const FIRE = [0xffd060, 0xff8a20, 0xff5a10];
 const MARK = 0xff3030;
+const VENOM = [0x8cff5a, 0x4cd03a, 0xc8ff9a];
 const rnd = (k: number) => (Math.random() * 2 - 1) * k;
 const t3 = (v: readonly number[], i = 0): Vec3 => ({ x: v[i]!, y: v[i + 1]!, z: v[i + 2]! });
 
 /** Statuses by player id (room time each ends), and the marks I placed. */
 export const papFxState = {
   burn: new Map<string, number>(),
+  /** Poisoned players: until (room time) and doses. */
+  venom: new Map<string, { until: number; n: number }>(),
   shatter: new Map<string, number>(),
   marks: new Map<string, number>(),
   /** When my own burn / shatter started (local time), for the overlays' fade in. */
@@ -46,6 +52,11 @@ export const papFxState = {
 
 const live = (m: Match, until: number | undefined) => until !== undefined && until > m.serverTime;
 
+/** Doses of venom in player `id` right now (0 when not poisoned). */
+export const venomDoses = (m: Match, id: string): number => {
+  const v = papFxState.venom.get(id);
+  return v && live(m, v.until) ? v.n : 0;
+};
 /** Is player `id` burning right now (tests, the HUD)? */
 export const isBurning = (m: Match, id: string): boolean => live(m, papFxState.burn.get(id));
 /** Is player `id` marked for me right now? */
@@ -70,6 +81,15 @@ onFeature('killstreaks.papFx', (fx: PapFx) => {
       if (fx.v === m.myId && !was) papFxState.burnAt = m.time;
       const at = bodyPos(m, fx.v);
       if (!was && at) sfx.play('ks_fire', { at: { x: at.x, y: at.y + 1, z: at.z }, volume: 0.9 });
+      break;
+    }
+    case 'venom': {
+      papFxState.venom.set(fx.v, { until: fx.until, n: fx.n });
+      const at = bodyPos(m, fx.v);
+      if (at) {
+        sfx.play('weapons.wonder.chill', { at: { x: at.x, y: at.y + 1.1, z: at.z }, volume: 0.5 + 0.08 * fx.n, rate: 1.25 });
+        for (let i = 0; i < 4 + fx.n * 2; i++) fxKit.emit({ x: at.x + rnd(0.2), y: at.y + 1.1, z: at.z + rnd(0.2) }, { color: VENOM[i % 3]!, life: 0.4, size: 0.07, size1: 0.02, vel: { x: rnd(1.5), y: Math.random() * 1.5, z: rnd(1.5) }, grav: 4 });
+      }
       break;
     }
     case 'shatter': {
@@ -174,6 +194,15 @@ function updateBodies(m: Match, dt: number): void {
     }
     if (Math.random() < 0.3) fxKit.emit({ x: v.x + rnd(0.2), y: v.y + h, z: v.z + rnd(0.2) }, { tex: 'puff', color: 0x2a2624, additive: false, life: 0.9, size: 0.2, size1: 0.6, vel: { x: rnd(0.3), y: 1.2, z: rnd(0.3) } });
   }
+  for (const [id, v] of papFxState.venom) {
+    if (!live(m, v.until)) {
+      papFxState.venom.delete(id);
+      continue;
+    }
+    const r = id === m.myId ? null : m.remotes.views.get(id);
+    if (!r || !r.alive || !puff || Math.random() > 0.2 + 0.1 * v.n) continue;
+    fxKit.emit({ x: r.x + rnd(0.25), y: r.y + 0.4 + Math.random() * 1.2, z: r.z + rnd(0.25) }, { color: VENOM[(Math.random() * 3) | 0]!, life: 0.6, size: 0.09, size1: 0.03, vel: { x: rnd(0.2), y: 0.9, z: rnd(0.2) } });
+  }
   for (const [id, until] of papFxState.shatter) {
     if (!live(m, until)) {
       papFxState.shatter.delete(id);
@@ -236,12 +265,18 @@ function dropAkimbo(): void {
   akimbo.src = null;
 }
 
-/** A packed dual-wield gun: a mirrored copy of the viewmodel in the left hand, following its pose. */
-function updateAkimbo(m: Match): void {
+/** Does the gun in hand get a second one in the left hand: packed dual wield (MPL-LF) or the Akimbo attachment? */
+export function heldAkimbo(m: Match): boolean {
   const id = heldPacked(m);
+  if (id && papEffectOf(id, 'akimbo')) return true;
+  return m.slot < 2 && !!m.weapon()?.attachmentIds.includes('akimbo');
+}
+
+/** Dual wield in hand: a mirrored copy of the viewmodel in the left hand, following its pose. */
+function updateAkimbo(m: Match): void {
   const root = m.viewmodel.root;
   const src = root.children.find((c) => c !== akimbo.copy) ?? null;
-  if (!id || !papEffectOf(id, 'akimbo') || !src || !root.visible || !root.parent) {
+  if (!heldAkimbo(m) || !src || !root.visible || !root.parent) {
     dropAkimbo();
     return;
   }
@@ -270,6 +305,7 @@ function updateAkimbo(m: Match): void {
 registerMatchHook('killstreaks.papFx', {
   start() {
     papFxState.burn.clear();
+    papFxState.venom.clear();
     papFxState.shatter.clear();
     papFxState.marks.clear();
     papFxState.burnAt = papFxState.shatterAt = -9;
@@ -277,6 +313,7 @@ registerMatchHook('killstreaks.papFx', {
       clearOutlines();
       dropAkimbo();
       papFxState.burn.clear();
+      papFxState.venom.clear();
       papFxState.shatter.clear();
       papFxState.marks.clear();
     };
@@ -352,6 +389,16 @@ registerHudWidget(
           if ((h2 % 1000) / 1000 < density * 0.7) rect(g, W - d - step, j * step, step, step, cols[h2 % 3]!);
         }
       }
+    }
+    // Poisoned: a green rim that pulses, thicker with more doses.
+    const doses = venomDoses(m, m.myId);
+    if (doses > 0) {
+      const rim = Math.round((1 + doses * 0.6) * u * (0.6 + 0.4 * Math.abs(Math.sin(m.time * 5))));
+      const c = Math.floor(m.time * 6) % 2 ? '#5ad040' : '#8cff5a';
+      rect(g, 0, 0, W, rim, c);
+      rect(g, 0, H - rim, W, rim, c);
+      rect(g, 0, 0, rim, H, c);
+      rect(g, W - rim, 0, rim, H, c);
     }
     // Armour shattered: cracked glass over the screen while it lasts.
     if (live(m, papFxState.shatter.get(m.myId))) {

@@ -12,6 +12,7 @@ import { KILLSTREAKS } from '../../../shared/defs/killstreaks';
 import { PERKS } from '../../../shared/defs/perks';
 import { WEAPONS, type WeaponClass, type WeaponDef } from '../../../shared/defs/weapons';
 import { DEFAULT_LOADOUTS, type Loadout } from '../../../shared/loadout';
+import { rng } from '../../../shared/math';
 
 /** How bots like each primary class (weights scaled by skill rating where noted). */
 const PRIMARY_WEIGHT: Partial<Record<WeaponClass, (rating: number) => number>> = {
@@ -25,6 +26,8 @@ const PRIMARY_WEIGHT: Partial<Record<WeaponClass, (rating: number) => number>> =
 const SECONDARY_WEIGHT: Partial<Record<WeaponClass, (rating: number) => number>> = {
   pistol: () => 5,
   launcher: (r) => 0.4 + r * 0.6,
+  // Per gun, like every weight: five machine pistols at ~0.8 make one bot in four or five carry one.
+  machinepistol: (r) => 0.6 + r * 0.4,
 };
 
 function weighted<T>(items: T[], weight: (t: T) => number, rnd: () => number): T | undefined {
@@ -63,7 +66,11 @@ export function pickBotCamo(def: WeaponDef | undefined, rating: number, rnd: () 
 }
 
 /** A random but sensible class for a bot of overall skill `rating` (0..1). */
-export function chooseBotLoadout(rating: number, rnd: () => number = Math.random): Loadout {
+export function chooseBotLoadout(rating: number, rnd0: () => number = Math.random): Loadout {
+  // Remember the last draw: the machine pistol's attachment rolls from it (below) instead of taking
+  // more draws, so a seeded caller's random stream stays what it was before machine pistols.
+  let last = 0;
+  const rnd = () => (last = rnd0());
   const base = DEFAULT_LOADOUTS[0]!;
   const primaries = WEAPONS.filter((w) => w.slot === 'primary' && PRIMARY_WEIGHT[w.class]);
   const secondaries = WEAPONS.filter((w) => w.slot === 'secondary' && SECONDARY_WEIGHT[w.class]);
@@ -91,10 +98,13 @@ export function chooseBotLoadout(rating: number, rnd: () => number = Math.random
   const tactical = tacticals.length ? tacticals[Math.floor(rnd() * tacticals.length)]! : base.tactical;
   // Drawn last so the rest of the class stays what the same seed gave before camos.
   const camo = pickBotCamo(primary, rating, rnd);
+  // A machine pistol sometimes comes with its one attachment (Akimbo, a long mag...), from a
+  // generator seeded off the last draw: no extra draws on the caller's stream.
+  const secondaryAtts = secondary?.class === 'machinepistol' ? pickAttachments(secondary, rng(Math.floor(last * 2 ** 31) ^ 0x5eed), 1) : [];
   return {
     name: 'Bot',
     primary: primary ? { weapon: primary.id, attachments, camo } : { ...base.primary },
-    secondary: secondary ? { weapon: secondary.id, attachments: [], camo: 'none' } : { ...base.secondary },
+    secondary: secondary ? { weapon: secondary.id, attachments: secondaryAtts, camo: 'none' } : { ...base.secondary },
     perks,
     killstreaks: chosen,
     lethal,

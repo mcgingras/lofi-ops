@@ -26,7 +26,7 @@ import { debounce, errText, h } from './ui';
 
 type Section = 'name' | 'primary' | 'primaryAtt' | 'primaryCamo' | 'secondary' | 'secondaryAtt' | 'secondaryCamo' | 'lethal' | 'tactical' | 'perk1' | 'perk2' | 'perk3' | 'streaks';
 
-const CLASS_NAMES: Record<WeaponClass, string> = { ar: 'Assault rifles', smg: 'Submachine guns', lmg: 'Light machine guns', sniper: 'Sniper rifles', shotgun: 'Shotguns', pistol: 'Pistols', launcher: 'Launchers', special: 'Specials' };
+const CLASS_NAMES: Record<WeaponClass, string> = { ar: 'Assault rifles', smg: 'Submachine guns', lmg: 'Light machine guns', sniper: 'Sniper rifles', shotgun: 'Shotguns', pistol: 'Pistols', machinepistol: 'Machine pistols', launcher: 'Launchers', special: 'Specials' };
 const wName = (id: string) => WEAPON_BY_ID.get(id)?.name ?? id;
 const camoColor = (id: string) => {
   const c = CAMO_BY_ID.get(id)?.recipe?.colors?.[0];

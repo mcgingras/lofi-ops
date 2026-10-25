@@ -3,7 +3,8 @@
  * modifiers into a WeaponDef. Core combat always fights with the effective def.
  *
  * Rules (BO1): a weapon accepts only the attachments in its `WeaponDef.attachments` list, at most
- * one per attachment slot, and only ONE attachment in total unless the player has extra slots
+ * one per attachment slot, never two that clash (`excludes`: Akimbo takes no optic), and only ONE
+ * attachment in total unless the player has extra slots
  * on the primary (Warlord: the perks feature registers `attachmentSlotsOffset(p, loadout)` = 1; the
  * weapons feature enforces the count at spawn, create-a-class uses `attachmentSlotsFor`). `validAttachments(def, ids, max)` is the
  * pure rule the server and the loadout editor share.
@@ -56,6 +57,8 @@ export interface AttachmentDef {
   blurb?: string;
   /** Per-class modifier overrides (e.g. an ACOG on a sniper zooms differently). */
   byClass?: Partial<Record<WeaponDef['class'], Partial<WeaponModifiers>>>;
+  /** Attachment slots it can't share a gun with (Akimbo: no optic, there are no sights to use). */
+  excludes?: AttachmentSlot[];
 }
 
 export const ATTACHMENTS: AttachmentDef[] = [
@@ -74,12 +77,26 @@ export const ATTACHMENTS: AttachmentDef[] = [
   },
   { id: 'varzoom', name: 'Variable Zoom', slot: 'optic', blurb: 'Sniper scope with three zoom levels (X or middle mouse).', modifiers: { zoom: 4.5, zoomLevels: [4.5, 7, 10] }, unlockKills: 30, model: 'varzoom', price: 1500 },
   { id: 'suppressor', name: 'Suppressor', slot: 'muzzle', blurb: 'Stays off the radar when firing. Reduced range.', modifiers: { suppressed: true, rangeMult: 0.7 }, unlockKills: 40, model: 'suppressor', price: 3000 },
-  { id: 'extmag', name: 'Extended Mag', slot: 'magazine', blurb: 'More rounds per magazine.', modifiers: { magazineMult: 1.5, reserveMult: 1.25 }, unlockKills: 10, model: 'extmag', price: 1500 },
+  // Machine pistols take MW2's long mags (G18: 20 -> 33).
+  { id: 'extmag', name: 'Extended Mag', slot: 'magazine', blurb: 'More rounds per magazine.', modifiers: { magazineMult: 1.5, reserveMult: 1.25 }, byClass: { machinepistol: { magazineMult: 1.65 / 1.5 } }, unlockKills: 10, model: 'extmag', price: 1500 },
   { id: 'dualmag', name: 'Dual Mag', slot: 'magazine', blurb: 'Taped magazines: faster reloads.', modifiers: { reloadMult: 0.72 }, unlockKills: 20, model: 'dualmag', price: 1500 },
   { id: 'grip', name: 'Grip', slot: 'underbarrel', blurb: 'Foregrip: less recoil.', modifiers: { recoilMult: 0.6 }, unlockKills: 15, model: 'grip', price: 1000 },
   { id: 'gl', name: 'Grenade Launcher', slot: 'underbarrel', blurb: 'Underbarrel launcher: switch to it with 3 (or the wheel).', modifiers: { adsTimeMult: 1.1, moveMult: 0.97 }, unlockKills: 50, model: 'gl', price: 2000 },
   { id: 'rapidfire', name: 'Rapid Fire', slot: 'other', blurb: 'Higher rate of fire, more kick and spread.', modifiers: { rpmMult: 1.3, hipSpreadMult: 1.25, recoilMult: 1.2 }, unlockKills: 30, model: 'rapidfire', price: 2000 },
   { id: 'dual', name: 'Dual Wield', slot: 'other', blurb: 'A pistol in each hand: double the rounds and fire rate, no aiming.', modifiers: { magazineMult: 2, reserveMult: 2, rpmMult: 1.6, hipSpreadMult: 1.25, noAds: true, reloadMult: 1.3 }, unlockKills: 25, model: 'dual', price: 2000 },
+  // Machine pistols: MW2's Akimbo. Like Dual Wield (and the MPL-LF's packed dual wield, whose
+  // mirrored viewmodel it reuses), but no faster fire: the pair already cycles fast.
+  {
+    id: 'akimbo',
+    name: 'Akimbo',
+    slot: 'other',
+    blurb: 'A machine pistol in each hand: double the magazine, no aiming, a little more spread.',
+    modifiers: { magazineMult: 2, reserveMult: 2, hipSpreadMult: 1.2, noAds: true, reloadMult: 1.35 },
+    excludes: ['optic'],
+    unlockKills: 30,
+    model: 'akimbo',
+    price: 2000,
+  },
   { id: 'speedreloader', name: 'Speed Reloader', slot: 'magazine', blurb: 'Revolver speed loader: much faster reloads.', modifiers: { reloadMult: 0.55 }, unlockKills: 20, model: 'speedreloader', price: 1000 },
 ];
 
@@ -88,9 +105,14 @@ export const ATTACHMENT_BY_ID = indexById(ATTACHMENTS);
 /** BO1: one attachment per weapon (Warlord adds one). */
 export const BASE_ATTACHMENT_SLOTS = 1;
 
+/** Do two attachments rule each other out (`excludes`, either way round)? */
+export function attachmentsClash(a: AttachmentDef, b: AttachmentDef): boolean {
+  return !!a.excludes?.includes(b.slot) || !!b.excludes?.includes(a.slot);
+}
+
 /**
  * The attachments from `ids` that `def` really takes: known, on the weapon's list, unique, one per
- * attachment slot, at most `max` in total (in the order given).
+ * attachment slot, none another one `excludes`, at most `max` in total (in the order given).
  */
 export function validAttachments(def: Pick<WeaponDef, 'attachments'>, ids: readonly string[], max = Infinity): string[] {
   const used: string[] = [];
@@ -99,6 +121,7 @@ export function validAttachments(def: Pick<WeaponDef, 'attachments'>, ids: reado
     if (used.length >= max) break;
     const a = ATTACHMENT_BY_ID.get(id);
     if (!a || !def.attachments.includes(id) || slots.has(a.slot) || used.includes(id)) continue;
+    if (used.some((u) => attachmentsClash(a, ATTACHMENT_BY_ID.get(u)!))) continue;
     slots.add(a.slot);
     used.push(id);
   }
@@ -111,7 +134,7 @@ export function canAttach(def: Pick<WeaponDef, 'attachments'>, id: string, other
   if (!a || !def.attachments.includes(id)) return false;
   const rest = validAttachments(def, others.filter((o) => o !== id));
   if (rest.length + 1 > max) return false;
-  return !rest.some((o) => ATTACHMENT_BY_ID.get(o)!.slot === a.slot);
+  return !rest.some((o) => ATTACHMENT_BY_ID.get(o)!.slot === a.slot || attachmentsClash(a, ATTACHMENT_BY_ID.get(o)!));
 }
 
 /** Effective weapon stats with attachments applied. Unknown or disallowed ids are ignored. */
@@ -121,7 +144,7 @@ export interface EffectiveWeapon extends WeaponDef {
   suppressed: boolean;
   /** Variable zoom levels (empty unless the optic has them). */
   zoomLevels: number[];
-  /** True when ADS is disabled (dual wield). */
+  /** True when ADS is disabled (dual wield, akimbo). */
   noAds: boolean;
 }
 
@@ -161,7 +184,7 @@ export function effectiveWeapon(def: WeaponDef, attachmentIds: readonly string[]
     adsMs: def.adsMs * m.adsTimeMult,
     moveMult: def.moveMult * m.moveMult,
     spread: { hip, ads: m.noAds ? hip : def.spread.ads * m.adsSpreadMult, move: def.spread.move },
-    recoil: { vertical: def.recoil.vertical * m.recoilMult, horizontal: def.recoil.horizontal * m.recoilMult, recovery: def.recoil.recovery },
+    recoil: { ...def.recoil, vertical: def.recoil.vertical * m.recoilMult, horizontal: def.recoil.horizontal * m.recoilMult, ...(def.recoil.drift ? { drift: def.recoil.drift * m.recoilMult } : {}) },
     zoom: m.noAds ? 1 : m.zoom,
     scope: m.scope,
     ...(m.rangeMult !== 1 ? { range: range * Math.max(0.5, m.rangeMult) } : {}),

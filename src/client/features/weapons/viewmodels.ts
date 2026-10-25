@@ -132,7 +132,7 @@ export function buildWeaponViewmodel(c: ViewmodelCtx, model: string): ViewmodelS
   const rShoulder = new THREE.Vector3(0.12, -0.3, 0.6);
   const lShoulder = new THREE.Vector3(-0.3, -0.32, 0.55);
   const right = hand(gunRoot, build.grip, rShoulder, glove, sleeve);
-  const left = build.parts.offhand ? null : hand(gunRoot, build.fore, lShoulder, glove, sleeve);
+  const left = build.parts.offhand || build.oneHand ? null : hand(gunRoot, build.fore, lShoulder, glove, sleeve);
   if (build.parts.offhand) hand(build.parts.offhand, build.grip, rShoulder.clone().setX(-0.12), glove, sleeve);
   const leftHome = left?.position.clone() ?? new THREE.Vector3();
   const rightHome = right.position.clone();
