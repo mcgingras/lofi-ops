@@ -281,10 +281,10 @@ function recoverRecoil(s: AimState, recovery: number, dt: number) {
 }
 
 /** A shot was fired: the player's view kick (WeaponDef.recoil degrees), less when ADS. */
-export function addRecoil(s: AimState, recoil: { vertical: number; horizontal: number; ads?: number }, ads: number, rnd: () => number = Math.random): void {
+export function addRecoil(s: AimState, recoil: { vertical: number; horizontal: number; drift?: number; ads?: number }, ads: number, rnd: () => number = Math.random): void {
   const k = recoilAdsK(recoil, ads) * RECOIL_SCALE;
   const p = recoil.vertical * k;
-  const y = (rnd() - 0.5) * 2 * recoil.horizontal * k;
+  const y = ((rnd() - 0.5) * 2 * recoil.horizontal + (recoil.drift ?? 0)) * k;
   s.recoil += p;
   s.recoilYaw += y;
   s.pitch += p * DEG;

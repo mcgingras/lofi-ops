@@ -184,7 +184,7 @@ export function effectiveWeapon(def: WeaponDef, attachmentIds: readonly string[]
     adsMs: def.adsMs * m.adsTimeMult,
     moveMult: def.moveMult * m.moveMult,
     spread: { hip, ads: m.noAds ? hip : def.spread.ads * m.adsSpreadMult, move: def.spread.move },
-    recoil: { ...def.recoil, vertical: def.recoil.vertical * m.recoilMult, horizontal: def.recoil.horizontal * m.recoilMult },
+    recoil: { ...def.recoil, vertical: def.recoil.vertical * m.recoilMult, horizontal: def.recoil.horizontal * m.recoilMult, ...(def.recoil.drift ? { drift: def.recoil.drift * m.recoilMult } : {}) },
     zoom: m.noAds ? 1 : m.zoom,
     scope: m.scope,
     ...(m.rangeMult !== 1 ? { range: range * Math.max(0.5, m.rangeMult) } : {}),

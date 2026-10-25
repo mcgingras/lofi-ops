@@ -893,7 +893,7 @@ export class BlackoutBrain implements BotBrain {
 /** How much a gun is worth to a bot (rarity, class; an empty one is worth little). */
 export function gunValue(id: string, attachments: number, ammo = 1): number {
   if (id === 'knife') return 0;
-  const base = id === 'raygun' ? 6 : ['m1911', 'python', 'asp'].includes(id) ? 1.5 : WEAPON_BY_ID.get(id)?.class === 'machinepistol' ? 2 : ['olympia', 'stakeout'].includes(id) ? 2.2 : 3;
+  const base = id === 'raygun' ? 6 : WEAPON_BY_ID.get(id)?.class === 'pistol' ? 1.5 : WEAPON_BY_ID.get(id)?.class === 'machinepistol' ? 2 : ['olympia', 'stakeout'].includes(id) ? 2.2 : 3;
   return ammo > 0 ? base + attachments * 0.6 : 0.4;
 }
 

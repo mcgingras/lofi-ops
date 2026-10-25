@@ -199,9 +199,11 @@ export const OITC = { lives: 3, weapon: 'm1911', killScore: 50, surviveScore: 10
  * Gun Game ladder by intent (BO1 order: pistols, shotguns, SMGs, ARs, snipers, LMGs, specials).
  * Ids the weapons area hasn't shipped are skipped at runtime (`gunGameLadder`). The MW2 additions
  * (M16A4, ACR, Intervention) sit next to their BO1 cousins and bring the shipped ladder to BO1's 20.
+ * The HK21 shipped later with the other LMGs; it is left off so the ladder stays at 20 rungs with
+ * the RPK as its one LMG.
  */
 export const GUN_GAME_LADDER_INTENT = [
-  'm1911', 'python', 'cz75', 'olympia', 'spas12', 'mp5k', 'ak74u', 'mac11', 'm16', 'm16a4', 'famas', 'galil', 'commando', 'aug', 'acr', 'ak47', 'rpk', 'hk21', 'dragunov', 'intervention', 'l96a1', 'crossbow', 'ballistic_knife',
+  'm1911', 'python', 'cz75', 'olympia', 'spas12', 'mp5k', 'ak74u', 'mac11', 'm16', 'm16a4', 'famas', 'galil', 'commando', 'aug', 'acr', 'ak47', 'rpk', 'dragunov', 'intervention', 'l96a1', 'crossbow', 'ballistic_knife',
 ];
 export const GUN_GAME = { killScore: 100, demoteOnMelee: true, demoteOnSuicide: true };
 

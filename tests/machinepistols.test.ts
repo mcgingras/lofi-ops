@@ -15,7 +15,7 @@ import { gunGameLadder } from '../src/server/features/economy/modes/gungame';
 import { callKillstreak } from '../src/server/features/killstreaks/api';
 import killstreaks from '../src/server/features/killstreaks/index';
 import { grant, ksOf } from '../src/server/features/killstreaks/state';
-import { papMarked, papShatter, papVenom, setPapRng } from '../src/server/features/killstreaks/streaks/packapunch-effects';
+import { papVenom } from '../src/server/features/killstreaks/streaks/packapunch-effects';
 import perks from '../src/server/features/perks/index';
 import pickups from '../src/server/features/pickups/index';
 import weapons from '../src/server/features/weapons/index';
@@ -216,7 +216,7 @@ describe('Akimbo', () => {
   it('packs like any gun (the packed magazine grows from the doubled one)', () => {
     const e = packDef(effectiveWeapon(W('g18'), ['akimbo']));
     expect(e.name).toBe('G115 Generator');
-    expect(e.magazine).toBe(60);
+    expect(e.magazine).toBe(80); // the G115's own dual wield doubles it again
     expect(e.noAds).toBe(true);
   });
 });
@@ -228,7 +228,9 @@ describe('machine pistols: Pack-a-Punch', () => {
     expect(new Set(kinds).size).toBe(MPS.length);
     expect(papEffect('skorpion')!.kind).toBe('venom');
     expect(papEffect('cz75auto')!.kind).toBe('ricochet');
-    expect(papEffect('g18')!.kind).toBe('zap');
+    expect(papEffect('g18')!.kind).toBe('akimbo');
+    expect(papEffect('tmp')!.kind).toBe('laser');
+    expect(papEffect('mp9')!.kind).toBe('headblast');
     expect(papToastLine('skorpion')).toBe('Scorpion Venom: venom: every hit adds poison');
     for (const id of MPS) expect(papToastLine(id).startsWith(papName(id)), id).toBe(true);
   });
@@ -276,32 +278,34 @@ describe('machine pistols: Pack-a-Punch', () => {
     expect(deaths).toEqual([{ attacker: a.id, weapon: 'skorpion', means: 'poison' }]);
   });
 
-  it('the others in a room: Nightstalker marks, Tempest shatters, G115 Generator zaps (seeded)', () => {
+  it('the others: Tempest is a laser, the G115 Generator goes akimbo (no sights), a Nightstalker head kill bursts', () => {
+    const tmp = packDef(effectiveWeapon(W('tmp')));
+    expect(tmp.spread.hip).toBe(W('tmp').spread.ads);
+    expect(tmp.recoil.vertical).toBe(0);
+    const g18 = packDef(effectiveWeapon(W('g18')));
+    expect(g18.magazine).toBe(40);
+    expect(g18.rpm).toBe(W('g18').rpm);
     const room = setup([weapons, perks, killstreaks, pickups]);
-    const mark = papBot(room, 0, 'mp9');
-    const shat = papBot(room, 0, 'tmp');
-    const zap = papBot(room, 0, 'g18');
+    const a = papBot(room, 0, 'mp9');
+    const b = papBot(room, 0, 'g18');
     const v = papBot(room, 1);
-    const n = papBot(room, 1);
-    for (const p of [mark, shat, zap]) {
+    const near = papBot(room, 1);
+    for (const p of [a, b]) {
       packNow(room, p);
       switchWeapon(room, p, 1);
     }
+    steps(room, 0.5);
+    expect(room.modifiers.any('canAds', b)).toBe(false);
+    expect(room.modifiers.any('canAds', a)).not.toBe(false);
+    place(a, -4, 20);
+    place(b, -4, 30);
     place(v, 4, 20);
-    place(n, 4, 23);
-    v.health = n.health = 1000;
-    place(mark, -4, 20);
-    place(shat, -4, 26);
-    place(zap, -4, 14);
-    shootAt(room, mark, chestOf(v));
-    expect(papMarked(room, mark, v)).toBe(true);
-    expect(papMarked(room, shat, v)).toBe(false);
-    shootAt(room, shat, chestOf(v));
-    expect(papShatter(room, v)).toBe(1.2);
-    setPapRng(room, () => 0.1);
-    const nh = n.health;
-    shootAt(room, zap, chestOf(v));
-    expect(nh - n.health).toBeCloseTo(papEffectOf('g18', 'zap')!.damage * 1.0, 5);
+    place(near, 4, 21.5);
+    v.health = 1;
+    near.health = 100;
+    shootAt(room, a, { x: v.move.x, y: v.move.y + 1.68, z: v.move.z });
+    expect(v.alive).toBe(false);
+    expect(near.health).toBeLessThan(100);
   });
 });
 
