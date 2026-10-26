@@ -10,14 +10,15 @@ import { describe, expect, it } from 'vitest';
 import { CLASS_STYLE } from '../src/server/features/bots/brain';
 import { chooseBotLoadout } from '../src/server/features/bots/loadout';
 import { STYLE } from '../src/server/features/blackout/brain';
-import { AMMO_OF_CLASS } from '../src/shared/defs/blackout';
+import { AMMO_OF_CLASS, LOOT_WEAPONS } from '../src/shared/defs/blackout';
 import { challengeById, CLASS_NAMES } from '../src/shared/defs/challenges';
 import { SHARPSHOOTER } from '../src/shared/defs/economy';
-import { DISTANT_RATE } from '../src/shared/defs/sfx-recipes';
+import { isPackable, papEffect } from '../src/shared/defs/pack-a-punch';
+import { DISTANT_RATE, SFX_BINDINGS, WEAPON_SHOTS } from '../src/shared/defs/sfx-recipes';
 import { CLASS_LABEL } from '../src/shared/defs/unlocks';
 import { WAGER_ONLY_WEAPONS } from '../src/shared/defs/wager-weapons';
 import { LOADOUT_WEAPONS, WEAPON_CLASSES, WEAPONS, type WeaponClass } from '../src/shared/defs/weapons';
-import { ZOMBIE_DAMAGE, ZOMBIE_PARTS } from '../src/shared/defs/zombies';
+import { boxPool, ZOMBIE_DAMAGE, ZOMBIE_PARTS } from '../src/shared/defs/zombies';
 import { GUN_GROUPS, groupOfClass } from '../src/shared/frontend/store-browse';
 import { penetrationType } from '../src/shared/penetration';
 
@@ -55,6 +56,20 @@ describe('weapon class coverage', () => {
     if (CLASSABLE.has(c)) {
       expect(SHARPSHOOTER.classes, 'sharpshooter').toContain(c);
       expect(challengeById(`class_${c}_kills`)?.weaponClass, 'class challenge').toBe(c);
+    }
+  });
+
+  it('every classable gun reaches the per-gun lists: a Pack-a-Punch effect, a recorded shot, the box, Blackout loot', () => {
+    const pool = new Set(boxPool().map((p) => p.id));
+    for (const w of LOADOUT_WEAPONS) {
+      if (WAGER_ONLY_WEAPONS.has(w.id)) continue;
+      expect(isPackable(w.id), w.id).toBe(true);
+      expect(papEffect(w.id), `${w.id} pap effect`).toBeTruthy();
+      expect(WEAPON_SHOTS[w.id], `${w.id} shot`).toBeDefined();
+      expect(SFX_BINDINGS[`shot.${w.id}.sup`], `${w.id} suppressed shot`).toBeDefined();
+      if (w.id !== 'm1911') expect(pool.has(w.id), `${w.id} box`).toBe(true);
+      // Machine pistols stay off the floor loot (the class is fought with, not looted).
+      if (w.class !== 'machinepistol') expect(LOOT_WEAPONS, `${w.id} loot`).toContain(w.id);
     }
   });
 
