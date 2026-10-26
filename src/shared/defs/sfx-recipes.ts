@@ -244,6 +244,14 @@ export const WEAPON_SHOTS: Record<string, { files: string[]; rate: number; gain?
   mp5k: { files: ['gun_smg_a', 'gun_smg_b', 'gun_smg_c'], rate: 1.04, gain: 0.9, sup: ['sup_pistol_b', 'sup_pistol_c', 'sup_pistol_a'], supRate: 1.04 },
   ak74u: { files: ['gun_smg_a', 'gun_smg_c', 'gun_ak_e'], rate: 1.0, gain: 0.95, lowpass: 8000, sup: ['sup_pistol_d', 'sup_pistol_b'], supRate: 1.0 },
   mpl: { files: ['gun_smg_b', 'gun_smg_c'], rate: 1.06, gain: 0.85, highpass: 160, sup: ['sup_pistol_c', 'sup_pistol_d'], supRate: 1.06 },
+  // Iconic SMGs: no new recordings. The SMG pool, the .45s (UMP45, Vector) heavier with the M1911's
+  // .45 in the mix, the P90's 5.7 bright and thin, the Uzi pitched down and punchy.
+  mp5: { files: ['gun_smg_a', 'gun_smg_c', 'gun_smg_b'], rate: 1.02, gain: 0.9, lowpass: 9000, highpass: 110, sup: ['sup_pistol_b', 'sup_pistol_a'], supRate: 1.02 },
+  ump45: { files: ['gun_smg_a', 'gun_m1911_b', 'gun_smg_c'], rate: 0.96, gain: 1.0, lowpass: 7500, sup: ['sup_pistol_a', 'sup_pistol_d'], supRate: 0.96 },
+  vector: { files: ['gun_smg_b', 'gun_m1911_a', 'gun_smg_c'], rate: 1.01, gain: 0.85, highpass: 140, sup: ['sup_pistol_d', 'sup_pistol_a'], supRate: 1.0 },
+  p90: { files: ['gun_smg_c', 'gun_smg_b'], rate: 1.05, gain: 0.82, highpass: 190, sup: ['sup_pistol_c', 'sup_pistol_b'], supRate: 1.05 },
+  spectre: { files: ['gun_smg_b', 'gun_smg_a', 'gun_asp_a'], rate: 1.04, gain: 0.86, lowpass: 8500, highpass: 130, sup: ['sup_pistol_c', 'sup_pistol_a'], supRate: 1.04 },
+  uzi: { files: ['gun_smg_a', 'gun_smg_b', 'gun_m1911_a'], rate: 0.97, gain: 0.95, lowpass: 8000, highpass: 90, sup: ['sup_pistol_b', 'sup_pistol_d'], supRate: 0.97 },
   rpk: { files: ['gun_ak_a', 'gun_ak_d', 'gun_ak_c'], rate: 0.95, gain: 1.05, sup: ['sup_rifle_a', 'sup_pistol_b'], supRate: 0.94 },
   // Early-CoD LMGs: the 7.62 guns (M60, HK21, RPD) on the AK pool, the 5.56 guns (Stoner63, SAW,
   // MG4) on the AR pool, each with its own pitch and EQ (the M60 lowest and darkest).

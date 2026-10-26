@@ -17,7 +17,8 @@ import { rng } from '../../../shared/math';
 /** How bots like each primary class (weights scaled by skill rating where noted). */
 const PRIMARY_WEIGHT: Partial<Record<WeaponClass, (rating: number) => number>> = {
   ar: () => 5,
-  smg: () => 4,
+  // Per gun: nine SMGs at 2.2 (three at 4 before) keep them a bit under a quarter of primaries.
+  smg: () => 2.2,
   lmg: () => 1.2,
   shotgun: (r) => 1 + r,
   sniper: (r) => 0.3 + r * 1.2,

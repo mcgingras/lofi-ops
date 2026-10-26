@@ -35,6 +35,8 @@ export interface GunBuild {
   parts: GunParts;
   /** One-handed weapons (pistols). */
   pistol: boolean;
+  /** The magazine sits on top (P90): the reload lifts it up instead of dropping it out. */
+  magUp?: boolean;
   /** No ADS pose (dual wield, akimbo). */
   noAds?: boolean;
   /** No left hand on the gun (Akimbo: the left hand holds the mirrored second gun). */
@@ -580,6 +582,180 @@ export const GUNS: Record<string, GunBuilder> = {
     k.box(0.06, 0.09, 0.012, M.metal, 0, -0.02, 0.45);
     const r = longGunAttachments(k, atts, { mountZ: 0, mountY: 0.04, tip, boreY: 0, guardZ: -0.2, guardY: -0.04, sightY: 0.078, adsZ: -0.42 });
     return { muzzle: V(0, 0, r.tip), sightY: r.sightY, adsZ: r.adsZ, grip: V(0.005, -0.09, 0.11), fore: V(-0.012, -0.075, -0.07), parts: { mag }, pistol: false };
+  },
+
+  // ---- Iconic SMGs. Each reads at a glance from its signature part: the MP5's cocking tube and
+  // slim tapered handguard with a fixed stock, the UMP45's boxy polymer slab and straight mag, the
+  // Vector's slanted lower with the mag well far forward, the P90's bullpup blob with the magazine
+  // lying on top, the Spectre's perforated jacket and fat four-row casket mag, the Uzi's magazine
+  // up through the pistol grip.
+
+  // CoD4 MP5: stamped receiver, HK cocking tube over the barrel with its handle on the left, slim
+  // tapered handguard, hooded front post and drum rear sight, curved 30-round mag, A2 fixed stock.
+  mp5(k, atts) {
+    const { M } = k;
+    k.box(0.06, 0.08, 0.34, M.body, 0, 0, 0);
+    k.box(0.064, 0.01, 0.3, M.metal, 0, -0.028, 0.0); // stamped seam
+    k.cyl(0.013, 0.26, M.metal, 0, 0.05, -0.24, 6); // cocking tube
+    k.box(0.01, 0.025, 0.035, M.metal, -0.026, 0.05, -0.3); // cocking handle
+    k.box(0.062, 0.055, 0.16, M.furn, 0, -0.012, -0.25); // handguard
+    k.box(0.052, 0.04, 0.05, M.furn, 0, -0.008, -0.34); // tapered nose
+    for (let i = 0; i < 3; i++) k.box(0.066, 0.006, 0.012, M.poly, 0, -0.012, -0.2 - i * 0.04);
+    const tip0 = k.barrel(-0.36, 0.06, 0.012, 0.005);
+    k.cyl(0.016, 0.025, M.metal, 0, 0.005, tip0 + 0.012); // tri-lug
+    // Hooded front sight at the end of the tube, drum rear sight.
+    k.box(0.026, 0.02, 0.026, M.metal, 0, 0.055, -0.37);
+    for (const s of [-1, 1]) k.box(0.005, 0.035, 0.02, M.metal, s * 0.012, 0.08, -0.37);
+    k.frontPost(-0.37, 0.088, 0.025);
+    k.cyl(0.018, 0.026, M.metal, 0, 0.06, 0.13, 8, k.root, 'x');
+    k.rearSight(0.13, 0.088);
+    const mag = k.magazine(-0.07, -0.04, atts, (g, l) => k.curvedMag(g, 0.17 * l, 0.034, 0.055, M.metal));
+    k.pistolGrip(0.09, -0.04, M.poly);
+    k.stock(0.17, 0.26, -0.005, 0.1, M.furn, 0.02);
+    const r = longGunAttachments(k, atts, { mountZ: 0.0, mountY: 0.065, tip: tip0, boreY: 0.005, guardZ: -0.25, guardY: -0.04, sightY: 0.088, adsZ: -0.42 });
+    return { muzzle: V(0, 0.005, r.tip), sightY: r.sightY, adsZ: r.adsZ, grip: V(0.005, -0.1, 0.1), fore: V(-0.012, -0.055, -0.25), parts: { mag }, pistol: false };
+  },
+
+  // MW2 UMP45: a boxy polymer slab with a flat top rail, a short square handguard, a straight 25
+  // round box mag, a charging handle up front on the left and a skeletal side-folding stock.
+  ump45(k, atts) {
+    const { M } = k;
+    k.box(0.066, 0.09, 0.36, M.furn, 0, -0.005, 0.0);
+    k.box(0.06, 0.03, 0.34, M.body, 0, 0.05, -0.01); // upper
+    k.rail(-0.2, 0.15, 0.065);
+    k.box(0.07, 0.07, 0.14, M.furn, 0, -0.01, -0.25); // handguard
+    for (const s of [-1, 1]) k.box(0.004, 0.025, 0.08, M.poly, s * 0.036, -0.01, -0.25);
+    k.box(0.012, 0.022, 0.03, M.metal, -0.04, 0.03, -0.17); // charging handle
+    const tip0 = k.barrel(-0.32, 0.07, 0.013, 0.005);
+    k.cyl(0.017, 0.03, M.metal, 0, 0.005, tip0 + 0.015, 6);
+    k.box(0.012, 0.035, 0.014, M.metal, 0, 0.09, -0.19); // front post on the rail
+    k.box(0.03, 0.025, 0.02, M.metal, 0, 0.083, 0.13); // rear aperture block
+    const mag = k.magazine(-0.08, -0.05, atts, (g, l) => k.straightMag(g, 0.17 * l, 0.04, 0.07, M.poly, 0.1));
+    k.box(0.044, 0.12, 0.05, M.furn, 0, -0.105, 0.1, -0.22); // integral grip
+    k.box(0.012, 0.02, 0.07, M.furn, 0, -0.06, 0.03); // trigger guard
+    // Skeletal stock: two struts and a butt pad.
+    k.box(0.014, 0.014, 0.24, M.poly, 0, 0.02, 0.3);
+    k.box(0.014, 0.014, 0.26, M.poly, 0, -0.06, 0.3, -0.14);
+    k.box(0.05, 0.12, 0.025, M.poly, 0, -0.03, 0.43);
+    const r = longGunAttachments(k, atts, { mountZ: -0.02, mountY: 0.077, tip: tip0, boreY: 0.005, guardZ: -0.25, guardY: -0.045, sightY: 0.1, adsZ: -0.42 });
+    return { muzzle: V(0, 0.005, r.tip), sightY: r.sightY, adsZ: r.adsZ, grip: V(0.005, -0.11, 0.1), fore: V(-0.012, -0.06, -0.25), parts: { mag }, pistol: false };
+  },
+
+  // MW2 Vector: the slanted Super V lower (the mag well far ahead of a raked grip), a tall flat
+  // upper with a full rail and flip-up sights, a slim barrel shroud and a folding stock.
+  vector(k, atts) {
+    const { M } = k;
+    k.box(0.06, 0.07, 0.38, M.body, 0, 0.01, -0.02); // upper
+    k.rail(-0.24, 0.16, 0.045);
+    // The slanted lower: a deep block raked forward down to the mag well.
+    k.box(0.062, 0.14, 0.12, M.furn, 0, -0.07, -0.08, 0.42);
+    k.box(0.064, 0.05, 0.1, M.furn, 0, -0.04, 0.05);
+    k.box(0.058, 0.04, 0.14, M.furn, 0, -0.01, -0.26); // shroud
+    k.box(0.05, 0.03, 0.04, M.poly, 0, -0.03, -0.31); // finger stop
+    const tip0 = k.barrel(-0.33, 0.06, 0.012, 0.0);
+    k.cyl(0.016, 0.03, M.metal, 0, 0.0, tip0 + 0.015, 6);
+    // Flip-up sights on the rail.
+    k.box(0.01, 0.03, 0.012, M.metal, 0, 0.072, -0.23);
+    k.box(0.028, 0.025, 0.014, M.metal, 0, 0.07, 0.14);
+    const mag = k.magazine(-0.15, -0.09, atts, (g, l) => k.straightMag(g, 0.15 * l, 0.034, 0.055, M.poly, 0.05));
+    k.box(0.04, 0.12, 0.05, M.furn, 0, -0.1, 0.09, -0.35); // raked grip
+    k.box(0.012, 0.02, 0.06, M.furn, 0, -0.06, 0.02); // trigger guard
+    // Folding stock: hinge, slim arm and a squared butt.
+    k.box(0.04, 0.05, 0.04, M.poly, 0, 0.0, 0.2);
+    k.box(0.03, 0.035, 0.22, M.furn, 0, 0.0, 0.32);
+    k.box(0.05, 0.12, 0.03, M.furn, 0, -0.03, 0.44);
+    const r = longGunAttachments(k, atts, { mountZ: -0.02, mountY: 0.057, tip: tip0, boreY: 0.0, guardZ: -0.24, guardY: -0.03, sightY: 0.085, adsZ: -0.42 });
+    return { muzzle: V(0, 0.0, r.tip), sightY: r.sightY, adsZ: r.adsZ, grip: V(0.005, -0.11, 0.09), fore: V(-0.012, -0.11, -0.12), parts: { mag }, pistol: false };
+  },
+
+  // P90 (CoD4 / MW2): a rounded bullpup with the 50-round magazine lying along the top, the ring
+  // reflex sight perched on it, the thumbhole grip under the front and a short stubby muzzle.
+  p90(k, atts) {
+    const { M } = k;
+    k.box(0.07, 0.11, 0.42, M.furn, 0, -0.01, 0.06); // body
+    k.box(0.064, 0.05, 0.42, M.furn, 0, -0.075, 0.06, 0); // lower shell
+    k.box(0.066, 0.06, 0.06, M.furn, 0, -0.03, -0.17, 0.3); // rounded nose
+    k.box(0.07, 0.12, 0.04, M.poly, 0, -0.03, 0.29); // butt pad
+    // Thumbhole: a loop forward of the grip.
+    k.box(0.04, 0.012, 0.1, M.furn, 0, -0.16, -0.08);
+    k.box(0.04, 0.07, 0.014, M.furn, 0, -0.125, -0.13);
+    k.box(0.044, 0.11, 0.05, M.furn, 0, -0.14, 0.02, -0.1); // grip
+    const tip0 = k.barrel(-0.19, 0.08, 0.011, 0.0);
+    k.cyl(0.016, 0.035, M.metal, 0, 0.0, tip0 + 0.017, 6); // flash hider
+    // The magazine along the top (it lifts off on a reload), the ring sight on its rails.
+    const mag = k.magazine(0.06, 0.045, atts, (g, l) => {
+      const len = 0.34 * (l > 1 ? 1.25 : 1);
+      k.box(0.06, 0.03, len, M.poly, 0, 0.015, 0.02 - (len - 0.34) / 2, 0, 0, 0, g);
+      k.box(0.05, 0.006, len - 0.02, M.brass, 0, 0.031, 0.02 - (len - 0.34) / 2, 0, 0, 0, g); // rounds seen through the shell
+    });
+    k.box(0.02, 0.06, 0.03, M.poly, 0.0, 0.1, -0.06); // sight post
+    const opt = k.optic(atts, -0.02, 0.13);
+    let sightY = 0.165;
+    let adsZ = -0.4;
+    if (opt) ({ sightY, adsZ } = opt);
+    else {
+      // Built-in ring sight.
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.012, 0.018, 10), M.red);
+      ring.position.set(0, sightY, -0.06);
+      ring.rotation.y = Math.PI;
+      k.root.add(ring);
+      k.box(0.05, 0.05, 0.03, M.poly, 0, 0.14, -0.06);
+      for (const s of [-1, 1]) k.box(0.006, 0.05, 0.03, M.poly, s * 0.025, sightY, -0.06);
+    }
+    let tip = tip0;
+    if (atts.includes('suppressor')) tip = k.suppressor(tip0, 0);
+    return { muzzle: V(0, 0, tip), sightY, adsZ, grip: V(0.005, -0.15, 0.02), fore: V(-0.012, -0.14, -0.1), parts: { mag }, pistol: false, magUp: true };
+  },
+
+  // BO1 Spectre M4: a long receiver with the perforated cooling jacket over the barrel, a fat
+  // four-row casket mag, a pistol grip and the top-folding stock lying along the receiver.
+  spectre(k, atts) {
+    const { M } = k;
+    k.box(0.06, 0.075, 0.32, M.body, 0, 0, 0);
+    k.cyl(0.028, 0.16, M.metal, 0, 0.0, -0.24, 8); // jacket
+    for (let i = 0; i < 5; i++) for (const s of [-1, 1]) k.box(0.004, 0.012, 0.018, M.poly, s * 0.029, 0.0, -0.18 - i * 0.03);
+    const tip0 = k.barrel(-0.32, 0.04, 0.011, 0.0);
+    k.box(0.04, 0.02, 0.03, M.metal, 0, -0.04, -0.29); // front grip lug
+    k.frontPost(-0.3, 0.075, 0.04);
+    k.box(0.03, 0.025, 0.02, M.metal, 0, 0.05, 0.13); // rear notch
+    // Casket mag: wide and deep.
+    const mag = k.magazine(-0.08, -0.035, atts, (g, l) => k.straightMag(g, 0.16 * l, 0.05, 0.075, M.metal, 0.03));
+    k.pistolGrip(0.09, -0.035, M.poly);
+    // Top-folding stock along the top of the receiver, butt hanging over the rear.
+    k.box(0.012, 0.012, 0.26, M.metal, 0.024, 0.05, -0.02);
+    k.box(0.012, 0.012, 0.26, M.metal, -0.024, 0.05, -0.02);
+    k.box(0.06, 0.07, 0.016, M.metal, 0, 0.02, 0.17);
+    const r = longGunAttachments(k, atts, { mountZ: -0.02, mountY: 0.06, tip: tip0, boreY: 0, guardZ: -0.22, guardY: -0.03, sightY: 0.075, adsZ: -0.42 });
+    return { muzzle: V(0, 0, r.tip), sightY: r.sightY, adsZ: r.adsZ, grip: V(0.005, -0.09, 0.1), fore: V(-0.012, -0.07, -0.08), parts: { mag }, pistol: false };
+  },
+
+  // Uzi: a short square receiver with a ribbed top cover, the magazine up through the pistol grip,
+  // a stubby barrel and nut, a grip safety and a folding metal stock.
+  uzi(k, atts) {
+    const { M } = k;
+    k.box(0.062, 0.085, 0.3, M.body, 0, 0, -0.02);
+    k.box(0.058, 0.02, 0.24, M.metal, 0, 0.05, -0.03); // top cover
+    for (let i = 0; i < 5; i++) k.box(0.06, 0.005, 0.008, M.poly, 0, 0.061, -0.12 + i * 0.035);
+    k.box(0.066, 0.05, 0.1, M.furn, 0, -0.025, -0.13); // fore grip panel
+    const tip0 = k.barrel(-0.17, 0.07, 0.012, 0.005);
+    k.cyl(0.02, 0.025, M.metal, 0, 0.005, -0.18, 6); // barrel nut
+    // Front sight ears and a flip rear sight.
+    k.box(0.03, 0.02, 0.02, M.metal, 0, 0.06, -0.15);
+    for (const s of [-1, 1]) k.box(0.005, 0.03, 0.016, M.metal, s * 0.012, 0.08, -0.15);
+    k.frontPost(-0.15, 0.085, 0.02);
+    k.box(0.03, 0.025, 0.02, M.metal, 0, 0.073, 0.1);
+    // The grip with the magazine running up through it (mag well = the grip).
+    k.box(0.05, 0.13, 0.065, M.furn, 0, -0.105, 0.03, -0.12);
+    k.box(0.02, 0.05, 0.02, M.metal, 0, -0.09, 0.07, -0.12); // grip safety
+    k.box(0.012, 0.02, 0.07, M.metal, 0, -0.055, -0.03); // trigger guard
+    const mag = k.magazine(0.03, -0.12, atts, (g, l) => k.straightMag(g, 0.13 * l, 0.03, 0.05, M.metal, -0.12));
+    // Folding stock: two struts and a butt plate.
+    k.box(0.04, 0.03, 0.03, M.metal, 0, -0.01, 0.15);
+    k.box(0.01, 0.01, 0.24, M.metal, 0.02, -0.01, 0.27);
+    k.box(0.01, 0.01, 0.24, M.metal, -0.02, -0.03, 0.27, -0.06);
+    k.box(0.06, 0.08, 0.012, M.metal, 0, -0.03, 0.39);
+    const r = longGunAttachments(k, atts, { mountZ: -0.02, mountY: 0.065, tip: tip0, boreY: 0.005, guardZ: -0.13, guardY: -0.05, sightY: 0.085, adsZ: -0.4 });
+    return { muzzle: V(0, 0.005, r.tip), sightY: r.sightY, adsZ: r.adsZ, grip: V(0.005, -0.11, 0.04), fore: V(-0.012, -0.055, -0.13), parts: { mag }, pistol: false };
   },
 
   rpk(k, atts) {
