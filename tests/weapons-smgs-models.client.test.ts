@@ -62,7 +62,7 @@ describe('SMG models', () => {
       const bare = build(id, []);
       for (const o of ['reddot', 'reflex', 'acog']) {
         const s = build(id, [o]).b.sightY;
-        if (id === 'p90') expect(s, `${id}/${o}`).toBeGreaterThan(0.15);
+        if (id === 'p90') expect(s, `${id}/${o}`).toBeGreaterThan(0.12);
         else expect(s, `${id}/${o}`).toBeGreaterThan(bare.b.sightY);
       }
       expect(build(id, ['suppressor']).b.muzzle.z, id).toBeLessThan(bare.b.muzzle.z);

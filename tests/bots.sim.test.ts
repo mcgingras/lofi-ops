@@ -7,13 +7,16 @@ import { duel, simMatch } from './bots-sim';
 
 describe('bots: simulated duels', () => {
   it('regular bots rarely kill a strafing player at 25 m in under 0.6 s; veterans are faster but not instant', () => {
-    const reg = duel({ difficulty: 'regular', distance: 25, strafe: true, trials: 12, seed: 3 });
+    // 24 trials: with 12 the recruit / regular comparison sat within a few ms and flipped when the
+    // bot loadout pool grew (the nine SMGs), though over 30 trials and several seeds the recruit is
+    // 0.2-0.4 s slower.
+    const reg = duel({ difficulty: 'regular', distance: 25, strafe: true, trials: 24, seed: 3 });
     expect(reg.under06).toBeLessThanOrEqual(0.1);
     expect(reg.firstShot).toBeGreaterThan(0.45);
-    const vet = duel({ difficulty: 'veteran', distance: 10, strafe: false, trials: 12, seed: 3 });
+    const vet = duel({ difficulty: 'veteran', distance: 10, strafe: false, trials: 24, seed: 3 });
     expect(vet.firstShot).toBeGreaterThan(0.25);
     expect(vet.firstShot).toBeLessThan(reg.firstShot);
-    const rec = duel({ difficulty: 'recruit', distance: 10, strafe: false, trials: 12, seed: 3 });
+    const rec = duel({ difficulty: 'recruit', distance: 10, strafe: false, trials: 24, seed: 3 });
     expect(rec.firstShot).toBeGreaterThan(reg.firstShot);
   }, 30000);
 });

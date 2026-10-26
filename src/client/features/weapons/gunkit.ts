@@ -648,8 +648,8 @@ export const GUNS: Record<string, GunBuilder> = {
     k.box(0.06, 0.07, 0.38, M.body, 0, 0.01, -0.02); // upper
     k.rail(-0.24, 0.16, 0.045);
     // The slanted lower: a deep block raked forward down to the mag well.
-    k.box(0.062, 0.14, 0.12, M.furn, 0, -0.07, -0.08, 0.42);
-    k.box(0.064, 0.05, 0.1, M.furn, 0, -0.04, 0.05);
+    k.box(0.058, 0.11, 0.08, M.furn, 0, -0.06, -0.09, 0.42);
+    k.box(0.06, 0.045, 0.1, M.furn, 0, -0.035, 0.04);
     k.box(0.058, 0.04, 0.14, M.furn, 0, -0.01, -0.26); // shroud
     k.box(0.05, 0.03, 0.04, M.poly, 0, -0.03, -0.31); // finger stop
     const tip0 = k.barrel(-0.33, 0.06, 0.012, 0.0);
@@ -688,9 +688,9 @@ export const GUNS: Record<string, GunBuilder> = {
       k.box(0.06, 0.03, len, M.poly, 0, 0.015, 0.02 - (len - 0.34) / 2, 0, 0, 0, g);
       k.box(0.05, 0.006, len - 0.02, M.brass, 0, 0.031, 0.02 - (len - 0.34) / 2, 0, 0, 0, g); // rounds seen through the shell
     });
-    k.box(0.02, 0.06, 0.03, M.poly, 0.0, 0.1, -0.06); // sight post
-    const opt = k.optic(atts, -0.02, 0.13);
-    let sightY = 0.165;
+    k.box(0.03, 0.03, 0.05, M.poly, 0.0, 0.09, -0.06); // sight base on the magazine rails
+    const opt = k.optic(atts, -0.02, 0.105);
+    let sightY = 0.13;
     let adsZ = -0.4;
     if (opt) ({ sightY, adsZ } = opt);
     else {
@@ -699,8 +699,9 @@ export const GUNS: Record<string, GunBuilder> = {
       ring.position.set(0, sightY, -0.06);
       ring.rotation.y = Math.PI;
       k.root.add(ring);
-      k.box(0.05, 0.05, 0.03, M.poly, 0, 0.14, -0.06);
-      for (const s of [-1, 1]) k.box(0.006, 0.05, 0.03, M.poly, s * 0.025, sightY, -0.06);
+      k.box(0.046, 0.006, 0.03, M.poly, 0, sightY - 0.022, -0.06);
+      k.box(0.046, 0.006, 0.03, M.poly, 0, sightY + 0.022, -0.06);
+      for (const s of [-1, 1]) k.box(0.006, 0.05, 0.03, M.poly, s * 0.023, sightY, -0.06);
     }
     let tip = tip0;
     if (atts.includes('suppressor')) tip = k.suppressor(tip0, 0);
