@@ -80,6 +80,11 @@ declare module '../protocol' {
     /** Someone called a streak (everyone gets it; the HUD says friendly / enemy). */
     'killstreaks.called': { id: string; owner: string; team: Team | null };
     'killstreaks.ended': { id: string; owner: string; team: Team | null; destroyed: boolean; by?: string | null };
+    /**
+     * An enemy destroyed a piece of killstreak hardware (everyone): `name` what it was ("Spy Plane",
+     * "Supply Chopper"), `by` who, `xp` the points (score and XP) they got for it.
+     */
+    'killstreaks.shotDown': { id: string; kind: string; name: string; owner: string | null; team: Team | null; by: string; xp: number };
     'killstreaks.fx': KillstreakFx;
     /**
      * Pack-a-Punch started for player `p` (everyone gets it: the owner's gun dips, the jingle plays

@@ -43,6 +43,7 @@ import { registerRadarModifiers } from './streaks/radar';
 import { pushGlitch, registerGlitchModifiers } from './streaks/glitch';
 import { botLauncher, fireLauncher, onOwnerDeath, putAwayLauncher, raiseLauncher, syncLauncherEntity } from './streaks/valkyrie';
 import { cancelCarry, ownTurretInReach, placeCarried, startCarry, tickCarry, tryPickUp } from './streaks/carry';
+import { wireShootDowns } from './streaks/shootdown';
 import { onTurretMelee, onWeaponDetonated } from './streaks/turret-damage';
 import { ksRoom } from './world';
 import { TURRET_PLACE } from '../../../shared/defs/turret-place';
@@ -209,7 +210,7 @@ const feature: Feature = {
         if (!p || !room) throw new RpcError('not_in_match');
         const d = (data ?? {}) as { id?: unknown; bots?: unknown; weapon?: unknown; selfFx?: unknown };
         if (typeof d.id === 'string' && KILLSTREAK_BY_ID.has(d.id)) grant(room, p, d.id);
-        if (typeof d.weapon === 'string' && WEAPON_BY_ID.get(d.weapon)?.slot === 'primary') {
+        if (typeof d.weapon === 'string' && ['primary', 'secondary'].includes(WEAPON_BY_ID.get(d.weapon)?.slot ?? '')) {
           p.weapons[0] = makeWeapon({ weapon: d.weapon, attachments: [], camo: 'none' }, d.weapon);
           if (p.weapons.length > 2) p.weapons.length = 2;
           p.slot = 0;
@@ -263,6 +264,8 @@ const feature: Feature = {
       }
     });
     room.bus.on('fire', (e) => ctx.onFire(e.player, e.weapon, e.origin, e.dir, e.end));
+    // Destroyed hardware: XP for whoever did it, the owner told (BO1 "Spy Plane destroyed +100").
+    wireShootDowns(room, ctx);
     // Players' grenades and launcher rounds hurt hardware, tacticals stun turrets, a knife kills one.
     room.bus.on('weapons.detonated', (e) => onWeaponDetonated(ctx, e));
     room.bus.on('weapons.melee', (e) => onTurretMelee(ctx, e.player, e.victim));

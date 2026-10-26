@@ -68,8 +68,8 @@ describe('weapon class coverage', () => {
       expect(WEAPON_SHOTS[w.id], `${w.id} shot`).toBeDefined();
       expect(SFX_BINDINGS[`shot.${w.id}.sup`], `${w.id} suppressed shot`).toBeDefined();
       if (w.id !== 'm1911') expect(pool.has(w.id), `${w.id} box`).toBe(true);
-      // Machine pistols stay off the floor loot (the class is fought with, not looted).
-      if (w.class !== 'machinepistol') expect(LOOT_WEAPONS, `${w.id} loot`).toContain(w.id);
+      // Machine pistols and launchers stay off the floor loot.
+      if (w.class !== 'machinepistol' && w.class !== 'launcher') expect(LOOT_WEAPONS, `${w.id} loot`).toContain(w.id);
     }
   });
 

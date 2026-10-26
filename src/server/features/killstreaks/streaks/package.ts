@@ -25,7 +25,7 @@ import { grant } from '../state';
 import type { Active, KsRoom } from '../world';
 import type { CallArgs } from './types';
 
-export const PACKAGE = { heliSpeed: 24, hover: 1.2, fall: 12, life: 60, radius: CRATE_REACH.r, owner: 0.5, friend: 1.25, enemy: 3, hacker: 1.25, crush: 1.2, trap: { r: 5, max: 300, min: 80 } };
+export const PACKAGE = { heliSpeed: 24, heliHp: 1000, hover: 1.2, fall: 12, life: 60, radius: CRATE_REACH.r, owner: 0.5, friend: 1.25, enemy: 3, hacker: 1.25, crush: 1.2, trap: { r: 5, max: 300, min: 80 } };
 
 export interface Crate {
   ent: Entity;
@@ -108,8 +108,27 @@ export function callCarePackage(ctx: KsRoom, p: PlayerState, args: CallArgs, opt
   const deliver = (to: Vec3) => {
     target = to;
     const inYaw = Math.atan2(-(to.x - ctx.center.x), -(to.z - ctx.center.z)) + Math.PI + (Math.random() - 0.5);
-    heli = room.entities.add({ kind: KS_ENTITY.dropHeli, ...ctx.edgePoint(inYaw, 30, ctx.heliY()), yaw: 0, owner: p.id, team: p.team });
-    act.entities.push(heli.id);
+    const h = room.entities.add({ kind: KS_ENTITY.dropHeli, ...ctx.edgePoint(inYaw, 30, ctx.heliY()), yaw: 0, owner: p.id, team: p.team });
+    heli = h;
+    act.entities.push(h.id);
+    // BO1: the supply chopper can be shot down (bullets, launchers, a SAM). Brought down on its way
+    // in, the crate falls from where it was; on its way out, it just goes.
+    ctx.damageable(h, {
+      hp: PACKAGE.heliHp,
+      air: true,
+      radius: 3.5,
+      yOff: 0,
+      active: act,
+      score: 100,
+      onDestroyed: () => {
+        if (phase === 'in') {
+          if (opts.contents) dropCrate(ctx, act, p, { x: h.x, y: h.y - 2, z: h.z }, opts.contents, true);
+          else dropCrate(ctx, act, p, { x: h.x, y: h.y - 2, z: h.z });
+          phase = 'out';
+        }
+        ctx.removeEntity(h.id);
+      },
+    });
   };
   const act: Active = {
     streak: 'care_package',

@@ -177,7 +177,7 @@ export class KsRoom {
       this.hp.delete(id);
       this.fx({ kind: 'destroyed', x: e.x, y: e.y + d.yOff, z: e.z, r: d.air ? 6 : 3 });
       if (by && d.score > 0) this.room.addPlayerScore(by, d.score, 'killstreak_destroyed');
-      this.room.bus.emit('killstreaks.destroyed', { owner: d.active.owner, id: d.active.streak, kind: e.kind, by });
+      this.room.bus.emit('killstreaks.destroyed', { owner: d.active.owner, id: d.active.streak, kind: e.kind, by, score: d.score });
       if (d.onDestroyed) d.onDestroyed(by);
       else {
         d.active.destroyed = true;

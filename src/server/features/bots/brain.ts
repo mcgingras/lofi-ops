@@ -26,6 +26,9 @@
  *                     jumping onto ledges, unsticking itself when blocked.
  *   streaks           presses STREAK (or the registered handler) after earning one, promptly
  *                     in proportion to `streakUse`.
+ *   launchers         a secondary launcher (weapons/launchers/bots.ts) comes out for clustered or
+ *                     camping targets at range and never fires point blank; with nobody to fight
+ *                     it hunts enemy air killstreaks (lock-on: ADS until the lock holds).
  *
  * Behaviour skeleton adapted from Blockyard's shooter bots (src/platform/kits/shooterbot.ts, MIT,
  * Patrick Blais): react-then-settle aim, bursts, strafe timers, chase heard/seen, stuck handling.
@@ -51,6 +54,9 @@ import { hasObjectives } from '../modes/bots';
 import { chasersNear, crowdPenalty, depthOf, laneOf, mapAxis, pickLane, rollRole, type BotRole, type GoalClaim, type PathUsage } from './roles';
 import { botCanHit, chestOf, eyePointOf, headOf, occludersFor, visiblePart } from './sight';
 import { wonderBotDecision, wonderBotStyle } from '../weapons/wonder/index';
+import { airTargetFor, launcherAim, launcherBotPlan, lockOf, type LauncherBotPlan } from '../weapons/launchers/index';
+import { worthRocket } from '../weapons/launchers/bots';
+import { isLauncher, isLockOn, LAUNCHERS } from '../../../shared/defs/launchers';
 
 const DEG = Math.PI / 180;
 
@@ -152,6 +158,12 @@ export class Brain implements BotBrain {
   private lobAt = 0;
   private pitchBias = 0;
   private streakPress: { id: string; at: number } | null = null;
+  /** Air killstreak hunt with a launcher: the aircraft, when it was first seen, its last position (lead). */
+  private airHunt: { id: number; since: number; last: Vec3; vel: Vec3 } | null = null;
+  /** Next time it weighs bringing the launcher out against its target. */
+  private launcherThinkAt = 0;
+  /** Launcher shots fired at aircraft (tests). */
+  airShots = 0;
   private retreatUntil = 0;
   private holdUntil = 0;
   private slotWanted = 0;
@@ -322,8 +334,10 @@ export class Brain implements BotBrain {
       // ================================ FIGHT ================================
       const t = this.target;
       // Where it can't see the target it works from the last sighting, never the live position.
-      const aimPt = vis || !this.lastAim ? this.aimPoint(eye, t) : this.lastAim;
       const tpos: Vec3 = vis || !this.lastSeen ? t.move : this.lastSeen.at;
+      // A launcher aims at the feet (the blast is measured there) or lobs (China Lake).
+      const holdingLauncher = !!def && isLauncher(def.base.id);
+      const aimPt = holdingLauncher ? launcherAim(def!.base.id, eye, tpos, vis ? { x: t.move.vx, y: 0, z: t.move.vz } : undefined) : vis || !this.lastAim ? this.aimPoint(eye, t) : this.lastAim;
       const d = dist(eye, aimPt);
       const trueYaw = yawTo(eye, aimPt);
       const truePitch = Math.atan2(aimPt.y - eye.y, Math.hypot(aimPt.x - eye.x, aimPt.z - eye.z));
@@ -336,7 +350,8 @@ export class Brain implements BotBrain {
       const intended = stepAim(this.aim, sk, trueYaw, truePitch, dt, ctx, def?.recoil.recovery ?? 10);
 
       // Weapon: dry up close -> sidearm (quicker than a reload); empty everything -> sidearm.
-      if (w && w.mag === 0 && this.slotWanted === 0 && secondary && secondary.mag > 0 && (d < 12 || (primary?.reserve ?? 0) === 0)) this.slotWanted = 1;
+      const secondaryLauncher = !!secondary && isLauncher(secondary.def.base.id);
+      if (w && w.mag === 0 && this.slotWanted === 0 && secondary && secondary.mag > 0 && (secondaryLauncher ? (primary?.reserve ?? 0) === 0 && d >= 14 : d < 12 || (primary?.reserve ?? 0) === 0)) this.slotWanted = 1;
       if (this.slotWanted === 1 && secondary && secondary.mag === 0 && secondary.reserve === 0 && primary && primary.mag + primary.reserve > 0) this.slotWanted = 0;
       // A machine pistol is for the close fight: once the target is well out of its range, go back
       // to the primary (and reload it there) rather than spraying at 20 m.
@@ -351,6 +366,16 @@ export class Brain implements BotBrain {
         if (other?.def.wonder && other.mag > 0 && wonderBotStyle(other.def.base.id)?.switchBeyond !== undefined && wonderBotDecision(self, other.def.base.id, d) === 'fire') this.slotWanted = self.slot === 0 ? 1 : 0;
       }
 
+      // Launchers: never point blank, only for targets worth a rocket (weapons/launchers/bots.ts).
+      let launcherCall: LauncherBotPlan | null = null;
+      if (holdingLauncher && self.slot === this.slotWanted) {
+        launcherCall = launcherBotPlan(room, self, def!.base.id, t, d, eye, aimPt);
+        if (launcherCall === 'switch') this.slotWanted = self.slot === 1 ? 0 : self.slot;
+      } else if (!holdingLauncher && vis && secondaryLauncher && self.slot === 0 && this.slotWanted === 0 && secondary!.mag + secondary!.reserve > 0 && now >= this.launcherThinkAt) {
+        this.launcherThinkAt = now + 1.5;
+        if (worthRocket(room, self, secondary!.def.base.id, t, d) && this.rnd() < 0.35 + 0.4 * sk.aggression) this.slotWanted = 1;
+      }
+
       const wantAds = !!def && d > cls.ads && !(cls.rush && style.rush && d < 8);
       if (wantAds) buttons |= Buttons.ADS;
       const ready = !!w && w.mag > 0 && self.reloadEnd === 0 && now >= self.swapEnd && !self.move.sprinting && self.slot === this.slotWanted;
@@ -362,7 +387,7 @@ export class Brain implements BotBrain {
       // at a last-known position, or through bullet-proof glass.
       const lineOfFire = !!vis && botCanHit(room.world, room.map, eye, aimPt);
 
-      if (ready && onTarget && steadyOk && lineOfFire && def && (wonderCall === null || wonderCall === 'fire')) {
+      if (ready && onTarget && steadyOk && lineOfFire && def && (wonderCall === null || wonderCall === 'fire') && (launcherCall === null || launcherCall === 'fire')) {
         const auto = def.mode === 'auto' || def.mode === 'burst';
         if (auto) {
           if (now >= this.pauseUntil) {
@@ -478,6 +503,10 @@ export class Brain implements BotBrain {
       if (this.slotWanted === 1 && primary && primary.mag + primary.reserve > 0 && (!this.lastSeen || now - this.lastSeen.t > 1.5)) this.slotWanted = 0;
       // Top up between fights.
       if (w && w.mag < w.def.magazine * 0.5 && w.reserve > 0 && self.reloadEnd === 0 && (!this.lastSeen || now - this.lastSeen.t > 1.2)) pulse(Buttons.RELOAD);
+
+      // An enemy air killstreak in sight and a launcher that reaches it: shoot it down.
+      const air = this.huntAircraft(room, self, now, dt, eye);
+      if (air !== null) return this.out(self, buttons | air);
 
       this.considerGrenade(room, self, now);
       this.considerStreak(room, self, now, (b) => pulse(b));
@@ -1057,6 +1086,59 @@ export class Brain implements BotBrain {
     }
     this.throwing = { at: grenadeAimPoint(this.lastSeen.at, this.skill, this.rnd), t: now + 0.25, pressed: false };
     this.grenadeAt = now + grenadeCooldown(this.skill, this.rnd());
+  }
+
+  /**
+   * Nobody to fight: with a launcher that reaches it, go after an enemy air killstreak in sight
+   * (weapons/launchers/bots.ts `airTargetFor`). Switches to the launcher, aims down the sights at it
+   * (leading a helicopter for a dumb rocket), and fires once on target: a lock-on launcher waits
+   * for its lock. Returns the buttons to send (null: not hunting; the caller carries on).
+   */
+  private huntAircraft(room: Room, self: PlayerState, now: number, dt: number, eye: Vec3): number | null {
+    const slot = self.weapons.findIndex((w, i) => i < 2 && isLauncher(w.def.base.id) && w.mag + w.reserve > 0);
+    const lw = slot >= 0 ? self.weapons[slot]! : null;
+    const tgt = lw ? airTargetFor(room, self, lw.def.base.id, eye) : null;
+    if (!lw || !tgt) {
+      if (this.airHunt) {
+        this.airHunt = null;
+        if (this.slotWanted === slot) this.slotWanted = 0;
+      }
+      return null;
+    }
+    const sk = this.cur;
+    if (!this.airHunt || this.airHunt.id !== tgt.id) this.airHunt = { id: tgt.id, since: now, last: tgt.at, vel: { x: 0, y: 0, z: 0 } };
+    const h = this.airHunt;
+    if (dt > 0) h.vel = { x: (tgt.at.x - h.last.x) / dt, y: (tgt.at.y - h.last.y) / dt, z: (tgt.at.z - h.last.z) / dt };
+    h.last = tgt.at;
+    // Noticing it takes a moment (quicker for sharper bots).
+    if (now - h.since < 0.4 + sk.reactionMs / 1000) return 0;
+    this.slotWanted = slot;
+    const id = lw.def.base.id;
+    const speed = LAUNCHERS[id]?.speed ?? 40;
+    const lockOn = isLockOn(id);
+    // A homing missile only needs the aircraft in the cone; a dumb rocket leads it.
+    const t = Math.min(3, tgt.dist / speed);
+    const at = lockOn ? tgt.at : { x: tgt.at.x + h.vel.x * t, y: tgt.at.y + h.vel.y * t, z: tgt.at.z + h.vel.z * t };
+    const yaw = yawTo(eye, at);
+    const pitch = Math.atan2(at.y - eye.y, Math.hypot(at.x - eye.x, at.z - eye.z));
+    lookToward(this.aim, sk, yaw, pitch, dt);
+    let buttons = Buttons.ADS;
+    const w = currentWeapon(self);
+    const ready = self.slot === slot && !!w && w.mag > 0 && self.reloadEnd === 0 && now >= self.swapEnd && !self.move.sprinting;
+    if (w && self.slot === slot && w.mag === 0 && w.reserve > 0 && self.reloadEnd === 0 && !(this.prevButtons & Buttons.RELOAD)) buttons |= Buttons.RELOAD;
+    const off = Math.hypot(angleDiff(this.aim.yaw, yaw), this.aim.pitch - pitch) / DEG;
+    const onTarget = off < (lockOn ? 3 : 1.2) && self.move.ads > 0.8;
+    const fireOk = lockOn ? lockOf(self).locked : onTarget;
+    if (ready && onTarget && fireOk && now >= this.nextShotAt) {
+      const res = room.fire(self, { dir: viewDir(this.aim.yaw, this.aim.pitch) });
+      if (res.ok) {
+        this.airShots++;
+        this.stats.shots++;
+        this.nextShotAt = now + 0.6;
+        buttons |= Buttons.FIRE;
+      }
+    }
+    return buttons;
   }
 
   private considerStreak(room: Room, self: PlayerState, now: number, pulse: (b: number) => void) {

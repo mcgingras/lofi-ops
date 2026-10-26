@@ -1,7 +1,8 @@
 /**
  * Server side of the 'weapons' feature area. See docs/features/weapons.md.
  *
- *   setup: the underbarrel grenade launcher behaviour (weapon id `gl`) and the Mystery Box's wonder
+ *   setup: the underbarrel grenade launcher behaviour (weapon id `gl`), the secondary launchers
+ *          (`launchers/`: China Lake, RPG-7, M72 LAW, Strela-3, Stinger) and the Mystery Box's wonder
  *          weapons (`wonder/`: Ray Gun, Thundergun, Wunderwaffe DG-2, Winter's Howl, Scavenger,
  *          31-79 JGb215, Wave Gun; dev-only `weapons.wonderCheat` with LOFI_CHEATS=1).
  *   room:  primary attachment count (1 + `attachmentSlotsOffset(p, loadout)`, Warlord) at
@@ -30,6 +31,7 @@ import { updateTomahawks } from './tomahawk';
 import { wext } from './state';
 import { registerWonderBehaviors, wireWonder } from './wonder/index';
 import { registerWonderCheat } from './wonder/cheat';
+import { registerLauncherBehaviors, wireLaunchers } from './launchers/index';
 
 export { melee, meleeTarget } from './melee';
 export { startThrow, flashedAmount, stunnedAmount, explode, spawnNade } from './equipment';
@@ -56,6 +58,7 @@ const feature: Feature = {
   setup(api) {
     api.registerWeaponBehavior('gl', GL_BEHAVIOR);
     registerWonderBehaviors(api.registerWeaponBehavior);
+    registerLauncherBehaviors(api.registerWeaponBehavior);
     registerWonderCheat(api);
   },
   room(room) {
@@ -64,6 +67,9 @@ const feature: Feature = {
     // Mystery Box wonder weapons: Ray Gun bolts, Thundergun, Wunderwaffe arcs, Winter's Howl frost.
     registerWonderBehaviors(registerWeaponBehavior);
     wireWonder(room);
+    // Secondary launchers: China Lake, RPG-7, M72 LAW, Strela-3, Stinger (launchers/).
+    registerLauncherBehaviors(registerWeaponBehavior);
+    wireLaunchers(room);
     // BO1: one attachment per weapon; Warlord (perks) adds a primary slot through the modifier. It
     // reads the loadout being spawned: `player.loadout` is still the previous life's here, and a
     // class change mid-match must use the new class's perks. Low priority: after progression's
