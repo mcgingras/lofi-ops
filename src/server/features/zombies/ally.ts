@@ -63,7 +63,11 @@ interface BuyPlan {
 const flat = (a: Vec3, b: Vec3) => Math.hypot(a.x - b.x, a.z - b.z);
 const DEG = Math.PI / 180;
 /** Wall guns it rates (higher is better); anything not listed rates by price. */
-const GUN_RANK: Record<string, number> = { m1911: 0, asp: 1, olympia: 2, mpl: 3, mp5k: 4, m16: 5, ak74u: 6, commando: 7, stakeout: 6.5 };
+const GUN_RANK: Record<string, number> = {
+  m1911: 0, asp: 1, olympia: 2, mpl: 3, mp5k: 4, m16: 5, ak74u: 6, commando: 7, stakeout: 6.5,
+  // The iconic SMGs among the BO1 wall SMGs (by their kill speed and magazine).
+  uzi: 4.2, mp5: 4.5, p90: 4.8, spectre: 5.2, vector: 5.5, ump45: 5.8,
+};
 /** Rank of a gun not in GUN_RANK, by class: pistols last, machine pistols between the Olympia and the MPL, wonder weapons first. */
 const classRank = (cls: string | undefined, other: number): number => (cls === 'pistol' ? 0.5 : cls === 'machinepistol' ? 2.5 : cls === 'special' ? 9 : other);
 

@@ -118,6 +118,11 @@ const SNIPER_ATTS = ['extmag', 'acog', 'varzoom', 'suppressor'];
 // MW2 rifles: Holographic -> reflex, Red Dot, ACOG, Silencer, Extended Mags, M203 (no FMJ, Shotgun,
 // Heartbeat or Thermal equivalents here).
 const MW2_AR_ATTS = ['extmag', 'acog', 'reddot', 'reflex', 'suppressor', 'gl'];
+// MW2 SMGs (UMP45, Vector, P90): Rapid Fire, Red Dot, Holographic -> reflex, ACOG, Silencer,
+// Extended Mags (Akimbo stays a machine pistol attachment here; no FMJ / Thermal). CoD4's MP5: its
+// Red Dot, ACOG and Silencer plus the Holographic and Extended Mags it got in MW2, no Rapid Fire.
+const MW2_SMG_ATTS = ['extmag', 'acog', 'reddot', 'reflex', 'suppressor', 'rapidfire'];
+const CLASSIC_SMG_ATTS = ['extmag', 'acog', 'reddot', 'reflex', 'suppressor'];
 
 const ar = (o: Omit<WeaponDef, 'class' | 'slot' | 'multipliers' | 'sprintOutMs'> & Partial<Pick<WeaponDef, 'multipliers' | 'sprintOutMs'>>): WeaponDef => ({ class: 'ar', slot: 'primary', multipliers: { head: 1.4, torso: 1, limb: 1 }, sprintOutMs: 250, ...o });
 const smg = (o: Omit<WeaponDef, 'class' | 'slot' | 'multipliers' | 'sprintOutMs'> & Partial<Pick<WeaponDef, 'multipliers' | 'sprintOutMs'>>): WeaponDef => ({ class: 'smg', slot: 'primary', multipliers: { head: 1.4, torso: 1, limb: 1 }, sprintOutMs: 200, ...o });
@@ -369,6 +374,153 @@ export const WEAPONS: WeaponDef[] = [
     attachments: SMG_ATTS,
     model: 'mpl',
     price: 2000,
+  }),
+
+  // Iconic SMGs from CoD4 (MP5, P90), MW2 (UMP45, Vector, P90) and BO1 (Spectre, Uzi), fitted to
+  // the curve above: every SMG kills in 120-170 ms up close and 250-320 ms at range (the machine
+  // pistols, 336 ms at best past 13 m, stay behind every one of them past 10 m). Each owns one
+  // thing: the MP5 the tightest sights, the UMP45 the best long-range kill, the Vector the fastest
+  // cycle and the lowest kick, the P90 the 50-round magazine, the Spectre the close-range kill and
+  // the best hipfire, the Uzi the fastest ADS and the biggest kick. TTK (torso, ms) near / far:
+  // MP5 154 / 308, UMP45 167 / 250, Vector 150 / 300, P90 126 / 316, Spectre 120 / 300,
+  // Uzi 141 / 282. For scale: MP5K 160 / 320, AK74u 150 / 300, MPL 128 / 256.
+  smg({
+    // CoD4 MP5: the classic. AK74u damage held a little further (4 shots to 23 m) at 780 rpm, 30 rounds, a
+    // soft straight climb and the tightest aimed cone of the class; the full stock costs it a
+    // slower ADS and sprint-out than the MP5K.
+    id: 'mp5',
+    name: 'MP5',
+    blurb: 'The classic: accurate, controllable and balanced, thirty rounds.',
+    damage: { near: 40, far: 22, nearRange: 11, farRange: 26 },
+    rpm: 780,
+    mode: 'auto',
+    magazine: 30,
+    reserve: 120,
+    reloadMs: 2400,
+    reloadEmptyMs: 3000,
+    adsMs: 230,
+    sprintOutMs: 220,
+    moveMult: 1,
+    spread: { hip: 3, ads: 0.35, move: 1 },
+    recoil: { vertical: 0.5, horizontal: 0.22, recovery: 18 },
+    unlockLevel: 15,
+    attachments: CLASSIC_SMG_ATTS,
+    model: 'mp5',
+    price: 2000,
+  }),
+  smg({
+    // MW2 UMP45: the .45 that never falls off. 38-28 is three shots to 18 m and four at any
+    // range, at a slow 720 rpm (the slowest kill up close, the fastest far off), with low, slightly
+    // left-leaning kick; the slowest ADS of the class.
+    id: 'ump45',
+    name: 'UMP45',
+    blurb: 'Hard-hitting .45: slower fire, low recoil, and it keeps its damage at range.',
+    damage: { near: 38, far: 28, nearRange: 8, farRange: 30 },
+    rpm: 720,
+    mode: 'auto',
+    magazine: 32,
+    reserve: 128,
+    reloadMs: 2500,
+    reloadEmptyMs: 3100,
+    adsMs: 240,
+    sprintOutMs: 230,
+    moveMult: 1,
+    spread: { hip: 3.2, ads: 0.4, move: 1 },
+    recoil: { vertical: 0.42, horizontal: 0.18, recovery: 17, drift: -0.05 },
+    unlockLevel: 37,
+    attachments: MW2_SMG_ATTS,
+    model: 'ump45',
+    price: 3000,
+  }),
+  smg({
+    // MW2 Vector: 1200 rpm of light rounds (four up close, seven far), its recoil system all but
+    // cancels the kick (the lowest of any gun with the fastest recovery); 25 rounds go in 1.2 s.
+    id: 'vector',
+    name: 'Vector',
+    blurb: 'Blistering fire rate and almost no kick, but light rounds and only 25 of them.',
+    damage: { near: 25, far: 15, nearRange: 8, farRange: 20 },
+    rpm: 1200,
+    mode: 'auto',
+    magazine: 25,
+    reserve: 100,
+    reloadMs: 2200,
+    reloadEmptyMs: 2700,
+    adsMs: 190,
+    sprintOutMs: 190,
+    moveMult: 1,
+    spread: { hip: 2.9, ads: 0.5, move: 1 },
+    recoil: { vertical: 0.3, horizontal: 0.15, recovery: 22 },
+    unlockLevel: 47,
+    attachments: MW2_SMG_ATTS,
+    model: 'vector',
+    price: 3000,
+  }),
+  smg({
+    // P90 (CoD4 / MW2): a 50-round top magazine at 950 rpm. Three shots only inside 5 m, the
+    // earliest falloff of the class (six shots far), a gentle left pull, the longest reload.
+    id: 'p90',
+    name: 'P90',
+    blurb: 'Fifty rounds at a high rate of fire; weak once the range opens up.',
+    damage: { near: 34, far: 18, nearRange: 5, farRange: 16 },
+    rpm: 950,
+    mode: 'auto',
+    magazine: 50,
+    reserve: 150,
+    reloadMs: 3100,
+    reloadEmptyMs: 3600,
+    adsMs: 210,
+    moveMult: 1,
+    spread: { hip: 2.75, ads: 0.6, move: 1 },
+    recoil: { vertical: 0.55, horizontal: 0.3, recovery: 17, drift: -0.06 },
+    unlockLevel: 28,
+    attachments: MW2_SMG_ATTS,
+    model: 'p90',
+    price: 2500,
+  }),
+  smg({
+    // BO1 Spectre: the close-quarters king. 40 damage at 1000 rpm (three shots, 120 ms, the fastest
+    // kill of any SMG) but gone by 15 m; the best hipfire of the class, a twitchy kick that walks right.
+    id: 'spectre',
+    name: 'Spectre',
+    blurb: 'Fast and deadly up close with the best hipfire, but it falls off quickly.',
+    damage: { near: 40, far: 18, nearRange: 6, farRange: 15 },
+    rpm: 1000,
+    mode: 'auto',
+    magazine: 30,
+    reserve: 120,
+    reloadMs: 2200,
+    reloadEmptyMs: 2800,
+    adsMs: 210,
+    moveMult: 1,
+    spread: { hip: 2.65, ads: 0.6, move: 1 },
+    recoil: { vertical: 0.65, horizontal: 0.5, recovery: 16, drift: 0.08 },
+    unlockLevel: 18,
+    attachments: [...SMG_ATTS, 'grip'],
+    model: 'spectre',
+    price: 2000,
+  }),
+  smg({
+    // Uzi (BO1 / CoD4): fast and punchy, three shots to 10 m and five far at 850 rpm, the quickest
+    // ADS and sprint-out of the class, paid for with the heaviest climb, pulling right.
+    id: 'uzi',
+    name: 'Uzi',
+    blurb: 'Fast, punchy and quick to handle, with a hard climb that pulls right.',
+    damage: { near: 40, far: 20, nearRange: 6, farRange: 18 },
+    rpm: 850,
+    mode: 'auto',
+    magazine: 32,
+    reserve: 128,
+    reloadMs: 2300,
+    reloadEmptyMs: 2900,
+    adsMs: 175,
+    sprintOutMs: 180,
+    moveMult: 1,
+    spread: { hip: 2.9, ads: 0.65, move: 1 },
+    recoil: { vertical: 1, horizontal: 0.55, recovery: 13, drift: 0.18 },
+    unlockLevel: 6,
+    attachments: [...SMG_ATTS, 'grip'],
+    model: 'uzi',
+    price: 1500,
   }),
 
   // ------------------------------------------------------------------ light machine gun

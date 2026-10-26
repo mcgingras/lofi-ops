@@ -101,12 +101,13 @@ describe('Pack-a-Punch effect data', () => {
     expect(papToastLine('ak47')).toBe("Reznov's Revenge: incendiary rounds");
     expect(papEffectOf('m1911', 'explosive')).toMatchObject({ radius: 3, max: 30, min: 10 });
     // Varied on purpose: no single kind on more than a handful of guns (burn has three: the AK-47,
-    // the Olympia's dragon's breath and the SAW's incendiary rounds).
+    // the Olympia's dragon's breath and the SAW's incendiary rounds; every other kind two at most).
+    // The iconic SMGs brought two kinds of their own (vampire, adrenaline).
     const kinds = new Map<string, number>();
     for (const row of Object.values(PAP_WEAPONS)) if (row.effect && row.effect.kind !== 'wonder') kinds.set(row.effect.kind, (kinds.get(row.effect.kind) ?? 0) + 1);
     expect(Math.max(...kinds.values())).toBeLessThanOrEqual(3);
     expect([...kinds.values()].filter((n) => n > 2)).toHaveLength(1);
-    expect(kinds.size).toBeGreaterThanOrEqual(16);
+    expect(kinds.size).toBeGreaterThanOrEqual(21);
   });
 
   it('pure maths: reflect, the knockback falloff, burn per tick, pierce specs', () => {

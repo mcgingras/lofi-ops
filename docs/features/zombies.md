@@ -55,7 +55,7 @@ All tuning and formulas are in `src/shared/defs/zombies.ts`, with the source of 
 | Breaks | 10 s between rounds | 8 s (short breaks) |
 | Game over | everyone down or dead | every survivor down (no self-revive coming) or dead, AI allies included: an ally up keeps the game going (it revives you; bled out, you are back next round). "GAME OVER / YOU SURVIVED N ROUNDS", results 8.5 s later |
 
-Wall-buy prices (`WALL_PRICES`, Kino tiers on the guns we have; there is no M14 or PM63): Olympia 500, MP5K 1000, MPL 1000, AK-74u 1200, M16 1200, Stakeout 1500 (also ASP 500, Commando 1400 for future layers). Ammo costs half. You carry two guns: a third replaces the one in hand (BO1).
+The iconic SMGs (MP5, UMP45, Vector, P90, Spectre, Uzi) come from the box at the SMG class numbers; the AI partner ranks them among the wall SMGs (Uzi 4.2 just above the MP5K, up to the UMP45 at 5.8 below the AK-74u). Wall-buy prices (`WALL_PRICES`, Kino tiers on the guns we have; there is no M14 or PM63): Olympia 500, MP5K 1000, MPL 1000, AK-74u 1200, M16 1200, Stakeout 1500 (also ASP 500, Commando 1400 for future layers). Ammo costs half. You carry two guns: a third replaces the one in hand (BO1).
 
 Damage against the undead: our guns are tuned for 100-health players, BO1's zombie weapon files hit far harder. `ZOMBIE_DAMAGE` multiplies damage dealt to zombies by class (ARs x2.6, SMGs x2.5, shotguns x3, snipers x4, pistols x2.2, machine pistols x2.4, specials x6) with overrides: the M1911 x0.5 (BO1's 20 a round), the Ray Gun x6, the Thundergun / Wunderwaffe x40, Winter's Howl x30. That lands body damage on BO1's numbers (MP5K 100 vs BO1 100-50, AK-74u 100 vs 120-80, M16 104 vs 100-70). The knife already does BO1's 150.
 

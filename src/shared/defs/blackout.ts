@@ -315,7 +315,7 @@ export const LOOT_ENTITY = 'blackout_loot';
 export const PLANE_ENTITY = 'blackout_plane';
 
 /** Weapons that can lie on the floor, by rarity weight (launchers, the knife and wonder weapons excluded). */
-export const LOOT_WEAPONS: readonly string[] = ['m16', 'famas', 'ak47', 'commando', 'galil', 'aug', 'acr', 'm16a4', 'mp5k', 'ak74u', 'mpl', 'rpk', 'l96a1', 'dragunov', 'intervention', 'olympia', 'stakeout', 'spas12', 'm1911', 'python', 'asp', 'm60', 'stoner63', 'hk21', 'rpd', 'm249', 'mg4', 'deagle', 'makarov', 'usp'];
+export const LOOT_WEAPONS: readonly string[] = ['m16', 'famas', 'ak47', 'commando', 'galil', 'aug', 'acr', 'm16a4', 'mp5k', 'ak74u', 'mpl', 'rpk', 'l96a1', 'dragunov', 'intervention', 'olympia', 'stakeout', 'spas12', 'm1911', 'python', 'asp', 'm60', 'stoner63', 'hk21', 'rpd', 'm249', 'mg4', 'deagle', 'makarov', 'usp', 'mp5', 'ump45', 'vector', 'p90', 'spectre', 'uzi'];
 /** The very rare wonder weapon spawn (a legendary roll can turn into it). */
 export const LOOT_WONDER = 'raygun';
 export const WONDER_CHANCE = 0.03;

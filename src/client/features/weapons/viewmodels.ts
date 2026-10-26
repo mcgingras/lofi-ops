@@ -164,9 +164,11 @@ export function buildWeaponViewmodel(c: ViewmodelCtx, model: string): ViewmodelS
     // Magazine out and back in, the left hand following it.
     if (p.mag && magHome) {
       const d = r >= 0 ? bump(r, 0.12, 0.7) : 0;
-      p.mag.position.set(magHome.x - d * 0.04, magHome.y - d * 0.32, magHome.z + d * 0.05);
-      p.mag.rotation.x = d * 0.4;
-      if (left) left.position.lerpVectors(leftHome, p.mag.position.clone().add(new THREE.Vector3(-0.02, -0.12, 0.02)), r >= 0 ? bump(r, 0.05, 0.85) : 0);
+      // A top magazine (the P90's) lifts up and back off its rails instead of dropping out.
+      const up = build.magUp ? -1 : 1;
+      p.mag.position.set(magHome.x - d * 0.04, magHome.y - up * d * (build.magUp ? 0.2 : 0.32), magHome.z + d * 0.05 * (build.magUp ? 2 : 1));
+      p.mag.rotation.x = up * d * 0.4;
+      if (left) left.position.lerpVectors(leftHome, p.mag.position.clone().add(new THREE.Vector3(-0.02, build.magUp ? 0.04 : -0.12, 0.02)), r >= 0 ? bump(r, 0.05, 0.85) : 0);
     }
     // Bolt action: lift, pull, push, drop after every shot and around a reload.
     if (p.bolt && boltHome) {

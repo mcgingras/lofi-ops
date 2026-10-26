@@ -15,6 +15,10 @@
  * - Shockwave: a purple ring on the floor, dust and a whoomp. Knockback: dust and a thud.
  * - Frost round: an ice burst and crackle (the frost itself is the wonder weapons' ice entity).
  * - Exploding headshot: a small red-orange burst (blast jolt nearby).
+ * - Vampire rounds (Nosferatu, the shooter only): a red pulse at the screen edge and a soft chime
+ *   per hit that healed.
+ * - Adrenaline (Uncle Gal): a yellow spark burst on the killer and a whoosh; on my own screen a
+ *   pulsing yellow edge while the rush lasts.
  * - In hand: a red laser dot at the crosshair (AK74fu2), a second gun in the left hand (MPL-LF, and
  *   any gun with the Akimbo attachment: the same mirrored copy).
  */
@@ -45,6 +49,10 @@ export const papFxState = {
   venom: new Map<string, { until: number; n: number }>(),
   shatter: new Map<string, number>(),
   marks: new Map<string, number>(),
+  /** Adrenaline rushes: until (room time). */
+  rush: new Map<string, number>(),
+  /** When a vampire hit last healed me (local time), for the edge pulse. */
+  healAt: -9,
   /** When my own burn / shatter started (local time), for the overlays' fade in. */
   burnAt: -9,
   shatterAt: -9,
@@ -59,6 +67,8 @@ export const venomDoses = (m: Match, id: string): number => {
 };
 /** Is player `id` burning right now (tests, the HUD)? */
 export const isBurning = (m: Match, id: string): boolean => live(m, papFxState.burn.get(id));
+/** Is player `id` on an adrenaline rush right now? */
+export const isRushing = (m: Match, id: string): boolean => live(m, papFxState.rush.get(id));
 /** Is player `id` marked for me right now? */
 export const isMarked = (m: Match, id: string): boolean => live(m, papFxState.marks.get(id)) && (m.remotes.views.get(id)?.alive ?? false);
 
@@ -152,6 +162,21 @@ onFeature('killstreaks.papFx', (fx: PapFx) => {
       sfx.play('ks_pap_freeze', { at, volume: 1.1 });
       break;
     }
+    case 'vampire':
+      if (fx.v === m.myId) {
+        papFxState.healAt = m.time;
+        sfx.play('ks_pap_ding', { volume: 0.25, rate: 1.6 });
+      }
+      break;
+    case 'adrenaline': {
+      papFxState.rush.set(fx.v, fx.until);
+      const at = bodyPos(m, fx.v);
+      if (at) {
+        for (let i = 0; i < 12; i++) fxKit.emit({ x: at.x, y: at.y + 1, z: at.z }, { color: i % 2 ? 0xffe040 : 0xfff6b0, life: 0.35, size: 0.1, size1: 0.02, vel: { x: rnd(3), y: 1 + Math.random() * 2.5, z: rnd(3) }, grav: 5 });
+        sfx.play('ks_pap_pulse', { at: { x: at.x, y: at.y + 1, z: at.z }, volume: fx.v === m.myId ? 0.7 : 0.5, rate: 1.5 });
+      }
+      break;
+    }
     case 'headblast': {
       const at = { x: fx.x, y: fx.y, z: fx.z };
       fxKit.emit(at, { color: 0xffffff, life: 0.1, size: 1.2, size1: 2 });
@@ -212,6 +237,7 @@ function updateBodies(m: Match, dt: number): void {
     if (!v || !v.alive || !puff || Math.random() > 0.25) continue;
     fxKit.emit({ x: v.x + rnd(0.3), y: v.y + 0.5 + Math.random() * 1.1, z: v.z + rnd(0.3) }, { color: 0xdfe8ff, life: 0.4, size: 0.06, size1: 0.02, vel: { x: rnd(0.8), y: 0.5, z: rnd(0.8) }, grav: 6 });
   }
+  for (const [id, until] of papFxState.rush) if (!live(m, until)) papFxState.rush.delete(id);
   // Marks: a red outline box through walls around each target I marked.
   for (const [id, line] of outlines) {
     if (!isMarked(m, id)) {
@@ -308,7 +334,8 @@ registerMatchHook('killstreaks.papFx', {
     papFxState.venom.clear();
     papFxState.shatter.clear();
     papFxState.marks.clear();
-    papFxState.burnAt = papFxState.shatterAt = -9;
+    papFxState.rush.clear();
+    papFxState.burnAt = papFxState.shatterAt = papFxState.healAt = -9;
     return () => {
       clearOutlines();
       dropAkimbo();
@@ -316,6 +343,7 @@ registerMatchHook('killstreaks.papFx', {
       papFxState.venom.clear();
       papFxState.shatter.clear();
       papFxState.marks.clear();
+      papFxState.rush.clear();
     };
   },
   frame(m, dt) {
@@ -406,6 +434,23 @@ registerHudWidget(
       for (const pts of CRACKS) {
         for (let i = 1; i < pts.length; i++) line(g, pts[i - 1]![0] * W, pts[i - 1]![1] * H, pts[i]![0] * W, pts[i]![1] * H, u, c);
       }
+    }
+    // Adrenaline: a yellow rim pulsing fast while the rush lasts.
+    if (isRushing(m, m.myId)) {
+      const rim = Math.round(u * (1 + Math.abs(Math.sin(m.time * 9))));
+      const c = Math.floor(m.time * 10) % 2 ? '#ffe040' : '#fff6b0';
+      rect(g, 0, 0, W, rim, c);
+      rect(g, 0, H - rim, W, rim, c);
+      rect(g, 0, 0, rim, H, c);
+      rect(g, W - rim, 0, rim, H, c);
+    }
+    // Vampire: a short red pulse at the edges when a hit heals me.
+    if (m.time - papFxState.healAt < 0.18) {
+      const rim = 2 * u;
+      rect(g, 0, 0, W, rim, '#d01830');
+      rect(g, 0, H - rim, W, rim, '#d01830');
+      rect(g, 0, 0, rim, H, '#d01830');
+      rect(g, W - rim, 0, rim, H, '#d01830');
     }
     // Laser (AK74fu2): a red dot at the crosshair, where every round goes.
     const id = heldPacked(m);

@@ -17,7 +17,7 @@ Owner: bots. Covers DESIGN.md section 8a (hard requirement): every lobby runs wi
 | `src/server/features/bots/roles.ts` | roles, lanes, goal claims, chase limits and the team path-usage grid (pure) |
 | `src/server/features/modes/spawns.ts` | spawn scoring (owner: modes) and `recentSpawns`, which bots read to stay off the enemy's spawn |
 | `src/server/features/bots/skill.ts` | settings validation, per-bot variance, skill rating |
-| `src/server/features/bots/loadout.ts` | bot classes picked from the current defs (primaries wear an MW2 camo about two times in three, from what a pretend headshot record growing with skill would have opened: `pickBotCamo`; about one bot in four or five carries a machine pistol, sometimes with its one attachment, Akimbo included, rolled from a generator seeded off the last draw so seeded callers' streams don't shift), and bot callsigns |
+| `src/server/features/bots/loadout.ts` | bot classes picked from the current defs (primaries wear an MW2 camo about two times in three, from what a pretend headshot record growing with skill would have opened: `pickBotCamo`; about one bot in four or five carries a machine pistol, sometimes with its one attachment, Akimbo included, rolled from a generator seeded off the last draw so seeded callers' streams don't shift), SMGs weigh 2.2 per gun (nine of them: a bit under a quarter of primaries), and bot callsigns |
 | `src/server/features/bots/hooks.ts` | `registerBotGoal`, `registerBotStreakHandler`, `registerBotModeStyle`, `registerBotStyle` (per-bot style for modes whose players play different roles: Infected) |
 | `src/client/features/bots/index.ts` | `botsClient` (typed RPC helpers), the `bots.setup` screen with the "Play with Bots" menu item, and the `bots.wait` HUD widget |
 
