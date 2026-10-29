@@ -75,7 +75,7 @@ export interface WagerRoomSummary {
   phase: string;
   /** Room-relative seconds until the lobby starts (null when not counting down). */
   startsIn: number | null;
-  /** The bots it backfills with ("Hardened / Veteran"). */
+  /** The bots' skill ("Hardened"). */
   opponents: string;
 }
 
@@ -95,8 +95,6 @@ export interface WagerStanding {
   score: number;
   /** A human whose real CP is in escrow. */
   staked: boolean;
-  /** Bots: the preset this bot plays at (staked tiers mix two). */
-  difficulty?: string;
 }
 
 export interface WagerHud {
@@ -118,7 +116,7 @@ export interface WagerHud {
   startsIn: number | null;
   humans: number;
   target: number;
-  /** Bot difficulty the lobby backfills with; `opponents` names it ("Hardened / Veteran" for High Roller). */
+  /** Bot difficulty the lobby backfills with (every tier); `opponents` is its display name ("Hardened"). */
   bots: { fill: boolean; difficulty: string; opponents: string };
 }
 

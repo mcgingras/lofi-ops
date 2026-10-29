@@ -598,23 +598,22 @@ describe('wager escrow and payouts', () => {
 });
 
 describe('practice wagers and bot backfill', () => {
-  it('a lone human waits for players, then stakes against bots the tier picks (not the lobby)', async () => {
+  it('a lone human waits for players, then stakes against bots at the lobby\'s own skill', async () => {
     const w = world();
     const a = w.human('A');
-    const r = await w.call(a, 'economy.wagerQueue', { mode: 'oitc', ante: 1000, bots: { fill: true, difficulty: 'recruit', variance: 0 } });
+    const r = await w.call(a, 'economy.wagerQueue', { mode: 'oitc', ante: 1000, bots: { fill: true, difficulty: 'veteran', variance: 0 } });
     expect(r.practice).toBe(false);
     w.lobby.join(a, r.roomId as string);
     const room = w.lobby.get(r.roomId as string)!;
     steps(room, MATCHMAKING_WAIT_SEC - 1);
     expect(room.phase).toBe('lobby');
-    expect(feats(a, 'economy.wager').at(-1)).toMatchObject({ pot: 6000, entrants: 6, practice: false, bots: { opponents: 'Regular / Hardened' } });
+    expect(feats(a, 'economy.wager').at(-1)).toMatchObject({ pot: 6000, entrants: 6, practice: false, bots: { opponents: 'Veteran' } });
     expect(feats(a, 'economy.wager').at(-1)?.startsIn).toBeGreaterThan(0);
     steps(room, 1.5);
     expect(room.phase).toBe('countdown');
     expect(room.players.size).toBe(6);
-    // Big Spender: regular / hardened bots, the harder one first; the asked-for recruits are ignored.
-    expect(room.bots().map((b) => b.ext.wager?.difficulty)).toEqual(['hardened', 'regular', 'hardened', 'regular', 'hardened']);
-    expect(room.bots()[0]!.ext.wager?.skill?.reactionMs).toBe(320);
+    // Same skill as any lobby: no scaling by the ante.
+    expect(room.bots().every((b) => b.ext.wager?.skill?.reactionMs === 180)).toBe(true); // veteran, no variance
     expect(a.profile.codPoints).toBe(19000);
     expect(wagersFor(room)!.states.get(room.id)).toMatchObject({ practice: false, pot: 6000, entrantsAtStart: 6, stakedAtStart: 1 });
   });

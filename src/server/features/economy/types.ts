@@ -21,8 +21,6 @@ export interface WagerPlayerExt {
   lastMelee?: number;
   /** Skill the wager lobby asked for (bots only; the bots feature may read it). */
   skill?: BotSkill;
-  /** Bots in a staked tier: the preset this bot was dealt (TIER_BOT_SKILL). */
-  difficulty?: string;
 }
 
 declare module '../../player' {

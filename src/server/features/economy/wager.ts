@@ -4,9 +4,9 @@
  *
  * Flow (rooms created by `economy.wagerQueue`, "managed"):
  *   lobby  - humans gather. The match starts when the lobby is full, when someone asks to start,
- *            or after MATCHMAKING_WAIT_SEC; empty slots are backfilled with bots. In a staked tier
- *            the bots' skill comes from the tier (TIER_BOT_SKILL); Practice uses the lobby's
- *            LobbyBotSettings. With bot fill on, one human is enough for real stakes.
+ *            or after MATCHMAKING_WAIT_SEC; empty slots are backfilled with bots at the lobby's
+ *            LobbyBotSettings on every tier (bots are not scaled by the ante). With bot fill on,
+ *            one human is enough for real stakes.
  *   start  - every human's ante goes into escrow (`profile.ext.economy.escrow`, saved at once in
  *            the same row write as the debit). The house covers each bot's ante, so the pot is
  *            ante x entrants (humans + bots). Fewer than WAGER_MIN_ENTRANTS entrants, nobody able
@@ -24,7 +24,7 @@
  * an ante was set with `setWagerAnte`.
  */
 import { BOT_DIFFICULTY_BY_ID, BOT_SKILL_RANGES, DEFAULT_TARGET_PLAYERS, MATCHMAKING_WAIT_SEC, skillFor, type BotSkill, type LobbyBotSettings } from '../../../shared/defs/bots';
-import { ANTE_TIERS, ANTES, EARN_CP_HINT, isWagerMode, opponentsLabel, paidPlaces, tierBotDifficulties, tierBotDifficulty, WAGER_BOT_VARIANCE, WAGER_MIN_ENTRANTS, WAGER_MIN_HUMANS, wagerPayouts, WAGER_MODES } from '../../../shared/defs/economy';
+import { ANTE_TIERS, ANTES, EARN_CP_HINT, isWagerMode, opponentsLabel, paidPlaces, WAGER_MIN_ENTRANTS, WAGER_MIN_HUMANS, wagerPayouts, WAGER_MODES } from '../../../shared/defs/economy';
 import type { EconomyResultsExt, WagerBotRequest, WagerHud, WagerPayoutLine, WagerPlacing, WagerRecord, WagerRoomSummary, WagerStanding } from '../../../shared/defs/economy-net';
 import { mapsForMode } from '../../../shared/defs/maps';
 import { MODE_BY_ID } from '../../../shared/defs/modes';
@@ -87,8 +87,6 @@ export interface WagerState {
   stakedAtStart: number;
   /** Staked humans + house bots at the start (places paid follow it). */
   entrantsAtStart: number;
-  /** Bots dealt a tier preset so far (alternates the tier's two presets). */
-  botSeq: number;
   /** Bots may still join during the countdown (the bots feature fills after us): check entrants at play. */
   checkAtPlay: boolean;
   hudDirty: boolean;
@@ -126,7 +124,7 @@ export class WagerManager {
     if (econ(prof).escrow) throw new RpcError('busy', 'already staked in a wager');
     if (!practice && prof.codPoints < ante)
       throw new RpcError('funds', `not enough CoD Points for the ante (${prof.codPoints.toLocaleString('en-US')} of ${ante.toLocaleString('en-US')}). ${EARN_CP_HINT}`);
-    const bots = sanitizeBots(mode.id, req.bots, ante);
+    const bots = sanitizeBots(mode.id, req.bots);
 
     let state: WagerState | undefined;
     if (!practice)
@@ -155,7 +153,7 @@ export class WagerManager {
   list(): WagerRoomSummary[] {
     return [...this.states.values()]
       .filter((s) => s.managed && !s.room.closed && !s.practiceRequested)
-      .map((s) => ({ roomId: s.room.id, mode: s.mode, ante: s.ante, practice: s.practiceRequested, humans: s.room.humans().length, players: s.room.players.size, target: s.target, phase: s.room.phase, startsIn: this.startsIn(s), opponents: opponentsLabel(s.ante, s.bots.difficulty) }));
+      .map((s) => ({ roomId: s.room.id, mode: s.mode, ante: s.ante, practice: s.practiceRequested, humans: s.room.humans().length, players: s.room.players.size, target: s.target, phase: s.room.phase, startsIn: this.startsIn(s), opponents: opponentsLabel(s.bots.difficulty) }));
   }
 
   /** Ask the lobby to start now (needs 2+ humans for stakes; practice starts anyway). */
@@ -175,8 +173,8 @@ export class WagerManager {
     if (!s) throw new Error('not a wager room');
     s.ante = ante;
     s.practiceRequested = ante === 0;
-    if (bots || tierBotDifficulties(ante)) {
-      s.bots = sanitizeBots(room.mode.id, bots ?? s.bots, ante);
+    if (bots) {
+      s.bots = sanitizeBots(room.mode.id, bots);
       const rb = getRoomBots(room);
       if (rb) rb.update({ difficulty: s.bots.difficulty, custom: s.bots.custom, variance: s.bots.variance });
     }
@@ -203,7 +201,6 @@ export class WagerManager {
       pot: 0,
       stakedAtStart: 0,
       entrantsAtStart: 0,
-      botSeq: 0,
       checkAtPlay: false,
       hudDirty: true,
       lastHud: -99,
@@ -282,12 +279,7 @@ export class WagerManager {
       if (!s) return;
       s.hudDirty = true;
       if (player.isBot) {
-        const tier = s.practiceRequested ? null : tierBotDifficulty(s.ante, s.botSeq);
-        if (tier) s.botSeq += 1;
-        const base = tier ? { ...BOT_DIFFICULTY_BY_ID.get(tier)!.skill } : skillFor(s.bots);
-        const variance = tier ? Math.min(s.bots.variance, WAGER_BOT_VARIANCE) : s.bots.variance;
-        const skill = (wx(player).skill = jitterSkill(base, variance, this.random));
-        wx(player).difficulty = tier ?? s.bots.difficulty;
+        const skill = (wx(player).skill = jitterSkill(skillFor(s.bots), s.bots.variance, this.random));
         // The bots feature's brain plays at exactly this (jittered) skill.
         const brain = getRoomBots(room)?.attachBrain(player);
         if (brain) brain.skill = { ...skill };
@@ -618,10 +610,7 @@ export class WagerManager {
     const standings: WagerStanding[] = order.map((p, i) => {
       const inIt = isEntrant(p);
       if (inIt) rank += 1;
-      const st: WagerStanding = { id: p.id, name: p.name, bot: p.isBot, place: i + 1, rank: inIt ? rank : 0, payout: inIt ? (payouts[rank - 1] ?? 0) : 0, score: p.stats.score, staked: inIt && !p.isBot };
-      const d = p.isBot ? wx(p).difficulty : undefined;
-      if (d) st.difficulty = d;
-      return st;
+      return { id: p.id, name: p.name, bot: p.isBot, place: i + 1, rank: inIt ? rank : 0, payout: inIt ? (payouts[rank - 1] ?? 0) : 0, score: p.stats.score, staked: inIt && !p.isBot };
     });
     return {
       roomId: room.id,
@@ -637,7 +626,7 @@ export class WagerManager {
       startsIn: this.startsIn(s),
       humans,
       target: s.target,
-      bots: { fill: s.bots.fill, difficulty: s.bots.difficulty, opponents: opponentsLabel(s.practiceRequested ? 0 : s.ante, s.bots.difficulty) },
+      bots: { fill: s.bots.fill, difficulty: s.bots.difficulty, opponents: opponentsLabel(s.bots.difficulty) },
     };
   }
 
@@ -662,12 +651,8 @@ export function pickWagerMap(mode: string, avoid?: string): string {
   return choices[Math.floor(Math.random() * choices.length)] ?? 'yard';
 }
 
-/**
- * Clamp an untrusted bot request into LobbyBotSettings for a wager mode. For a staked ante the tier
- * decides the bots (TIER_BOT_SKILL): the request's difficulty and custom skill are ignored and its
- * variance is capped, so nobody stakes against recruits at High Roller.
- */
-export function sanitizeBots(mode: string, raw: unknown, ante = 0): LobbyBotSettings {
+/** Clamp an untrusted bot request into LobbyBotSettings for a wager mode. */
+export function sanitizeBots(mode: string, raw: unknown): LobbyBotSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as WagerBotRequest;
   const max = MODE_BY_ID.get(mode)?.maxPlayers ?? 8;
   const def = DEFAULT_TARGET_PLAYERS[mode] ?? max;
@@ -688,12 +673,6 @@ export function sanitizeBots(mode: string, raw: unknown, ante = 0): LobbyBotSett
       if (typeof v === 'number' && Number.isFinite(v)) base[k] = Math.max(lo, Math.min(hi, v));
     }
     out.custom = base;
-  }
-  const tier = tierBotDifficulties(ante);
-  if (tier) {
-    out.difficulty = tier[1];
-    delete out.custom;
-    out.variance = Math.min(out.variance, WAGER_BOT_VARIANCE);
   }
   return out;
 }

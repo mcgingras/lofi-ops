@@ -149,40 +149,14 @@ export function wagerPotPreview(ante: number, players: number): { pot: number; p
   return { pot, payouts: wagerPayouts(pot, n, n) };
 }
 
-/**
- * Bot skill by ante tier (staked tiers only; Practice keeps the lobby's own difficulty). Bots in a
- * staked lobby alternate between the two presets, the harder one first, so the bigger the ante the
- * tougher the table. The lobby's difficulty setting is ignored for stakes, and its variance is
- * capped at WAGER_BOT_VARIANCE so a lucky roll can't hand out a pushover.
- */
-export const TIER_BOT_SKILL: Record<Exclude<AnteTier['id'], 'practice'>, readonly [BotDifficultyId, BotDifficultyId]> = {
-  low: ['recruit', 'regular'],
-  mid: ['regular', 'hardened'],
-  high: ['hardened', 'veteran'],
-};
-export const WAGER_BOT_VARIANCE = 0.15;
-
-export const tierForAnte = (ante: number): AnteTier | undefined => ANTE_TIERS.find((t) => t.ante === ante);
-
-/** The bot presets a staked tier plays against (null for Practice / unknown antes). */
-export function tierBotDifficulties(ante: number): readonly [BotDifficultyId, BotDifficultyId] | null {
-  const t = tierForAnte(ante);
-  return t && t.id !== 'practice' ? TIER_BOT_SKILL[t.id] : null;
-}
-
-/** The difficulty of the n-th bot (0-based) to join a staked lobby: harder preset first, then alternating. */
-export function tierBotDifficulty(ante: number, n: number): BotDifficultyId | null {
-  const d = tierBotDifficulties(ante);
-  return d ? d[1 - (n % 2)]! : null;
-}
-
 const DIFFICULTY_NAMES: Record<BotDifficultyId, string> = { recruit: 'Recruit', regular: 'Regular', hardened: 'Hardened', veteran: 'Veteran' };
 
-/** "Hardened / Veteran" for a staked tier; the practice difficulty's name otherwise. */
-export function opponentsLabel(ante: number, practiceDifficulty: string): string {
-  const d = tierBotDifficulties(ante);
-  if (d) return d.map((x) => DIFFICULTY_NAMES[x]).join(' / ');
-  return practiceDifficulty in DIFFICULTY_NAMES ? DIFFICULTY_NAMES[practiceDifficulty as BotDifficultyId] : 'Custom';
+/**
+ * The bots' skill as the lobby shows it ("Opponents: Hardened"). Every tier, staked or not, uses
+ * the lobby's own difficulty: bots are not scaled by the ante.
+ */
+export function opponentsLabel(difficulty: string): string {
+  return difficulty in DIFFICULTY_NAMES ? DIFFICULTY_NAMES[difficulty as BotDifficultyId] : 'Custom';
 }
 
 /** The cheapest staked ante (Low Roller): below it the wager screen offers practice and a hint. */

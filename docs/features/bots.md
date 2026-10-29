@@ -260,7 +260,7 @@ Nothing in the server adds avoidable delay. Inputs are applied on the next tick,
   - The highest-priority goal from the mode's sources and the `'*'` sources wins. Bots follow it with a probability set by `objectivePlay`.
   - For rounds without respawn (S&D), backfilled bots join at match start. A bot replacing a leaver mid-round waits for the next round, like a human would.
 - **economy:**
-  - Wagers with bots stake real CP (the house covers the bots' antes); in a staked tier economy sets each bot's skill from `TIER_BOT_SKILL` (`player.ext.wager.skill` / `.difficulty`) and hands it to the brain.
+  - Wagers with bots stake real CP (the house covers the bots' antes); bots play at the lobby's own difficulty on every tier (`player.ext.wager.skill`, handed to the brain).
   - Wager loadouts forced in `beforeSpawn` apply to bots too.
   - `registerBotModeStyle(id, { conserveAmmo, meleeHappy, rush })` tunes bots for new wager modes.
   - `registerBotStyle(modeId, (room, bot) => Partial<BotModeStyle> | null)` overrides it per bot (the brain reads `botStyleFor(room, bot)`). Two optional flags: `kite` (in a fight never close in, back away from anyone inside 4 m) and `throwAtRange` (lob the lethal at a target in sight 6-18 m away, on half the chances, every 5-8 s, the arc scattered by `aimErrorDeg`). A melee-happy bot with nothing to shoot goes in instead of backing off to cover. Infected uses all of it (docs/features/modes.md).
