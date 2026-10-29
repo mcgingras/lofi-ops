@@ -7,7 +7,7 @@
  */
 import type { Match } from '../../game/match';
 import { h } from '../../menus/dom';
-import { registerMatchHook, registerScreen, screens } from '../../registry';
+import { registerMatchHook, registerScreen, screens, summaryCards } from '../../registry';
 import { closeOverlay, navigate, openOverlay, overlayOpen } from '../../router';
 import { currentMatch } from '../../state';
 import './modes.css';
@@ -68,6 +68,18 @@ function render(root: HTMLElement, m: Match, params: Record<string, string>): ()
     h('div', { class: 'lfm-xp-line lfm-xp-total' }, h('span', {}, 'Total'), h('b', {}, `+${view.xpTotal.toLocaleString()}`)),
   );
 
+  // Other areas' cards (the economy's wager results); a throwing card is skipped, not fatal.
+  const extra = [...summaryCards.values()]
+    .sort((a, b) => a.order - b.order)
+    .map(({ card }) => {
+      try {
+        return card(results, m.myId);
+      } catch (err) {
+        console.error('[summary card]', err);
+        return null;
+      }
+    });
+
   const tables = view.teams
     ? view.teams.map((t) => table(view, t.rows, h('div', { class: `lfm-team ${t.mine ? 'lfm-friend' : 'lfm-enemy'}` }, `${t.name.toUpperCase()} · ${t.score}`)))
     : [table(view, view.rows, null)];
@@ -82,7 +94,7 @@ function render(root: HTMLElement, m: Match, params: Record<string, string>): ()
       'div',
       { class: 'lf-page lfm-summary', role: 'dialog', 'aria-label': 'Match summary' },
       h('div', { class: 'lfm-head' }, h('h1', { class: `lfm-title ${titleCls}` }, view.title), h('div', { class: 'lf-sub' }, sub), scoreLine),
-      h('div', { class: 'lfm-grid' }, h('div', { class: 'lfm-tables' }, ...tables), h('div', { class: 'lfm-side' }, mvp, xp)),
+      h('div', { class: 'lfm-grid' }, h('div', { class: 'lfm-tables' }, ...tables), h('div', { class: 'lfm-side' }, ...extra, mvp, xp)),
       h('div', { class: 'lf-row' }, cont, leave, countdown),
     ),
   );

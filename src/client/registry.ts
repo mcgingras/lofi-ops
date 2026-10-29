@@ -6,6 +6,7 @@
  */
 import type * as THREE from 'three';
 import type { FeatureId, FeatureMessages, EntitySnap } from '../shared/protocol';
+import type { MatchResults } from '../shared/events';
 import type { Vec3 } from '../shared/math';
 import type { Match } from './game/match';
 
@@ -119,6 +120,20 @@ export interface MatchHook {
 export const matchHooks = new Map<string, MatchHook>();
 export function registerMatchHook(id: string, hook: MatchHook): void {
   matchHooks.set(id, hook);
+}
+
+// ---------------------------------------------------------------------------------------------
+// End-of-match summary cards
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Extra cards in the end-of-match summary's side column (the economy's wager results). Return null
+ * to show nothing for this match. Lower `order` first; the modes summary renders them after its own.
+ */
+export type SummaryCard = (results: MatchResults, myId: string) => HTMLElement | null;
+export const summaryCards = new Map<string, { card: SummaryCard; order: number }>();
+export function registerSummaryCard(id: string, card: SummaryCard, order = 0): void {
+  summaryCards.set(id, { card, order });
 }
 
 // ---------------------------------------------------------------------------------------------

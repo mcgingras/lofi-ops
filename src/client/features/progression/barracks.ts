@@ -317,6 +317,13 @@ function challengesTab(p: Profile, rerenderBody: () => void): HTMLElement[] {
   ];
 }
 
+/** Net CoD Points from wagers (economy's ledger totals in profile.ext.economy). */
+function wagerNet(p: Profile): string {
+  const e = (p.ext.economy ?? {}) as { wagerWon?: number; wagerLost?: number };
+  const n = (e.wagerWon ?? 0) - (e.wagerLost ?? 0);
+  return `${n >= 0 ? '+' : '-'}${fmt(Math.abs(n))}`;
+}
+
 function recordTab(p: Profile): HTMLElement[] {
   const s = (k: string) => stat(p, k);
   const kills = s('kills');
@@ -346,6 +353,9 @@ function recordTab(p: Profile): HTMLElement[] {
     tile(fmt(s('tripleKills')), 'Triple kills'),
     tile(fmt(s('meleeKills')), 'Melee kills'),
     tile(fmt(s('streaksEarned')), 'Streaks earned'),
+    tile(fmt(s('wager.wins')), `Wagers won (of ${fmt(s('wager.matches'))})`),
+    tile(fmt(s('wager.inMoney')), 'Wagers in the money'),
+    tile(wagerNet(p), 'Wager net CP'),
   );
 
   const weaponIds = new Set(WEAPONS.map((w) => w.id));
