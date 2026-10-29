@@ -2,7 +2,8 @@
  * The CoD Points ledger: every change to `profile.codPoints` made by the economy goes through
  * here so `profile.ext.economy` keeps totals, a short history and the wager escrow.
  */
-import type { EconomyState, EconomyTxn } from '../../../shared/defs/economy-net';
+import { WAGER_HISTORY } from '../../../shared/defs/economy';
+import type { EconomyState, EconomyTxn, WagerRecord } from '../../../shared/defs/economy-net';
 import { DEFAULT_EMBLEM_BACKGROUND, DEFAULT_RETICLE } from '../../../shared/defs/store';
 import { bumpStat, type Profile } from '../../../shared/profile';
 import type { EconomyExt } from './types';
@@ -24,6 +25,7 @@ export function econ(profile: Profile): EconomyExt {
       emblem: typeof cur?.equipped?.emblem === 'string' ? cur.equipped.emblem : DEFAULT_EMBLEM_BACKGROUND,
     },
     lastMatch: cur?.lastMatch ?? null,
+    wagerHistory: Array.isArray(cur?.wagerHistory) ? cur.wagerHistory : [],
   };
   // Normalise in place (keeps the object identity other references hold).
   profile.ext.economy = Object.assign(cur ?? {}, e);
@@ -74,6 +76,13 @@ export function recordPurchase(profile: Profile, cp: number, label: string) {
   if (cp > 0) log(e, 'purchase', -cp, label);
 }
 
+/** Add a settled wager to the profile's record (newest first). */
+export function recordWager(profile: Profile, rec: WagerRecord): void {
+  const e = econ(profile);
+  e.wagerHistory.unshift(rec);
+  if (e.wagerHistory.length > WAGER_HISTORY) e.wagerHistory.length = WAGER_HISTORY;
+}
+
 export function stateOf(profile: Profile): EconomyState {
   const e = econ(profile);
   return {
@@ -87,5 +96,6 @@ export function stateOf(profile: Profile): EconomyState {
     escrow: e.escrow ? { ...e.escrow } : null,
     history: e.history.slice(0, HISTORY),
     lastMatch: e.lastMatch,
+    wagerHistory: e.wagerHistory.slice(0, WAGER_HISTORY),
   };
 }

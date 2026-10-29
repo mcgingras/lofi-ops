@@ -108,6 +108,16 @@ export class Store {
       .run(p.name, p.xp, p.level, p.prestige, p.codPoints, p.selectedLoadout, ...JSON_FIELDS.map((f) => JSON.stringify(p[f])), p.updatedAt, p.id);
   }
 
+  /**
+   * Ids of profiles whose `ext` has a non-null value at a JSON path (`'$.economy.escrow'`): boot-time
+   * recovery scans (the economy refunds antes left in escrow by a crash).
+   */
+  idsWithExt(jsonPath: string): string[] {
+    if (!/^\$(\.[A-Za-z_][A-Za-z0-9_]*)+$/.test(jsonPath)) throw new Error(`bad json path ${jsonPath}`);
+    const rows = this.db.prepare('SELECT id FROM profiles WHERE json_extract(ext, ?) IS NOT NULL').all(jsonPath) as { id: string }[];
+    return rows.map((r) => r.id);
+  }
+
   count(): number {
     return (this.db.prepare('SELECT COUNT(*) AS n FROM profiles').get() as { n: number }).n;
   }

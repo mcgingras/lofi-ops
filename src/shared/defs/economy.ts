@@ -6,6 +6,7 @@
  * spend them on weapons/attachments (once your level unlocks them), camos, reticles and emblem
  * backgrounds, or stake them on wager matches. Bots never earn or cost CP.
  */
+import type { BotDifficultyId } from './bots';
 import type { ModeDef } from './modes';
 import './wager-weapons';
 
@@ -99,12 +100,19 @@ export const ANTE_TIERS: AnteTier[] = [
 
 export const ANTES = ANTE_TIERS.map((t) => t.ante);
 
-/** Fewest humans for real stakes; below this a wager runs as practice (bots fill, nobody pays). */
+/**
+ * Wagers with 2+ staked humans keep their original rule: when leavers drop the staked humans below
+ * this, the wager is void and every ante (forfeits too) is refunded. A wager that started with one
+ * staked human (solo against bots) is never voided by leaving: the leaver forfeits.
+ */
 export const WAGER_MIN_HUMANS = 2;
+
+/** Fewest entrants (humans + bots) for real stakes; a lone human with no bots plays practice. */
+export const WAGER_MIN_ENTRANTS = 2;
 
 /**
  * Share of the pot paid to 1st/2nd/3rd, by how many places are paid. Places paid =
- * min(3, humans - 1), so at least one staked player always loses their ante.
+ * min(3, entrants - 1), so at least one entrant always loses their ante.
  */
 export const PAYOUT_SPLITS: Record<number, readonly number[]> = {
   1: [1],
@@ -112,22 +120,77 @@ export const PAYOUT_SPLITS: Record<number, readonly number[]> = {
   3: [0.5, 0.3, 0.2],
 };
 
-export const paidPlaces = (humans: number) => Math.max(0, Math.min(3, humans - 1));
+/** Places paid for a match with this many entrants (humans and bots). */
+export const paidPlaces = (entrants: number) => Math.max(0, Math.min(3, entrants - 1));
 
 /**
- * Payout amounts for the pot. `staked` = humans who paid an ante at the start; `present` = how many
- * of them are still in at the end (leavers forfeit and cannot place). Rounding remainder goes to
- * 1st. Returns amounts for ranked present humans (index 0 = best placed human).
+ * Payout amounts for the pot. `entrants` = everyone who was in at the start (staked humans plus
+ * house-covered bots); `present` = how many of them are still in at the end (leavers forfeit and
+ * cannot place). Rounding remainder goes to 1st. Returns amounts for the ranked present entrants
+ * (index 0 = best placed, bots included: a bot's share goes back to the house).
  */
-export function wagerPayouts(pot: number, staked: number, present: number): number[] {
-  const k = Math.min(paidPlaces(staked), present);
+export function wagerPayouts(pot: number, entrants: number, present: number): number[] {
+  const k = Math.min(paidPlaces(entrants), present);
   if (k <= 0 || pot <= 0) return [];
-  const shares = PAYOUT_SPLITS[paidPlaces(staked)]!.slice(0, k);
+  const shares = PAYOUT_SPLITS[paidPlaces(entrants)]!.slice(0, k);
   const sum = shares.reduce((a, b) => a + b, 0);
   const out = shares.map((s) => Math.floor((pot * s) / sum));
   out[0]! += pot - out.reduce((a, b) => a + b, 0);
   return out;
 }
+
+/**
+ * The pot and payout table for a lobby before it starts: the house covers every bot's ante, so the
+ * pot is ante x all players.
+ */
+export function wagerPotPreview(ante: number, players: number): { pot: number; payouts: number[] } {
+  const n = Math.max(0, Math.floor(players));
+  const pot = ante > 0 && n >= WAGER_MIN_ENTRANTS ? ante * n : 0;
+  return { pot, payouts: wagerPayouts(pot, n, n) };
+}
+
+/**
+ * Bot skill by ante tier (staked tiers only; Practice keeps the lobby's own difficulty). Bots in a
+ * staked lobby alternate between the two presets, the harder one first, so the bigger the ante the
+ * tougher the table. The lobby's difficulty setting is ignored for stakes, and its variance is
+ * capped at WAGER_BOT_VARIANCE so a lucky roll can't hand out a pushover.
+ */
+export const TIER_BOT_SKILL: Record<Exclude<AnteTier['id'], 'practice'>, readonly [BotDifficultyId, BotDifficultyId]> = {
+  low: ['recruit', 'regular'],
+  mid: ['regular', 'hardened'],
+  high: ['hardened', 'veteran'],
+};
+export const WAGER_BOT_VARIANCE = 0.15;
+
+export const tierForAnte = (ante: number): AnteTier | undefined => ANTE_TIERS.find((t) => t.ante === ante);
+
+/** The bot presets a staked tier plays against (null for Practice / unknown antes). */
+export function tierBotDifficulties(ante: number): readonly [BotDifficultyId, BotDifficultyId] | null {
+  const t = tierForAnte(ante);
+  return t && t.id !== 'practice' ? TIER_BOT_SKILL[t.id] : null;
+}
+
+/** The difficulty of the n-th bot (0-based) to join a staked lobby: harder preset first, then alternating. */
+export function tierBotDifficulty(ante: number, n: number): BotDifficultyId | null {
+  const d = tierBotDifficulties(ante);
+  return d ? d[1 - (n % 2)]! : null;
+}
+
+const DIFFICULTY_NAMES: Record<BotDifficultyId, string> = { recruit: 'Recruit', regular: 'Regular', hardened: 'Hardened', veteran: 'Veteran' };
+
+/** "Hardened / Veteran" for a staked tier; the practice difficulty's name otherwise. */
+export function opponentsLabel(ante: number, practiceDifficulty: string): string {
+  const d = tierBotDifficulties(ante);
+  if (d) return d.map((x) => DIFFICULTY_NAMES[x]).join(' / ');
+  return practiceDifficulty in DIFFICULTY_NAMES ? DIFFICULTY_NAMES[practiceDifficulty as BotDifficultyId] : 'Custom';
+}
+
+/** The cheapest staked ante (Low Roller): below it the wager screen offers practice and a hint. */
+export const MIN_STAKE = Math.min(...ANTE_TIERS.filter((t) => t.ante > 0).map((t) => t.ante));
+export const EARN_CP_HINT = 'Earn CoD Points by playing any normal match (Quick Play, or Play with Bots) and by completing challenges.';
+
+/** How many settled wagers profile.ext.economy.wagerHistory keeps. */
+export const WAGER_HISTORY = 10;
 
 const wager = (payouts = PAYOUT_SPLITS[3]!) => ({ ante: 1000, payouts: [...payouts] });
 

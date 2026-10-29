@@ -4,7 +4,7 @@
  */
 import type { BotSkill } from '../../../shared/defs/bots';
 import type { CpLine } from '../../../shared/defs/economy';
-import type { EconomyTxn, EscrowInfo } from '../../../shared/defs/economy-net';
+import type { EconomyTxn, EscrowInfo, WagerRecord } from '../../../shared/defs/economy-net';
 import '../../../shared/defs/economy-net';
 
 /** Per-player wager-mode state (bots may read it: lives, gun rung, tomahawks, skill). */
@@ -21,6 +21,8 @@ export interface WagerPlayerExt {
   lastMelee?: number;
   /** Skill the wager lobby asked for (bots only; the bots feature may read it). */
   skill?: BotSkill;
+  /** Bots in a staked tier: the preset this bot was dealt (TIER_BOT_SKILL). */
+  difficulty?: string;
 }
 
 declare module '../../player' {
@@ -51,4 +53,6 @@ export interface EconomyExt {
   history: EconomyTxn[];
   equipped: { reticle: string; emblem: string };
   lastMatch: { mode: string; lines: CpLine[]; total: number } | null;
+  /** Settled wagers, newest first (WAGER_HISTORY kept). */
+  wagerHistory: WagerRecord[];
 }

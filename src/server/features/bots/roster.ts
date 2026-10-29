@@ -10,8 +10,8 @@
  *   - Back in the lobby phase bots leave; they come back at the next start.
  *   - Brains for every bot in the room (also bots other areas add), with per-bot variance and a
  *     loadout picked from the defs; hearing, hurt and streak events are fed to the brains.
- *   - `results.ext.bots` tells economy/progression how many bots played (wagers with bots are
- *     practice only; bots have no profile, so they never earn CoD Points or XP).
+ *   - `results.ext.bots` tells economy/progression how many bots played (bots have no profile, so
+ *     they never earn CoD Points or XP; in a staked wager the house covers their antes, economy).
  */
 import type { Team } from '../../../shared/constants';
 import { MATCHMAKING_WAIT_SEC, skillFor, type BotSkill, type BotsState, type LobbyBotSettings } from '../../../shared/defs/bots';
@@ -264,8 +264,6 @@ export class RoomBots {
           bots,
           humans: results.players.length - bots,
           difficulty: this.settings.difficulty,
-          /** Wager matches with bots in them pay nothing (DESIGN 8a): economy should honour this. */
-          practice: !!this.room.mode.wager && bots > 0,
         };
       }),
     );

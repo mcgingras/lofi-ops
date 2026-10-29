@@ -598,26 +598,25 @@ describe('wager escrow and payouts', () => {
 });
 
 describe('practice wagers and bot backfill', () => {
-  it('a lone human waits for players, then plays practice against tuned bots for free', async () => {
+  it('a lone human waits for players, then stakes against bots the tier picks (not the lobby)', async () => {
     const w = world();
     const a = w.human('A');
-    const r = await w.call(a, 'economy.wagerQueue', { mode: 'oitc', ante: 1000, bots: { fill: true, difficulty: 'veteran', variance: 0 } });
+    const r = await w.call(a, 'economy.wagerQueue', { mode: 'oitc', ante: 1000, bots: { fill: true, difficulty: 'recruit', variance: 0 } });
     expect(r.practice).toBe(false);
     w.lobby.join(a, r.roomId as string);
     const room = w.lobby.get(r.roomId as string)!;
     steps(room, MATCHMAKING_WAIT_SEC - 1);
     expect(room.phase).toBe('lobby');
+    expect(feats(a, 'economy.wager').at(-1)).toMatchObject({ pot: 6000, entrants: 6, practice: false, bots: { opponents: 'Regular / Hardened' } });
     expect(feats(a, 'economy.wager').at(-1)?.startsIn).toBeGreaterThan(0);
     steps(room, 1.5);
     expect(room.phase).toBe('countdown');
     expect(room.players.size).toBe(6);
-    const bot = room.bots()[0]!;
-    expect(bot.ext.wager?.skill?.reactionMs).toBe(180); // veteran, no variance
-    expect(a.profile.codPoints).toBe(20000);
-    steps(room, 5.2);
-    room.endMatch('time');
-    expect(ext(room).wager).toMatchObject({ practice: true, pot: 0 });
-    expect(a.profile.codPoints).toBe(20000);
+    // Big Spender: regular / hardened bots, the harder one first; the asked-for recruits are ignored.
+    expect(room.bots().map((b) => b.ext.wager?.difficulty)).toEqual(['hardened', 'regular', 'hardened', 'regular', 'hardened']);
+    expect(room.bots()[0]!.ext.wager?.skill?.reactionMs).toBe(320);
+    expect(a.profile.codPoints).toBe(19000);
+    expect(wagersFor(room)!.states.get(room.id)).toMatchObject({ practice: false, pot: 6000, entrantsAtStart: 6, stakedAtStart: 1 });
   });
 
   it('the practice tier starts right away with bots and never touches CP', async () => {
