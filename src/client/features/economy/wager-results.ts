@@ -71,9 +71,9 @@ registerSummaryCard(
       i === paid && paid > 0 ? h('div', { class: 'ec-dim' }, 'OUT OF THE MONEY') : null,
       h(
         'div',
-        { class: `ec-result-line${p.id === myId ? ' me' : ''}${i === paid ? ' cut' : ''}` },
+        { class: `ec-result-line${p.id === myId ? ' me' : ''}${i === paid ? ' cut' : ''}${p.bot ? ' bot' : ''}`, title: p.bot && p.payout > 0 ? 'A bot\'s share goes back to the house' : undefined },
         h('span', {}, `#${p.rank} ${p.bot ? '[BOT] ' : ''}${p.name}`),
-        h('b', {}, p.payout > 0 ? `${cp(p.payout)}${p.bot ? ' (HOUSE)' : ''}` : '-'),
+        h('b', {}, p.payout > 0 ? cp(p.payout) : '-'),
       ),
     ]);
     return h(

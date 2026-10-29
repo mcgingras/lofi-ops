@@ -179,7 +179,8 @@ registerHudWidget(
     // Left of the scoreboard (230 units wide, centred) when it fits, else along the bottom.
     const side = (W - Math.min(W - 16 * u, 230 * u)) / 2 >= bw + 6 * u;
     const x = side ? 4 * u : Math.round(W / 2 - bw / 2);
-    const y = side ? (m.phase === 'ended' ? 38 : 30) * u : H - bh - 8 * u;
+    // Below the score bars and the economy.wager lines it stands in for.
+    const y = side ? 70 * u : H - bh - 8 * u;
     box(g, x, y, bw, bh, 'rgba(12,12,16,0.9)', u);
     let ry = y + 4 * u;
     txt(g, `POT ${fmt(w.pot)} CP`, x + 4 * u, ry, 8, C.ammo, 'left', u);

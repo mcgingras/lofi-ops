@@ -177,4 +177,7 @@ body[data-input='pad'] #app .ec-gun:focus .ec-name { color: var(--hi); }
 .ec-result-line b { color: var(--paper); }
 .ec-result-line.me b, .ec-result-line.me span { color: var(--hi); }
 .ec-result-line.cut { border-top: 2px dashed var(--warn); padding-top: 3px; }
+.ec-result-line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ec-result-line b { white-space: nowrap; }
+.ec-result-line.bot b { color: var(--dim); }
 @media (max-width: 520px) { .ec-record-row { grid-template-columns: 1fr auto; } .ec-record-row b { grid-column: 1 / -1; } }
