@@ -14,6 +14,7 @@ import './camos';
 import './store-screen';
 import './wager-screen';
 import './hud';
+import './wager-results';
 import './models';
 
 export { camoPreview, camoTextureId } from './camos';

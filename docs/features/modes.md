@@ -142,7 +142,7 @@ src/client/features/modes/
                 projectiles, streak views, live audio ducked)
   replay.ts     stand-in soldiers shared by both killcams (real weapons, Infected look, frost, flung/shattered)
   killcam-math.ts pure: spline pose interpolation, replayGun, killProjectile, deathEffects
-  summary.ts    summary overlay screen `modes.summary` (+ summary-data.ts, pure; modes.css)
+  summary.ts    summary overlay screen `modes.summary` (+ summary-data.ts, pure; modes.css); other areas add side cards with `registerSummaryCard` (economy: wager results)
 tests/modes.test.ts              rules for every mode, summary, killcam, objective points, bot hooks
 tests/modes.integration.test.ts  DOM capture, S&D plant over the wire + summary, KC tags (real server)
 tests/modes.client.test.ts       announcer wording, summary view model, killcam timeline

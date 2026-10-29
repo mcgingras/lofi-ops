@@ -32,7 +32,7 @@ Owner: bots. Covers DESIGN.md section 8a (hard requirement): every lobby runs wi
 - **Fill off, or a lower target:** extra bots retire, live ones at their next death.
 - Changing settings mid-match takes effect at once: bots are added or retired, and every bot's skill is recomputed.
 - **Names.** Bots get callsigns (`pickBotName`); bots added by core backfill (`botFill`, named "Bot 7") are renamed on join.
-- **Bots never earn CoD Points or XP** because they have no profile. `matchEnd` adds `results.ext.bots = { bots, humans, difficulty, practice }`; `practice` is true for a wager mode with bots in it.
+- **Bots never earn CoD Points or XP** because they have no profile. `matchEnd` adds `results.ext.bots = { bots, humans, difficulty }`. Wagers with bots are real stakes: the house covers each bot's ante and bots place for the pot (economy.md, **Stakes against bots**).
 
 ### Skill
 
@@ -260,7 +260,7 @@ Nothing in the server adds avoidable delay. Inputs are applied on the next tick,
   - The highest-priority goal from the mode's sources and the `'*'` sources wins. Bots follow it with a probability set by `objectivePlay`.
   - For rounds without respawn (S&D), backfilled bots join at match start. A bot replacing a leaver mid-round waits for the next round, like a human would.
 - **economy:**
-  - Read `results.ext.bots.practice` (or call `roomHasBots(room)`) to pay nothing for wagers with bots.
+  - Wagers with bots stake real CP (the house covers the bots' antes); bots play at the lobby's own difficulty on every tier (`player.ext.wager.skill`, handed to the brain).
   - Wager loadouts forced in `beforeSpawn` apply to bots too.
   - `registerBotModeStyle(id, { conserveAmmo, meleeHappy, rush })` tunes bots for new wager modes.
   - `registerBotStyle(modeId, (room, bot) => Partial<BotModeStyle> | null)` overrides it per bot (the brain reads `botStyleFor(room, bot)`). Two optional flags: `kite` (in a fight never close in, back away from anyone inside 4 m) and `throwAtRange` (lob the lethal at a target in sight 6-18 m away, on half the chances, every 5-8 s, the arc scattered by `aimErrorDeg`). A melee-happy bot with nothing to shoot goes in instead of backing off to cover. Infected uses all of it (docs/features/modes.md).

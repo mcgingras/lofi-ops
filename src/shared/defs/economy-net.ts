@@ -24,6 +24,23 @@ export interface EscrowInfo {
   at: number;
 }
 
+/** One settled wager on the profile (`profile.ext.economy.wagerHistory`, newest first). */
+export interface WagerRecord {
+  /** Unix ms. */
+  at: number;
+  mode: string;
+  ante: number;
+  /** 1-based placement among the entrants (0 = forfeited by leaving). */
+  place: number;
+  entrants: number;
+  /** Humans who staked (1 = solo against bots). */
+  humans: number;
+  payout: number;
+  /** payout - ante */
+  net: number;
+  forfeit?: boolean;
+}
+
 export interface EconomyState {
   codPoints: number;
   owned: string[];
@@ -35,6 +52,7 @@ export interface EconomyState {
   escrow: EscrowInfo | null;
   history: EconomyTxn[];
   lastMatch: { mode: string; lines: CpLine[]; total: number } | null;
+  wagerHistory: WagerRecord[];
 }
 
 /** Bot settings a wager lobby asks for (subset of LobbyBotSettings; the server clamps it). */
@@ -57,30 +75,40 @@ export interface WagerRoomSummary {
   phase: string;
   /** Room-relative seconds until the lobby starts (null when not counting down). */
   startsIn: number | null;
+  /** The bots' skill ("Hardened"). */
+  opponents: string;
 }
 
 export interface WagerStanding {
   id: string;
   name: string;
   bot: boolean;
-  /** Overall placement in the mode's ranking (bots included). */
+  /** Overall placement in the mode's ranking (everyone in the room). */
   place: number;
-  /** Rank among staked humans (0 = not staked: bots, practice, late joiners). */
+  /**
+   * Placement among the wager's entrants (staked humans and house-covered bots), which decides the
+   * money. 0 = not an entrant (practice, late joiners).
+   */
   rank: number;
-  /** Projected payout at this rank. */
+  /** Projected payout at this rank (a bot's share goes back to the house). */
   payout: number;
   score: number;
+  /** A human whose real CP is in escrow. */
+  staked: boolean;
 }
 
 export interface WagerHud {
   roomId: string;
   mode: string;
   ante: number;
+  /** ante x entrants: the humans' escrowed antes plus the house's cover for every bot. */
   pot: number;
   practice: boolean;
   /** Humans who paid the ante this match. */
   staked: number;
-  /** Payout per human rank (index 0 = 1st). */
+  /** Everyone in the money race: staked humans + bots (the house covers each bot's ante). */
+  entrants: number;
+  /** Payout per entrant rank (index 0 = 1st). */
   payouts: number[];
   standings: WagerStanding[];
   phase: 'lobby' | 'countdown' | 'playing' | 'ended';
@@ -88,8 +116,8 @@ export interface WagerHud {
   startsIn: number | null;
   humans: number;
   target: number;
-  /** Bot difficulty the lobby backfills with. */
-  bots: { fill: boolean; difficulty: string };
+  /** Bot difficulty the lobby backfills with (every tier); `opponents` is its display name ("Hardened"). */
+  bots: { fill: boolean; difficulty: string; opponents: string };
 }
 
 /** Per-player wager-mode state for the HUD. */
@@ -124,11 +152,37 @@ export interface WagerPayoutLine {
   net: number;
 }
 
+/** One entrant's final placing in a staked wager (bots too; their share went to the house). */
+export interface WagerPlacing {
+  id: string;
+  name: string;
+  bot: boolean;
+  rank: number;
+  payout: number;
+}
+
 /** `results.ext.economy` */
 export interface EconomyResultsExt {
   /** Per player id: CP awarded for this match (normal modes). */
   awards: Record<string, { total: number; lines: CpLine[] }>;
-  wager: { ante: number; pot: number; practice: boolean; staked: number; lines: WagerPayoutLine[]; forfeits: string[] } | null;
+  wager: {
+    ante: number;
+    pot: number;
+    practice: boolean;
+    /** Humans who staked real CP. */
+    staked: number;
+    /** Staked humans + house-covered bots at the start (decides the places paid). */
+    entrants: number;
+    /** Payout per entrant rank. */
+    payouts: number[];
+    /** Per staked human still in at the end. */
+    lines: WagerPayoutLine[];
+    /** Every entrant still in at the end, by rank. */
+    placings: WagerPlacing[];
+    /** CP that bots placed in the money for (back to the house). */
+    house: number;
+    forfeits: string[];
+  } | null;
 }
 
 declare module '../protocol' {

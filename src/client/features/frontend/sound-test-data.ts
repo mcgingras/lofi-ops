@@ -21,6 +21,7 @@ const GROUPS: [string, (id: string) => boolean][] = [
   ['Player and UI', (id) => id === 'tick' || id === 'thud'],
   ['Killstreaks', (id) => id.startsWith('ks_')],
   ['Modes', (id) => id.startsWith('modes.')],
+  ['Wagers', (id) => id.startsWith('economy.')],
   ['Zombies', (id) => id.startsWith('zombies.')],
 ];
 
@@ -117,6 +118,8 @@ export const IN_GAME_VOLUME: Record<string, number> = {
   'modes.pickup': 0.55,
   'modes.beep': 0.6,
   'modes.boom': 1,
+  'economy.cash': 0.9,
+  'economy.bust': 0.9,
   'zombies.round_start': 0.9,
   'zombies.round_end': 0.9,
   'zombies.dog_round': 1,

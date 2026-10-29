@@ -16,14 +16,14 @@ Owner: economy. Branch `feature/economy`.
 | Server feature: RPCs, CP at match end, `economy.grant`, spawn-time ownership check | `src/server/features/economy/{index,earn,shop,ledger,types}.ts` |
 | Wager matchmaking, bot backfill, escrow, payouts, live HUD state | `src/server/features/economy/wager.ts` |
 | Wager mode rules | `src/server/features/economy/modes/{oitc,gungame,sharpshooter,sticks,common}.ts` |
-| Client: camo recipes + `camoPreview`, STORE screen, WAGER screen, HUD widgets, wager viewmodels, bolt/tomahawk views, third-person camo | `src/client/features/economy/*` |
-| Tests | `tests/camos-mw2.test.ts` and `tests/camos-mw2-paint.client.test.ts` (MW2 collection), `tests/economy.test.ts` (rules), `tests/economy-wager.test.ts` (modes incl. Sticks and Stones ammo, bolts, blades, tomahawk, bankrupt payouts; escrow, bots; room-level), `tests/economy.integration.test.ts` and `tests/sticks.integration.test.ts` (real server + sockets) |
+| Client: camo recipes + `camoPreview`, STORE screen, WAGER screen (buy-in, record), HUD widgets, wager results card + sounds (`wager-results.ts`), wager viewmodels, bolt/tomahawk views, third-person camo | `src/client/features/economy/*` |
+| Tests | `tests/camos-mw2.test.ts` and `tests/camos-mw2-paint.client.test.ts` (MW2 collection), `tests/economy.test.ts` (rules), `tests/economy-wager.test.ts` (modes incl. Sticks and Stones ammo, bolts, blades, tomahawk, bankrupt payouts; escrow, bots; room-level), `tests/economy-wager-bots.test.ts` (stakes against bots, pot maths, placements with bots in the money, forfeits, guard rails, 2-human rules, crash recovery), `tests/economy.integration.test.ts`, `tests/economy-wager-bots.integration.test.ts` (a solo OITC wager against bots end to end) and `tests/sticks.integration.test.ts` (real server + sockets) |
 
 ## Earning CoD Points (BO1-like)
 
 Every normal match pays each human (`codPointsBreakdown`): 100 for completing (scaled by the share of the match played), 0.1 CP per score point, +100 for winning, FFA podium +75/50/25, best streak 5/10/15 => +50/100/200; floor 25, cap 2,000. Bots never earn. Rooms with `persist: false` pay nothing. The breakdown goes to the player as the `economy.award` push (HUD toast) and into `results.ext.economy.awards[playerId]`. Wager modes pay only through the pot.
 
-Everything that changes CP goes through `ledger.ts`, which keeps `profile.ext.economy` = `{ earned, spent, wagerWon, wagerLost, escrow, history (last 30), equipped { reticle, emblem }, lastMatch }` plus `stats.codPointsEarned/Spent`, `stats.wager.matches/wins/inMoney/forfeits`.
+Everything that changes CP goes through `ledger.ts`, which keeps `profile.ext.economy` = `{ earned, spent, wagerWon, wagerLost, escrow, history (last 30), equipped { reticle, emblem }, lastMatch, wagerHistory (last 10 settled wagers: mode, ante, place of entrants, payout, net, forfeit) }` plus `stats.codPointsEarned/Spent`, `stats.wager.matches/wins/inMoney/forfeits`.
 
 ## Store (screen `store`, menu item "Store")
 
@@ -77,16 +77,40 @@ Modes (FFA, registered from the feature setup, ModeDefs in `WAGER_MODES`):
   - Bots: the bots' own throw logic presses LETHAL (the tomahawk leaves on release), their usual melee-happy / rush style for `sticks`, and a goal registered from economy (`registerSticksBotGoals` through `bots/hooks.ts` `registerBotGoal`) sends a bot to the nearest blade or tomahawk it can use, urgently when it is out of bolts and blades. A bot's bolt / blade launch is lifted to land on whatever its aim ray meets (they don't lead for drop themselves).
 - All wager modes: one-hit knife on the melee button (`wagerMelee`), wager-forced weapons (custom classes ignored), no class grenades (lethal and tactical cleared at `beforeSpawn`, priority -20; Sticks sets its tomahawk after that).
 
+### Stakes against bots
+
+One rule for every staked wager, solo or not: **the house covers each bot's ante; the humans' antes are escrowed.**
+
+- **Entrants** = the humans who paid the ante at the start + the bots in the room at the start (bots that join during the countdown count too; bots that join mid-match, and late-joining humans, don't).
+- **Pot** = ante x entrants. Only the humans' real CP is debited and held in escrow; the bots' share is virtual house money.
+- **Places paid** = min(3, entrants - 1), split 100% / 65-35 / 50-30-20 (BO1's top three), by the mode's final ranking among the entrants still in, bots included. Rounding goes to 1st. A bot that places in the money keeps nothing: its share goes back to the house (`results.ext.economy.wager.house`).
+- Example, 1 human + 5 bots at Big Spender (1,000): pot 6,000; 1st 3,000 (+2,000 net), 2nd 1,800 (+800), 3rd 1,200 (+200), 4th-6th 0 (-1,000). If a bot wins and the human is 2nd, the human gets 1,800 and 4,200 goes back to the house.
+- **Bot skill is not scaled by the tier**: wager bots play at the lobby's own difficulty (preset or custom, with its variance) on every tier, the same as practice. The buy-in screen and the lobby card show it ("Opponents: Regular").
+- **Practice** (ante 0) stays free: no escrow, no payout, bots or not. A lone human with bot fill off (one entrant) also plays practice.
+- **Server-authoritative**: placement comes from the mode's `rank()` on the server and payouts from `wagerPayouts`; the client only sends `economy.wagerQueue { mode, ante, bots }`, and the ante is checked against the balance when queueing and again when it is debited at the start (`debit` never goes below 0; someone who can't pay is kicked before the match).
+
 Flow (`economy.wagerQueue { mode, ante, bots }` -> join the returned room via the match screen):
 
 1. **Lobby.** Rooms are matched by mode + ante. The match starts when full, when someone sends `economy.wagerStart` (2+ humans, or bot fill on), or after `MATCHMAKING_WAIT_SEC` (20 s). Practice tier starts after 3 s. Rematch after 12 s.
-2. **Bots.** With `fill` on, empty slots up to `targetPlayers` become bots (`room.options.botFill`, core backfill: humans who join replace bots). The lobby's `LobbyBotSettings` (preset or custom skill, variance) are clamped with `sanitizeBots` and each bot gets `player.ext.wager.skill` (jittered by variance). With the bots feature loaded, wager lobbies hand it the settings with `configureRoomBots(room, bots, { managed: false })` (economy keeps the count) and each bot's brain plays at exactly its `ext.wager.skill`. One human + bots is fine: it runs as practice.
-3. **Escrow at match start.** Each human pays the ante into `profile.ext.economy.escrow` (saved immediately). Can't pay => kicked. Fewer than 2 staked, or the Practice tier => practice: no escrow, no payout. Bots never stake or get paid.
-4. **Leaving.** During the countdown, or when the room closes (shutdown): refunded. Mid-match: forfeit (ante stays in the pot). If that leaves fewer than 2 staked, the wager is void and everyone (forfeits too) is refunded.
-5. **Payout at match end.** Places paid = min(3, staked - 1); splits 100% / 65-35 / 50-30-20 of the pot; leavers can't place (their shares are renormalised over who's left); rounding goes to 1st. Ranking = the mode's `rank()` (bots included in placement, skipped for money). `results.ext.economy.wager` lists ante/payout/net per staked player; each gets an `economy.award` push.
-6. **Crash safety.** An escrow whose match no longer exists is refunded by a sweeper (every 5 s for connected sessions, and on wager RPCs).
+2. **Bots.** With `fill` on, empty slots up to `targetPlayers` become bots (`room.options.botFill`, core backfill: humans who join replace bots). The lobby's `LobbyBotSettings` (preset or custom skill, variance) are clamped with `sanitizeBots` and each bot gets `player.ext.wager.skill` (jittered by variance with `WagerManager.random`, seedable in tests). With the bots feature loaded, wager lobbies hand it the settings with `configureRoomBots(room, bots, { managed: false })` (economy keeps the count) and each bot's brain plays at exactly its `ext.wager.skill`.
+3. **Escrow at match start.** Each human pays the ante into `profile.ext.economy.escrow`; the debit and the escrow are one row write (`store.save`), so a crash leaves both or neither. Can't pay => kicked. Nobody staked, fewer than `WAGER_MIN_ENTRANTS` (2) entrants, or the Practice tier => practice. In a custom lobby whose bots the bots feature adds during the countdown, the entrant check waits for play.
+4. **Leaving.**
+   - During the countdown, or when the room closes (server shutdown): refunded.
+   - Mid-match: **forfeit**. The ante stays in the pot, the leaver can't place, the loss is booked (`wagerLost`, `stats.wager.forfeits`, a `forfeit` record) and the profile saved at once with the escrow cleared, so a crash afterwards can't refund it.
+   - **Solo (one staked human): a forfeit is final.** No void, no refund, not even when the emptied room closes. Disconnecting counts as leaving.
+   - **2+ staked humans: the original rule stays.** If leavers drop the staked humans below `WAGER_MIN_HUMANS` (2), the wager is void and every ante (forfeits too) is refunded; a server shutdown also refunds forfeits.
+5. **Payout at match end.** As above. `results.ext.economy.wager` = `{ ante, pot, practice, staked, entrants, payouts, lines (per staked human: ante/payout/net), placings (every entrant still in, bots too), house, forfeits }`; each staked human gets an `economy.award` push ("In the money (#2 of 6)"), a `wagerHistory` record, and an immediate save.
+6. **Crash safety (the Fly volume holds `/data/lofi.db`, SQLite in WAL mode).** Any escrow still in the database belongs to a match that died with the process, so **at boot** `WagerManager.recoverEscrows()` scans `store.idsWithExt('$.economy.escrow')` and refunds each one ("Server restarted mid-wager: ante refunded"). A graceful drain (SIGINT, `kill_timeout` 10 s) closes the rooms first, which refunds through `onClosed`. The sweeper still refunds any escrow whose match is gone (every 5 s for connected sessions, and on wager RPCs). Forfeits are never refunded by a restart (their escrow was cleared when they left); a settled payout and its escrow clear are one save, so it can't be paid twice.
 
-HUD: `economy.lobby` (lobby card: mode, ante/pot, players, start countdown, bot difficulty, who's in), `economy.wager` (pot + IN THE MONEY #n +CP / OUT OF THE MONEY / PRACTICE WAGER), `economy.mode` (lives, gun rung, swap timer + bonus, tomahawk hint), `economy.award` (CP toast), `economy.splash` (BANKRUPTED / HUMILIATION, STUCK!), `economy.reticle` (equipped reticle while aiming through an optic).
+### Screens
+
+- **Buy-in (`wager` screen).** Balance, your stake, the balance after the buy-in, the pot (ante x players, players = the bot fill target), the payout table for that lobby size (place, payout, net, a dashed cut line above the first unpaid place), "Opponents: <difficulty>" and "IN THE MONEY: top N of M". Tiers you can't afford are disabled and the button reads "Buy in: 1,000 CP" (disabled above your balance). Under the Low Roller ante (`MIN_STAKE`) only Practice is open, with `EARN_CP_HINT`. The open-lobbies list shows each lobby's opponents. Below: **Your wager record** (played, won, in the money, net CP, last 5 results).
+- **Lobby card** (HUD `economy.lobby`): ante and pot, players, start countdown, "OPPONENTS: REGULAR BOTS", your stake ("HOUSE COVERS THE BOTS") and the payout table.
+- **In match**: `economy.wager` (pot and stake, IN THE MONEY #n +CP / OUT OF THE MONEY #n TOP 3 PAID), and with Tab held `economy.board` beside the scoreboard: every entrant's projected payout by rank with the IN THE MONEY cut line.
+- **End of match**: the summary's wager card (`registerSummaryCard('economy.wager')`): IN THE MONEY / OUT OF THE MONEY, placed #n of N, ante, payout, won/lost, new balance, the placings with the cut line and what went back to the house. A coin chime (`economy.cash`) or a low buzz (`economy.bust`) plays when the payout arrives, next to the `economy.award` toast.
+- **Barracks record tab**: Wagers won (of played), Wagers in the money, Wager net CP.
+
+HUD: `economy.lobby` (lobby card: mode, ante/pot, stake, players, start countdown, opponents, who's in), `economy.wager` (pot, stake + IN THE MONEY #n +CP / OUT OF THE MONEY / PRACTICE WAGER), `economy.board` (Tab: the money by rank), `economy.mode` (lives, gun rung, swap timer + bonus, tomahawk hint), `economy.award` (CP toast), `economy.splash` (BANKRUPTED / HUMILIATION, STUCK!), `economy.reticle` (equipped reticle while aiming through an optic).
 
 ## RPCs and pushes
 
@@ -95,7 +119,7 @@ economy.state {}                                  -> EconomyState
 economy.buy { item: '<ownership key>' }           -> { codPoints, owned, item }   errors: level|prestige|weapon|kills|challenge|funds|owned|unknown
 economy.equip { kind: 'reticle'|'emblem', id }    -> { equipped }
 economy.setCamo { loadout, slot, camo }           -> { loadouts }   (canUseCamo with the slot's gun: ownership, or the MW2 challenge)
-economy.wagerQueue { mode, ante, bots? }          -> { roomId, practice }
+economy.wagerQueue { mode, ante, bots? }          -> { roomId, practice }   errors: funds (with the balance and EARN_CP_HINT)|busy|bad_request
 economy.wagerList {}                              -> { rooms: WagerRoomSummary[] }
 economy.wagerStart {}                             -> { ok }
 push economy.wager (WagerHud), economy.mode (WagerModeHud), economy.award { reason, lines, total, codPoints },
@@ -107,7 +131,7 @@ room events: economy.grant { player, amount, reason, kind? }, economy.payout { p
 
 - **progression**: pay challenge CoD Points with `room.bus.emit('economy.grant', { player, amount: def.codPoints, reason: 'Challenge: ' + def.name, kind: 'challenge' })`; don't touch `profile.codPoints` directly. Prestige can keep `owned` (CP purchases persist; level gates re-apply).
 - **frontend**: camo picker uses `CAMOS` + `camoPreview(id, size)` and `canUse(profile, keyOf.camo(id))` (or call `economy.setCamo`). `itemPreview(storeItem)`, `drawReticle`, `drawEmblemBackground` are exported from `src/client/features/economy/index.ts`. Loadout saving should run `enforceLoadout` or leave it to the spawn check. Wager entry is the `wager` screen; a custom lobby in a wager mode can set stakes via `wagersFor(room)?.setWagerAnte(room, ante, bots)` (otherwise it's practice). If you replace the main menu, keep rendering `menuItems` (Wager Match 30, Store 60).
-- **bots**: wager lobbies use core `botFill`; read the lobby settings with `wagerRoomInfo(room)` (`src/server/features/economy/index.ts`) or `player.ext.wager.skill` on each bot. Wager awareness: `player.ext.wager` has `lives`, `out`, `gunLevel`; tomahawks are `player.ext.weapons.lethal === 'tomahawk'` / `lethalN`; weapons are forced by the mode (bots just fire what they hold); melee = `Buttons.MELEE` press, tomahawk = `Buttons.LETHAL` press then release (the throw leaves on release). Sticks and Stones retrieval is a `registerBotGoal('sticks', ...)` from economy; no bots files were changed for it.
+- **bots**: wager lobbies use core `botFill`; bots in a staked wager are entrants whose ante the house covers (no profile, nothing escrowed, their winnings go back to the house); read the lobby settings with `wagerRoomInfo(room)` (`src/server/features/economy/index.ts`) or `player.ext.wager.skill` on each bot. Wager awareness: `player.ext.wager` has `lives`, `out`, `gunLevel`; tomahawks are `player.ext.weapons.lethal === 'tomahawk'` / `lethalN`; weapons are forced by the mode (bots just fire what they hold); melee = `Buttons.MELEE` press, tomahawk = `Buttons.LETHAL` press then release (the throw leaves on release). Sticks and Stones retrieval is a `registerBotGoal('sticks', ...)` from economy; no bots files were changed for it.
 - **weapons**: crossbow/ballistic_knife are added to `WEAPONS` only if you don't define those ids (if you do, yours win and the economy's bolt behaviour isn't registered). Gun Game and Sharpshooter pick up your roster automatically. The wager knife is a separate one-hit melee bound to the melee button in wager modes only; a global melee of yours composes (a dead victim can't die twice). Store prices come from `WeaponDef.price` / `AttachmentDef.price` (defaults 1,500 / 1,000).
 - **modes / maps**: wager rooms pick maps from `mapsForMode(<wager id>)`, falling back to `mapsForMode('ffa')`; add wager ids to a map's `modes` to dedicate it.
 

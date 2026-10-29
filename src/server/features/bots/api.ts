@@ -41,7 +41,7 @@ export function getRoomBots(room: Room): RoomBots | undefined {
   return roomBots(room);
 }
 
-/** True when bots are playing in the room (economy: wagers with bots are practice only). */
+/** True when bots are playing in the room. */
 export function roomHasBots(room: Room): boolean {
   return room.bots().length > 0;
 }

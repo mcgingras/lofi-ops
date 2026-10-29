@@ -1,11 +1,13 @@
 /**
- * WAGER lobby screen (`wager`): pick a wager mode and an ante tier, tune the bots that backfill
- * empty slots, then queue (`economy.wagerQueue`) and jump into the room's match screen, where the
- * lobby phase shows players, the pot and the start countdown (HUD widget economy.wager).
+ * WAGER lobby screen (`wager`), the buy-in: pick a wager mode and an ante tier, tune the bots that
+ * backfill empty slots, see your balance, the pot (ante x players: the house covers every bot's
+ * ante), the payout table for this lobby size and the opponents' skill, then queue
+ * (`economy.wagerQueue`) and jump into the room's match screen, where the lobby phase shows
+ * players, the pot and the start countdown (HUD widget economy.wager). Below: your wager record.
  */
 import { BOT_DIFFICULTIES, BOT_SKILL_RANGES, DEFAULT_TARGET_PLAYERS, MATCHMAKING_WAIT_SEC, skillFor, type BotSkill } from '../../../shared/defs/bots';
-import { ANTE_TIERS, PAYOUT_SPLITS, WAGER_MODES } from '../../../shared/defs/economy';
-import type { WagerBotRequest, WagerRoomSummary } from '../../../shared/defs/economy-net';
+import { ANTE_TIERS, EARN_CP_HINT, MIN_STAKE, opponentsLabel, wagerPotPreview, WAGER_MODES } from '../../../shared/defs/economy';
+import type { WagerBotRequest, WagerRecord, WagerRoomSummary } from '../../../shared/defs/economy-net';
 import { h } from '../../menus/dom';
 import { net } from '../../net';
 import { registerScreen } from '../../registry';
@@ -63,9 +65,12 @@ registerScreen('wager', (root, params) => {
   const modes = h('div', { class: 'ec-modes', role: 'radiogroup', 'aria-label': 'Wager mode' });
   const antes = h('div', { class: 'ec-antes', role: 'radiogroup', 'aria-label': 'Ante' });
   const payoutInfo = h('div', { class: 'lf-hint' });
+  const buyIn = h('div', { class: 'lf-panel ec-buyin', 'aria-live': 'polite' });
+  const record = h('div', { class: 'lf-panel ec-record' });
   const bots = h('div', { class: 'lf-panel lf-form ec-bots' });
   const status = h('div', { class: 'lf-status', role: 'status', 'aria-live': 'polite' });
   const findBtn = h('button', { class: 'lf-btn primary ec-find', type: 'button', onclick: () => void find(prefs.mode, prefs.ante) }, 'Find match');
+  const setFindLabel = () => (findBtn.textContent = prefs.ante ? `Buy in: ${cp(prefs.ante)}` : 'Play practice');
   const list = h('div', { class: 'ec-lobbies' });
 
   const mode = () => WAGER_MODES.find((m) => m.id === prefs.mode)!;
@@ -99,13 +104,75 @@ registerScreen('wager', (root, params) => {
       }),
     );
     if (prefs.ante > cpNow) prefs.ante = 0;
-    const split = PAYOUT_SPLITS[3]!.map((s) => `${Math.round(s * 100)}%`).join(' / ');
     payoutInfo.textContent = prefs.ante
-      ? `Ante goes into escrow when the match starts. Top 3 split the pot ${split} (fewer players, fewer places). Leave before the start: refunded. Quit mid-match: you forfeit. Bots never stake: with fewer than 2 players it's a free practice match.`
-      : 'Practice: you against bots, nothing at stake, nothing paid.';
+      ? 'Your ante goes into escrow when the match starts; the house covers each bot\'s ante. The top 3 of everyone, bots included, split the pot 50 / 30 / 20 (fewer players, fewer places); a bot\'s share goes back to the house. Leave before the start: refunded. Quit mid-match: you forfeit the ante.'
+      : cpNow < MIN_STAKE
+        ? `You need ${cp(MIN_STAKE)} for Low Roller. Practice is free. ${EARN_CP_HINT}`
+        : 'Practice: you against bots, nothing at stake, nothing paid.';
+    renderBuyIn(cpNow);
+    renderRecord();
     renderBots();
-    findBtn.toggleAttribute('disabled', busy || net.status !== 'online');
+    setFindLabel();
+    findBtn.toggleAttribute('disabled', busy || net.status !== 'online' || prefs.ante > cpNow);
     renderList();
+  };
+
+  const renderBuyIn = (cpNow: number) => {
+    const players = Math.min(target(), mode().maxPlayers);
+    const opponents = prefs.bots.fill ? `Opponents: ${opponentsLabel(prefs.bots.difficulty)}` : 'Opponents: humans only (no bots)';
+    const row = (k: string, v: string, cls = '') => h('div', { class: `ec-buyin-row ${cls}` }, h('span', {}, k), h('b', {}, v));
+    if (!prefs.ante) {
+      buyIn.replaceChildren(h('h3', { class: 'lf-h2' }, 'Buy-in'), row('Balance', cp(cpNow)), row('Ante', 'Free'), row('Payout', 'None (practice)'), h('div', { class: 'ec-dim' }, opponents));
+      return;
+    }
+    const { pot, payouts } = wagerPotPreview(prefs.ante, players);
+    const places = ['1st', '2nd', '3rd'];
+    buyIn.replaceChildren(
+      h('h3', { class: 'lf-h2' }, 'Buy-in'),
+      row('Balance', cp(cpNow)),
+      row('Your stake', cp(prefs.ante)),
+      row('After the buy-in', cp(cpNow - prefs.ante)),
+      row(`Pot (${cp(prefs.ante)} x ${players} players)`, cp(pot), 'ec-pot'),
+      h(
+        'table',
+        { class: 'ec-paytable', 'aria-label': `Payouts for ${players} players` },
+        h('tbody', {}, ...payouts.map((p, i) => h('tr', {}, h('td', {}, places[i] ?? `${i + 1}th`), h('td', {}, cp(p)), h('td', { class: p > prefs.ante ? 'ec-up' : 'ec-down' }, `${p - prefs.ante >= 0 ? '+' : ''}${cp(p - prefs.ante)}`))),
+          h('tr', { class: 'ec-out' }, h('td', {}, payouts.length < players ? `${places[payouts.length] ?? `${payouts.length + 1}th`}+` : '-'), h('td', {}, cp(0)), h('td', { class: 'ec-down' }, `-${cp(prefs.ante)}`)),
+        ),
+      ),
+      h('div', { class: 'ec-dim' }, `${opponents} · IN THE MONEY: top ${payouts.length} of ${players}`),
+    );
+  };
+
+  const renderRecord = () => {
+    const p = net.profile;
+    const e = (p?.ext.economy ?? {}) as { wagerWon?: number; wagerLost?: number; wagerHistory?: WagerRecord[] };
+    const st = (k: string) => p?.stats[k] ?? 0;
+    const netCp = (e.wagerWon ?? 0) - (e.wagerLost ?? 0);
+    const hist = (e.wagerHistory ?? []).slice(0, 5);
+    const modeName = (id: string) => WAGER_MODES.find((m) => m.id === id)?.short ?? id;
+    record.replaceChildren(
+      h('h3', { class: 'lf-h2' }, 'Your wager record'),
+      h(
+        'div',
+        { class: 'ec-record-tiles' },
+        h('span', {}, h('b', {}, String(st('wager.matches'))), ' played'),
+        h('span', {}, h('b', {}, String(st('wager.wins'))), ' won'),
+        h('span', {}, h('b', {}, String(st('wager.inMoney'))), ' in the money'),
+        h('span', { class: netCp >= 0 ? 'ec-up' : 'ec-down' }, h('b', {}, `${netCp >= 0 ? '+' : '-'}${cp(Math.abs(netCp))}`), ' net'),
+      ),
+      ...(hist.length
+        ? hist.map((r) =>
+            h(
+              'div',
+              { class: 'ec-record-row' },
+              h('span', {}, `${modeName(r.mode)} · ${cp(r.ante)}`),
+              h('span', {}, r.forfeit ? 'Forfeit' : `#${r.place} of ${r.entrants}`),
+              h('b', { class: r.net >= 0 ? 'ec-up' : 'ec-down' }, `${r.net >= 0 ? '+' : '-'}${cp(Math.abs(r.net))}`),
+            ),
+          )
+        : [h('div', { class: 'ec-dim' }, 'No wagers yet.')]),
+    );
   };
 
   const renderBots = () => {
@@ -150,7 +217,7 @@ registerScreen('wager', (root, params) => {
             return h(
               'div',
               { class: 'ec-lobby' },
-              h('span', {}, `${m?.name ?? l.mode} · ${cp(l.ante)} · ${l.humans}/${l.target}${l.startsIn !== null ? ` · starts in ${Math.ceil(l.startsIn)}s` : ''}`),
+              h('span', {}, `${m?.name ?? l.mode} · ${cp(l.ante)} · ${l.humans}/${l.target} · vs ${l.opponents}${l.startsIn !== null ? ` · starts in ${Math.ceil(l.startsIn)}s` : ''}`),
               h('button', { class: 'lf-btn small', type: 'button', disabled: !afford, onclick: () => void find(l.mode, l.ante) }, 'Join'),
             );
           })
@@ -194,8 +261,10 @@ registerScreen('wager', (root, params) => {
       h('div', { class: 'ec-section' }, h('h3', { class: 'lf-h2' }, 'Mode'), modes),
       h('div', { class: 'ec-section' }, h('h3', { class: 'lf-h2' }, 'Ante'), antes, payoutInfo),
       bots,
+      buyIn,
       h('div', { class: 'lf-row' }, findBtn, status),
       list,
+      record,
     ),
   );
   render();

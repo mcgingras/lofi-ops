@@ -238,9 +238,9 @@ Each file exports a typed array and a `*_BY_ID` map (`indexById` throws on dupli
 | `modestate.ts` | modes wire types (`modes.state`, `modes.event`, `modes.killcam`, `modes.deathcam`), `MatchSummaryExt` (`results.ext.modes`), `MODE_ENTITY` kinds | modes |
 | `killcam.ts` | final killcam: `FINAL_KILLCAM` (BO1 timing: 5 s + 2 s, 0.25x around the kill), `finalTimeline`, `finalClock`, `FinalKillcamPayload` (`modes.killcam`); see docs/features/modes.md "Final killcam" | modes |
 | `deathcam.ts` | per-death killcam: `DEATHCAM` timing, `deathcamWindow(at, respawnAt)` (clip cut so it ends by the respawn), `DeathcamPayload` / `KillerCard` (`KillerCard.pap`: the gun was Pack-a-Punched, show `papName`; `modes.deathcam`, sent only to the victim; `cam.track` = a camera path to ride, `CamTrack` / `packTrack`: a Valkyrie kill rides its rocket), `packClip` / `unpackClip`, `NO_DEATHCAM_MEANS` (fall, world, suicide, nuke) | modes |
-| `economy.ts` | `CP_REWARDS`, `STARTING_COD_POINTS`, `DEFAULT_PRICES`, `codPointsForMatch` / `codPointsBreakdown` (score, win, podium, streak, time share), `ANTE_TIERS` (0/10/1,000/10,000), `wagerPayouts`, `WAGER_MODES` (oitc, gungame, sharpshooter, sticks), wager mode data (`STICKS` points, `BOLT` / `BLADE` projectile tuning, `BOLT_ENTITY` `economy.bolt` / `BLADE_ENTITY` `economy.blade`) | economy |
+| `economy.ts` | `CP_REWARDS`, `STARTING_COD_POINTS`, `DEFAULT_PRICES`, `codPointsForMatch` / `codPointsBreakdown` (score, win, podium, streak, time share), `ANTE_TIERS` (0/10/1,000/10,000), `wagerPayouts(pot, entrants, present)` / `wagerPotPreview(ante, players)` / `paidPlaces(entrants)` (entrants = staked humans + house-covered bots), `WAGER_MIN_ENTRANTS`, `WAGER_MIN_HUMANS` (the multi-human void rule), `MIN_STAKE`, `EARN_CP_HINT`, `opponentsLabel`, `WAGER_MODES` (oitc, gungame, sharpshooter, sticks), wager mode data (`STICKS` points, `BOLT` / `BLADE` projectile tuning, `BOLT_ENTITY` `economy.bolt` / `BLADE_ENTITY` `economy.blade`) | economy |
 | `store.ts` | `RETICLES`, `EMBLEM_BACKGROUNDS`, `storeCatalog()`, ownership keys `keyOf.*` (`weapon.<id>`, `att.<weapon>.<att>`, `camo.<id>`, `reticle.<id>`, `emblem.<id>` in `profile.owned`), `lockReason`, `canUse`, `canUseCamo(p, camo, weapon)` (use for every camo check), `purchase`, `enforceLoadout` | economy |
-| `economy-net.ts` | economy RPC / feature message types (`economy.*`), `EconomyResultsExt` (`results.ext.economy`) | economy |
+| `economy-net.ts` | economy RPC / feature message types (`economy.*`), `EconomyResultsExt` (`results.ext.economy`: `wager.entrants`, `payouts`, `placings` for everyone incl. bots, `house`), `WagerRecord` (`profile.ext.economy.wagerHistory`) | economy |
 | `wager-weapons.ts` | `crossbow` (1 + 5 bolts), `ballistic_knife` (1 + 1 blades), both projectile weapons, appended to `WEAPONS` at load unless the weapons area defines those ids; `WAGER_ONLY_WEAPONS` | economy |
 | `maps.ts` | `MapDef {id, name, inspiredBy, build, modes, size}` (`size: 'huge'` = Blackout's island: map tests that flood or nav-grid every map split it into regions or skip it), `MAPS`, `getMapData(id)` (cached), `mapsForMode` | maps-bo, maps-mw2 |
 | `progression.ts` | `MAX_LEVEL` 50, `MAX_PRESTIGE` 15, `XP_TABLE`, `levelForXp`, `xpForLevel`, `addXp`, `canPrestige`, `applyPrestige`, `XP_SOURCES` | progression |
@@ -255,7 +255,7 @@ Also shared: `blast.ts` (`blastDistance`, `blastPoints`, `blastExposure`: BO1's 
 
 Pickups for loot modes: `setPickupRules(room, { keep?, cap?, slotFor?, bots? })` (`pickups/state.ts`): drops that never expire and count against `cap` instead of `PICKUP.maxPerRoom`, the slot a human's swap fills, and the pickups feature's own bot logic off (Blackout).
 
-Wager modes: economy appends to `WAGER_MODES` in `economy.ts` and registers rules from its feature `setup` (`api.registerMode('oitc', factory)`), so `modes.ts` stays the modes owner's. CoD Points for challenges: emit the room event `economy.grant { player, amount, reason, kind: 'challenge' }` instead of changing `profile.codPoints` (details: `docs/features/economy.md`).
+Wager modes: economy appends to `WAGER_MODES` in `economy.ts` and registers rules from its feature `setup` (`api.registerMode('oitc', factory)`), so `modes.ts` stays the modes owner's. CoD Points for challenges: emit the room event `economy.grant { player, amount, reason, kind: 'challenge' }` instead of changing `profile.codPoints` (details: `docs/features/economy.md`). Wagers against bots stake real CP: the house covers each bot's ante, the pot is ante x entrants (humans + bots) and the top 3 of everyone are paid (a bot's share goes back to the house); only the humans' antes are escrowed (economy.md, **Stakes against bots**).
 
 ## 8. Mode rules (src/server/modes)
 
@@ -359,7 +359,7 @@ interface Profile {
 }
 ```
 
-Loaded at `hello` (`session.profile`, also `player.profile` in a room). Mutate it on the server; core saves it at match end (after `matchEnd` handlers), when leaving a room and on disconnect, and sends the owner a `profile` message after match end. Save immediately yourself (`api.store.save(profile)`) for menu purchases. No schema migrations needed: add fields under `ext.<you>` or new `stats` keys. One account open in two tabs (same token) gets the same live `Profile` object in both sessions, so writes from either never overwrite the other; still never keep a stale copy of a profile across awaits (re-read `session.profile`). Economy code should still check balances at the moment it spends.
+Loaded at `hello` (`session.profile`, also `player.profile` in a room). Mutate it on the server; core saves it at match end (after `matchEnd` handlers), when leaving a room and on disconnect, and sends the owner a `profile` message after match end. Save immediately yourself (`api.store.save(profile)`) for menu purchases. No schema migrations needed: add fields under `ext.<you>` or new `stats` keys. One account open in two tabs (same token) gets the same live `Profile` object in both sessions, so writes from either never overwrite the other; still never keep a stale copy of a profile across awaits (re-read `session.profile`). Economy code should still check balances at the moment it spends. `store.save` is one SQLite `UPDATE` of the whole row (WAL), so `codPoints` and `ext` change together or not at all: write a debit and the state that explains it (the wager escrow) before one save. `store.idsWithExt('$.economy.escrow')` lists profiles with a non-null value at an `ext` JSON path, for boot-time recovery scans.
 
 ## 12. Client (src/client)
 
@@ -406,6 +406,7 @@ registerSightBlocker('weapons.smoke', (a, b) => false);    // true = something (
 registerButtonFilter('killstreaks.valkyrie', (match, buttons) => buttons); // rewrite this frame's outgoing Buttons bits (after pause masking)
 registerShotFx('raygun', { local(match, origin, dir) {}, replay(match, shooter, from, to, hit, t) {} }); // a weapon's own look: on the local pull (Match) and in killcam replays instead of the tracer
 registerKillfeedIcon('raygun', (g, x, y, u) => width);     // a pixel icon beside the weapon name in the killfeed
+registerSummaryCard('economy.wager', (results, myId) => el | null, -10); // an extra card in the end-of-match summary's side column (lower order first)
 ```
 
 - Screens: `mount(root, params)` returns an optional unmount. Replacing a core id (`menu`) replaces the core screen; feature folders load after core, so the last registration wins. `params.overlay === '1'` when shown with `openOverlay` over a match; use `back(params)` for a Back button.

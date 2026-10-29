@@ -1,14 +1,15 @@
 /**
  * Economy HUD widgets (pixel HUD, render resolution):
  *   economy.lobby  85  wager lobby card (mode, ante, pot, players, start countdown, bots)
- *   economy.wager  52  pot + "IN THE MONEY #n +CP" / "OUT OF THE MONEY" / "PRACTICE" (under the score)
+ *   economy.wager  52  pot, your stake, "IN THE MONEY #n +CP" / "OUT OF THE MONEY" / "PRACTICE" (under the score)
+ *   economy.board  91  with the scoreboard open: pot, stake and every entrant's projected payout
+ *                      with the IN THE MONEY cut line (bots included; their share goes to the house)
  *   economy.mode   53  mode state: OITC lives, Gun Game rung, Sharpshooter swap timer, tomahawks
  *   economy.award  86  CP toast after a match / payout / refund
  *   economy.splash 87  Sticks and Stones: BANKRUPTED / HUMILIATION, and the STUCK warning
  *   economy.reticle 21 the equipped reticle while aiming through an optic
  */
 import { ATTACHMENT_BY_ID } from '../../../shared/defs/attachments';
-import { BOT_DIFFICULTY_BY_ID } from '../../../shared/defs/bots';
 import { WAGER_MODES } from '../../../shared/defs/economy';
 import type { WagerHud, WagerModeHud } from '../../../shared/defs/economy-net';
 import type { CpLine } from '../../../shared/defs/economy';
@@ -106,12 +107,15 @@ registerHudWidget(
     const mode = WAGER_MODES.find((x) => x.id === w.mode);
     const lines: [string, string][] = [
       [(mode?.name ?? w.mode).toUpperCase(), C.hi],
-      [!w.ante ? 'PRACTICE: NOTHING AT STAKE' : w.staked ? `ANTE ${fmt(w.ante)} CP   POT ${fmt(w.pot)} CP` : `ANTE ${fmt(w.ante)} CP: NEEDS 2 PLAYERS, ELSE PRACTICE`, w.ante ? C.paper : C.dim],
+      [!w.ante ? 'PRACTICE: NOTHING AT STAKE' : !w.practice ? `ANTE ${fmt(w.ante)} CP   POT ${fmt(w.pot)} CP` : `ANTE ${fmt(w.ante)} CP: NEEDS AN OPPONENT, ELSE PRACTICE`, w.ante ? C.paper : C.dim],
       [`PLAYERS ${w.humans}/${w.target}`, C.paper],
       [w.startsIn !== null ? `STARTS IN ${Math.ceil(w.startsIn)}` : 'WAITING FOR PLAYERS', w.startsIn !== null ? GREEN : blink(m.time, 1.2, 0.8) ? C.paper : C.dim],
-      [w.bots.fill ? `BOT BACKFILL: ${(BOT_DIFFICULTY_BY_ID.get(w.bots.difficulty as never)?.name ?? w.bots.difficulty).toUpperCase()}` : 'NO BOTS', C.dim],
+      [w.bots.fill ? `OPPONENTS: ${w.bots.opponents.toUpperCase()} BOTS` : 'NO BOTS', C.dim],
     ];
-    if (w.ante && w.payouts.length) lines.push([`PAYS ${w.payouts.map((p, i) => `#${i + 1} ${fmt(p)}`).join('  ')}`, C.ammo]);
+    if (w.ante && !w.practice && w.payouts.length) {
+      lines.push([`YOUR STAKE ${fmt(w.ante)} CP${w.bots.fill ? '  HOUSE COVERS THE BOTS' : ''}`, C.paper]);
+      lines.push([`PAYS ${w.payouts.map((p, i) => `#${i + 1} ${fmt(p)}`).join('  ')}`, C.ammo]);
+    }
     let bw = 0;
     for (const [s] of lines) bw = Math.max(bw, textWidth(g, s, 8, u));
     const bh = lines.length * 11 * u + 14 * u;
@@ -145,19 +149,60 @@ registerHudWidget(
       txt(g, 'PRACTICE WAGER', x, y, 8, C.dim, 'left', u);
       return;
     }
-    txt(g, `POT ${fmt(w.pot)} CP`, x, y, 8, C.ammo, 'left', u);
-    y += 10 * u;
     const me = myStanding();
+    txt(g, `POT ${fmt(w.pot)} CP${me && me.rank ? `  STAKE ${fmt(w.ante)}` : ''}`, x, y, 8, C.ammo, 'left', u);
+    y += 10 * u;
     if (!me || me.rank === 0) {
       txt(g, 'NOT STAKED', x, y, 8, C.dim, 'left', u);
       return;
     }
     const inMoney = me.payout > 0;
-    const label = inMoney ? `IN THE MONEY #${me.rank}  +${fmt(me.payout)}` : `OUT OF THE MONEY #${me.rank}`;
+    const label = inMoney ? `IN THE MONEY #${me.rank}  +${fmt(me.payout)}` : `OUT OF THE MONEY #${me.rank}  TOP ${w.payouts.length} PAID`;
     rect(g, x - u, y - u, textWidth(g, label, 8, u) + 4 * u, 10 * u, inMoney ? 'rgba(20,60,20,.75)' : 'rgba(70,20,14,.75)');
     txt(g, label, x + u, y, 8, inMoney ? GREEN : C.warn, 'left', u);
   },
   52,
+);
+
+// The money view next to the Tab scoreboard (BO1 showed each player's cut on the wager scoreboard).
+registerHudWidget(
+  'economy.board',
+  (g, W, H) => {
+    const m = currentMatch();
+    const w = state.wager;
+    if (!m || !w || !isWager() || !m.scoreboardOpen || m.loading || w.practice || m.phase === 'lobby') return;
+    const u = unit(H);
+    const entrants = w.standings.filter((s) => s.rank > 0).sort((a, b) => a.rank - b.rank);
+    const bw = 112 * u;
+    const rows = entrants.length + 3;
+    const bh = rows * 9 * u + 14 * u;
+    // Left of the scoreboard (230 units wide, centred) when it fits, else along the bottom.
+    const side = (W - Math.min(W - 16 * u, 230 * u)) / 2 >= bw + 6 * u;
+    const x = side ? 4 * u : Math.round(W / 2 - bw / 2);
+    // Below the score bars and the economy.wager lines it stands in for.
+    const y = side ? 70 * u : H - bh - 8 * u;
+    box(g, x, y, bw, bh, 'rgba(12,12,16,0.9)', u);
+    let ry = y + 4 * u;
+    txt(g, `POT ${fmt(w.pot)} CP`, x + 4 * u, ry, 8, C.ammo, 'left', u);
+    ry += 9 * u;
+    const me = myStanding();
+    txt(g, me && me.rank ? `YOUR STAKE ${fmt(w.ante)} CP` : 'NOT STAKED', x + 4 * u, ry, 8, C.paper, 'left', u);
+    ry += 11 * u;
+    const paid = w.payouts.length;
+    entrants.forEach((s, i) => {
+      if (i === paid) {
+        rect(g, x + 2 * u, ry - u, bw - 4 * u, u, C.warn);
+        ry += u;
+      }
+      const mine = s.id === m.myId;
+      const col = mine ? C.hi : s.payout > 0 ? GREEN : C.dim;
+      txt(g, `${s.rank} ${s.bot ? '[BOT] ' : ''}${s.name}`.slice(0, 18), x + 4 * u, ry, 8, col, 'left', u);
+      txt(g, s.payout > 0 ? fmt(s.payout) : '-', x + bw - 4 * u, ry, 8, col, 'right', u);
+      ry += 9 * u;
+    });
+    txt(g, `IN THE MONEY: TOP ${paid}`, x + 4 * u, ry + u, 8, C.dim, 'left', u);
+  },
+  91,
 );
 
 registerHudWidget(

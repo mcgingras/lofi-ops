@@ -309,7 +309,7 @@ describe('bots: lobby backfill and replacement', () => {
     r.startMatch();
     expect(r.bots().length).toBe(3);
     r.endMatch('forfeit');
-    expect(r.results?.ext.bots).toMatchObject({ bots: 3, humans: 1, practice: false });
+    expect(r.results?.ext.bots).toMatchObject({ bots: 3, humans: 1 });
     steps(r, 1.2);
     expect(r.phase).toBe('lobby');
     expect(r.bots().length).toBe(0);

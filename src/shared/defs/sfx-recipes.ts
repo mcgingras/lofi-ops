@@ -379,6 +379,8 @@ export const SFX_SYNTH_ONLY: Record<string, string> = {
   ks_buzz: 'RC-XD motor: no small-motor recording in the manifest',
   ks_fire: 'napalm fire crackle: no fire recording in the manifest',
   'weapons.thump': 'Sticks and Stones BANKRUPTED sting: a low thump, no fitting recording',
+  'economy.cash': 'wager IN THE MONEY sting: synthesized coin chimes, no fitting recording',
+  'economy.bust': 'wager OUT OF THE MONEY sting: a low falling buzz, no fitting recording',
   'weapons.beep': 'stuck crossbow bolt beep: a synthesized chirp, like the semtex blink',
   'weapons.cook': 'frag cook tick: a short synthesized fuse tick, no fitting recording',
   // Launchers (defs/launchers.ts): lock-on tones are electronic beeps, the rest have no recording.

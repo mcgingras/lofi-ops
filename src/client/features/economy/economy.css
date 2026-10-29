@@ -152,3 +152,32 @@ body[data-input='pad'] #app .ec-gun:focus .ec-name { color: var(--hi); }
   .ec-search-row { flex-wrap: wrap; }
   .ec-modes, .ec-antes { grid-template-columns: 1fr 1fr; }
 }
+
+/* ---- wager buy-in, record, results card ----------------------------------------------------- */
+.ec-buyin, .ec-record { max-width: 640px; display: flex; flex-direction: column; gap: 6px; }
+.ec-buyin-row { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dim); }
+.ec-buyin-row b { color: var(--paper); }
+.ec-buyin-row.ec-pot b { color: var(--hi); font-size: 13px; }
+.ec-paytable { border-collapse: collapse; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; width: 100%; }
+.ec-paytable td { padding: 3px 6px; border-top: 1px solid var(--line); }
+.ec-paytable td:nth-child(n + 2) { text-align: right; }
+.ec-paytable tr.ec-out td { border-top: 2px dashed var(--warn); color: var(--dim); }
+.ec-up { color: #7adf6a; }
+.ec-down { color: var(--warn); }
+.ec-record-tiles { display: flex; flex-wrap: wrap; gap: 14px; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dim); }
+.ec-record-tiles b { font-size: 13px; color: var(--paper); }
+.ec-record-tiles .ec-up b { color: #7adf6a; }
+.ec-record-tiles .ec-down b { color: var(--warn); }
+.ec-record-row { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dim); border-top: 1px solid var(--line); padding-top: 4px; }
+.ec-result { display: flex; flex-direction: column; gap: 4px; }
+.ec-result-title { font-size: 14px; letter-spacing: 0.08em; }
+.ec-result-title.in { color: #7adf6a; }
+.ec-result-title.out { color: var(--warn); }
+.ec-result-line { display: flex; justify-content: space-between; gap: 10px; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dim); }
+.ec-result-line b { color: var(--paper); }
+.ec-result-line.me b, .ec-result-line.me span { color: var(--hi); }
+.ec-result-line.cut { border-top: 2px dashed var(--warn); padding-top: 3px; }
+.ec-result-line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ec-result-line b { white-space: nowrap; }
+.ec-result-line.bot b { color: var(--dim); }
+@media (max-width: 520px) { .ec-record-row { grid-template-columns: 1fr auto; } .ec-record-row b { grid-column: 1 / -1; } }

@@ -13,6 +13,7 @@ import '../src/client/features/weapons/sounds';
 import '../src/client/features/killstreaks/sounds';
 import '../src/client/features/modes/sounds';
 import '../src/client/features/zombies/sounds';
+import '../src/client/features/economy/sounds';
 import { gunOf, inGameVolume, soundLabel, soundTestGroups } from '../src/client/features/frontend/sound-test-data';
 import { SFX_CREDITS } from '../src/shared/defs/sfx-credits';
 import { SFX_BINDINGS, SFX_SAMPLE_ONLY, SFX_SYNTH_ONLY } from '../src/shared/defs/sfx-recipes';
