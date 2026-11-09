@@ -235,6 +235,8 @@ registerMatchHook('killstreaks.marker', {
     prev = { streak: false, fire: false, slot: 0 };
     markerClient.held = false;
     markerClient.preview = null;
+    // The last match's throw: its time must not hide this match's gun.
+    markerClient.raisedAt = markerClient.thrownAt = -99;
     fp = new FirstPersonCanister();
     view = new PreviewView();
     return () => {

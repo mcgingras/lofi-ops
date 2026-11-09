@@ -96,7 +96,7 @@ describe('earning', () => {
 });
 
 describe('radar streaks', () => {
-  it('Spy Plane shows enemies to the team for 30 s and can be shot down', () => {
+  it('Spy Plane shows enemies to the team and can be shot down', () => {
     const room = setup();
     const a = bot(room, 0);
     const mate = bot(room, 0);
@@ -127,7 +127,9 @@ describe('radar streaks', () => {
     bot(room, 1);
     give(a, 'uav');
     callKillstreak(room, a, 'uav');
-    steps(room, 30.5);
+    steps(room, 44);
+    expect(room.radarFor(a)).toHaveLength(1);
+    steps(room, 1.5);
     expect(room.radarFor(a)).toEqual([]);
     expect(room.entities.byKind(KS_ENTITY.uav)).toHaveLength(0);
   });

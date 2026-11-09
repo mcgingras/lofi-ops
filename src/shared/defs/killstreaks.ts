@@ -60,7 +60,7 @@ export interface KillstreakDef {
 }
 
 export const KILLSTREAKS: KillstreakDef[] = [
-  { id: 'uav', name: 'Spy Plane', kills: 3, description: 'Shows enemies on the minimap.', unlockLevel: 1, kind: 'called', durationSec: 30, targeting: 'none', air: true, hp: 700, icon: 'ks_uav' },
+  { id: 'uav', name: 'Spy Plane', kills: 3, description: 'Sweeps the map every second for 45 s: enemies show on the minimap, those beyond it on its edge.', unlockLevel: 1, kind: 'called', durationSec: 45, targeting: 'none', air: true, hp: 700, icon: 'ks_uav' },
   { id: 'rcxd', name: 'RC-XD', kills: 3, description: 'Remote-control car packed with explosives. Fire to detonate.', unlockLevel: 1, kind: 'controlled', durationSec: 30, targeting: 'control', hp: 40, icon: 'ks_rcxd' },
   { id: 'counter_uav', name: 'Counter-Spy Plane', kills: 4, description: "Jams the enemy's minimap.", unlockLevel: 1, kind: 'called', durationSec: 30, targeting: 'none', air: true, hp: 700, icon: 'ks_cuav' },
   { id: 'sam_turret', name: 'SAM Turret', kills: 4, description: 'Carry it into place: a turret that shoots down enemy aircraft.', unlockLevel: 8, kind: 'called', durationSec: 60, targeting: 'place', hp: 450, icon: 'ks_sam' },
@@ -75,7 +75,7 @@ export const KILLSTREAKS: KillstreakDef[] = [
   { id: 'attack_helicopter', name: 'Attack Helicopter', kills: 7, description: 'Pick an area on the map: a helicopter patrols it and attacks enemies.', unlockLevel: 1, kind: 'called', durationSec: 60, targeting: 'map', mapPick: 'area', air: true, hp: 1500, icon: 'ks_heli' },
   // BO1 `m220_tow_drop_mp`: a supply drop whose crate holds the launcher (defs/valkyrie.ts).
   { id: 'valkyrie', name: 'Valkyrie Rockets', kills: 7, description: 'Throw the marker for a launcher with two rockets you fly yourself: steer with your view, boost, fire to detonate.', unlockLevel: 26, kind: 'controlled', targeting: 'marker', icon: 'ks_valkyrie' },
-  { id: 'blackbird', name: 'Blackbird', kills: 8, description: 'Shows enemy positions and facing. Cannot be shot down.', unlockLevel: 32, kind: 'called', durationSec: 30, targeting: 'none', air: true, icon: 'ks_blackbird' },
+  { id: 'blackbird', name: 'Blackbird', kills: 8, description: 'Shows enemy positions and facing live for 45 s. Cannot be shot down.', unlockLevel: 32, kind: 'called', durationSec: 45, targeting: 'none', air: true, icon: 'ks_blackbird' },
   { id: 'rolling_thunder', name: 'Rolling Thunder', kills: 8, description: 'Pick a spot and a direction on the map: a B-52 carpet-bombs along it.', unlockLevel: 36, kind: 'called', targeting: 'map', mapPick: 'line', icon: 'ks_thunder' },
   { id: 'chopper_gunner', name: 'Chopper Gunner', kills: 9, description: 'Man the explosive gun of a circling helicopter.', unlockLevel: 40, kind: 'controlled', durationSec: 40, targeting: 'control', air: true, hp: 2000, icon: 'ks_gunner' },
   // Original EMP-like streak: corrupts the enemy side for 20 s (screens, minimaps, bots, hardware). defs/glitch.ts.

@@ -204,7 +204,7 @@ export function buildWeaponViewmodel(c: ViewmodelCtx, model: string): ViewmodelS
     }
     // Break action.
     if (p.barrels) p.barrels.rotation.x = r >= 0 ? 0.55 * Math.min(ramp(r, 0.05, 0.25), 1 - ramp(r, 0.8, 0.95)) : 0;
-    if (p.barrels && left && r >= 0) left.position.lerpVectors(leftHome, new THREE.Vector3(-0.03, -0.02, 0.05), bump(r, 0.3, 0.75));
+    if (p.barrels && left) left.position.lerpVectors(leftHome, new THREE.Vector3(-0.03, -0.02, 0.05), r >= 0 ? bump(r, 0.3, 0.75) : 0);
     // Revolver: cylinder turns each shot, swings out to reload.
     if (p.cylinder && cylHome) {
       if (shot) cylTurn += Math.PI / 3;

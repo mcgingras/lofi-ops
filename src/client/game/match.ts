@@ -32,6 +32,7 @@ import { client } from '../state';
 import { drawHud } from '../hud/hud';
 import { aimAssist, newAimState, type AimResult, type AimTarget } from './aim-assist';
 import { sfx } from './audio';
+import { matchClockStart, matchClockTick } from './clock';
 import { Controls } from './controls';
 import { inputDevice, rumble } from './gamepad';
 import { Effects } from './effects';
@@ -94,8 +95,8 @@ export class Match {
   /** Damage direction markers: local time and world yaw towards the source. */
   damageMarks: { t: number; yaw: number }[] = [];
   death: DeathInfo | null = null;
-  /** Local seconds since this session started (HUD animation). */
-  time = 0;
+  /** Local clock in seconds (HUD animation, feature timers). It carries on from the last match's: game/clock.ts. */
+  time = matchClockStart();
   /** Local time the title card started. */
   cardAt = 0;
   /** Last frame's crosshair spread (degrees). */
@@ -515,6 +516,7 @@ export class Match {
     const dt = Math.min(0.1, Math.max(0, now - this.last));
     this.last = now;
     this.time += dt;
+    matchClockTick(this.time);
     if (dt > 0) this.fps = this.fps * 0.95 + (1 / dt) * 0.05;
     try {
       this.step(dt);

@@ -77,7 +77,7 @@ Sounds: `killstreaks/sounds.ts` holds the synthesized `ks_*` voices; the recorde
 
 | id | name | kills | how it works |
 |---|---|---|---|
-| uav | Spy Plane | 3 | plane orbits 30 s; `radarVisible` true for your enemies (client shows 2 s sweep pings); 700 hp |
+| uav | Spy Plane | 3 | plane orbits 45 s; `radarVisible` true for your enemies (client sweeps every second: blips hold until the next sweep, enemies beyond the minimap show on its edge; `radar-logic.ts`); 700 hp |
 | rcxd | RC-XD | 3 | drive it (movement keys + view yaw, chase cam); FIRE/STREAK detonates (6 m, 260); 30 s fuse; 40 hp, harmless when shot |
 | counter_uav | Counter-Spy Plane | 4 | `radarJammed` for your enemies (static on their radar) 30 s; 700 hp |
 | sam_turret | SAM Turret | 4 | carried and placed like the Sentry Gun (below); homing missiles (1000 dmg) at enemy aircraft in 160 m, 8 missiles, 60 s; 450 hp |
@@ -89,7 +89,7 @@ Sounds: `killstreaks/sounds.ts` holds the synthesized `ks_*` voices; the recorde
 | attack_helicopter | Attack Helicopter | 7 | tactical map: patrol point; flies in, orbits it (14 m), minigun bursts at the nearest visible enemy; 60 s; 1500 hp; airspace max 3 helis |
 | mystery_box | Mystery Box | 5 | throw the marker (the box's own canister): a beam of light, the sky flickers, lightning strikes, the box rides the beam down and crashes in; hold USE to open it, the weapons cycle and land on a wonder weapon (never a teddy bear), USE takes it into your hand on a 60 s loan (your gun is put away and comes back); untaken it sinks back after 10 s; then it flies off up the beam. Only its owner can use it (below) |
 | valkyrie | Valkyrie Rockets | 7 | a supply drop whose crate holds the launcher (below): STREAK raises it, FIRE launches one of 2 rockets; you fly it from its camera (look steers, hold the tactical button to boost, FIRE detonates); it explodes on impact (7.5 m, 400 to 100); your body stays put and can be killed |
-| blackbird | Blackbird | 8 | like the Spy Plane but live with facing arrows on the radar; cannot be shot down |
+| blackbird | Blackbird | 8 | like the Spy Plane but live with facing arrows on the radar, 45 s; cannot be shot down |
 | rolling_thunder | Rolling Thunder | 8 | tactical map: spot + direction; B-52 carpet-bombs 14 bombs (4 m apart) through the spot, ~7 s out |
 | chopper_gunner | Chopper Gunner | 9 | you work its explosive cannon from the air (camera in the seat, FIRE shoots); your body stays put and dying ends it; 2000 hp |
 | glitch | Glitch (original) | 10 | EMP-like, 20 s: the enemy side's screens and minimaps corrupt, their radar goes dark, their bots react late, miss and stutter (below); their hardware is knocked out and they can't call streaks; can't be shot down; unlock level 42 |
