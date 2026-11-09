@@ -1,8 +1,9 @@
 /**
  * Radar minimap (top left, under the score): the map from above, rotating with the player; team
- * mates always; enemies the server lists in `snap.radar` (firing, Spy Plane sweeps every 2 s as
- * fading pings, Blackbird live with facing arrows); friendly hardware; enemy aircraft; enemy ground
- * hardware with Hacker; static when jammed by a Counter-Spy Plane.
+ * mates always; enemies the server lists in `snap.radar` (firing, Spy Plane sweeps every second as
+ * blips that hold until the next sweep, Blackbird live with facing arrows); with either plane up,
+ * enemies beyond the minimap show as small blips on its edge; friendly hardware; enemy aircraft;
+ * enemy ground hardware with Hacker; static when jammed by a Counter-Spy Plane.
  */
 import type { MapData } from '../../../shared/maps/types';
 import { KS_ENTITY } from '../../../shared/defs/killstreaks';
@@ -13,10 +14,10 @@ import type { Match } from '../../game/match';
 import { iHave } from '../perks/state';
 import { friendly } from './store';
 import { iAmGlitched } from './glitch-state';
+import { clampToRadar, PULSE_SEC, sweepPings, type Ping } from './radar-logic';
 
 const PX_PER_M = 4;
 const VIEW_M = 50; // metres shown across the radar
-const SWEEP = 2;
 
 let mapCanvas: HTMLCanvasElement | null = null;
 let mapId = '';
@@ -47,13 +48,8 @@ function buildMap(map: MapData): HTMLCanvasElement {
   return c;
 }
 
-interface Ping {
-  x: number;
-  z: number;
-  t: number;
-}
 let pings: Ping[] = [];
-let lastSweep = 0;
+let lastSweep = -Infinity;
 
 function radarState(m: Match) {
   const snap = m.net.lastSnap;
@@ -123,10 +119,18 @@ registerHudWidget(
       g.drawImage(mapCanvas, (ox - px) * PX_PER_M, (oz - pz) * PX_PER_M);
       g.setTransform(1, 0, 0, 1, 0, 0);
     }
-    const dot = (wx: number, wz: number, col: string, s = 2) => {
-      const [sx, sy] = toRadar(wx, wz);
+    const mark = (sx: number, sy: number, col: string, s = 2) => {
       rect(g, sx - s * u * 0.5 - u * 0.5, sy - s * u * 0.5 - u * 0.5, s * u + u, s * u + u, C.ink);
       rect(g, sx - s * u * 0.5, sy - s * u * 0.5, s * u, s * u, col);
+    };
+    const dot = (wx: number, wz: number, col: string, s = 2) => mark(...toRadar(wx, wz), col, s);
+    // An enemy a plane found: on the map, or a small blip on its edge when they are beyond it.
+    const half = size / 2 - 2 * u;
+    const found = (wx: number, wz: number, s = 2): boolean => {
+      const [sx, sy] = toRadar(wx, wz);
+      const p = clampToRadar(sx - cx, sy - cy, half);
+      mark(cx + p.x, cy + p.y, C.enemy, p.out ? 1 : s);
+      return !p.out;
     };
     // Hardware.
     for (const e of st.ents) {
@@ -144,19 +148,15 @@ registerHudWidget(
     }
     // Team mates.
     for (const r of m.remotes.views.values()) if (r.alive && !m.isEnemy(r.id)) dot(r.x, r.z, C.friend);
-    // Enemies: UAV sweeps leave fading pings; Blackbird and gunfire are live.
+    // Enemies: Spy Plane sweeps pin blips until the next sweep; Blackbird and gunfire are live.
     const now = m.time;
-    if (st.uav && !st.blackbird && now - lastSweep >= SWEEP) {
-      lastSweep = now;
-      for (const r of m.remotes.views.values()) if (r.alive && st.radar.has(r.id)) pings.push({ x: r.x, z: r.z, t: now });
-    }
-    pings = pings.filter((p) => now - p.t < SWEEP * 1.25);
-    for (const p of pings) if (Math.floor((now - p.t) * 8) % 2 === 0 || now - p.t < SWEEP * 0.7) dot(p.x, p.z, C.enemy);
-    for (const r of m.remotes.views.values()) {
-      if (!r.alive || !st.radar.has(r.id)) continue;
+    const seen = [...m.remotes.views.values()].filter((r) => r.alive && st.radar.has(r.id));
+    ({ pings, lastSweep } = sweepPings(pings, lastSweep, now, st.uav && !st.blackbird, seen));
+    for (const p of pings) found(p.x, p.z, now - p.t < PULSE_SEC ? 3 : 2);
+    for (const r of seen) {
       if (st.uav && !st.blackbird) continue; // drawn as pings
-      dot(r.x, r.z, C.enemy);
-      if (st.blackbird) {
+      if (!st.blackbird) dot(r.x, r.z, C.enemy);
+      else if (found(r.x, r.z)) {
         const [sx, sy] = toRadar(r.x, r.z);
         const fx = -Math.sin(r.yaw);
         const fz = -Math.cos(r.yaw);
