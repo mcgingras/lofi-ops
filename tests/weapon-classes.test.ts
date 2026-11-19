@@ -24,8 +24,8 @@ import { penetrationType } from '../src/shared/penetration';
 
 /** Classes of real guns (not the launcher slot or specials like the knife and wonder weapons). */
 const GUN_CLASSES = WEAPON_CLASSES.filter((c) => c !== 'launcher' && c !== 'special');
-/** Classes Create-a-Class actually offers a gun of. */
-const CLASSABLE = new Set(LOADOUT_WEAPONS.filter((w) => !WAGER_ONLY_WEAPONS.has(w.id)).map((w) => w.class));
+/** Classes Create-a-Class actually offers a gun of (the Ballistic Knife is classable but no gun: its own checks below). */
+const CLASSABLE = new Set(LOADOUT_WEAPONS.filter((w) => !WAGER_ONLY_WEAPONS.has(w.id) && w.class !== 'special').map((w) => w.class));
 
 describe('weapon class coverage', () => {
   it('every weapon belongs to a listed class, and machine pistols are one', () => {
@@ -62,7 +62,7 @@ describe('weapon class coverage', () => {
   it('every classable gun reaches the per-gun lists: a Pack-a-Punch effect, a recorded shot, the box, Blackout loot', () => {
     const pool = new Set(boxPool().map((p) => p.id));
     for (const w of LOADOUT_WEAPONS) {
-      if (WAGER_ONLY_WEAPONS.has(w.id)) continue;
+      if (WAGER_ONLY_WEAPONS.has(w.id) || w.class === 'special') continue;
       expect(isPackable(w.id), w.id).toBe(true);
       expect(papEffect(w.id), `${w.id} pap effect`).toBeTruthy();
       expect(WEAPON_SHOTS[w.id], `${w.id} shot`).toBeDefined();
@@ -71,6 +71,14 @@ describe('weapon class coverage', () => {
       // Machine pistols and launchers stay off the floor loot.
       if (w.class !== 'machinepistol' && w.class !== 'launcher') expect(LOOT_WEAPONS, `${w.id} loot`).toContain(w.id);
     }
+  });
+
+  it('the Ballistic Knife: classable, its own shot sound, in the Mystery Box, never packed or floor loot', () => {
+    expect(LOADOUT_WEAPONS.map((w) => w.id)).toContain('ballistic_knife');
+    expect(SFX_BINDINGS['shot.ballistic_knife'], 'shot').toBeDefined();
+    expect(boxPool().map((p) => p.id), 'box').toContain('ballistic_knife');
+    expect(isPackable('ballistic_knife')).toBe(false);
+    expect(LOOT_WEAPONS).not.toContain('ballistic_knife');
   });
 
   it('bots carry a gun of every classable class (seeded)', () => {

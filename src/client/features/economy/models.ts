@@ -12,6 +12,7 @@ import { sfx } from '../../game/audio';
 import type { Match } from '../../game/match';
 import { registerEntityRenderer, registerMatchHook } from '../../registry';
 import { registerViewmodel, worldUV, type ViewmodelCtx, type ViewmodelSpec } from '../../render/models/viewmodels';
+import { GUNS } from '../weapons/gunkit';
 import { actionHands } from '../weapons/viewmodels';
 import type { Soldier } from '../../render/models/soldier';
 import { makeLookMaterial, setDynLight, type LookMaterial } from '../../render/shader';
@@ -65,6 +66,19 @@ registerViewmodel('ballistic_knife', (c) => {
   c.box(0.1, 0.1, 0.4, sl, 0.04, -0.12, 0.28, 0.25, -0.05);
   return withHands(c, { muzzle: new THREE.Vector3(0, 0.005, -0.25), hip: new THREE.Vector3(0.15, -0.16, -0.32), ads: new THREE.Vector3(0.06, -0.12, -0.34), reload: 'drop' });
 });
+
+// The ballistic knife in the gun kit (it is a Create-a-Class secondary too): third person and the
+// dropped weapon use it. Its first-person viewmodel stays the one above (registered by model id:
+// weapons/viewmodels.ts had already registered every GUNS model when this module loaded).
+GUNS.ballistic_knife = (k) => {
+  const { M } = k;
+  k.box(0.035, 0.04, 0.16, M.body, 0, 0, 0); // the spring handle
+  k.box(0.04, 0.012, 0.02, M.metal, 0, 0, -0.085); // guard
+  k.box(0.008, 0.03, 0.15, M.steel, 0, 0.005, -0.17); // blade
+  k.box(0.004, 0.012, 0.04, M.steel, 0, 0.014, -0.25, 0.5);
+  k.box(0.012, 0.016, 0.03, M.metal, 0, -0.026, 0.02); // trigger lever
+  return { muzzle: new THREE.Vector3(0, 0.005, -0.25), sightY: 0.02, adsZ: -0.34, grip: new THREE.Vector3(0, -0.01, 0.03), fore: new THREE.Vector3(0, -0.01, 0.03), parts: {}, pistol: true, oneHand: true };
+};
 
 // ---------------------------------------------------------------------------------------------
 // Projectiles
