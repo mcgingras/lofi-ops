@@ -194,7 +194,7 @@ export function unlockTable(): UnlockEntry[] {
   const t: UnlockEntry[] = [];
   for (const f of FEATURE_UNLOCKS) t.push({ level: f.level, kind: 'feature', id: featureUnlockId(f.id), name: f.name, detail: f.detail });
   CLASS_SLOT_LEVELS.forEach((level, i) => t.push({ level, kind: 'class', id: classUnlockId(i + 1), name: `Custom Class ${i + 1}`, detail: 'Create-a-Class slot' }));
-  // Only what Create-a-Class offers: no knife / underbarrel GL, no wager-only crossbow or ballistic knife.
+  // Only what Create-a-Class offers: no knife / underbarrel GL, no wager-only crossbow.
   for (const w of LOADOUT_WEAPONS) if (!WAGER_ONLY_WEAPONS.has(w.id)) t.push({ level: unlockLevelOf('weapon', w.id), kind: 'weapon', id: w.id, name: w.name, detail: CLASS_LABEL[w.class] ?? w.class });
   for (const k of PERKS) t.push({ level: unlockLevelOf('perk', k.id), kind: 'perk', id: k.id, name: k.name, detail: `Perk ${k.tier}` });
   for (const k of KILLSTREAKS) t.push({ level: unlockLevelOf('killstreak', k.id), kind: 'killstreak', id: k.id, name: k.name, detail: `${k.kills} kills` });

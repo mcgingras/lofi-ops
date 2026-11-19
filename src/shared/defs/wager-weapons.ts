@@ -1,11 +1,13 @@
 /**
- * Wager-only weapons (owner: economy). Sticks and Stones needs a crossbow (explosive bolts) and a
+ * The economy's special weapons. Sticks and Stones needs a crossbow (explosive bolts) and a
  * ballistic knife, and both cap the Gun Game ladder. They are appended to WEAPONS / WEAPON_BY_ID
  * when this module loads (imported by economy.ts, which every side loads through profile.ts and
  * modes.ts). If the weapons area ships its own def with the same id, theirs wins and this one is
- * skipped. They never show in the store (see WAGER_ONLY_WEAPONS).
+ * skipped (ECONOMY_WEAPONS lists the ones that went in). The crossbow is wager-only (never sold or
+ * classed: WAGER_ONLY_WEAPONS); the ballistic knife is also a Create-a-Class secondary, unlocked
+ * at level 20 or bought in the store, as in BO1.
  */
-import { WEAPON_BY_ID, WEAPONS, type WeaponDef } from './weapons';
+import { LOADOUT_WEAPONS, WEAPON_BY_ID, WEAPONS, type WeaponDef } from './weapons';
 
 export const WAGER_WEAPONS: WeaponDef[] = [
   {
@@ -59,7 +61,8 @@ export const WAGER_WEAPONS: WeaponDef[] = [
     moveMult: 1.05,
     spread: { hip: 1, ads: 0.3, move: 0.8 },
     recoil: { vertical: 1, horizontal: 0.2, recovery: 14 },
-    unlockLevel: 1,
+    unlockLevel: 20,
+    price: 4000,
     attachments: [],
     model: 'ballistic_knife',
     swapMs: 300,
@@ -68,12 +71,20 @@ export const WAGER_WEAPONS: WeaponDef[] = [
   },
 ];
 
-/** Ids registered here (wager modes only): never sold, never allowed in custom classes. */
+/** Our defs that are wager modes only: never sold, never allowed in custom classes. */
+const WAGER_ONLY_IDS = new Set(['crossbow']);
+
+/** Ids registered here (so the economy's projectile behaviours drive them). */
+export const ECONOMY_WEAPONS = new Set<string>();
+/** Ids registered here that are wager modes only: never sold, never allowed in custom classes. */
 export const WAGER_ONLY_WEAPONS = new Set<string>();
 
 for (const w of WAGER_WEAPONS) {
   if (WEAPON_BY_ID.has(w.id)) continue;
   WEAPONS.push(w);
   (WEAPON_BY_ID as Map<string, WeaponDef>).set(w.id, w);
-  WAGER_ONLY_WEAPONS.add(w.id);
+  ECONOMY_WEAPONS.add(w.id);
+  if (WAGER_ONLY_IDS.has(w.id)) WAGER_ONLY_WEAPONS.add(w.id);
+  // LOADOUT_WEAPONS was built before this module ran: a classable one joins it here.
+  else LOADOUT_WEAPONS.push(w);
 }

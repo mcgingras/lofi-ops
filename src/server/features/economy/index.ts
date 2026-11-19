@@ -7,7 +7,7 @@
  *   room:  CP at match end, `economy.grant`, spawn-time ownership checks, wager escrow + HUD,
  *          bolt/blade projectiles every tick, no class grenades in wager modes.
  */
-import { WAGER_ONLY_WEAPONS } from '../../../shared/defs/wager-weapons';
+import { ECONOMY_WEAPONS } from '../../../shared/defs/wager-weapons';
 import { registerWeaponBehavior } from '../../combat';
 import type { Feature, ServerApi } from '../../feature';
 import type { Room } from '../../room';
@@ -38,8 +38,8 @@ export function wagerRoomInfo(room: Room) {
 
 /** Only our own defs get our projectile behaviours (a weapons-area crossbow brings its own). */
 function registerWagerBehaviors(register: ServerApi['registerWeaponBehavior']) {
-  if (WAGER_ONLY_WEAPONS.has('crossbow')) register('crossbow', crossbowBehavior);
-  if (WAGER_ONLY_WEAPONS.has('ballistic_knife')) register('ballistic_knife', ballisticKnifeBehavior);
+  if (ECONOMY_WEAPONS.has('crossbow')) register('crossbow', crossbowBehavior);
+  if (ECONOMY_WEAPONS.has('ballistic_knife')) register('ballistic_knife', ballisticKnifeBehavior);
 }
 
 const feature: Feature = {
