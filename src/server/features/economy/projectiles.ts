@@ -219,11 +219,11 @@ function land(room: Room, e: Entity, b: BladeData, k: 1 | 2) {
   e.s = k === 2 ? { k, pt: 0 } : { ...e.s, k };
 }
 
-/** Loaded + spare ballistic knife blades a player can still take (0 = full or no knife). */
+/** Loaded + spare ballistic knife blades a player can still take (0 = full or no knife; a packed knife holds more). */
 export function bladeRoom(p: PlayerState): number {
   const w = p.weapons.find((x) => x.def.base.id === 'ballistic_knife');
   if (!w) return 0;
-  return Math.max(0, w.def.magazine + w.def.base.reserve - (w.mag + w.reserve));
+  return Math.max(0, w.def.magazine + w.def.reserve - (w.mag + w.reserve));
 }
 
 function bladeTaker(room: Room, e: Entity): PlayerState | null {

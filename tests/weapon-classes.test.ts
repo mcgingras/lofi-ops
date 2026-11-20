@@ -73,11 +73,12 @@ describe('weapon class coverage', () => {
     }
   });
 
-  it('the Ballistic Knife: classable, its own shot sound, in the Mystery Box, never packed or floor loot', () => {
+  it('the Ballistic Knife: classable, its own shot sound, in the Mystery Box, packable, never floor loot', () => {
     expect(LOADOUT_WEAPONS.map((w) => w.id)).toContain('ballistic_knife');
     expect(SFX_BINDINGS['shot.ballistic_knife'], 'shot').toBeDefined();
     expect(boxPool().map((p) => p.id), 'box').toContain('ballistic_knife');
-    expect(isPackable('ballistic_knife')).toBe(false);
+    expect(isPackable('ballistic_knife')).toBe(true);
+    expect(isPackable('crossbow')).toBe(false);
     expect(LOOT_WEAPONS).not.toContain('ballistic_knife');
   });
 

@@ -2,11 +2,19 @@
  * The Ballistic Knife as a Create-a-Class secondary (it was wager-only): offered in the class
  * editor's list, the unlock table (level 20) and the store, while the crossbow stays wager-only;
  * a level-20 player who bought it spawns with it in a normal TDM match and its blade kills there.
+ * Pack-a-Punched it is the Krauss Refibrillator: 2 loaded + 3 spare blades, and a blade kill
+ * reloads it on the spot and speeds you up (the adrenaline effect).
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import type { WebSocket } from 'ws';
 import { registerWeaponBehavior } from '../src/server/combat';
 import economy from '../src/server/features/economy/index';
+import { bladeRoom } from '../src/server/features/economy/projectiles';
+import { callKillstreak } from '../src/server/features/killstreaks/api';
+import killstreaks from '../src/server/features/killstreaks/index';
+import { grant } from '../src/server/features/killstreaks/state';
+import { papRushing } from '../src/server/features/killstreaks/streaks/packapunch-effects';
+import perks from '../src/server/features/perks/index';
 import weapons from '../src/server/features/weapons/index';
 import type { Feature, ServerApi } from '../src/server/feature';
 import { Lobby } from '../src/server/lobby';
@@ -18,6 +26,7 @@ import { Session } from '../src/server/session';
 import { Store } from '../src/server/store';
 import { PLAYER, TICK_DT } from '../src/shared/constants';
 import { BLADE_ENTITY } from '../src/shared/defs/economy';
+import { isPackable, PACK_A_PUNCH, PAP_CAMO, PAP_ID, papEffectOf, papName } from '../src/shared/defs/pack-a-punch';
 import { keyOf, purchase, storeItem } from '../src/shared/defs/store';
 import { unlockTable } from '../src/shared/defs/unlocks';
 import { ECONOMY_WEAPONS, WAGER_ONLY_WEAPONS } from '../src/shared/defs/wager-weapons';
@@ -108,5 +117,48 @@ describe('Ballistic Knife in Create-a-Class', () => {
     w.lobby.join(s, room.id);
     steps(room, 0.7);
     expect(room.players.get(s.id)!.weapons.map((x) => x.def.base.id)).not.toContain('ballistic_knife');
+  });
+
+  it('Pack-a-Punched: the Krauss Refibrillator holds 2 + 3 blades, and a blade kill reloads it and rushes you', () => {
+    expect(isPackable('ballistic_knife')).toBe(true);
+    expect(papName('ballistic_knife')).toBe('Krauss Refibrillator');
+    const w = world([weapons, economy, perks, killstreaks]);
+    const s = w.human('Krauss', 20);
+    s.profile.codPoints = 5000;
+    expect(purchase(s.profile, keyOf.weapon('ballistic_knife')).ok).toBe(true);
+    s.profile.loadouts[0] = { ...cloneLoadout(DEFAULT_LOADOUTS[0]!), secondary: { weapon: 'ballistic_knife', attachments: [], camo: 'none' } };
+    const room = w.lobby.createRoom({ mode: 'tdm', map: 'yard', closeWhenEmpty: false });
+    w.lobby.join(s, room.id);
+    const a = room.players.get(s.id)!;
+    const b = room.addBot({ name: 'Target' });
+    b.brain = { think: (_r, self) => ({ buttons: 0, yaw: self.yaw, pitch: 0, weaponSlot: self.slot }) };
+    steps(room, 0.7);
+    if (!a.alive) steps(room, 6);
+    const knife = a.weapons.find((x) => x.def.base.id === 'ballistic_knife')!;
+    a.slot = a.weapons.indexOf(knife);
+    steps(room, 0.6);
+    // The real killstreak: every gun carried is packed, the knife included.
+    grant(room, a, PAP_ID);
+    expect(callKillstreak(room, a, PAP_ID)).toEqual({ ok: true });
+    steps(room, PACK_A_PUNCH.durationSec + 0.1);
+    expect(knife.pap).toBe(true);
+    expect(knife.camo).toBe(PAP_CAMO);
+    expect(knife.def.name).toBe('Krauss Refibrillator');
+    expect([knife.mag, knife.reserve]).toEqual([2, 3]);
+    expect(bladeRoom(a)).toBe(0);
+    place(a, -1, 8);
+    if (!b.alive) steps(room, 6);
+    place(b, -1, 0);
+    const d = { x: b.move.x - a.move.x, y: b.move.y + 1.6 - (a.move.y + PLAYER.eye), z: b.move.z - a.move.z };
+    const l = Math.hypot(d.x, d.y, d.z);
+    const speed = room.modifiers.mul('speedMultiplier', a);
+    expect(room.fire(a, { dir: { x: d.x / l, y: d.y / l, z: d.z / l } }).ok).toBe(true);
+    expect(knife.mag).toBe(1);
+    steps(room, 0.6);
+    expect(b.alive).toBe(false);
+    // The kill put the fired blade straight back in the chamber, and the rush is on.
+    expect(knife.mag).toBe(2);
+    expect(papRushing(room, a)).toBe(true);
+    expect(room.modifiers.mul('speedMultiplier', a) / speed).toBeCloseTo(papEffectOf('ballistic_knife', 'adrenaline')!.speed);
   });
 });

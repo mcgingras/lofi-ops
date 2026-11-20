@@ -217,6 +217,9 @@ export const PAP_WEAPONS: Record<string, PapOverride> = {
   scavenger: { name: 'Hyena Infra-Dead', effect: { kind: 'wonder', radiusMult: 1.4 }, effectText: 'a bigger blast' },
   babygun: { name: 'Fractalizer', effect: { kind: 'wonder', shrinkR: 3 }, effectText: 'shrinks everyone near the hit' },
   wavegun: { name: 'Max Wave Gun', effect: { kind: 'wonder', arcs: 3 }, effectText: 'zaps arc to 3' },
+  // The Ballistic Knife (a Create-a-Class special, defs/wager-weapons.ts): BO1 Zombies' upgraded
+  // name. Packed it carries 2 loaded + 3 spare blades, and a blade kill reloads it on the spot.
+  ballistic_knife: { name: 'Krauss Refibrillator', effect: { kind: 'adrenaline', speed: 1.15, sec: 3 }, effectText: 'adrenaline: blade kills reload it and speed you up' },
 };
 
 /** The upgraded name of a weapon (fallback: "<name> Upgraded"). */
@@ -224,11 +227,14 @@ export function papName(id: string): string {
   return PAP_WEAPONS[id]?.name ?? `${WEAPON_BY_ID.get(id)?.name ?? id} Upgraded`;
 }
 
-/** Can this weapon be packed? Guns and wonder weapons; never the knife, the underbarrel launcher or wager specials. */
+/**
+ * Can this weapon be packed? Guns, wonder weapons and the specials with their own row (the
+ * Ballistic Knife); never the melee knife, the underbarrel launcher or the crossbow.
+ */
 export function isPackable(id: string): boolean {
   const def = WEAPON_BY_ID.get(id);
   if (!def || def.slot === 'melee' || def.slot === 'attachment') return false;
-  return def.class !== 'special' || !!def.wonder;
+  return def.class !== 'special' || !!def.wonder || !!PAP_WEAPONS[id];
 }
 
 /** The damage multiplier a packed weapon deals. */
