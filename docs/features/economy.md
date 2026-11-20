@@ -11,7 +11,7 @@ Owner: economy. Branch `feature/economy`.
 | MW2 camo per-weapon challenge rules (`weaponCamoProgress`, `camoFitsWeapon`, `mw2CamoProgress`, `mw2CamosUnlockedBetween`) | `src/shared/defs/camo-unlocks.ts` |
 | Store catalog, reticles, emblem backgrounds, ownership keys, purchase/gate rules, class enforcement (pure, shared) | `src/shared/defs/store.ts` |
 | Wire types (RPCs, feature pushes, `results.ext.economy`) | `src/shared/defs/economy-net.ts` |
-| Crossbow + ballistic knife defs (wager only) | `src/shared/defs/wager-weapons.ts` |
+| Crossbow (wager only) + ballistic knife (also a class secondary, packable) defs | `src/shared/defs/wager-weapons.ts` |
 | Crossbow bolt and ballistic knife blade projectiles, blade pickups | `src/server/features/economy/projectiles.ts` |
 | Server feature: RPCs, CP at match end, `economy.grant`, spawn-time ownership check | `src/server/features/economy/{index,earn,shop,ledger,types}.ts` |
 | Wager matchmaking, bot backfill, escrow, payouts, live HUD state | `src/server/features/economy/wager.ts` |
