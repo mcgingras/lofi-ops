@@ -1,5 +1,5 @@
 /** Per-player killstreak ladder: counting kills, earning (Hardline-aware), the ready list, pushes. */
-import { KILLSTREAK_BY_ID, isStreakWeapon, streakAllowedIn, streakCost } from '../../../shared/defs/killstreaks';
+import { KILLSTREAK_BY_ID, isStreakWeapon, streaksAllowedIn, streakCost } from '../../../shared/defs/killstreaks';
 import type { KillstreakStateMsg } from '../../../shared/defs/perks-streaks-protocol';
 import type { PlayerState } from '../../player';
 import type { Room } from '../../room';
@@ -10,10 +10,10 @@ export const ksOf = (p: PlayerState): KillstreakExt => (p.ext.killstreaks ??= { 
 /** The player's three picks (from the loadout in use; next loadout if not spawned yet). */
 export const chosenStreaks = (p: PlayerState): string[] => (p.loadout ?? p.nextLoadout)?.killstreaks.filter((id) => KILLSTREAK_BY_ID.has(id)).slice(0, 3) ?? [];
 
-/** Kills `p` needs for `id` right now (Hardline via the `streakCostOffset` modifier). Infinity when it can't be had here (the nuke in a wager). */
+/** Kills `p` needs for `id` right now (Hardline via the `streakCostOffset` modifier). Infinity when it can't be had here (any streak in a wager). */
 export function costFor(room: Room, p: PlayerState, id: string): number {
   const def = KILLSTREAK_BY_ID.get(id);
-  if (!def || !streakAllowedIn(def, room.mode)) return Infinity;
+  if (!def || !streaksAllowedIn(room.mode)) return Infinity;
   return streakCost(def, room.modifiers.sum('streakCostOffset', p));
 }
 
@@ -62,6 +62,7 @@ export function flushState(room: Room): void {
 
 /** Give a ready streak (earned, or from a Care Package). */
 export function grant(room: Room, p: PlayerState, id: string): void {
+  if (!streaksAllowedIn(room.mode)) return;
   const ks = ksOf(p);
   ks.ready.push(id);
   ks.selected = ks.ready.length - 1;

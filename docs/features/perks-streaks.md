@@ -6,7 +6,7 @@ Code lives in the pre-made feature folders (`perks` and `killstreaks`, already l
 
 ```
 src/shared/defs/perks.ts                  PerkDef x17, PERK_TUNING, PERK_PRO_CHALLENGES (ChallengeDef[])
-src/shared/defs/killstreaks.ts            KillstreakDef x16 (+targeting/mapPick/air/hp/countsStreakKills/noWager), CARE_PACKAGE_WEIGHTS, KS_ENTITY kinds
+src/shared/defs/killstreaks.ts            KillstreakDef x16 (+targeting/mapPick/air/hp/countsStreakKills), CARE_PACKAGE_WEIGHTS, KS_ENTITY kinds
 src/shared/defs/glitch.ts                 Glitch: GLITCH tuning (duration, bot skill changes, stutter, screen fx), glitchHits / glitchStrength / glitchSkill, `killstreaks.glitch` wire type
 src/shared/defs/tracker.ts                Tracker: TRACKER tuning, packTracks / unpackTracks (quantised prints), printAlpha, `perks.tracks` wire type
 src/shared/defs/pack-rat.ts               Pack Rat: PACK_RAT tuning (hold, swap, raise)
@@ -96,7 +96,7 @@ Sounds: `killstreaks/sounds.ts` holds the synthesized `ks_*` voices; the recorde
 | attack_dogs | Attack Dogs | 11 | 8 dogs, 3 at a time, from your spawn side, hunt the nearest enemy and bite (55); 60 s; 80 hp each |
 | nuke | Tactical Nuke (MW2) | 25 | laptop, 10 s countdown for everyone, then everyone dies and the match ends as a win for your side (below); killstreak kills count toward it; not in wagers; unlock level 25 |
 
-Rules: kills toward streaks reset on death; streak kills don't count (`isStreakWeapon`) except toward streaks with `countsStreakKills` (the nuke reads `countAll`, every kill this life); each picked streak is earned once per life at its cost (Hardline: -1); earned streaks wait in `ready` until called and survive deaths until match end. Calling needs you alive and not already driving one. Streaks with `noWager` (the nuke) are dropped from the ladder in wager modes and `callKillstreak` answers `disabled` there (`streakAllowedIn`).
+Rules: kills toward streaks reset on death; streak kills don't count (`isStreakWeapon`) except toward streaks with `countsStreakKills` (the nuke reads `countAll`, every kill this life); each picked streak is earned once per life at its cost (Hardline: -1); earned streaks wait in `ready` until called and survive deaths until match end. Calling needs you alive and not already driving one. There are no killstreaks in wager modes: the ladder is empty, nothing is earned or granted, and `callKillstreak` answers `disabled` (`streaksAllowedIn`).
 
 ## Glitch (original killstreak, 10 kills)
 
@@ -244,7 +244,7 @@ Ours: `mystery_box`, 5 kills (it was 7: the wonder weapon is only a loan now), u
 
 Shared rules and numbers: `src/shared/defs/pack-a-punch.ts` (+ `pap-effects.ts`); server `streaks/packapunch.ts` (+ `packapunch-effects.ts`); client `killstreaks/packapunch.ts` (+ `packapunch-camo.ts`, `packapunch-sounds.ts`, `packapunch-fx.ts`).
 
-Ours: `pack_a_punch`, 6 kills, unlock level 15, `targeting: 'none'`, `noWager` (wagers hand out exact ammo and guns).
+Ours: `pack_a_punch`, 6 kills, unlock level 15, `targeting: 'none'` (like every streak, not in wagers).
 - **Calling it.** STREAK (or the API): the gun in your hands dips out of view and comes back over 1.8 s (`PACK_A_PUNCH.durationSec`; the server holds the weapon down and locks the slot; the client poses the dip on top of the viewmodel with `papDip` and cancels core's raise-after-switch snap for that window). At 0.85 s, out of view, the buff lands: `KillstreakExt.papUntil` = now + `TIMED_WEAPON_BUFF_SEC` (60 s), every carried gun is packed and filled to its packed magazine and reserve. An original synthesized jingle (`ks_pap_jingle`: clunks, a hum spinning up, a rising toy-organ phrase; not the Zombies tune) plays from the call, a ding (`ks_pap_ding`) and a toast with the held gun's new name as it comes back up. Others hear the jingle where you stand and get an announcement naming the gun. Dying before it lands gives the streak back.
 - **The buff belongs to the player**, not a weapon. It runs through death: die at 20 s and you respawn packed with ~40 s left (the `spawn` handler packs the fresh loadout at once). Any gun you pick up, swap to or take from a Mystery Box while it runs is packed (and filled) on the next tick. Using it again while buffed resets the clock to 60 s and refills.
 - **Running out.** Every gun reverts to its own def and camo with ammo clamped to the normal magazine and reserve (`unpackWeaponState`), the owner hears `ks_pap_down` (a power-down whine) and sees "PACK-A-PUNCH EXPIRED". The HUD counts down ("PAP 0:42", purple/blue, blinking red in the last 10 s) left of the weapon name, from `KillstreakStateMsg.papUntil`.

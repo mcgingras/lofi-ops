@@ -55,8 +55,6 @@ export interface KillstreakDef {
    * knife and equipment kills count. MW2's Tactical Nuke counted every kill, so it sets this.
    */
   countsStreakKills?: boolean;
-  /** Not available in wager matches (it can't be earned or called there). */
-  noWager?: boolean;
 }
 
 export const KILLSTREAKS: KillstreakDef[] = [
@@ -71,7 +69,7 @@ export const KILLSTREAKS: KillstreakDef[] = [
   { id: 'sentry_gun', name: 'Sentry Gun', kills: 6, description: 'Carry it into place: an automated gun that guards the arc in front of it for 60 s.', unlockLevel: 14, kind: 'called', durationSec: SENTRY.durationSec, targeting: 'place', hp: SENTRY.hp, icon: 'ks_sentry' },
   { id: 'mortar', name: 'Mortar Team', kills: 6, description: 'Mark three spots on the map for a mortar barrage.', unlockLevel: 1, kind: 'called', targeting: 'map', mapPick: 'points', marks: 3, icon: 'ks_mortar' },
   // BO1 Zombies' Pack-a-Punch as a self-use streak: upgrades the gun in your hands (defs/pack-a-punch.ts).
-  { id: 'pack_a_punch', name: 'Pack-a-Punch', kills: 6, description: 'For 60 s every gun you carry is Pack-a-Punched: more damage, a bigger magazine and far more ammo, a quicker reload, an upgraded name and the Pack-a-Punch camo. The clock keeps running if you die.', unlockLevel: 15, kind: 'passive', targeting: 'none', icon: 'ks_pap', noWager: true },
+  { id: 'pack_a_punch', name: 'Pack-a-Punch', kills: 6, description: 'For 60 s every gun you carry is Pack-a-Punched: more damage, a bigger magazine and far more ammo, a quicker reload, an upgraded name and the Pack-a-Punch camo. The clock keeps running if you die.', unlockLevel: 15, kind: 'passive', targeting: 'none', icon: 'ks_pap' },
   { id: 'attack_helicopter', name: 'Attack Helicopter', kills: 7, description: 'Pick an area on the map: a helicopter patrols it and attacks enemies.', unlockLevel: 1, kind: 'called', durationSec: 60, targeting: 'map', mapPick: 'area', air: true, hp: 1500, icon: 'ks_heli' },
   // BO1 `m220_tow_drop_mp`: a supply drop whose crate holds the launcher (defs/valkyrie.ts).
   { id: 'valkyrie', name: 'Valkyrie Rockets', kills: 7, description: 'Throw the marker for a launcher with two rockets you fly yourself: steer with your view, boost, fire to detonate.', unlockLevel: 26, kind: 'controlled', targeting: 'marker', icon: 'ks_valkyrie' },
@@ -83,7 +81,7 @@ export const KILLSTREAKS: KillstreakDef[] = [
   { id: 'attack_dogs', name: 'Attack Dogs', kills: 11, description: 'A pack of dogs hunts down the enemy.', unlockLevel: 44, kind: 'called', durationSec: 60, targeting: 'none', icon: 'ks_dogs' },
   // MW2's Tactical Nuke. Killstreak kills count toward it as they did in MW2 (25 gun kills in a
   // row against bots is a very long ask); set `countsStreakKills: false` for the strict BO1 rule.
-  { id: 'nuke', name: 'Tactical Nuke', kills: 25, description: 'Ten seconds after you call it, a nuclear blast kills everyone and ends the match in your favour. Killstreak kills count toward it.', unlockLevel: 25, kind: 'called', targeting: 'none', icon: 'ks_nuke', countsStreakKills: true, noWager: true },
+  { id: 'nuke', name: 'Tactical Nuke', kills: 25, description: 'Ten seconds after you call it, a nuclear blast kills everyone and ends the match in your favour. Killstreak kills count toward it.', unlockLevel: 25, kind: 'called', targeting: 'none', icon: 'ks_nuke', countsStreakKills: true },
 ];
 
 export const KILLSTREAK_BY_ID = indexById(KILLSTREAKS);
@@ -146,5 +144,5 @@ export const isStreakWeapon = (weapon: string) => KILLSTREAK_BY_ID.has(weapon) |
 /** Kills needed with a cost offset (Hardline: -1), never below 1. */
 export const streakCost = (def: KillstreakDef, offset: number) => Math.max(1, def.kills + Math.round(offset));
 
-/** Can `def` be earned and called in a mode? (The Tactical Nuke is off in wager matches.) */
-export const streakAllowedIn = (def: KillstreakDef, mode: { playlist?: string; wager?: unknown }) => !(def.noWager && (mode.playlist === 'wager' || !!mode.wager));
+/** Can killstreaks be earned and called in a mode? Not in wager matches: they are about the guns the mode hands out. */
+export const streaksAllowedIn = (mode: { playlist?: string; wager?: unknown }) => !(mode.playlist === 'wager' || !!mode.wager);

@@ -22,7 +22,7 @@
  */
 import type { MarkerLaunch } from '../../../shared/defs/care-marker';
 import type { TurretSpot } from '../../../shared/defs/turret-place';
-import { KILLSTREAK_BY_ID, streakAllowedIn } from '../../../shared/defs/killstreaks';
+import { KILLSTREAK_BY_ID, streaksAllowedIn } from '../../../shared/defs/killstreaks';
 import type { Vec3 } from '../../../shared/math';
 import type { PlayerState } from '../../player';
 import type { Room } from '../../room';
@@ -117,7 +117,7 @@ export function callKillstreak(room: Room, p: PlayerState, id: string, opts: Cal
   const def = KILLSTREAK_BY_ID.get(id);
   const impl = STREAK_IMPLS[id];
   if (!def || !impl) return { ok: false, reason: 'unknown' };
-  if (!streakAllowedIn(def, room.mode)) return { ok: false, reason: 'disabled' };
+  if (!streaksAllowedIn(room.mode)) return { ok: false, reason: 'disabled' };
   if (room.phase !== 'playing') return { ok: false, reason: 'phase' };
   if (!p.alive) return { ok: false, reason: 'dead' };
   const ks = ksOf(p);
