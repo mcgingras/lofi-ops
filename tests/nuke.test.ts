@@ -76,7 +76,7 @@ const matchEnd = (room: Room) => {
 describe('Tactical Nuke def and cost', () => {
   it('costs 25, 24 with Hardline, counts streak kills, is off in wagers and unlocks at level 25', () => {
     const def = KILLSTREAK_BY_ID.get('nuke')!;
-    expect(def).toMatchObject({ name: 'Tactical Nuke', kills: 25, countsStreakKills: true, noWager: true, targeting: 'none' });
+    expect(def).toMatchObject({ name: 'Tactical Nuke', kills: 25, countsStreakKills: true, targeting: 'none' });
     expect(streakCost(def, 0)).toBe(25);
     expect(streakCost(def, -1)).toBe(24);
     expect(def.unlockLevel).toBe(25);
@@ -136,17 +136,19 @@ describe('earning the nuke', () => {
     expect(readyKillstreaks(a)).toEqual(['nuke']);
   });
 
-  it('is not earnable or callable in a wager match', () => {
+  it('no killstreak is earnable or callable in a wager match', () => {
     const room = makeRoom({ mode: 'oitc' });
-    const a = bot(room, null as never, [], ['uav', 'nuke']);
+    const a = bot(room, null as never, [], ['uav', 'pack_a_punch', 'nuke']);
     for (let i = 0; i < 30; i++) {
       const v = bot(room, null as never);
       gunKill(room, a, v);
       room.removePlayer(v.id);
     }
-    expect(readyKillstreaks(a)).not.toContain('nuke');
-    expect(stateMsg(room, a).chosen.map((c) => c.id)).toEqual(['uav']);
+    expect(readyKillstreaks(a)).toEqual([]);
+    expect(stateMsg(room, a).chosen).toEqual([]);
+    give(a, 'uav');
     give(a, 'nuke');
+    expect(callKillstreak(room, a, 'uav')).toEqual({ ok: false, reason: 'disabled' });
     expect(callKillstreak(room, a, 'nuke')).toEqual({ ok: false, reason: 'disabled' });
     expect(room.endLock).toBeNull();
   });

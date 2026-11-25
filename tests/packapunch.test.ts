@@ -24,7 +24,7 @@ import type { Room } from '../src/server/room';
 import { Store } from '../src/server/store';
 import { PLAYER, TICK_DT, type Team } from '../src/shared/constants';
 import { effectiveWeapon } from '../src/shared/defs/attachments';
-import { KILLSTREAK_BY_ID, streakAllowedIn } from '../src/shared/defs/killstreaks';
+import { KILLSTREAK_BY_ID, streaksAllowedIn } from '../src/shared/defs/killstreaks';
 import { isPackable, PACK_A_PUNCH, packDef, packWeaponState, papDamageMult, papDip, papName, PAP_CAMO, PAP_ID, PAP_WEAPONS, TIMED_WEAPON_BUFF_SEC, unpackWeaponState } from '../src/shared/defs/pack-a-punch';
 import { WEAPON_BY_ID, WEAPONS } from '../src/shared/defs/weapons';
 import { cloneLoadout, DEFAULT_LOADOUTS, sanitizeLoadout, type Loadout } from '../src/shared/loadout';
@@ -74,8 +74,8 @@ describe('Pack-a-Punch defs and numbers', () => {
   it('is a 6-kill self-use streak at level 15, off in wager matches', () => {
     const d = KILLSTREAK_BY_ID.get(PAP_ID)!;
     expect(d).toMatchObject({ name: 'Pack-a-Punch', kills: 6, unlockLevel: 15, targeting: 'none', icon: 'ks_pap' });
-    expect(streakAllowedIn(d, { playlist: 'wager' })).toBe(false);
-    expect(streakAllowedIn(d, {})).toBe(true);
+    expect(streaksAllowedIn({ playlist: 'wager' })).toBe(false);
+    expect(streaksAllowedIn({})).toBe(true);
   });
 
   it('BO1 upgraded names, and a fallback for weapons nobody named yet', () => {
